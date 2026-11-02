@@ -141,3 +141,4 @@ If a breaking defect is detected in production:
 ## 8. Known Limitations & Upgrades
 - *Anonymous Deployment Expiration*: The temporary deployment claim URL expires 60 minutes after creation. Permanent deployments require linking the GitHub repository in the Vercel dashboard or logging in via `vercel login`.
 - *Browser Direct MQTT*: Browsers cannot establish raw TCP sockets (`mqtt://`); browser-direct MQTT requires an MQTT-over-WebSocket broker listener (`ws://` or `wss://`) configured with appropriate CORS/TLS policies.
+
