@@ -132,6 +132,10 @@ export class ApiClient {
     return this.request<TrainLocation[]>(`/location${query}`);
   }
 
+  static async fetchCorridorStations(): Promise<import('../types').CorridorStation[]> {
+    return this.request<import('../types').CorridorStation[]>('/location/corridor');
+  }
+
   // Tanks
   static async fetchLiveTank(): Promise<TankLiveStatus> {
     return this.request<TankLiveStatus>('/tanks/live');

@@ -25,3 +25,17 @@ export interface TrainLocation {
   waypoints: GPSWaypoint[];
 }
 
+export interface CorridorStation {
+  id: string;
+  name: string;
+  code: string;
+  latitude: number;
+  longitude: number;
+  route_order: number;
+  water_refill_available: boolean;
+  water_capacity_liters: number;
+  operational_status: string;
+  last_verified: string;
+  is_source?: boolean;
+  is_destination?: boolean;
+}
