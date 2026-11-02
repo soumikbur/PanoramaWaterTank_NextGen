@@ -1,6 +1,6 @@
 {
   "installCommand": "cd apps/mobile && npm install",
-  "buildCommand": "cd apps/mobile && npm run build && node -e \"const fs = require('fs'); const path = require('path'); const src = path.resolve('dist'); const dest = path.resolve('../../dist'); fs.mkdirSync(dest, { recursive: true }); fs.cpSync(src, dest, { recursive: true, force: true }); console.log('Successfully synced apps/mobile/dist to root dist');\"",
+  "buildCommand": "cd apps/mobile && npm run build && cd ../.. && node scripts/sync_dist.js",
   "outputDirectory": "apps/mobile/dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
