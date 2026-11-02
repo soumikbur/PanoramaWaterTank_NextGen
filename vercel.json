@@ -1,7 +1,7 @@
 {
   "framework": "vite",
-  "installCommand": "if [ -d \"apps/mobile\" ]; then cd apps/mobile && npm install; else npm install; fi",
-  "buildCommand": "if [ -d \"apps/mobile\" ]; then cd apps/mobile && npm run build && cd ../.. && node scripts/sync_dist.js; else npm run build; fi",
+  "installCommand": "node scripts/vercel_install.js",
+  "buildCommand": "node scripts/vercel_build.js",
   "outputDirectory": "apps/mobile/dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }

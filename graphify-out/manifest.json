@@ -3144,9 +3144,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/vercel.json": {
-    "mtime": 1793612957.1300843,
-    "seen": 1793615313.9854703,
-    "ast_hash": "b1fbd793223fe24a844efa2de9e6924e",
+    "mtime": 1793623896.3942163,
+    "seen": 1793624113.1276813,
+    "ast_hash": "7a8ea5fe7aea58908c32eb256270250f",
     "semantic_hash": ""
   },
   "apps/mobile/verify_live_vercel.cjs": {
@@ -3156,9 +3156,9 @@
     "semantic_hash": ""
   },
   "vercel.json": {
-    "mtime": 1793620346.3547552,
-    "seen": 1793621078.091716,
-    "ast_hash": "008940ee64a216048bbf92780b225158",
+    "mtime": 1793624059.834693,
+    "seen": 1793624113.1385963,
+    "ast_hash": "2b85ffd4172396dbbe295d4111441829",
     "semantic_hash": ""
   },
   "WLI_DOCS/deployment/DEPLOYMENT_WORKFLOW.md": {
@@ -3252,9 +3252,9 @@
     "semantic_hash": ""
   },
   "package.json": {
-    "mtime": 1793620340.9183981,
-    "seen": 1793621078.0778546,
-    "ast_hash": "fc4af568b884bc265fb5e70b93d5939a",
+    "mtime": 1793623931.97556,
+    "seen": 1793624113.1330078,
+    "ast_hash": "90c3dae947695c20427f8d33bda2fb06",
     "semantic_hash": ""
   },
   "WLI_DOCS/audit_screenshots/search_clear_and_dashboard.png": {
@@ -3299,75 +3299,21 @@
     "ast_hash": "378607136ee6e044858c070afb2f72c0",
     "semantic_hash": ""
   },
-  "audit_screenshots/stm32_architecture/alerts_audit.png": {
-    "mtime": 1793622779.1482396,
-    "seen": 1793622835.6763637,
-    "ast_hash": "8c8befd848c6465143dd09ef7eeeae6e",
+  "scripts/vercel_build.js": {
+    "mtime": 1793624054.0580347,
+    "seen": 1793624113.1338167,
+    "ast_hash": "d4cfb94e2a26f18f037fab65e2844e46",
     "semantic_hash": ""
   },
-  "audit_screenshots/stm32_architecture/dashboard_audit.png": {
-    "mtime": 1793622771.792677,
-    "seen": 1793622835.676366,
-    "ast_hash": "b45fdb1c2ab8988c6411efccd8212f8e",
-    "semantic_hash": ""
-  },
-  "audit_screenshots/stm32_architecture/devices_audit.png": {
-    "mtime": 1793622776.1530583,
-    "seen": 1793622835.6763678,
-    "ast_hash": "d585b052d953e6376a8e7e63f1c673d5",
-    "semantic_hash": ""
-  },
-  "audit_screenshots/stm32_architecture/history_audit.png": {
-    "mtime": 1793622780.4041467,
-    "seen": 1793622835.6763694,
-    "ast_hash": "242e887438e819e9026cda057ce0dac1",
-    "semantic_hash": ""
-  },
-  "audit_screenshots/stm32_architecture/location_audit.png": {
-    "mtime": 1793622777.8961806,
-    "seen": 1793622835.6763716,
-    "ast_hash": "6f6c646dafcee6ce44aa7a4137003b58",
-    "semantic_hash": ""
-  },
-  "audit_screenshots/stm32_architecture/logs_audit.png": {
-    "mtime": 1793622785.3937092,
-    "seen": 1793622835.676373,
-    "ast_hash": "cbec84793994152cc484066a3e4876f6",
-    "semantic_hash": ""
-  },
-  "audit_screenshots/stm32_architecture/reports_audit.png": {
-    "mtime": 1793622781.6480117,
-    "seen": 1793622835.6763744,
-    "ast_hash": "b52c84bb73502684e6ca2cac9ddcba92",
-    "semantic_hash": ""
-  },
-  "audit_screenshots/stm32_architecture/settings_audit.png": {
-    "mtime": 1793622782.9043949,
-    "seen": 1793622835.6763754,
-    "ast_hash": "1f22a2a57b074d1f13d343407131f6e9",
-    "semantic_hash": ""
-  },
-  "audit_screenshots/stm32_architecture/trains_audit.png": {
-    "mtime": 1793622773.039281,
-    "seen": 1793622835.6763768,
-    "ast_hash": "b746bf1ea0bee8cda53332bac9a81f74",
-    "semantic_hash": ""
-  },
-  "audit_screenshots/stm32_architecture/users_audit.png": {
-    "mtime": 1793622784.1502042,
-    "seen": 1793622835.676378,
-    "ast_hash": "64e3589ca1fefb189dd56bee4e8c4230",
-    "semantic_hash": ""
-  },
-  "audit_screenshots/stm32_architecture/watertank_audit.png": {
-    "mtime": 1793622774.2936702,
-    "seen": 1793622835.6763794,
-    "ast_hash": "1c8ac9cc1e75041390d03a9eaa023897",
+  "scripts/vercel_install.js": {
+    "mtime": 1793624048.3790941,
+    "seen": 1793624113.1338189,
+    "ast_hash": "8aeb4945fd8d57f103fd25f1386c2cac",
     "semantic_hash": ""
   },
   "apps/mobile/package-lock.json": {
-    "mtime": 1793621521.3781536,
-    "seen": 1793622835.6770344,
+    "mtime": 1793624068.9228518,
+    "seen": 1793624113.1604128,
     "ast_hash": "ce77aa4671192c070828ea06e8e9431c",
     "semantic_hash": ""
   }
