@@ -1,0 +1,11 @@
+{
+  "name": "panoramawatertank-nextgen",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Panorama Water Tank Monitor — Railway SCADA/HMI Web Application",
+  "scripts": {
+    "install:mobile": "cd apps/mobile && npm install",
+    "build": "cd apps/mobile && npm run build && node -e \"const fs = require('fs'); const path = require('path'); const src = path.resolve('dist'); const dest = path.resolve('../../dist'); fs.mkdirSync(dest, { recursive: true }); fs.cpSync(src, dest, { recursive: true, force: true }); console.log('Successfully synced apps/mobile/dist to root dist');\"",
+    "dev": "cd apps/mobile && npm run dev"
+  }
+}
