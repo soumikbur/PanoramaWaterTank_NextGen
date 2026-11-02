@@ -1,5 +1,4 @@
 {
-  "framework": "vite",
   "installCommand": "node scripts/vercel_install.js",
   "buildCommand": "node scripts/vercel_build.js",
   "outputDirectory": "apps/mobile/dist",

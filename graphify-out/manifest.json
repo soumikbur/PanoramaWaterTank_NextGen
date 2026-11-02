@@ -654,9 +654,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/package.json": {
-    "mtime": 1793442692.6112154,
-    "seen": 1793447068.824988,
-    "ast_hash": "c2555492d59a432a1f036670ce6d1267",
+    "mtime": 1793624479.9069314,
+    "seen": 1793624746.1364608,
+    "ast_hash": "c9686b3eba09fe3abc5727aab6509cf6",
     "semantic_hash": ""
   },
   "apps/mobile/src/App.tsx": {
@@ -666,9 +666,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/api/client.ts": {
-    "mtime": 1793616788.5126457,
-    "seen": 1793617571.3462133,
-    "ast_hash": "ac61b3b3304358a5a5f7ac4b877c1661",
+    "mtime": 1793624540.3241086,
+    "seen": 1793624746.1366284,
+    "ast_hash": "59ebc909f7ef993a5179addc73adc828",
     "semantic_hash": ""
   },
   "apps/mobile/src/components/charts/LevelTrendCard.tsx": {
@@ -780,9 +780,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/screens/LocationScreen.tsx": {
-    "mtime": 1793621457.091481,
-    "seen": 1793622835.641511,
-    "ast_hash": "2301851ba1d6b5e5225c0b7423ddc507",
+    "mtime": 1793624564.1917841,
+    "seen": 1793624746.138363,
+    "ast_hash": "a90f8142bb6fb7de339ebf4ac439cca5",
     "semantic_hash": ""
   },
   "apps/mobile/src/screens/LogsScreen.tsx": {
@@ -822,9 +822,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/services/websocket.ts": {
-    "mtime": 1793612277.9434495,
-    "seen": 1793615313.9842038,
-    "ast_hash": "35ed969808544c2c09fece1e24bb3cdc",
+    "mtime": 1793624551.6570055,
+    "seen": 1793624746.1389112,
+    "ast_hash": "b6f20f2fca3911a52cdb260e53943bf7",
     "semantic_hash": ""
   },
   "apps/mobile/src/state/AppContext.tsx": {
@@ -921,12 +921,6 @@
     "mtime": 1793190885.3719826,
     "seen": 1793442655.9619102,
     "ast_hash": "464fb52884588e0798ac897c12456c2c",
-    "semantic_hash": ""
-  },
-  "apps/mobile/vite.config.ts": {
-    "mtime": 1793267700.7135828,
-    "seen": 1793442655.961912,
-    "ast_hash": "23662f6ce1eeae342257153da8daa450",
     "semantic_hash": ""
   },
   "backend/app/__init__.py": {
@@ -3144,9 +3138,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/vercel.json": {
-    "mtime": 1793623896.3942163,
-    "seen": 1793624113.1276813,
-    "ast_hash": "7a8ea5fe7aea58908c32eb256270250f",
+    "mtime": 1793624508.547938,
+    "seen": 1793624746.1403317,
+    "ast_hash": "1cc2cc75ecb494a940c0ff0716e063dc",
     "semantic_hash": ""
   },
   "apps/mobile/verify_live_vercel.cjs": {
@@ -3156,9 +3150,9 @@
     "semantic_hash": ""
   },
   "vercel.json": {
-    "mtime": 1793624059.834693,
-    "seen": 1793624113.1385963,
-    "ast_hash": "2b85ffd4172396dbbe295d4111441829",
+    "mtime": 1793624521.2750876,
+    "seen": 1793624746.150129,
+    "ast_hash": "f3016feb35772d76b54b2953a99deb36",
     "semantic_hash": ""
   },
   "WLI_DOCS/deployment/DEPLOYMENT_WORKFLOW.md": {
@@ -3300,21 +3294,39 @@
     "semantic_hash": ""
   },
   "scripts/vercel_build.js": {
-    "mtime": 1793624054.0580347,
-    "seen": 1793624113.1338167,
-    "ast_hash": "d4cfb94e2a26f18f037fab65e2844e46",
+    "mtime": 1793624229.4174128,
+    "seen": 1793624746.145996,
+    "ast_hash": "347b394646c1c398087e3aac6a990c41",
     "semantic_hash": ""
   },
   "scripts/vercel_install.js": {
-    "mtime": 1793624048.3790941,
-    "seen": 1793624113.1338189,
-    "ast_hash": "8aeb4945fd8d57f103fd25f1386c2cac",
+    "mtime": 1793624229.4846473,
+    "seen": 1793624746.1459978,
+    "ast_hash": "5e5f9f5f387f263a46610fea6c7ed306",
+    "semantic_hash": ""
+  },
+  "apps/mobile/scripts/build.cjs": {
+    "mtime": 1793624399.774633,
+    "seen": 1793624746.136541,
+    "ast_hash": "b57e1644d652804b7894219522b21289",
+    "semantic_hash": ""
+  },
+  "apps/mobile/scripts/dev.cjs": {
+    "mtime": 1793624420.209067,
+    "seen": 1793624746.1365433,
+    "ast_hash": "5969ee0b2c386226860bd3cb354a2805",
+    "semantic_hash": ""
+  },
+  "apps/mobile/scripts/preview.cjs": {
+    "mtime": 1793624427.9916482,
+    "seen": 1793624746.1365447,
+    "ast_hash": "cf1928ed23d439aac08bae8ef6d48c97",
     "semantic_hash": ""
   },
   "apps/mobile/package-lock.json": {
-    "mtime": 1793624068.9228518,
-    "seen": 1793624113.1604128,
-    "ast_hash": "ce77aa4671192c070828ea06e8e9431c",
+    "mtime": 1793624691.1914425,
+    "seen": 1793624746.1746097,
+    "ast_hash": "6714bccee15734d596a731dbd166951d",
     "semantic_hash": ""
   }
 }

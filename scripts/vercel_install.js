@@ -8,3 +8,4 @@ const targetDir = fs.existsSync(mobileDir) ? mobileDir : process.cwd();
 
 console.log('[VERCEL-INSTALL] Installing dependencies in:', targetDir);
 cp.execSync('npm install', { cwd: targetDir, stdio: 'inherit' });
+

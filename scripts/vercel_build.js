@@ -17,3 +17,4 @@ if (fs.existsSync(srcDist) && path.resolve(srcDist) !== rootDist) {
   fs.cpSync(srcDist, rootDist, { recursive: true, force: true });
   console.log('[VERCEL-BUILD] Successfully synced dist to root dist');
 }
+

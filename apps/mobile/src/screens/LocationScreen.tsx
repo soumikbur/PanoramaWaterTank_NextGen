@@ -50,7 +50,7 @@ function calculateEta(distanceKm: number, speedKmh: number | null | undefined): 
 
 export const LocationScreen: React.FC = () => {
   const { selectedTrainNumber, setSelectedTrainNumber, sidebarCollapsed, selectedStationCode: contextStationCode, setSelectedStationCode: setContextStationCode } = useApp();
-  const googleMapsApiKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_MAPS_API_KEY) || '';
+  const googleMapsApiKey = (typeof process !== 'undefined' && (process.env?.GOOGLE_MAPS_API_KEY || process.env?.VITE_GOOGLE_MAPS_API_KEY)) || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_MAPS_API_KEY) || '';
   const [locations, setLocations] = useState<TrainLocation[]>([]);
   const [stations, setStations] = useState<CorridorStation[]>(DEFAULT_CORRIDOR_STATIONS);
   const [selectedStationCode, setSelectedStationCode] = useState<string>('');

@@ -8,8 +8,8 @@ type EventCallback = (data: any) => void;
 type StatusCallback = (status: WebSocketStatus) => void;
 
 const WS_URL =
+  (typeof process !== 'undefined' && (process.env?.WS_URL || process.env?.REACT_APP_WS_URL || process.env?.VITE_WS_URL)) ||
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_WS_URL) ||
-  (typeof process !== 'undefined' && (process.env?.VITE_WS_URL || process.env?.REACT_APP_WS_URL)) ||
   'ws://127.0.0.1:8000/api/v1/ws/live';
 
 export class WebSocketService {
