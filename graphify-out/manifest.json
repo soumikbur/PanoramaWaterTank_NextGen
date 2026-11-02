@@ -654,9 +654,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/package.json": {
-    "mtime": 1793624479.9069314,
-    "seen": 1793624746.1364608,
-    "ast_hash": "c9686b3eba09fe3abc5727aab6509cf6",
+    "mtime": 1793625778.4521341,
+    "seen": 1793625899.1308565,
+    "ast_hash": "160a0ada04d51af49d99c38ae39fc38c",
     "semantic_hash": ""
   },
   "apps/mobile/src/App.tsx": {
@@ -3138,9 +3138,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/vercel.json": {
-    "mtime": 1793624508.547938,
-    "seen": 1793624746.1403317,
-    "ast_hash": "1cc2cc75ecb494a940c0ff0716e063dc",
+    "mtime": 1793625844.935484,
+    "seen": 1793625899.1347492,
+    "ast_hash": "118a99a1b6cc8fbbc65b3dd3fd30dd5c",
     "semantic_hash": ""
   },
   "apps/mobile/verify_live_vercel.cjs": {
@@ -3150,9 +3150,9 @@
     "semantic_hash": ""
   },
   "vercel.json": {
-    "mtime": 1793624521.2750876,
-    "seen": 1793624746.150129,
-    "ast_hash": "f3016feb35772d76b54b2953a99deb36",
+    "mtime": 1793625841.1021318,
+    "seen": 1793625899.1455386,
+    "ast_hash": "118a99a1b6cc8fbbc65b3dd3fd30dd5c",
     "semantic_hash": ""
   },
   "WLI_DOCS/deployment/DEPLOYMENT_WORKFLOW.md": {
@@ -3246,9 +3246,9 @@
     "semantic_hash": ""
   },
   "package.json": {
-    "mtime": 1793623931.97556,
-    "seen": 1793624113.1330078,
-    "ast_hash": "90c3dae947695c20427f8d33bda2fb06",
+    "mtime": 1793625370.8176897,
+    "seen": 1793625899.1407201,
+    "ast_hash": "2061b9993733ac08c2db0e1ca2320956",
     "semantic_hash": ""
   },
   "WLI_DOCS/audit_screenshots/search_clear_and_dashboard.png": {
@@ -3306,27 +3306,45 @@
     "semantic_hash": ""
   },
   "apps/mobile/scripts/build.cjs": {
-    "mtime": 1793624399.774633,
-    "seen": 1793624746.136541,
-    "ast_hash": "b57e1644d652804b7894219522b21289",
+    "mtime": 1793624785.5585122,
+    "seen": 1793625899.1309385,
+    "ast_hash": "b56c9b1736533d676d6286f93e61feca",
     "semantic_hash": ""
   },
   "apps/mobile/scripts/dev.cjs": {
-    "mtime": 1793624420.209067,
-    "seen": 1793624746.1365433,
-    "ast_hash": "5969ee0b2c386226860bd3cb354a2805",
+    "mtime": 1793624786.5622368,
+    "seen": 1793625899.1309404,
+    "ast_hash": "a17ba45a24da3a74a55f9b8834e51e82",
     "semantic_hash": ""
   },
   "apps/mobile/scripts/preview.cjs": {
-    "mtime": 1793624427.9916482,
-    "seen": 1793624746.1365447,
-    "ast_hash": "cf1928ed23d439aac08bae8ef6d48c97",
+    "mtime": 1793624786.5622368,
+    "seen": 1793625899.130942,
+    "ast_hash": "a15a7bc15ce0e3facc71e758317a2448",
+    "semantic_hash": ""
+  },
+  "apps/mobile/apps/mobile/package.json": {
+    "mtime": 1793625826.3526819,
+    "seen": 1793625899.1303635,
+    "ast_hash": "b24873fcfc6bbcfe261d4dfddc3a837a",
+    "semantic_hash": ""
+  },
+  "apps/mobile/apps/mobile/package-lock.json": {
+    "mtime": 1793625815.388388,
+    "seen": 1793625899.1681814,
+    "ast_hash": "908132b11d009df6013237798a8ad04f",
     "semantic_hash": ""
   },
   "apps/mobile/package-lock.json": {
     "mtime": 1793624691.1914425,
     "seen": 1793624746.1746097,
     "ast_hash": "6714bccee15734d596a731dbd166951d",
+    "semantic_hash": ""
+  },
+  "package-lock.json": {
+    "mtime": 1793625866.1718717,
+    "seen": 1793625899.1682625,
+    "ast_hash": "b815c06bac450691e3e3e7e52ee7fad6",
     "semantic_hash": ""
   }
 }

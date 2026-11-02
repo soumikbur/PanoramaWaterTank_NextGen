@@ -1,0 +1,10 @@
+{
+  "name": "panorama-water-tank-nested",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Defensive workspace alias resolving cd apps/mobile invocations inside apps/mobile",
+  "scripts": {
+    "preinstall": "node -e \"console.log('[NESTED ALIAS] Installing parent dependencies...'); require('child_process').execSync('npm install', { cwd: require('path').resolve(__dirname, '../..'), stdio: 'inherit' });\"",
+    "build": "node -e \"console.log('[NESTED ALIAS] Building parent project...'); require('child_process').execSync('npm run build', { cwd: require('path').resolve(__dirname, '../..'), stdio: 'inherit' });\""
+  }
+}
