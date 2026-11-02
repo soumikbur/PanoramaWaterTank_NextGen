@@ -30,11 +30,23 @@ async function runTest() {
     }
   });
 
-  console.log('[TEST] Loading http://127.0.0.1:3001 ...');
-  await win.loadURL('http://127.0.0.1:3001');
+  const targetUrl = process.env.TEST_TARGET_URL || 'http://127.0.0.1:3001';
+  console.log(`[TEST] Loading ${targetUrl} ...`);
+  await win.loadURL(targetUrl);
 
-  // Wait for initial render
-  await new Promise((r) => setTimeout(r, 2000));
+  const waitFor = async (fn, timeout = 15000) => {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      const res = await win.webContents.executeJavaScript(`(${fn.toString()})()`);
+      if (res) return res;
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    return null;
+  };
+
+  // Wait for initial render: either login page or dashboard shell
+  console.log('[TEST] Waiting for application shell or login page...');
+  await waitFor(() => Boolean(document.querySelector('input[type="password"]') || document.getElementById('nav-location') || document.body.innerText.includes('Panorama')));
 
   // Check if LoginScreen is active; if so, perform login
   const isLoginPage = await win.webContents.executeJavaScript(`
@@ -45,7 +57,7 @@ async function runTest() {
     console.log('[TEST] Login form detected. Logging in as Administrator...');
     await win.webContents.executeJavaScript(`
       (() => {
-        const adminBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent && b.textContent.includes('Admin Quick Fill') || b.textContent.includes('Admin'));
+        const adminBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent && (b.textContent.includes('Admin Quick Fill') || b.textContent.includes('Admin')));
         if (adminBtn) {
           adminBtn.click();
         } else {
@@ -59,7 +71,9 @@ async function runTest() {
         if (submitBtn) submitBtn.click();
       })()
     `);
-    await new Promise((r) => setTimeout(r, 2000));
+
+    // Wait for login transition to dashboard
+    await waitFor(() => Boolean(document.getElementById('nav-location') || Array.from(document.querySelectorAll('button, span, div')).find(el => el.textContent && el.textContent.trim() === 'Location & GPS')));
   }
 
   // Navigate to Location & GPS screen
@@ -77,8 +91,9 @@ async function runTest() {
   `);
   console.log('[TEST] Navigation result:', navResult);
 
-  // Wait for map and tiles to initialize
-  await new Promise((r) => setTimeout(r, 2000));
+  // Wait for map wrapper to initialize
+  await waitFor(() => Boolean(document.getElementById('location-map-wrapper') && document.getElementById('map-expand-btn') && document.getElementById('map-fullscreen-btn')));
+  await new Promise((r) => setTimeout(r, 1000));
 
   // 1. Audit initial normal state
   const normalState = await win.webContents.executeJavaScript(`
