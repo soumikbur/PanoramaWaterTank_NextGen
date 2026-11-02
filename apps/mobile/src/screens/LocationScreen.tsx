@@ -654,6 +654,8 @@ export const LocationScreen: React.FC = () => {
           bottom: isFullscreen ? 0 : 'auto',
           width: isFullscreen ? '100vw' : '100%',
           height: isFullscreen ? '100vh' : (isMapExpanded ? '780px' : '520px'),
+          minHeight: isFullscreen ? '100vh' : (isMapExpanded ? '780px' : '520px'),
+          flexShrink: 0,
           zIndex: isFullscreen ? 99999 : 1,
           overflow: 'hidden',
           boxShadow: isFullscreen ? 'none' : colors.shadowSubtle,
