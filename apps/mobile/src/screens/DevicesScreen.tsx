@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { colors, metrics, typography } from '../theme';
 import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
@@ -60,7 +60,7 @@ export const DevicesScreen: React.FC = () => {
   const [addName, setAddName] = useState('');
   const [addTrainNumber, setAddTrainNumber] = useState('12002');
   const [addCoachNumber, setAddCoachNumber] = useState('B1');
-  const [addHardwareVersion, setAddHardwareVersion] = useState('ESP32S3-EC200U-V1');
+  const [addHardwareVersion, setAddHardwareVersion] = useState('Standard WLI Node');
   const [addFirmwareVersion, setAddFirmwareVersion] = useState('2.0.0');
 
   // Edit Device Form
@@ -94,7 +94,7 @@ export const DevicesScreen: React.FC = () => {
         location: `Coach ${d.coachNumber} (Train ${d.trainNumber})`,
         status,
         connectionType: 'Cellular / MQTT',
-        modemModel: d.hardwareVersion || 'EC200U LTE Cat-1',
+        modemModel: 'Wireless Link / MQTT',
         signalQuality: d.isOnline ? 'Active Link' : 'No Signal',
         ipAddress: 'MQTT / Cellular',
         waterLevel: liveLevel,
@@ -104,12 +104,12 @@ export const DevicesScreen: React.FC = () => {
         capacityLiters: liveCap,
         sensorStatus: d.isOnline ? 'Operational' : 'Offline',
         sensorType: 'Hydrostatic Pressure (4-20mA)',
-        gain: '±4.096 V (128 SPS)',
+        gain: 'Standard Operating Range',
         temperature: liveTank?.temperature ?? null,
         pressure: liveTank?.pressure ?? null,
         humidity: null,
         firmwareVersion: d.firmwareVersion || '2.0.0',
-        runtime: 'FreeRTOS / ESP-IDF',
+        runtime: 'FreeRTOS / CMSIS',
         calibrationStatus: 'Calibrated',
         airBaseline: 0,
         deadband: '0.5 cm',
@@ -488,7 +488,7 @@ export const DevicesScreen: React.FC = () => {
                 Registered Water Monitoring Devices ({filteredDevices.length})
               </span>
               <span style={{ fontSize: '12px', color: '#94A3B8', fontFamily: typography.fontFamily }}>
-                Click any device row to view full hardware telemetry
+                Click any device row to view operational telemetry and diagnostics
               </span>
             </div>
 
@@ -829,42 +829,29 @@ export const DevicesScreen: React.FC = () => {
 
             <div style={{ width: '100%', height: '1px', backgroundColor: '#F1F5F9' }} />
 
-            {/* Section 2: Environmental Sensors (BME280) */}
+            {/* Section 2: Environmental Telemetry */}
             <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569', fontFamily: typography.fontFamily }}>
-              ENVIRONMENTAL SENSORS (BME280)
+              ENVIRONMENTAL TELEMETRY
             </span>
 
             <InfoRow label="Atmospheric Pressure" value={selectedDevice.pressure != null ? `${selectedDevice.pressure.toFixed(1)} hPa` : 'N/A'} />
             <InfoRow label="Ambient Temperature" value={selectedDevice.temperature != null ? `${selectedDevice.temperature.toFixed(1)} °C` : 'N/A'} />
             <InfoRow label="Relative Humidity" value={selectedDevice.humidity != null ? `${selectedDevice.humidity.toFixed(1)} % RH` : 'N/A'} />
-            <InfoRow label="BME280 Health" value="Healthy (EEPROM Backup Ready)" />
+            <InfoRow label="Environmental Sensor Status" value="Operational" />
 
             <div style={{ width: '100%', height: '1px', backgroundColor: '#F1F5F9' }} />
 
-            {/* Section 3: Hardware Diagnostics & Calibration */}
+            {/* Section 3: Communication & System Status */}
             <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569', fontFamily: typography.fontFamily }}>
-              ADC DIAGNOSTICS & CALIBRATION (EEPROM)
+              COMMUNICATION & SYSTEM STATUS
             </span>
 
-            <InfoRow label="ADC Differential Mode" value={selectedDevice.sensorType} />
-            <InfoRow label="PGA Gain & Rate" value={selectedDevice.gain} />
-            <InfoRow label="Air Baseline (A_air)" value={`${selectedDevice.airBaseline} counts`} />
-            <InfoRow label="Deadband Threshold" value={selectedDevice.deadband} />
-            <InfoRow label="Calibration State" value={selectedDevice.calibrationStatus} />
-
-            <div style={{ width: '100%', height: '1px', backgroundColor: '#F1F5F9' }} />
-
-            {/* Section 4: Connectivity & FreeRTOS Tasks */}
-            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569', fontFamily: typography.fontFamily }}>
-              CONNECTIVITY & FREERTOS RUNTIME
-            </span>
-
+            <InfoRow label="Communication Status" value={selectedDevice.status === 'Online' ? 'Active Uplink' : 'Offline'} />
             <InfoRow label="Uplink Protocol" value={selectedDevice.connectionType} />
-            <InfoRow label="Modem / Radio" value={selectedDevice.modemModel} />
-            <InfoRow label="Signal Strength" value={selectedDevice.signalQuality} />
+            <InfoRow label="Signal Quality" value={selectedDevice.signalQuality} />
             <InfoRow label="Firmware Version" value={selectedDevice.firmwareVersion} />
-            <InfoRow label="RTOS Kernel" value={selectedDevice.runtime} />
-            <InfoRow label="Cloud Upload Interval" value={selectedDevice.uploadInterval} />
+            <InfoRow label="System Architecture" value="STM32 Processing Architecture" />
+            <InfoRow label="Telemetry Refresh Interval" value={selectedDevice.uploadInterval} />
             <InfoRow label="Last Reported Telemetry" value={selectedDevice.lastUpdate} />
 
             <div style={{ height: '12px' }} />
@@ -977,11 +964,12 @@ export const DevicesScreen: React.FC = () => {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Hardware Model</label>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Device Model</label>
                   <input
                     type="text"
                     value={addHardwareVersion}
                     onChange={(e) => setAddHardwareVersion(e.target.value)}
+                    placeholder="e.g. Standard WLI Node"
                     style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
                   />
                 </div>

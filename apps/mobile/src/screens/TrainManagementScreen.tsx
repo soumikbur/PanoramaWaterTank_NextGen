@@ -805,7 +805,7 @@ export const TrainManagementScreen: React.FC = () => {
                       UID: {coach.device_uid}
                     </span>
                     <span style={{ fontSize: '11px', color: '#94A3B8' }}>
-                      Hardware: {coach.hardware_version}
+                      Device: Water Monitoring Node
                     </span>
                   </div>
 
@@ -820,7 +820,7 @@ export const TrainManagementScreen: React.FC = () => {
                       fontWeight: 700,
                     }}
                   >
-                    {coach.is_online ? 'GATEWAY ONLINE' : 'GATEWAY OFFLINE'}
+                    {coach.is_online ? 'DEVICE ONLINE' : 'DEVICE OFFLINE'}
                   </span>
                 </div>
 

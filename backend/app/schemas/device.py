@@ -9,7 +9,7 @@ class DeviceBase(BaseModel):
     trainNumber: str = Field("12002", alias="train_number")
     coachNumber: str = Field("B4", alias="coach_number")
     name: str = "Coach Water Monitor"
-    hardwareVersion: Optional[str] = Field("ESP32S3-EC200U-V1", alias="hardware_version")
+    hardwareVersion: Optional[str] = Field("Standard WLI Node", alias="hardware_version")
     firmwareVersion: Optional[str] = Field("2.0.0", alias="firmware_version")
 
     model_config = ConfigDict(populate_by_name=True)

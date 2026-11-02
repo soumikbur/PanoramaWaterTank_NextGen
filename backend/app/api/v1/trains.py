@@ -273,7 +273,7 @@ async def get_train_consist(train_number: str, db: AsyncSession = Depends(get_db
             coach_number=d.coach_number,
             device_uid=d.uid,
             is_online=d.is_online,
-            hardware_version=d.hardware_version or "ESP32S3-EC200U-V1",
+            hardware_version=d.hardware_version or "Standard WLI Node",
             tanks=coach_tanks
         ))
 

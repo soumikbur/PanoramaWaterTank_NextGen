@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { colors, metrics, typography } from '../theme';
 import { useApp } from '../state/AppContext';
 import { TankLiveStatus } from '../types';
@@ -623,8 +623,8 @@ export const WaterTankScreen: React.FC = () => {
               />
             </BaseCard>
 
-            {/* Edge Sensor Telemetry */}
-            <BaseCard title="Sensor Diagnostics & Signal Link">
+            {/* Device Telemetry */}
+            <BaseCard title="Device Communication & Diagnostics">
               <InfoRow label="Connection Status" value={selectedTank.isOnline ? 'Online Link' : 'Device Offline'} />
               <InfoRow label="Battery Voltage" value={selectedTank.batteryVoltage != null ? `${selectedTank.batteryVoltage.toFixed(2)} V` : 'Not Reported'} />
               <InfoRow label="Capacity Rank" value={selectedTank.rank} />

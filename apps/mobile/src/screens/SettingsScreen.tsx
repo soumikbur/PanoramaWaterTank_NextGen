@@ -150,7 +150,7 @@ export const SettingsScreen: React.FC = () => {
   // Test Device REST Connection
   const handleTestDevice = async () => {
     try {
-      setDeviceTestResult('Testing ESP32-S3 REST endpoint...');
+      setDeviceTestResult('Testing Water Monitoring Device REST endpoint...');
       const res = await ApiClient.testDeviceConnection();
       setDeviceTestResult(`Status: ${res.status} — ${res.message} (${res.response_time_ms}ms)`);
     } catch (e: any) {
@@ -429,10 +429,10 @@ export const SettingsScreen: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
           <div>
             <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: colors.textPrimary }}>
-              A. Device & Telemetry Connectivity
+              A. Communication & Telemetry Settings
             </h3>
             <span style={{ fontSize: '11px', color: colors.textMuted }}>
-              Authoritative edge data sources: Primary broker over MQTT TLS and fallback HTTP REST Gateway
+              Authoritative edge data sources: Primary broker over MQTT TLS and fallback operational REST endpoint
             </span>
           </div>
 
@@ -545,10 +545,10 @@ export const SettingsScreen: React.FC = () => {
             />
           </div>
 
-          {/* ESP32 IP Host */}
+          {/* Device IP Host */}
           <div>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: colors.textSecondary, marginBottom: '4px' }}>
-              ESP32-S3 Edge IP / Hostname
+              Water Monitoring Device IP / Hostname
             </label>
             <input
               type="text"
@@ -567,7 +567,7 @@ export const SettingsScreen: React.FC = () => {
             />
           </div>
 
-          {/* ESP32 Port & Refresh */}
+          {/* Device REST Port & Refresh */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: colors.textSecondary, marginBottom: '4px' }}>
@@ -642,7 +642,7 @@ export const SettingsScreen: React.FC = () => {
                 cursor: 'pointer',
               }}
             >
-              Test Edge REST
+              Test Device REST
             </button>
           </div>
         </div>
@@ -1023,7 +1023,7 @@ export const SettingsScreen: React.FC = () => {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
           <div style={{ backgroundColor: colors.surfaceAlt, padding: '10px', borderRadius: '6px', border: `1px solid ${colors.border}` }}>
-            <span style={{ fontSize: '10px', color: colors.textMuted }}>GATEWAY UID</span>
+            <span style={{ fontSize: '10px', color: colors.textMuted }}>DEVICE IDENTIFIER</span>
             <div style={{ fontSize: '12px', fontWeight: 700, color: colors.textPrimary, marginTop: '2px', fontFamily: 'monospace' }}>
               {liveTank?.deviceUid || '0026004D4B42501120353332'}
             </div>
@@ -1032,7 +1032,7 @@ export const SettingsScreen: React.FC = () => {
           <div style={{ backgroundColor: colors.surfaceAlt, padding: '10px', borderRadius: '6px', border: `1px solid ${colors.border}` }}>
             <span style={{ fontSize: '10px', color: colors.textMuted }}>FIRMWARE VERSION</span>
             <div style={{ fontSize: '12px', fontWeight: 700, color: colors.textPrimary, marginTop: '2px' }}>
-              ESP32-S3 / v2.0.0-PROD
+              v2.0.0-PROD (STM32 Architecture)
             </div>
           </div>
 

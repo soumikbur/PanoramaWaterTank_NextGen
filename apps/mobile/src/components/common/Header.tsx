@@ -114,7 +114,7 @@ export const Header: React.FC = () => {
     },
     settings: {
       title: 'Settings',
-      subtitle: 'Tank geometry, alarm thresholds & hardware configuration',
+      subtitle: 'Tank geometry, alarm thresholds & device configuration',
     },
     users: {
       title: 'User Management & RBAC',
@@ -122,7 +122,7 @@ export const Header: React.FC = () => {
     },
     logs: {
       title: 'Diagnostics & Event Logs',
-      subtitle: 'Raw edge payloads, connection handshakes & audit trails',
+      subtitle: 'System telemetry payloads, connection handshakes & audit trails',
     },
   };
 

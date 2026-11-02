@@ -22,8 +22,8 @@ DEFAULT_CONFIG: Dict[str, Dict[str, Any]] = {
     "mqtt.port": {"category": "MQTT", "value": 1883, "desc": "MQTT Broker Port"},
     "mqtt.use_tls": {"category": "MQTT", "value": False, "desc": "Enable TLS Encryption"},
     "mqtt.topic": {"category": "MQTT", "value": "panorama/telemetry/+", "desc": "MQTT Telemetry Topic Pattern"},
-    "device.host": {"category": "DEVICE", "value": "192.168.4.1", "desc": "ESP32-S3 Edge IP/Host"},
-    "device.port": {"category": "DEVICE", "value": 80, "desc": "ESP32-S3 HTTP REST Port"},
+    "device.host": {"category": "DEVICE", "value": "192.168.4.1", "desc": "Water Monitoring Device IP/Host"},
+    "device.port": {"category": "DEVICE", "value": 80, "desc": "Water Monitoring Device HTTP REST Port"},
     "device.refresh_interval": {"category": "DEVICE", "value": 3.0, "desc": "Telemetry Refresh Interval (seconds)"},
     "ubidots.host": {"category": "UBIDOTS", "value": "https://industrial.api.ubidots.com", "desc": "Ubidots Cloud Bridge Host"},
     "ubidots.device_label": {"category": "UBIDOTS", "value": "wli", "desc": "Ubidots Target Device Label"},
@@ -242,7 +242,7 @@ async def read_device_configuration(db: AsyncSession = Depends(get_db)):
     return {
         "status": "SYNCHRONIZED",
         "device_uid": device.uid if device else "0026004D4B42501120353332",
-        "hardware_version": device.hardware_version if device else "ESP32S3-EC200U-V1",
+        "hardware_version": device.hardware_version if device else "Standard WLI Node",
         "firmware_version": device.firmware_version if device else "2.0.0",
         "is_online": device.is_online if device else True,
         "last_sync": datetime.now(timezone.utc).isoformat(),
@@ -302,7 +302,7 @@ async def test_mqtt_connection():
 
 @router.post("/test-device")
 async def test_device_connection(payload: Optional[Dict[str, Any]] = None, db: AsyncSession = Depends(get_db)):
-    """Test connection to ESP32-S3 REST endpoint."""
+    """Test connection to Water Monitoring Device REST endpoint."""
     repo = SettingsRepository(db)
     host_setting = await repo.get("device.host")
     port_setting = await repo.get("device.port")
