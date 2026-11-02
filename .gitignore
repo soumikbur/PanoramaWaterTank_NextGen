@@ -45,6 +45,9 @@ multi_res_*.log
 # Vercel project configuration and cache
 .vercel
 
+# Graphify cache
+graphify-out/cache/
+
 # Operating System Files
 .DS_Store
 Thumbs.db

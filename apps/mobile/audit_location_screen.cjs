@@ -17,7 +17,7 @@ const consoleErrors = [];
 const consoleWarns = [];
 
 app.whenReady().then(async () => {
-  console.log('[*] Starting Location & GPS Screen Comprehensive Browser Audit...');
+  console.log('[*] Starting Location & GPS Map Comprehensive Browser Audit...');
 
   const win = new BrowserWindow({
     width: 1920,
@@ -46,25 +46,29 @@ app.whenReady().then(async () => {
     // Wait for hydration & login
     await new Promise((r) => setTimeout(r, 2000));
 
-    // Ensure logged in and on 'location' screen
+    // Ensure on 'location' screen
     await win.webContents.executeJavaScript(`
       (() => {
-        // Find and click Location in sidebar
         const btn = document.querySelector('button[data-screen="location"]');
-        if (btn) {
-          btn.click();
-          console.log('[TEST] Clicked button[data-screen="location"]');
-        } else {
-          const navItems = Array.from(document.querySelectorAll('button'));
-          const loc = navItems.find(b => b.textContent && b.textContent.includes('Location'));
-          if (loc) loc.click();
-        }
+        if (btn) btn.click();
       })()
     `);
 
-    await new Promise((r) => setTimeout(r, 2500));
+    await new Promise((r) => setTimeout(r, 2000));
 
-    // 1. Audit Table and Map Elements
+    // 1. Audit Header Title and Subtitle
+    const headerData = await win.webContents.executeJavaScript(`
+      (() => {
+        const header = document.querySelector('header');
+        return {
+          title: header ? header.querySelector('h1')?.textContent : '',
+          subtitle: header ? header.querySelector('p')?.textContent : ''
+        };
+      })()
+    `);
+    console.log('[✓] Header Title & Subtitle:', JSON.stringify(headerData, null, 2));
+
+    // 2. Audit Table, Map Overlays, and Toolbar Elements
     const auditData = await win.webContents.executeJavaScript(`
       (() => {
         const tableRows = document.querySelectorAll('tbody tr');
@@ -78,12 +82,22 @@ app.whenReady().then(async () => {
         const markers = document.querySelectorAll('.station-marker, .custom-train-marker');
         const buttons = Array.from(document.querySelectorAll('button')).map(b => b.textContent.trim());
 
+        const upperLeftBanner = document.body.textContent.includes('NEXT REFILL FACILITY');
+        const upperCenterGps = document.body.textContent.includes('GPS FIX') ||
+                               document.body.textContent.includes('GPS UNAVAILABLE') ||
+                               document.body.textContent.includes('GNSS DATA STALE') ||
+                               document.body.textContent.includes('SEARCHING');
+        const tableHeading = document.body.textContent.includes('ROUTE CORRIDOR & REFILL FACILITIES');
+
         return {
           rowCount: tableRows.length,
           stationCodes,
           hasMap: !!mapCanvas,
           tileCount: tiles.length,
           markerCount: markers.length,
+          hasUpperLeftBanner: upperLeftBanner,
+          hasUpperCenterGps: upperCenterGps,
+          hasTableHeading: tableHeading,
           availableButtons: buttons
         };
       })()
@@ -91,14 +105,14 @@ app.whenReady().then(async () => {
 
     console.log('[✓] Location Page Elements Audit:', JSON.stringify(auditData, null, 2));
 
-    // 2. Test Interactions: Click Station Marker & Locate on Map
-    console.log('[*] Testing interaction: Click Locate Map on Bardhaman (BWN)...');
+    // 3. Test Interaction: Click Action 'Map' on Bardhaman Junction (BWN)
+    console.log('[*] Testing interaction: Click Map action on Bardhaman (BWN)...');
     await win.webContents.executeJavaScript(`
       (() => {
         const rows = document.querySelectorAll('tbody tr');
         for (const row of rows) {
           if (row.textContent.includes('BWN') || row.textContent.includes('Bardhaman')) {
-            const btn = row.querySelector('button');
+            const btn = Array.from(row.querySelectorAll('button')).find(b => b.textContent.includes('Map'));
             if (btn) btn.click();
             break;
           }
@@ -107,18 +121,18 @@ app.whenReady().then(async () => {
     `);
     await new Promise((r) => setTimeout(r, 1200));
 
-    // 3. Test Interaction: Satellite Layer Toggle
+    // 4. Test Interaction: Toggle Satellite Layer
     console.log('[*] Testing interaction: Toggle Satellite Layer...');
     await win.webContents.executeJavaScript(`
       (() => {
         const buttons = Array.from(document.querySelectorAll('button'));
-        const satBtn = buttons.find(b => b.textContent.includes('Satellite') || b.textContent.includes('Street'));
+        const satBtn = buttons.find(b => b.textContent.includes('Satellite'));
         if (satBtn) satBtn.click();
       })()
     `);
     await new Promise((r) => setTimeout(r, 1500));
 
-    // 4. Test Interaction: Toggle Expand Map
+    // 5. Test Interaction: Toggle Expand Map
     console.log('[*] Testing interaction: Toggle Expand Map...');
     await win.webContents.executeJavaScript(`
       (() => {
@@ -139,11 +153,11 @@ app.whenReady().then(async () => {
     `);
     await new Promise((r) => setTimeout(r, 1000));
 
-    // 5. Capture at all requested desktop resolutions
+    // 6. Capture at all requested desktop resolutions
     for (const res of RESOLUTIONS) {
       console.log(`[*] Capturing screenshot at ${res.width}x${res.height} (${res.name})...`);
       win.setSize(res.width, res.height);
-      await new Promise((r) => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 1200));
 
       const image = await win.capturePage();
       const filename = `location_rebuilt_${res.name}.png`;

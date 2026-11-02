@@ -47,8 +47,8 @@ export const Header: React.FC = () => {
       subtitle: 'ESP32-S3 + EC200U 4G IoT Gateway telematics & hardware status',
     },
     location: {
-      title: 'GNSS GPS Tracking',
-      subtitle: 'Real-time consist location, velocity vector & corridor tracking',
+      title: 'Location',
+      subtitle: 'Route intelligence & water refill monitoring',
     },
     alerts: {
       title: 'Alerts & Alarm Management',

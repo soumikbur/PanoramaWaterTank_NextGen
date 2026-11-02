@@ -5,23 +5,23 @@ import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
 import { TrainLocation, CorridorStation } from '../types';
 import {
-  Map,
-  MapPin,
-  Crosshair,
   Maximize2,
   Minimize2,
   Layers,
-  Droplets,
-  CheckCircle2,
-  AlertTriangle,
-  Info,
-  ChevronDown,
-  ChevronUp,
-  X,
+  Crosshair,
   Navigation,
+  ExternalLink,
+  Plus,
+  Minus,
+  Droplets,
+  MapPin,
+  ChevronUp,
+  ChevronDown,
+  X,
+  Info,
 } from 'lucide-react';
 
-// Default Fallback Eastern Railway Corridor (Howrah to Asansol) in case backend is offline
+// Authoritative Eastern Railway Corridor: Howrah Junction to Asansol Junction
 const DEFAULT_CORRIDOR_STATIONS: CorridorStation[] = [
   {
     id: 'hwh',
@@ -128,7 +128,7 @@ function calculateTrackDistanceKm(lat1: number, lon1: number, lat2: number, lon2
 
 // Calculate ETA based on distance and Doppler ground speed
 function calculateEta(distanceKm: number, speedKmh: number | null | undefined): string {
-  if (!speedKmh || speedKmh < 5) return '--';
+  if (!speedKmh || speedKmh < 5) return '—';
   const minutes = Math.round((distanceKm / speedKmh) * 60);
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);
@@ -209,7 +209,7 @@ export const LocationScreen: React.FC = () => {
   const enrichedStations = useMemo(() => {
     return stations.map((st) => {
       let distanceKm = 0;
-      let etaString = '--';
+      let etaString = '—';
 
       if (hasGps && activeTrainLoc?.current_latitude != null && activeTrainLoc?.current_longitude != null) {
         distanceKm = calculateTrackDistanceKm(
@@ -235,7 +235,6 @@ export const LocationScreen: React.FC = () => {
     if (!refillStations.length) return null;
 
     if (hasGps) {
-      // Find the upcoming refill hub with positive distance
       const sorted = [...refillStations].sort((a, b) => a.distanceKm - b.distanceKm);
       return sorted[0];
     }
@@ -254,9 +253,6 @@ export const LocationScreen: React.FC = () => {
         zoomControl: false,
         attributionControl: true,
       });
-
-      // Custom Zoom Control at bottom right
-      L.control.zoom({ position: 'bottomright' }).addTo(map);
 
       mapInstanceRef.current = map;
     }
@@ -304,7 +300,7 @@ export const LocationScreen: React.FC = () => {
     tileLayerRef.current = tileLayer;
   }, [tileMode]);
 
-  // Draw Corridor Track Polyline and Station Markers
+  // Draw Corridor Track Polyline and Station Markers with Vector SVG Icons (No Unicode Emoji)
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || stations.length === 0) return;
@@ -319,13 +315,13 @@ export const LocationScreen: React.FC = () => {
 
     const isSatellite = tileMode === 'satellite';
     const polyline = L.polyline(corridorCoords, {
-      color: isSatellite ? '#38BDF8' : '#2563EB',
+      color: isSatellite ? '#38BDF8' : '#1D4ED8',
       weight: 4,
-      opacity: 0.9,
+      opacity: 0.92,
       dashArray: '8, 6',
     }).addTo(map);
 
-    polyline.bindTooltip('Eastern Railway Corridor Axis (Howrah — Asansol • 218 km)', {
+    polyline.bindTooltip('Eastern Railway Mainline Corridor Axis (Howrah — Asansol • 218 km)', {
       sticky: true,
       className: 'rail-corridor-tooltip',
     });
@@ -335,7 +331,7 @@ export const LocationScreen: React.FC = () => {
     Object.values(stationMarkersRef.current).forEach((m) => map.removeLayer(m));
     stationMarkersRef.current = {};
 
-    // Render Station Markers
+    // Render Station Markers using Pure Vector SVGs
     stations.forEach((st) => {
       const isDestination = st.is_destination || st.code === 'ASN';
       const isRefill = st.water_refill_available && !isDestination;
@@ -343,29 +339,35 @@ export const LocationScreen: React.FC = () => {
 
       let iconHtml = '';
       if (isDestination) {
+        // Destination Marker: Purple Flag/Terminal Badge
         iconHtml = `
-          <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 34px; height: 34px;">
-            <div style="background-color: #7C3AED; color: #FFFFFF; border: 2px solid #FFFFFF; border-radius: 6px; padding: 2px 5px; font-weight: 800; font-size: 10px; font-family: Inter, sans-serif; box-shadow: 0 2px 6px rgba(0,0,0,0.35); text-align: center;">
+          <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 34px; height: 34px;">
+            <div style="background-color: #7C3AED; color: #FFFFFF; border: 2px solid #FFFFFF; border-radius: 6px; padding: 3px 6px; font-weight: 800; font-size: 10px; font-family: Inter, sans-serif; box-shadow: 0 3px 8px rgba(0,0,0,0.35); text-align: center;">
               ${st.code}
             </div>
+            <div style="width: 2px; height: 6px; background-color: #7C3AED;"></div>
           </div>
         `;
       } else if (isRefill) {
+        // Water Refill Hub: Vector Water Droplet Pin
         iconHtml = `
-          <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;">
-            <div style="background-color: #0284C7; color: #FFFFFF; border: 2px solid #FFFFFF; border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; font-size: 13px; box-shadow: 0 2px 6px rgba(0,0,0,0.3);">
-              💧
+          <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 32px; height: 36px;">
+            <div style="background-color: #0284C7; color: #FFFFFF; border: 2px solid #FFFFFF; border-radius: 50%; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 8px rgba(0,0,0,0.3);">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+              </svg>
             </div>
-            <div style="position: absolute; bottom: -12px; background: rgba(15,23,42,0.85); color: #FFF; font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px; font-family: Inter, sans-serif;">
+            <div style="background: rgba(15,23,42,0.9); color: #FFF; font-size: 8px; font-weight: 800; padding: 1px 4px; border-radius: 3px; font-family: Inter, sans-serif; margin-top: 2px; border: 1px solid rgba(255,255,255,0.3);">
               ${st.code}
             </div>
           </div>
         `;
       } else {
+        // Standard Passenger Station: Clean slate circular node
         iconHtml = `
-          <div style="position: relative; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px;">
-            <div style="background-color: #FFFFFF; border: 2px solid #64748B; border-radius: 50%; width: 14px; height: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.25);"></div>
-            <div style="position: absolute; bottom: -12px; background: rgba(241,245,249,0.9); color: #334155; font-size: 8px; font-weight: 700; padding: 0 3px; border-radius: 2px; font-family: Inter, sans-serif; border: 1px solid #CBD5E1;">
+          <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 26px; height: 30px;">
+            <div style="background-color: #FFFFFF; border: 2.5px solid #475569; border-radius: 50%; width: 14px; height: 14px; box-shadow: 0 1px 5px rgba(0,0,0,0.25);"></div>
+            <div style="background: rgba(248,250,252,0.95); color: #334155; font-size: 8px; font-weight: 700; padding: 0 3px; border-radius: 2px; font-family: Inter, sans-serif; border: 1px solid #CBD5E1; margin-top: 2px;">
               ${st.code}
             </div>
           </div>
@@ -375,15 +377,15 @@ export const LocationScreen: React.FC = () => {
       const icon = L.divIcon({
         html: iconHtml,
         className: `station-marker ${isSelected ? 'marker-selected' : ''}`,
-        iconSize: [34, 34],
-        iconAnchor: [17, 17],
+        iconSize: [34, 36],
+        iconAnchor: [17, 18],
       });
 
       const marker = L.marker([st.latitude, st.longitude], { icon }).addTo(map);
 
       const statusBadge = st.water_refill_available
-        ? '<span style="background-color: #ECFDF5; color: #16A34A; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">OPERATIONAL REFILL</span>'
-        : '<span style="background-color: #F1F5F9; color: #64748B; padding: 1px 6px; border-radius: 4px; font-weight: 600; font-size: 10px;">NO REFILL FACILITY</span>';
+        ? '<span style="background-color: #ECFDF5; color: #16A34A; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">VERIFIED REFILL</span>'
+        : '<span style="background-color: #F1F5F9; color: #64748B; padding: 1px 6px; border-radius: 4px; font-weight: 600; font-size: 10px;">NO FACILITY</span>';
 
       marker.bindPopup(`
         <div style="font-family: Inter, sans-serif; font-size: 12px; min-width: 200px; line-height: 1.5; color: #0F172A;">
@@ -393,8 +395,9 @@ export const LocationScreen: React.FC = () => {
           <div style="margin-bottom: 6px;">${statusBadge}</div>
           <div style="color: #475569; font-size: 11px;">
             Coordinates: <strong>${st.latitude.toFixed(4)}° N, ${st.longitude.toFixed(4)}° E</strong><br/>
-            Refill Capacity: <strong>${st.water_capacity_liters > 0 ? st.water_capacity_liters.toLocaleString() + ' L' : 'None'}</strong><br/>
-            Status: <strong>${st.operational_status}</strong> (Verified: ${st.last_verified})
+            Refill Capacity: <strong>${st.water_capacity_liters > 0 ? st.water_capacity_liters.toLocaleString() + ' L' : '—'}</strong><br/>
+            Facility Status: <strong>${st.operational_status}</strong><br/>
+            Last Verified: <strong>${st.last_verified}</strong>
           </div>
         </div>
       `);
@@ -410,7 +413,7 @@ export const LocationScreen: React.FC = () => {
     });
   }, [stations, tileMode, selectedStationCode]);
 
-  // Manage Live Train Marker
+  // Manage Live Train Marker using Vector SVG (No Emoji)
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -421,18 +424,26 @@ export const LocationScreen: React.FC = () => {
 
       if (!trainMarkerRef.current) {
         const trainIconHtml = `
-          <div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
-            <div style="position: absolute; width: 36px; height: 36px; border-radius: 50%; background-color: rgba(37, 99, 235, 0.25); animation: pulse 1.8s infinite;"></div>
-            <div style="position: absolute; width: 24px; height: 24px; border-radius: 50%; background-color: #2563EB; border: 2.5px solid #FFFFFF; box-shadow: 0 2px 6px rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; color: #FFFFFF; font-size: 12px;">
-              🚆
+          <div style="position: relative; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;">
+            <div style="position: absolute; width: 38px; height: 38px; border-radius: 50%; background-color: rgba(37, 99, 235, 0.28); animation: pulse 1.8s infinite;"></div>
+            <div style="position: absolute; width: 24px; height: 24px; border-radius: 50%; background-color: #2563EB; border: 2.5px solid #FFFFFF; box-shadow: 0 3px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: #FFFFFF;">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="16" height="16" x="4" y="3" rx="2"></rect>
+                <path d="M4 11h16"></path>
+                <path d="M12 3v8"></path>
+                <path d="m8 19-2 3"></path>
+                <path d="m18 22-2-3"></path>
+                <circle cx="8" cy="15" r="1"></circle>
+                <circle cx="16" cy="15" r="1"></circle>
+              </svg>
             </div>
           </div>
         `;
         const trainIcon = L.divIcon({
           html: trainIconHtml,
           className: 'custom-train-marker',
-          iconSize: [36, 36],
-          iconAnchor: [18, 18],
+          iconSize: [38, 38],
+          iconAnchor: [19, 19],
         });
         trainMarkerRef.current = L.marker([lat, lon], { icon: trainIcon }).addTo(map);
       } else {
@@ -440,7 +451,7 @@ export const LocationScreen: React.FC = () => {
       }
 
       const statusBadge = isStale
-        ? '<span style="background-color: #FEF3C7; color: #D97706; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">STALE TELEMETRY</span>'
+        ? '<span style="background-color: #FEF3C7; color: #D97706; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">GNSS DATA STALE</span>'
         : '<span style="background-color: #ECFDF5; color: #16A34A; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">LIVE BEACON</span>';
 
       trainMarkerRef.current.bindPopup(`
@@ -451,13 +462,13 @@ export const LocationScreen: React.FC = () => {
           </div>
           <div style="color: #475569; font-size: 11px;">Coach: <strong>${activeTrainLoc.coach_number}</strong></div>
           <div style="color: #2563EB; font-weight: 700; font-size: 12px; margin: 3px 0;">
-            Speed: ${activeTrainLoc.current_speed_kmh != null ? activeTrainLoc.current_speed_kmh.toFixed(1) : '--'} km/h
+            Speed: ${activeTrainLoc.current_speed_kmh != null ? activeTrainLoc.current_speed_kmh.toFixed(1) : '—'} km/h
           </div>
           <div style="color: #64748B; font-size: 11px;">
             GPS: ${lat.toFixed(6)}° N, ${lon.toFixed(6)}° E<br/>
-            Altitude: ${activeTrainLoc.current_altitude != null ? activeTrainLoc.current_altitude.toFixed(0) : '--'} m MSL<br/>
-            Satellites: ${activeTrainLoc.satellites != null ? activeTrainLoc.satellites : '--'} Tracked<br/>
-            Last Update: ${activeTrainLoc.last_update ? new Date(activeTrainLoc.last_update).toLocaleTimeString() : '--'}
+            Altitude: ${activeTrainLoc.current_altitude != null ? activeTrainLoc.current_altitude.toFixed(0) : '—'} m MSL<br/>
+            Satellites: ${activeTrainLoc.satellites != null ? activeTrainLoc.satellites : '—'} Tracked<br/>
+            Last Update: ${activeTrainLoc.last_update ? new Date(activeTrainLoc.last_update).toLocaleTimeString() : '—'}
           </div>
         </div>
       `);
@@ -501,8 +512,20 @@ export const LocationScreen: React.FC = () => {
         `Physical GNSS Position: ${activeTrainLoc.current_latitude.toFixed(6)}° N, ${activeTrainLoc.current_longitude.toFixed(6)}° E`
       );
     } else {
-      setFeedbackToast('GPS Searching: Physical hardware fix not yet acquired.');
+      setFeedbackToast('Searching for GPS fix: Satellite lock not yet acquired.');
     }
+  };
+
+  const handleOpenGoogleMaps = () => {
+    const origin = 'Howrah+Junction,+West+Bengal';
+    const destination = 'Asansol+Junction,+West+Bengal';
+    let gmapsUrl = `https://www.google.com/maps/dir/${origin}/${destination}`;
+
+    if (hasGps && activeTrainLoc?.current_latitude != null && activeTrainLoc?.current_longitude != null) {
+      gmapsUrl = `https://www.google.com/maps/search/?api=1&query=${activeTrainLoc.current_latitude},${activeTrainLoc.current_longitude}`;
+    }
+    window.open(gmapsUrl, '_blank', 'noopener,noreferrer');
+    setFeedbackToast('Opened route in Google Maps Live viewer');
   };
 
   const handleFitCorridor = () => {
@@ -512,7 +535,7 @@ export const LocationScreen: React.FC = () => {
       bounds.extend([activeTrainLoc.current_latitude, activeTrainLoc.current_longitude]);
     }
     mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40] });
-    setFeedbackToast('Map view reset to Eastern Railway Corridor (Howrah to Asansol)');
+    setFeedbackToast('Map viewport fitted to Eastern Railway Corridor (Howrah to Asansol)');
   };
 
   const handleLocateStation = (st: CorridorStation) => {
@@ -522,6 +545,10 @@ export const LocationScreen: React.FC = () => {
     stationMarkersRef.current[st.code]?.openPopup();
     setFeedbackToast(`Centered on ${st.name} (${st.code})`);
   };
+
+  // Zoom helpers
+  const handleZoomIn = () => mapInstanceRef.current?.zoomIn();
+  const handleZoomOut = () => mapInstanceRef.current?.zoomOut();
 
   return (
     <div
@@ -562,71 +589,7 @@ export const LocationScreen: React.FC = () => {
         </div>
       )}
 
-      {/* 1. Header Toolbar */}
-      <div
-        style={{
-          backgroundColor: colors.surface,
-          border: `1px solid ${colors.border}`,
-          borderRadius: `${metrics.cardRadius}px`,
-          padding: '12px 18px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          boxShadow: colors.shadowSubtle,
-        }}
-      >
-        <div>
-          <h2
-            style={{
-              fontSize: '16px',
-              fontWeight: 700,
-              color: colors.textPrimary,
-              margin: '0 0 2px 0',
-              fontFamily: typography.fontFamily,
-            }}
-          >
-            Location & Route Intelligence
-          </h2>
-          <span style={{ fontSize: '11px', color: colors.textMuted }}>
-            Eastern Railway Corridor • Howrah (HWH) to Asansol (ASN) • 7 Stations • 4 Verified Water Refill Hubs
-          </span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '12px', color: colors.textSecondary, fontWeight: 600 }}>Active Fleet:</span>
-          <select
-            value={activeTrainLoc?.train_number || ''}
-            onChange={(e) => setSelectedTrainNumber(e.target.value)}
-            style={{
-              padding: '6px 12px',
-              borderRadius: '6px',
-              border: `1px solid ${colors.borderStrong}`,
-              fontSize: '12px',
-              fontWeight: 600,
-              color: colors.textPrimary,
-              backgroundColor: colors.surfaceHighlight,
-              cursor: 'pointer',
-              outline: 'none',
-            }}
-          >
-            {locations.map((loc) => (
-              <option key={loc.train_number} value={loc.train_number}>
-                Train {loc.train_number} (Coach {loc.coach_number})
-              </option>
-            ))}
-            {locations.length === 0 && <option value="">No Active Fleet</option>}
-          </select>
-
-          <span style={{ fontSize: '11px', color: colors.textMuted, marginLeft: '6px' }}>
-            Telemetry:{' '}
-            <strong style={{ color: hasGps ? (isStale ? colors.warning : colors.success) : colors.textMuted }}>
-              {!hasGps ? 'No Fix' : isStale ? 'Stale' : 'Live'}
-            </strong>
-          </span>
-        </div>
-      </div>
-
-      {/* 2. Main Map Section (Dominant Geographic View) */}
+      {/* 1. Main Map Section (Dominant Geographic View) */}
       <div
         style={{
           backgroundColor: colors.surface,
@@ -644,125 +607,118 @@ export const LocationScreen: React.FC = () => {
           ref={mapContainerRef}
           style={{
             width: '100%',
-            height: isMapExpanded ? '700px' : '480px',
+            height: isMapExpanded ? '720px' : '480px',
             transition: 'height 0.25s ease-in-out',
             position: 'relative',
             zIndex: 1,
             backgroundColor: '#0F172A',
           }}
         >
-          {/* Top-Left Floating Overlay: GPS Status & Next Refill Panel */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '14px',
-              left: '14px',
-              zIndex: 1000,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-              maxWidth: '360px',
-            }}
-          >
-            {/* GPS Status Badge */}
+          {/* Upper-Left Information Banner: Next Refill Facility */}
+          {nextRefillFacility && (
             <div
               style={{
+                position: 'absolute',
+                top: '14px',
+                left: '14px',
+                zIndex: 1000,
                 backgroundColor: 'rgba(255, 255, 255, 0.96)',
                 backdropFilter: 'blur(6px)',
                 border: `1px solid ${colors.border}`,
                 borderRadius: '8px',
-                padding: '8px 14px',
+                padding: '10px 14px',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                 display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
+                flexDirection: 'column',
+                gap: '4px',
+                maxWidth: '340px',
               }}
             >
-              <div
-                style={{
-                  width: '9px',
-                  height: '9px',
-                  borderRadius: '50%',
-                  backgroundColor: !hasGps ? '#94A3B8' : isStale ? '#D97706' : '#16A34A',
-                  boxShadow: hasGps && !isStale ? '0 0 8px rgba(22, 163, 74, 0.6)' : 'none',
-                }}
-              />
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '11px', fontWeight: 700, color: colors.textPrimary }}>
-                  {!hasGps
-                    ? 'GPS UNAVAILABLE — Awaiting GNSS fix'
-                    : isStale
-                    ? 'GPS STALE TELEMETRY — Last update > 25s'
-                    : `GPS FIXED — ${activeTrainLoc?.satellites || 9} Satellites Tracked`}
-                </span>
-                {hasGps && activeTrainLoc?.current_latitude != null && (
-                  <span style={{ fontSize: '10px', color: colors.textMuted }}>
-                    {activeTrainLoc.current_latitude.toFixed(4)}° N, {activeTrainLoc.current_longitude?.toFixed(4)}° E •{' '}
-                    {activeTrainLoc.current_speed_kmh?.toFixed(1) || 0} km/h
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Droplets size={14} color="#0284C7" />
+                  <span style={{ fontSize: '10px', fontWeight: 800, color: '#0369A1', letterSpacing: '0.4px' }}>
+                    NEXT REFILL FACILITY
                   </span>
-                )}
+                </div>
+                <span
+                  style={{
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    backgroundColor: '#E0F2FE',
+                    color: '#0284C7',
+                    padding: '1px 5px',
+                    borderRadius: '4px',
+                  }}
+                >
+                  {nextRefillFacility.code}
+                </span>
+              </div>
+
+              <div style={{ fontSize: '13px', fontWeight: 700, color: colors.textPrimary }}>
+                {nextRefillFacility.name}
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', color: colors.textSecondary }}>
+                <span>
+                  Distance:{' '}
+                  <strong style={{ color: '#0284C7' }}>
+                    {hasGps ? `${nextRefillFacility.distanceKm.toFixed(1)} km` : '—'}
+                  </strong>
+                </span>
+                <span>&bull;</span>
+                <span>
+                  Capacity: <strong>{nextRefillFacility.water_capacity_liters > 0 ? nextRefillFacility.water_capacity_liters.toLocaleString() + ' L' : '—'}</strong>
+                </span>
+                <span>&bull;</span>
+                <span style={{ color: '#16A34A', fontWeight: 600 }}>{nextRefillFacility.operational_status}</span>
               </div>
             </div>
+          )}
 
-            {/* Next Refill Facility Info Panel */}
-            {nextRefillFacility && (
-              <div
-                style={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.96)',
-                  backdropFilter: 'blur(6px)',
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: '8px',
-                  padding: '10px 14px',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '4px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Droplets size={14} color="#0284C7" />
-                    <span style={{ fontSize: '10px', fontWeight: 800, color: '#0369A1', letterSpacing: '0.4px' }}>
-                      NEXT REFILL FACILITY
-                    </span>
-                  </div>
-                  <span
-                    style={{
-                      fontSize: '9px',
-                      fontWeight: 700,
-                      backgroundColor: '#E0F2FE',
-                      color: '#0284C7',
-                      padding: '1px 5px',
-                      borderRadius: '4px',
-                    }}
-                  >
-                    {nextRefillFacility.code}
-                  </span>
-                </div>
-
-                <div style={{ fontSize: '13px', fontWeight: 700, color: colors.textPrimary }}>
-                  {nextRefillFacility.name}
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px', color: colors.textSecondary }}>
-                  <span>
-                    Distance:{' '}
-                    <strong style={{ color: '#0284C7' }}>
-                      {hasGps ? `${nextRefillFacility.distanceKm.toFixed(1)} km` : 'N/A'}
-                    </strong>
-                  </span>
-                  <span>•</span>
-                  <span>
-                    Capacity: <strong>{nextRefillFacility.water_capacity_liters.toLocaleString()} L</strong>
-                  </span>
-                  <span>•</span>
-                  <span style={{ color: '#16A34A', fontWeight: 600 }}>{nextRefillFacility.operational_status}</span>
-                </div>
-              </div>
+          {/* Upper-Center GPS Status Indicator */}
+          <div
+            style={{
+              position: 'absolute',
+              top: '14px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 1000,
+              backgroundColor: 'rgba(255, 255, 255, 0.96)',
+              backdropFilter: 'blur(6px)',
+              border: `1px solid ${colors.border}`,
+              borderRadius: '20px',
+              padding: '6px 14px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
+            <div
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: !hasGps ? '#94A3B8' : isStale ? '#D97706' : '#16A34A',
+                boxShadow: hasGps && !isStale ? '0 0 8px rgba(22, 163, 74, 0.6)' : 'none',
+              }}
+            />
+            <span style={{ fontSize: '11px', fontWeight: 700, color: colors.textPrimary, whiteSpace: 'nowrap' }}>
+              {!hasGps
+                ? 'GPS UNAVAILABLE'
+                : isStale
+                ? 'GNSS DATA STALE'
+                : `GPS FIX AVAILABLE (${activeTrainLoc?.satellites || 9} Satellites)`}
+            </span>
+            {hasGps && activeTrainLoc?.current_latitude != null && (
+              <span style={{ fontSize: '10px', color: colors.textMuted, borderLeft: '1px solid #CBD5E1', paddingLeft: '8px' }}>
+                {activeTrainLoc.current_latitude.toFixed(4)}° N, {activeTrainLoc.current_longitude?.toFixed(4)}° E
+              </span>
             )}
           </div>
 
-          {/* Top-Right Floating Controls Bar */}
+          {/* Upper-Right Map Toolbar */}
           <div
             style={{
               position: 'absolute',
@@ -780,7 +736,29 @@ export const LocationScreen: React.FC = () => {
               border: `1px solid ${colors.border}`,
             }}
           >
-            {/* Expand / Normal Map */}
+            {/* 1. Google Maps Live */}
+            <button
+              onClick={handleOpenGoogleMaps}
+              title="Open Route in Google Maps Live View"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: `1px solid ${colors.borderStrong}`,
+                backgroundColor: '#FFFFFF',
+                color: colors.textPrimary,
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <ExternalLink size={13} color="#0284C7" />
+              <span>Google Maps Live</span>
+            </button>
+
+            {/* 2. Expand Map */}
             <button
               onClick={() => setIsMapExpanded(!isMapExpanded)}
               title={isMapExpanded ? 'Collapse Map' : 'Expand Map View'}
@@ -802,7 +780,7 @@ export const LocationScreen: React.FC = () => {
               <span>{isMapExpanded ? 'Normal' : 'Expand Map'}</span>
             </button>
 
-            {/* Satellite / Street Switch */}
+            {/* 3. Satellite */}
             <button
               onClick={() => {
                 const nextMode = tileMode === 'street' ? 'satellite' : 'street';
@@ -828,7 +806,7 @@ export const LocationScreen: React.FC = () => {
               <span>{tileMode === 'satellite' ? 'Street' : 'Satellite'}</span>
             </button>
 
-            {/* Current Location */}
+            {/* 4. Current Location */}
             <button
               onClick={handleCurrentLocation}
               title="Center on Physical GPS Telemetry"
@@ -850,7 +828,7 @@ export const LocationScreen: React.FC = () => {
               <span>Current Location</span>
             </button>
 
-            {/* Center Train */}
+            {/* 5. Center Train */}
             <button
               onClick={handleCenterTrain}
               title="Center on Selected Train"
@@ -872,26 +850,44 @@ export const LocationScreen: React.FC = () => {
               <span>Center Train</span>
             </button>
 
-            {/* Fit Corridor */}
+            {/* 6. Zoom In */}
             <button
-              onClick={handleFitCorridor}
-              title="Fit Entire Howrah — Asansol Corridor"
+              onClick={handleZoomIn}
+              title="Zoom In"
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '5px',
-                padding: '6px 10px',
+                justifyContent: 'center',
+                width: '28px',
+                height: '28px',
                 borderRadius: '6px',
                 border: `1px solid ${colors.borderStrong}`,
                 backgroundColor: '#FFFFFF',
                 color: colors.textPrimary,
-                fontSize: '11px',
-                fontWeight: 600,
                 cursor: 'pointer',
               }}
             >
-              <Map size={13} color="#64748B" />
-              <span>Fit Corridor</span>
+              <Plus size={14} />
+            </button>
+
+            {/* 7. Zoom Out */}
+            <button
+              onClick={handleZoomOut}
+              title="Zoom Out"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '28px',
+                height: '28px',
+                borderRadius: '6px',
+                border: `1px solid ${colors.borderStrong}`,
+                backgroundColor: '#FFFFFF',
+                color: colors.textPrimary,
+                cursor: 'pointer',
+              }}
+            >
+              <Minus size={14} />
             </button>
           </div>
 
@@ -972,7 +968,7 @@ export const LocationScreen: React.FC = () => {
           )}
         </div>
 
-        {/* Map Legend & Metadata Strip */}
+        {/* Map Legend (Section 5.D) */}
         <div
           style={{
             display: 'flex',
@@ -990,11 +986,11 @@ export const LocationScreen: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
               <span style={{ width: 9, height: 9, borderRadius: '50%', backgroundColor: '#2563EB', display: 'inline-block' }} />
-              <span>Selected Train</span>
+              <span>Live Train</span>
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
               <span style={{ width: 9, height: 9, borderRadius: '50%', backgroundColor: '#0284C7', display: 'inline-block' }} />
-              <span>Water Refill Hub</span>
+              <span>Water Refill Facility</span>
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
               <span style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #64748B', backgroundColor: '#FFFFFF', display: 'inline-block' }} />
@@ -1002,10 +998,10 @@ export const LocationScreen: React.FC = () => {
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
               <span style={{ width: 9, height: 9, borderRadius: '2px', backgroundColor: '#7C3AED', display: 'inline-block' }} />
-              <span>Destination (ASN)</span>
+              <span>Destination</span>
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ color: tileMode === 'satellite' ? '#38BDF8' : '#2563EB', fontWeight: 700 }}>— — —</span>
+              <span style={{ color: tileMode === 'satellite' ? '#38BDF8' : '#1D4ED8', fontWeight: 700 }}>— — —</span>
               <span>Railway Track Corridor Axis</span>
             </span>
           </div>
@@ -1016,7 +1012,7 @@ export const LocationScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Route and Refill Facilities Table (Directly Beneath Map) */}
+      {/* 2. Route Corridor and Refill Facilities Table (Directly Beneath Map, Section 5.E) */}
       <div
         style={{
           backgroundColor: colors.surface,
@@ -1041,13 +1037,13 @@ export const LocationScreen: React.FC = () => {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '11px', fontWeight: 800, color: '#334155', letterSpacing: '0.5px' }}>
-              ROUTE CORRIDOR & REFILL FACILITIES — HOWRAH TO ASANSOL
+              ROUTE CORRIDOR & REFILL FACILITIES
             </span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <span style={{ fontSize: '11px', color: colors.textMuted }}>
-              7 Route Stations • 4 Verified Water Refill Hubs • Click to locate on map
+              Howrah (HWH) to Asansol (ASN) • 7 Stations • 4 Verified Water Refill Hubs
             </span>
 
             <button
@@ -1105,8 +1101,8 @@ export const LocationScreen: React.FC = () => {
                 <th style={{ padding: '8px 14px' }}>STATION NAME</th>
                 <th style={{ padding: '8px 14px' }}>WATER REFILL CAPABILITY</th>
                 <th style={{ padding: '8px 14px', width: '90px' }}>DISTANCE</th>
-                <th style={{ padding: '8px 14px', width: '90px' }}>EST. ARRIVAL</th>
-                <th style={{ padding: '8px 14px', width: '130px' }}>FACILITY CAPACITY</th>
+                <th style={{ padding: '8px 14px', width: '90px' }}>ESTIMATED ARRIVAL</th>
+                <th style={{ padding: '8px 14px', width: '130px' }}>VERIFIED CAPACITY</th>
                 <th style={{ padding: '8px 14px', width: '110px' }}>FACILITY STATUS</th>
                 <th style={{ padding: '8px 14px', width: '70px', textAlign: 'center' }}>ACTION</th>
               </tr>
@@ -1135,12 +1131,12 @@ export const LocationScreen: React.FC = () => {
                       transition: 'background-color 0.15s ease',
                     }}
                   >
-                    {/* 1. Sequence # */}
+                    {/* 1. Serial Number (#) */}
                     <td style={{ padding: '9px 14px', color: colors.textMuted, fontWeight: 600 }}>
                       {st.route_order + 1}
                     </td>
 
-                    {/* 2. Code */}
+                    {/* 2. Station Code */}
                     <td style={{ padding: '9px 12px' }}>
                       <span
                         style={{
@@ -1204,19 +1200,19 @@ export const LocationScreen: React.FC = () => {
 
                     {/* 5. Distance */}
                     <td style={{ padding: '9px 14px', fontWeight: 700, color: '#0284C7' }}>
-                      {hasGps && st.distanceKm > 0 ? `${st.distanceKm.toFixed(1)} km` : '--'}
+                      {hasGps && st.distanceKm > 0 ? `${st.distanceKm.toFixed(1)} km` : '—'}
                     </td>
 
-                    {/* 6. Estimated Arrival (ETA) */}
+                    {/* 6. Estimated Arrival */}
                     <td style={{ padding: '9px 14px', fontWeight: 600, color: colors.textPrimary }}>
                       {st.etaString}
                     </td>
 
-                    {/* 7. Facility Capacity */}
+                    {/* 7. Verified Capacity */}
                     <td style={{ padding: '9px 14px', color: colors.textPrimary }}>
                       {st.water_capacity_liters > 0
                         ? `${st.water_capacity_liters.toLocaleString()} L`
-                        : '--'}
+                        : '—'}
                     </td>
 
                     {/* 8. Facility Status */}
@@ -1243,7 +1239,7 @@ export const LocationScreen: React.FC = () => {
                       </div>
                     </td>
 
-                    {/* 9. Action */}
+                    {/* 9. Action (Map Navigation) */}
                     <td style={{ padding: '9px 14px', textAlign: 'center' }}>
                       <button
                         onClick={(e) => {
@@ -1262,7 +1258,7 @@ export const LocationScreen: React.FC = () => {
                           transition: 'all 0.15s ease',
                         }}
                       >
-                        ⌖ Map
+                        Map
                       </button>
                     </td>
                   </tr>
