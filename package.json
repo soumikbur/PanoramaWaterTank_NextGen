@@ -5,6 +5,7 @@
   "description": "Panorama Water Tank Monitor — Railway SCADA/HMI Web Application",
   "scripts": {
     "install:mobile": "cd apps/mobile && npm install",
+    "install": "cd apps/mobile && npm install",
     "build": "cd apps/mobile && npm run build && cd ../.. && node scripts/sync_dist.js",
     "dev": "cd apps/mobile && npm run dev"
   }

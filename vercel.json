@@ -1,6 +1,7 @@
 {
-  "installCommand": "cd apps/mobile && npm install",
-  "buildCommand": "cd apps/mobile && npm run build && cd ../.. && node scripts/sync_dist.js",
+  "framework": "vite",
+  "installCommand": "if [ -d \"apps/mobile\" ]; then cd apps/mobile && npm install; else npm install; fi",
+  "buildCommand": "if [ -d \"apps/mobile\" ]; then cd apps/mobile && npm run build && cd ../.. && node scripts/sync_dist.js; else npm run build; fi",
   "outputDirectory": "apps/mobile/dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
