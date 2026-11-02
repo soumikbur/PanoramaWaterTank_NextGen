@@ -3,7 +3,7 @@ import { colors, typography, metrics } from '../theme';
 import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
 import { RegionSummary, TrainOverviewItem, TrainConsist } from '../types';
-import { Train, Plus, Trash2, X, ChevronRight, MapPin, ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Train, Plus, Trash2, X, ChevronRight, MapPin, ArrowLeft, ArrowRight, CheckCircle2, Edit3 } from 'lucide-react';
 
 export const TrainManagementScreen: React.FC = () => {
   const {
@@ -19,6 +19,7 @@ export const TrainManagementScreen: React.FC = () => {
   const [selectedTrain, setSelectedTrain] = useState<TrainConsist | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
 
   // Add Train Form State
   const [newTrainNumber, setNewTrainNumber] = useState('');
@@ -26,6 +27,13 @@ export const TrainManagementScreen: React.FC = () => {
   const [newTrainRegion, setNewTrainRegion] = useState('NORTH');
   const [newCoachNumber, setNewCoachNumber] = useState('B1');
   const [newCapacity, setNewCapacity] = useState('20.0');
+
+  // Edit Train Form State
+  const [editTrainNumber, setEditTrainNumber] = useState('');
+  const [editTrainName, setEditTrainName] = useState('');
+  const [editTrainRegion, setEditTrainRegion] = useState('NORTH');
+  const [editTrainType, setEditTrainType] = useState('Express');
+
   const [formError, setFormError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
@@ -103,6 +111,42 @@ export const TrainManagementScreen: React.FC = () => {
       await refreshRegions();
     } catch (err: any) {
       setFormError(err.message || 'Failed to register train');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenEditTrainModal = (train: TrainOverviewItem) => {
+    setEditTrainNumber(train.train_number);
+    setEditTrainName(train.name);
+    setEditTrainRegion(selectedRegion || 'NORTH');
+    setEditTrainType(train.type || 'Express');
+    setFormError(null);
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateTrainSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTrainName.trim()) {
+      setFormError('Please enter train name.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await ApiClient.updateTrain(editTrainNumber, {
+        name: editTrainName.trim(),
+        region: editTrainRegion,
+        type: editTrainType.trim(),
+      });
+
+      setIsEditModalOpen(false);
+      setFormError(null);
+      setActionMessage(`Train ${editTrainNumber} configuration updated successfully.`);
+      setTimeout(() => setActionMessage(null), 4000);
+      await refreshRegions();
+    } catch (err: any) {
+      setFormError(err.message || 'Failed to update train');
     } finally {
       setLoading(false);
     }
@@ -599,21 +643,41 @@ export const TrainManagementScreen: React.FC = () => {
                       <ChevronRight size={12} />
                     </button>
                     {currentUser.role === 'ADMIN' && (
-                      <button
-                        onClick={() => handleDeleteTrain(train.train_number)}
-                        style={{
-                          backgroundColor: '#FFF1F2',
-                          border: '1px solid #FECDD3',
-                          color: '#E11D48',
-                          borderRadius: '4px',
-                          padding: '4px 6px',
-                          fontSize: '11px',
-                          cursor: 'pointer',
-                        }}
-                        title="Delete train"
-                      >
-                        <Trash2 size={13} color="#DC2626" />
-                      </button>
+                      <>
+                        <button
+                          onClick={() => handleOpenEditTrainModal(train)}
+                          style={{
+                            backgroundColor: '#F1F5F9',
+                            border: '1px solid #CBD5E1',
+                            color: '#475569',
+                            borderRadius: '4px',
+                            padding: '4px 6px',
+                            fontSize: '11px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                          title="Edit train configuration"
+                        >
+                          <Edit3 size={13} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTrain(train.train_number)}
+                          style={{
+                            backgroundColor: '#FFF1F2',
+                            border: '1px solid #FECDD3',
+                            color: '#E11D48',
+                            borderRadius: '4px',
+                            padding: '4px 6px',
+                            fontSize: '11px',
+                            cursor: 'pointer',
+                          }}
+                          title="Delete train"
+                        >
+                          <Trash2 size={13} color="#DC2626" />
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1068,6 +1132,163 @@ export const TrainManagementScreen: React.FC = () => {
                   }}
                 >
                   {loading ? 'Registering...' : 'Add Train Consist'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Train Modal */}
+      {isEditModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+            padding: '16px',
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '8px',
+              width: '460px',
+              maxWidth: '100%',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                padding: '16px 20px',
+                borderBottom: '1px solid #E2E8F0',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0F172A' }}>
+                  Edit Train Configuration
+                </h3>
+                <span style={{ fontSize: '11px', color: '#64748B' }}>Train Number: {editTrainNumber}</span>
+              </div>
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateTrainSubmit} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {formError && (
+                <div style={{ padding: '10px 14px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '6px', color: '#DC2626', fontSize: '13px' }}>
+                  {formError}
+                </div>
+              )}
+
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                  Train Name &amp; Corridor Description *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTrainName}
+                  onChange={(e) => setEditTrainName(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '13px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                  Railway Region Zone
+                </label>
+                <select
+                  value={editTrainRegion}
+                  onChange={(e) => setEditTrainRegion(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '13px',
+                    backgroundColor: '#FFFFFF',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <option value="NORTH">NORTH — Northern Railway (NR)</option>
+                  <option value="SOUTH">SOUTH — Southern Railway (SR)</option>
+                  <option value="EAST">EAST — Eastern Railway (ER)</option>
+                  <option value="WEST">WEST — Western Railway (WR)</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                  Consist Fleet Classification
+                </label>
+                <input
+                  type="text"
+                  value={editTrainType}
+                  onChange={(e) => setEditTrainType(e.target.value)}
+                  placeholder="e.g. Shatabdi Express, Superfast AC, Rajdhani..."
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '13px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '14px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  style={{
+                    backgroundColor: '#F1F5F9',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '6px',
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    color: '#475569',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    backgroundColor: '#2563EB',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '8px 20px',
+                    fontSize: '12px',
+                    color: '#FFFFFF',
+                    cursor: 'pointer',
+                    fontWeight: 700,
+                  }}
+                >
+                  {loading ? 'Saving...' : 'Update Train'}
                 </button>
               </div>
             </form>

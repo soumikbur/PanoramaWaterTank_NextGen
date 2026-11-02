@@ -138,6 +138,7 @@ function calculateEta(distanceKm: number, speedKmh: number | null | undefined): 
 
 export const LocationScreen: React.FC = () => {
   const { selectedTrainNumber, setSelectedTrainNumber, sidebarCollapsed } = useApp();
+  const googleMapsApiKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_MAPS_API_KEY) || '';
   const [locations, setLocations] = useState<TrainLocation[]>([]);
   const [stations, setStations] = useState<CorridorStation[]>(DEFAULT_CORRIDOR_STATIONS);
   const [selectedStationCode, setSelectedStationCode] = useState<string>('');
@@ -589,6 +590,52 @@ export const LocationScreen: React.FC = () => {
         </div>
       )}
 
+      {/* Google Maps JS API Engine Status Notification */}
+      {!googleMapsApiKey && (
+        <div
+          style={{
+            backgroundColor: '#F8FAFC',
+            border: '1px solid #E2E8F0',
+            borderRadius: '6px',
+            padding: '8px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: '12px',
+            color: '#475569',
+            boxSizing: 'border-box',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ padding: '2px 6px', backgroundColor: '#EFF6FF', color: '#2563EB', fontWeight: 700, borderRadius: '4px', fontSize: '10px' }}>
+              SCADA MAP ENGINE
+            </span>
+            <span>
+              Google Maps JS API key (<code>VITE_GOOGLE_MAPS_API_KEY</code>) is not configured in environment. Using high-resolution Leaflet/OSM/Esri Satellite cartography with Eastern Railway corridor geometry.
+            </span>
+          </div>
+          <button
+            onClick={handleOpenGoogleMaps}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 10px',
+              borderRadius: '4px',
+              border: '1px solid #CBD5E1',
+              backgroundColor: '#FFFFFF',
+              color: '#0284C7',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <ExternalLink size={12} />
+            <span>Open in Google Maps Live</span>
+          </button>
+        </div>
+      )}
+
       {/* 1. Main Map Section (Dominant Geographic View) */}
       <div
         style={{
@@ -848,6 +895,28 @@ export const LocationScreen: React.FC = () => {
             >
               <Crosshair size={13} color="#2563EB" />
               <span>Center Train</span>
+            </button>
+
+            {/* 6. Fit Corridor */}
+            <button
+              onClick={handleFitCorridor}
+              title="Fit Viewport to Corridor Extents"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: `1px solid ${colors.borderStrong}`,
+                backgroundColor: '#FFFFFF',
+                color: colors.textPrimary,
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              <Navigation size={13} color="#0D9488" />
+              <span>Fit Corridor</span>
             </button>
 
             {/* 6. Zoom In */}

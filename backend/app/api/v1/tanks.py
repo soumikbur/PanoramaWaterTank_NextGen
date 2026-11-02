@@ -1,7 +1,9 @@
 """Tanks API Router."""
+from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -16,29 +18,7 @@ from app.services.alarm_service import AlarmService
 router = APIRouter(prefix="/tanks", tags=["Tanks"])
 
 
-@router.get("/live", response_model=TankLiveStatus)
-async def get_live_tank_status(db: AsyncSession = Depends(get_db)):
-    """Retrieve real-time telemetry, volume calculations, and status for the primary tank."""
-    tank_repo = TankRepository(db)
-    device_repo = DeviceRepository(db)
-    telemetry_repo = TelemetryRepository(db)
-    alarm_repo = AlarmRepository(db)
-
-    # Fetch default or first primary tank
-    tank = await tank_repo.get_first_primary()
-    if not tank:
-        # Auto-provision default tank & device if database is fresh
-        device = await device_repo.create_or_update(
-            uid=settings.DEFAULT_DEVICE_UID,
-            train_number=settings.DEFAULT_TRAIN_NUMBER,
-            coach_number=settings.DEFAULT_COACH_NUMBER,
-            name="Shatabdi Coach B4 Water System"
-        )
-        tank = await tank_repo.get_by_device_and_index(device.id, 1)
-
-    device = await device_repo.get_by_id(tank.device_id)
-    latest = await telemetry_repo.get_latest_for_tank(tank.id)
-
+def _calculate_tank_status(tank, device, latest, active_alarms) -> TankLiveStatus:
     has_telemetry = latest is not None
     is_stale = False
     if latest:
@@ -61,8 +41,6 @@ async def get_live_tank_status(db: AsyncSession = Depends(get_db)):
         ts = None
         rank = "N/A"
 
-    # Active alarms
-    active_alarms = await alarm_repo.list_alarms(status="ACTIVE", device_id=device.id)
     alarm_descriptors = [
         {"severity": a.severity, "alarm_type": a.alarm_type}
         for a in active_alarms
@@ -78,10 +56,10 @@ async def get_live_tank_status(db: AsyncSession = Depends(get_db)):
 
     return TankLiveStatus(
         tankId=tank.id,
-        deviceId=device.id,
-        deviceUid=device.uid,
-        trainNumber=device.train_number,
-        coachNumber=device.coach_number,
+        deviceId=device.id if device else "UNKNOWN",
+        deviceUid=device.uid if device else "UNKNOWN",
+        trainNumber=device.train_number if device else "—",
+        coachNumber=device.coach_number if device else "—",
         tankName=tank.name,
         levelPercent=level,
         rawLevelPercent=raw_level,
@@ -93,11 +71,66 @@ async def get_live_tank_status(db: AsyncSession = Depends(get_db)):
         rank=rank,
         alarmStatus=status_str,
         batteryVoltage=voltage,
-        isOnline=device.is_online,
+        isOnline=device.is_online if device else False,
         hasTelemetry=has_telemetry,
         isStale=is_stale,
         lastUpdate=ts
     )
+
+
+@router.get("", response_model=List[TankLiveStatus])
+async def list_all_tanks(db: AsyncSession = Depends(get_db)):
+    """Retrieve real-time telemetry, volume calculations, and statuses for all fleet tanks."""
+    tank_repo = TankRepository(db)
+    device_repo = DeviceRepository(db)
+    telemetry_repo = TelemetryRepository(db)
+    alarm_repo = AlarmRepository(db)
+
+    tanks = await tank_repo.list_all()
+    if not tanks:
+        # Auto-provision default tank & device if fresh
+        device = await device_repo.create_or_update(
+            uid=settings.DEFAULT_DEVICE_UID,
+            train_number=settings.DEFAULT_TRAIN_NUMBER,
+            coach_number=settings.DEFAULT_COACH_NUMBER,
+            name="Shatabdi Coach B4 Water System"
+        )
+        tank1 = await tank_repo.get_by_device_and_index(device.id, 1)
+        tanks = [tank1] if tank1 else []
+
+    results = []
+    for tank in tanks:
+        device = await device_repo.get_by_id(tank.device_id)
+        latest = await telemetry_repo.get_latest_for_tank(tank.id)
+        active_alarms = await alarm_repo.list_alarms(status="ACTIVE", device_id=tank.device_id) if device else []
+        results.append(_calculate_tank_status(tank, device, latest, active_alarms))
+
+    return results
+
+
+@router.get("/live", response_model=TankLiveStatus)
+async def get_live_tank_status(db: AsyncSession = Depends(get_db)):
+    """Retrieve real-time telemetry, volume calculations, and status for the primary tank."""
+    tank_repo = TankRepository(db)
+    device_repo = DeviceRepository(db)
+    telemetry_repo = TelemetryRepository(db)
+    alarm_repo = AlarmRepository(db)
+
+    tank = await tank_repo.get_first_primary()
+    if not tank:
+        device = await device_repo.create_or_update(
+            uid=settings.DEFAULT_DEVICE_UID,
+            train_number=settings.DEFAULT_TRAIN_NUMBER,
+            coach_number=settings.DEFAULT_COACH_NUMBER,
+            name="Shatabdi Coach B4 Water System"
+        )
+        tank = await tank_repo.get_by_device_and_index(device.id, 1)
+
+    device = await device_repo.get_by_id(tank.device_id) if tank else None
+    latest = await telemetry_repo.get_latest_for_tank(tank.id) if tank else None
+    active_alarms = await alarm_repo.list_alarms(status="ACTIVE", device_id=device.id) if device else []
+
+    return _calculate_tank_status(tank, device, latest, active_alarms)
 
 
 @router.put("/{tank_id}", response_model=TankOut)

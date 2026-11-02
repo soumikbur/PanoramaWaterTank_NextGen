@@ -24,10 +24,31 @@ class TankRepository:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def list_by_device(self, device_id: str) -> List[Tank]:
-        stmt = select(Tank).where(Tank.device_id == device_id).order_by(Tank.tank_index)
+    async def list_all(self) -> List[Tank]:
+        stmt = select(Tank).order_by(Tank.tank_index, Tank.created_at)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def create(
+        self,
+        device_id: str,
+        tank_index: int = 1,
+        name: str = "Primary Water Tank",
+        capacity_liters: float = 20.0,
+        height_cm: float = 50.0,
+        area_m2: float = 0.04
+    ) -> Tank:
+        tank = Tank(
+            device_id=device_id,
+            tank_index=tank_index,
+            name=name,
+            capacity_liters=capacity_liters,
+            height_cm=height_cm,
+            area_m2=area_m2,
+        )
+        self.session.add(tank)
+        await self.session.flush()
+        return tank
 
     async def get_first_primary(self) -> Optional[Tank]:
         """Fetch the first primary tank for the main dashboard view."""

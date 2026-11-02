@@ -120,6 +120,13 @@ export class ApiClient {
     });
   }
 
+  static async updateTrain(trainNumber: string, data: { name?: string; region?: string; type?: string }): Promise<any> {
+    return this.request(`/trains/${trainNumber}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
   static async deleteTrain(trainNumber: string): Promise<any> {
     return this.request(`/trains/${trainNumber}`, {
       method: 'DELETE',
@@ -137,6 +144,10 @@ export class ApiClient {
   }
 
   // Tanks
+  static async fetchTanks(): Promise<TankLiveStatus[]> {
+    return this.request<TankLiveStatus[]>('/tanks');
+  }
+
   static async fetchLiveTank(): Promise<TankLiveStatus> {
     return this.request<TankLiveStatus>('/tanks/live');
   }
@@ -155,6 +166,33 @@ export class ApiClient {
     if (isOnline !== undefined) params.append('is_online', String(isOnline));
     const query = params.toString() ? `?${params.toString()}` : '';
     return this.request<Device[]>(`/devices${query}`);
+  }
+
+  static async createDevice(data: { uid: string; train_number: string; coach_number: string; name: string; hardware_version?: string; firmware_version?: string }): Promise<Device> {
+    return this.request<Device>('/devices', {
+      method: 'POST',
+      body: JSON.stringify({
+        uid: data.uid,
+        train_number: data.train_number,
+        coach_number: data.coach_number,
+        name: data.name,
+        hardware_version: data.hardware_version,
+        firmware_version: data.firmware_version,
+      }),
+    });
+  }
+
+  static async updateDevice(deviceId: string, data: { name?: string; trainNumber?: string; coachNumber?: string; firmwareVersion?: string }): Promise<Device> {
+    return this.request<Device>(`/devices/${deviceId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  static async deleteDevice(deviceId: string): Promise<any> {
+    return this.request(`/devices/${deviceId}`, {
+      method: 'DELETE',
+    });
   }
 
   static async fetchDeviceDiagnostics(deviceId: string): Promise<DeviceDiagnostics> {

@@ -1,13 +1,17 @@
 import React, { useState, useMemo } from 'react';
 import { colors, metrics, typography } from '../theme';
 import { useApp } from '../state/AppContext';
+import { ApiClient } from '../api/client';
 import { BaseCard } from '../components/common/BaseCard';
 import { InfoRow } from '../components/common/InfoRow';
-import { RefreshCw, X } from 'lucide-react';
+import { RefreshCw, X, Plus, Edit3, Trash2, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export interface DeviceTelemetry {
+  dbId: string;
   name: string;
   id: string;
+  trainNumber: string;
+  coachNumber: string;
   serialNumber: string;
   location: string;
   status: 'Online' | 'Offline' | 'Warning';
@@ -38,11 +42,32 @@ export interface DeviceTelemetry {
 }
 
 export const DevicesScreen: React.FC = () => {
-  const { liveTank, devices, connectionStatus, currentTime, refreshData } = useApp();
+  const { liveTank, devices, connectionStatus, currentTime, refreshData, currentUser } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [connFilter, setConnFilter] = useState('All');
   const [selectedDevice, setSelectedDevice] = useState<DeviceTelemetry | null>(null);
+
+  // Add / Edit Modal States
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [deviceToEdit, setDeviceToEdit] = useState<DeviceTelemetry | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+
+  // Add Device Form
+  const [addUid, setAddUid] = useState('');
+  const [addName, setAddName] = useState('');
+  const [addTrainNumber, setAddTrainNumber] = useState('12002');
+  const [addCoachNumber, setAddCoachNumber] = useState('B1');
+  const [addHardwareVersion, setAddHardwareVersion] = useState('ESP32S3-EC200U-V1');
+  const [addFirmwareVersion, setAddFirmwareVersion] = useState('2.0.0');
+
+  // Edit Device Form
+  const [editName, setEditName] = useState('');
+  const [editTrainNumber, setEditTrainNumber] = useState('');
+  const [editCoachNumber, setEditCoachNumber] = useState('');
+  const [editFirmwareVersion, setEditFirmwareVersion] = useState('');
 
   // Live devices mapped strictly from registered backend database devices
   const allDevices: DeviceTelemetry[] = useMemo(() => {
@@ -60,8 +85,11 @@ export const DevicesScreen: React.FC = () => {
         : 'Online';
 
       return {
+        dbId: d.id,
         name: d.name || `Water Monitor (${d.trainNumber}/${d.coachNumber})`,
         id: d.uid,
+        trainNumber: d.trainNumber || '12002',
+        coachNumber: d.coachNumber || 'B4',
         serialNumber: d.uid,
         location: `Coach ${d.coachNumber} (Train ${d.trainNumber})`,
         status,
@@ -92,6 +120,87 @@ export const DevicesScreen: React.FC = () => {
       };
     });
   }, [devices, liveTank, connectionStatus]);
+
+  const handleOpenAddModal = () => {
+    setAddUid(`PANORAMA-DEV-${Math.floor(1000 + Math.random() * 9000)}`);
+    setAddName('Coach Water Monitor');
+    setAddTrainNumber('12002');
+    setAddCoachNumber('B2');
+    setFormError(null);
+    setIsAddModalOpen(true);
+  };
+
+  const handleCreateDevice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addUid.trim() || !addName.trim() || !addTrainNumber.trim() || !addCoachNumber.trim()) {
+      setFormError('All fields are required.');
+      return;
+    }
+    try {
+      await ApiClient.createDevice({
+        uid: addUid.trim(),
+        name: addName.trim(),
+        train_number: addTrainNumber.trim(),
+        coach_number: addCoachNumber.trim(),
+        hardware_version: addHardwareVersion.trim(),
+        firmware_version: addFirmwareVersion.trim(),
+      });
+      setIsAddModalOpen(false);
+      setActionFeedback(`Device ${addUid} registered successfully.`);
+      setTimeout(() => setActionFeedback(null), 4000);
+      await refreshData();
+    } catch (err: any) {
+      setFormError(err.message || 'Failed to create device');
+    }
+  };
+
+  const handleOpenEditModal = (dev: DeviceTelemetry) => {
+    setDeviceToEdit(dev);
+    setEditName(dev.name);
+    setEditTrainNumber(dev.trainNumber);
+    setEditCoachNumber(dev.coachNumber);
+    setEditFirmwareVersion(dev.firmwareVersion);
+    setFormError(null);
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateDevice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!deviceToEdit) return;
+    try {
+      await ApiClient.updateDevice(deviceToEdit.dbId, {
+        name: editName.trim(),
+        trainNumber: editTrainNumber.trim(),
+        coachNumber: editCoachNumber.trim(),
+        firmwareVersion: editFirmwareVersion.trim(),
+      });
+      setIsEditModalOpen(false);
+      setActionFeedback(`Device ${deviceToEdit.id} metadata updated successfully.`);
+      setTimeout(() => setActionFeedback(null), 4000);
+      await refreshData();
+    } catch (err: any) {
+      setFormError(err.message || 'Failed to update device');
+    }
+  };
+
+  const handleDeleteDevice = async (dev: DeviceTelemetry) => {
+    if (currentUser?.role !== 'ADMIN') {
+      alert('Administrator privileges required to delete monitoring hardware.');
+      return;
+    }
+    if (!window.confirm(`Are you sure you want to delete device ${dev.name} (${dev.id})? This will also remove its configured tank entities.`)) {
+      return;
+    }
+    try {
+      await ApiClient.deleteDevice(dev.dbId);
+      setActionFeedback(`Device ${dev.id} removed from fleet.`);
+      setTimeout(() => setActionFeedback(null), 4000);
+      if (selectedDevice?.id === dev.id) setSelectedDevice(null);
+      await refreshData();
+    } catch (err: any) {
+      alert(`Delete failed: ${err.message}`);
+    }
+  };
 
   // Filtering
   const filteredDevices = useMemo(() => {
@@ -127,7 +236,7 @@ export const DevicesScreen: React.FC = () => {
         }}
       >
         {/* 1. Page Header with Title & Action Controls */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
           <div>
             <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#0F172A', fontFamily: typography.fontFamily }}>
               Devices
@@ -137,27 +246,71 @@ export const DevicesScreen: React.FC = () => {
             </p>
           </div>
 
-          <button
-            onClick={() => refreshData()}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={handleOpenAddModal}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '6px',
+                border: 'none',
+                backgroundColor: '#2563EB',
+                color: '#FFFFFF',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: typography.fontFamily,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 1px 2px rgba(37, 99, 235, 0.2)',
+              }}
+            >
+              <Plus size={14} />
+              <span>Add Device</span>
+            </button>
+
+            <button
+              onClick={() => refreshData()}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '6px',
+                border: '1px solid #CBD5E1',
+                backgroundColor: '#FFFFFF',
+                color: '#334155',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: typography.fontFamily,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <RefreshCw size={13} />
+              <span>Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        {actionFeedback && (
+          <div
             style={{
-              padding: '8px 16px',
+              backgroundColor: '#ECFDF5',
+              border: '1px solid #A7F3D0',
+              color: '#065F46',
               borderRadius: '6px',
-              border: '1px solid #CBD5E1',
-              backgroundColor: '#FFFFFF',
-              color: '#334155',
+              padding: '10px 14px',
               fontSize: '13px',
               fontWeight: 600,
-              cursor: 'pointer',
-              fontFamily: typography.fontFamily,
-              display: 'inline-flex',
+              display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '8px',
             }}
           >
-            <RefreshCw size={13} />
-            <span>Refresh</span>
-          </button>
-        </div>
+            <CheckCircle2 size={16} />
+            <span>{actionFeedback}</span>
+          </div>
+        )}
 
         {/* 2. Search & Filter Bar */}
         <BaseCard style={{ padding: '12px', boxSizing: 'border-box' }}>
@@ -336,7 +489,7 @@ export const DevicesScreen: React.FC = () => {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: '180px 100px 130px 150px 120px 90px 1fr 90px',
+                gridTemplateColumns: '200px 90px 130px 140px 110px 80px 1fr 130px',
                 gap: '12px',
                 padding: '0 12px',
                 fontSize: '11px',
@@ -352,7 +505,7 @@ export const DevicesScreen: React.FC = () => {
               <div>SENSOR HEALTH</div>
               <div>FIRMWARE</div>
               <div>LAST UPDATE</div>
-              <div>ACTION</div>
+              <div>ACTIONS</div>
             </div>
 
             <div style={{ width: '100%', height: '1px', backgroundColor: '#F1F5F9' }} />
@@ -395,7 +548,7 @@ export const DevicesScreen: React.FC = () => {
                     onClick={() => setSelectedDevice(dev)}
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: '180px 100px 130px 150px 120px 90px 1fr 90px',
+                      gridTemplateColumns: '200px 90px 130px 140px 110px 80px 1fr 130px',
                       gap: '12px',
                       alignItems: 'center',
                       height: '64px',
@@ -414,7 +567,7 @@ export const DevicesScreen: React.FC = () => {
                         {dev.name}
                       </span>
                       <span style={{ fontSize: '11px', color: '#64748B', fontFamily: typography.fontFamily }}>
-                        ID: {dev.id}
+                        {dev.location}
                       </span>
                     </div>
 
@@ -484,7 +637,7 @@ export const DevicesScreen: React.FC = () => {
                       style={{
                         fontSize: '12px',
                         fontWeight: 500,
-                        color: dev.sensorStatus === 'Healthy' ? '#059669' : '#D97706',
+                        color: dev.sensorStatus === 'Healthy' || dev.sensorStatus === 'Operational' ? '#059669' : '#D97706',
                         fontFamily: typography.fontFamily,
                       }}
                     >
@@ -493,7 +646,7 @@ export const DevicesScreen: React.FC = () => {
 
                     {/* Firmware Version */}
                     <span style={{ fontSize: '12px', color: '#64748B', fontFamily: typography.fontFamily }}>
-                      {dev.firmwareVersion}
+                      {dev.firmwareVersion || 'Unknown'}
                     </span>
 
                     {/* Last Update */}
@@ -501,26 +654,72 @@ export const DevicesScreen: React.FC = () => {
                       {dev.lastUpdate}
                     </span>
 
-                    {/* Action View Button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedDevice(dev);
-                      }}
-                      style={{
-                        padding: '6px 10px',
-                        borderRadius: '6px',
-                        border: '1px solid #CBD5E1',
-                        backgroundColor: '#FFFFFF',
-                        color: '#334155',
-                        fontSize: '12px',
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                        fontFamily: typography.fontFamily,
-                      }}
-                    >
-                      View Details
-                    </button>
+                    {/* Action Buttons: Inspect, Edit, Delete */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedDevice(dev);
+                        }}
+                        title="View Telemetry Diagnostics"
+                        style={{
+                          padding: '5px 8px',
+                          borderRadius: '4px',
+                          border: '1px solid #CBD5E1',
+                          backgroundColor: '#FFFFFF',
+                          color: '#2563EB',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Inspect
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenEditModal(dev);
+                        }}
+                        title="Edit Device Configuration"
+                        style={{
+                          padding: '5px',
+                          borderRadius: '4px',
+                          border: '1px solid #CBD5E1',
+                          backgroundColor: '#FFFFFF',
+                          color: '#475569',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Edit3 size={13} />
+                      </button>
+
+                      {currentUser?.role === 'ADMIN' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteDevice(dev);
+                          }}
+                          title="Delete Device"
+                          style={{
+                            padding: '5px',
+                            borderRadius: '4px',
+                            border: '1px solid #FECACA',
+                            backgroundColor: '#FEF2F2',
+                            color: '#DC2626',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })
@@ -678,6 +877,237 @@ export const DevicesScreen: React.FC = () => {
             >
               Close Device Drawer
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Add Device Modal */}
+      {isAddModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+            padding: '16px',
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '8px',
+              width: '460px',
+              maxWidth: '100%',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0F172A' }}>Register New Monitoring Device</h3>
+              <button onClick={() => setIsAddModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateDevice} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {formError && (
+                <div style={{ padding: '10px 14px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '6px', color: '#DC2626', fontSize: '13px' }}>
+                  {formError}
+                </div>
+              )}
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Device Hardware UID *</label>
+                <input
+                  type="text"
+                  value={addUid}
+                  onChange={(e) => setAddUid(e.target.value)}
+                  placeholder="e.g. 0026004D4B42501120353332"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Device Display Name *</label>
+                <input
+                  type="text"
+                  value={addName}
+                  onChange={(e) => setAddName(e.target.value)}
+                  placeholder="e.g. Shatabdi Coach B2 Water Monitor"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Train Number *</label>
+                  <input
+                    type="text"
+                    value={addTrainNumber}
+                    onChange={(e) => setAddTrainNumber(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Coach Number *</label>
+                  <input
+                    type="text"
+                    value={addCoachNumber}
+                    onChange={(e) => setAddCoachNumber(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Hardware Model</label>
+                  <input
+                    type="text"
+                    value={addHardwareVersion}
+                    onChange={(e) => setAddHardwareVersion(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Firmware Version</label>
+                  <input
+                    type="text"
+                    value={addFirmwareVersion}
+                    onChange={(e) => setAddFirmwareVersion(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '13px', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{ padding: '8px 20px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Save Device
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Device Modal */}
+      {isEditModalOpen && deviceToEdit && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+            padding: '16px',
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '8px',
+              width: '460px',
+              maxWidth: '100%',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0F172A' }}>Edit Device Assignment</h3>
+                <span style={{ fontSize: '11px', color: '#64748B' }}>UID: {deviceToEdit.id}</span>
+              </div>
+              <button onClick={() => setIsEditModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateDevice} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {formError && (
+                <div style={{ padding: '10px 14px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '6px', color: '#DC2626', fontSize: '13px' }}>
+                  {formError}
+                </div>
+              )}
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Device Name *</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Train Assignment *</label>
+                  <input
+                    type="text"
+                    value={editTrainNumber}
+                    onChange={(e) => setEditTrainNumber(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Coach Assignment *</label>
+                  <input
+                    type="text"
+                    value={editCoachNumber}
+                    onChange={(e) => setEditCoachNumber(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Firmware Version</label>
+                <input
+                  type="text"
+                  value={editFirmwareVersion}
+                  onChange={(e) => setEditFirmwareVersion(e.target.value)}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '13px', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{ padding: '8px 20px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Update Device
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

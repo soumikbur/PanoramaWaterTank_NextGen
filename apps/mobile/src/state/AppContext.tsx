@@ -34,6 +34,7 @@ interface AppContextType {
   isAuthenticated: boolean;
   authLoading: boolean;
   liveTank: TankLiveStatus | null;
+  tanks: TankLiveStatus[];
   devices: Device[];
   activeAlarms: AlarmItem[];
   alarmStats: AlarmStats;
@@ -72,6 +73,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
   const [liveTank, setLiveTank] = useState<TankLiveStatus | null>(null);
+  const [tanks, setTanks] = useState<TankLiveStatus[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [activeAlarms, setActiveAlarms] = useState<AlarmItem[]>([]);
   const [alarmStats, setAlarmStats] = useState<AlarmStats>(defaultStats);
@@ -151,8 +153,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Fetch initial REST data
   const refreshData = async () => {
     try {
-      const [tank, devList, alarms, stats, regs] = await Promise.all([
+      const [tank, allTanks, devList, alarms, stats, regs] = await Promise.all([
         ApiClient.fetchLiveTank().catch(() => null),
+        ApiClient.fetchTanks().catch(() => []),
         ApiClient.fetchDevices().catch(() => []),
         ApiClient.fetchAlarms('ACTIVE').catch(() => []),
         ApiClient.fetchAlarmStats().catch(() => defaultStats),
@@ -160,6 +163,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       ]);
 
       if (tank) setLiveTank(tank);
+      if (allTanks && allTanks.length > 0) setTanks(allTanks);
       setDevices(devList);
       setActiveAlarms(alarms);
       setAlarmStats(stats);
@@ -196,6 +200,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           isOnline: data.isOnline ?? true,
           lastUpdate: data.timestamp ?? new Date().toISOString(),
         };
+      });
+
+      setTanks((prev) => {
+        if (!prev || prev.length === 0) return prev;
+        return prev.map((t) => {
+          if (t.tankIndex === 1 && (data.deviceUid ? t.deviceUid === data.deviceUid : true)) {
+            return {
+              ...t,
+              levelPercent: data.primaryLevel ?? t.levelPercent,
+              rawLevelPercent: data.rawLevel ?? t.rawLevelPercent,
+              volumeLiters: data.primaryVolume ?? t.volumeLiters,
+              heightCm: data.primaryHeight ?? t.heightCm,
+              rank: data.primaryRank ?? t.rank,
+              alarmStatus: data.status ?? t.alarmStatus,
+              batteryVoltage: data.batteryVoltage ?? t.batteryVoltage,
+              isOnline: data.isOnline ?? true,
+              lastUpdate: data.timestamp ?? new Date().toISOString(),
+            };
+          }
+          return t;
+        });
       });
     });
 
@@ -261,6 +286,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isAuthenticated,
         authLoading,
         liveTank,
+        tanks,
         devices,
         activeAlarms,
         alarmStats,

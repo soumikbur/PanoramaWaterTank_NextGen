@@ -41,6 +41,12 @@ class TrainCreate(BaseModel):
     tank_capacity: Optional[float] = 20.0
 
 
+class TrainUpdate(BaseModel):
+    name: Optional[str] = None
+    region: Optional[str] = None
+    type: Optional[str] = None
+
+
 class TankConsistItem(BaseModel):
     id: str
     tank_index: int
@@ -320,6 +326,26 @@ async def create_train(data: TrainCreate, db: AsyncSession = Depends(get_db)):
         )
 
     return {"message": "Train registered successfully", "train_number": data.train_number}
+
+
+@router.put("/{train_number}")
+async def update_train(train_number: str, data: TrainUpdate, db: AsyncSession = Depends(get_db)):
+    """Update train metadata."""
+    if train_number not in TRAIN_METADATA:
+        TRAIN_METADATA[train_number] = {
+            "name": f"Train {train_number}",
+            "region": "NORTH",
+            "type": "Fleet Consist"
+        }
+    if data.name is not None:
+        TRAIN_METADATA[train_number]["name"] = data.name.strip()
+    if data.region is not None:
+        reg = data.region.upper().strip()
+        if reg in REGION_CONFIG:
+            TRAIN_METADATA[train_number]["region"] = reg
+    if data.type is not None:
+        TRAIN_METADATA[train_number]["type"] = data.type.strip()
+    return {"message": "Train updated successfully", "train_number": train_number, "metadata": TRAIN_METADATA[train_number]}
 
 
 @router.delete("/{train_number}")

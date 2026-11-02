@@ -88,3 +88,11 @@ class DeviceRepository:
 
         return device
 
+    async def delete(self, device_id: str) -> bool:
+        device = await self.get_by_id(device_id)
+        if device:
+            await self.session.delete(device)
+            await self.session.flush()
+            return True
+        return False
+

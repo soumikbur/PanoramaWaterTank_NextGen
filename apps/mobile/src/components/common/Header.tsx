@@ -36,15 +36,15 @@ export const Header: React.FC = () => {
     },
     trains: {
       title: 'Train Management',
-      subtitle: 'Railway Fleet Operations & Consist Management',
+      subtitle: 'Railway fleet operations & regional consist management',
     },
     watertank: {
-      title: 'Water Tank Monitor',
-      subtitle: 'High-precision volume calculation & dual-tank telemetry',
+      title: 'All Tanks',
+      subtitle: 'Fleet-wide water reservoir level & volume monitoring',
     },
     devices: {
-      title: 'Edge Device Fleet',
-      subtitle: 'ESP32-S3 + EC200U 4G IoT Gateway telematics & hardware status',
+      title: 'Devices',
+      subtitle: 'Manage and monitor connected water-level monitoring devices',
     },
     location: {
       title: 'Location',
@@ -63,8 +63,8 @@ export const Header: React.FC = () => {
       subtitle: 'Water consumption analysis, refill logs & compliance audit',
     },
     settings: {
-      title: 'System Settings & Geometry',
-      subtitle: 'MQTT broker credentials, tank dimensions & sensor calibration',
+      title: 'Settings',
+      subtitle: 'Tank geometry, alarm thresholds & hardware configuration',
     },
     users: {
       title: 'User Management & RBAC',
