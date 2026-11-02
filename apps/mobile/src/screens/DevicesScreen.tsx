@@ -42,7 +42,7 @@ export interface DeviceTelemetry {
 }
 
 export const DevicesScreen: React.FC = () => {
-  const { liveTank, devices, connectionStatus, currentTime, refreshData, currentUser } = useApp();
+  const { liveTank, devices, connectionStatus, currentTime, refreshData, currentUser, selectedDeviceId } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [connFilter, setConnFilter] = useState('All');
@@ -120,6 +120,15 @@ export const DevicesScreen: React.FC = () => {
       };
     });
   }, [devices, liveTank, connectionStatus]);
+
+  useEffect(() => {
+    if (selectedDeviceId && allDevices.length > 0) {
+      const target = allDevices.find((d) => d.id === selectedDeviceId || d.dbId === selectedDeviceId || d.serialNumber === selectedDeviceId);
+      if (target) {
+        setSelectedDevice(target);
+      }
+    }
+  }, [selectedDeviceId, allDevices]);
 
   const handleOpenAddModal = () => {
     setAddUid(`PANORAMA-DEV-${Math.floor(1000 + Math.random() * 9000)}`);

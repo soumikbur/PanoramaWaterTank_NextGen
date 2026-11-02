@@ -3,7 +3,7 @@ import L from 'leaflet';
 import { colors, typography, metrics } from '../theme';
 import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
-import { TrainLocation, CorridorStation } from '../types';
+import { TrainLocation, CorridorStation, DEFAULT_CORRIDOR_STATIONS } from '../types';
 import {
   Maximize2,
   Minimize2,
@@ -20,96 +20,6 @@ import {
   X,
   Info,
 } from 'lucide-react';
-
-// Authoritative Eastern Railway Corridor: Howrah Junction to Asansol Junction
-const DEFAULT_CORRIDOR_STATIONS: CorridorStation[] = [
-  {
-    id: 'hwh',
-    name: 'Howrah Junction',
-    code: 'HWH',
-    latitude: 22.5839,
-    longitude: 88.3426,
-    route_order: 0,
-    water_refill_available: true,
-    water_capacity_liters: 50000,
-    operational_status: 'Operational',
-    last_verified: '05 Sep 2026',
-    is_source: true,
-  },
-  {
-    id: 'kqu',
-    name: 'Kamarkundu',
-    code: 'KQU',
-    latitude: 22.8272,
-    longitude: 88.1969,
-    route_order: 1,
-    water_refill_available: false,
-    water_capacity_liters: 0,
-    operational_status: 'No Facility',
-    last_verified: '05 Sep 2026',
-  },
-  {
-    id: 'bwn',
-    name: 'Bardhaman Junction',
-    code: 'BWN',
-    latitude: 23.2324,
-    longitude: 87.8615,
-    route_order: 2,
-    water_refill_available: true,
-    water_capacity_liters: 25000,
-    operational_status: 'Operational',
-    last_verified: '05 Sep 2026',
-  },
-  {
-    id: 'pan',
-    name: 'Panagarh',
-    code: 'PAN',
-    latitude: 23.4518,
-    longitude: 87.4382,
-    route_order: 3,
-    water_refill_available: false,
-    water_capacity_liters: 0,
-    operational_status: 'No Facility',
-    last_verified: '05 Sep 2026',
-  },
-  {
-    id: 'dgr',
-    name: 'Durgapur',
-    code: 'DGR',
-    latitude: 23.5014,
-    longitude: 87.3119,
-    route_order: 4,
-    water_refill_available: true,
-    water_capacity_liters: 20000,
-    operational_status: 'Operational',
-    last_verified: '05 Sep 2026',
-  },
-  {
-    id: 'rng',
-    name: 'Raniganj',
-    code: 'RNG',
-    latitude: 23.6186,
-    longitude: 87.1358,
-    route_order: 5,
-    water_refill_available: false,
-    water_capacity_liters: 0,
-    operational_status: 'No Facility',
-    last_verified: '05 Sep 2026',
-  },
-  {
-    id: 'asn',
-    name: 'Asansol Junction',
-    code: 'ASN',
-    latitude: 23.6871,
-    longitude: 86.9746,
-    route_order: 6,
-    water_refill_available: true,
-    water_capacity_liters: 30000,
-    operational_status: 'Operational',
-    last_verified: '05 Sep 2026',
-    is_destination: true,
-  },
-];
 
 // Great-circle Haversine formula with calibrated railway track winding factor (1.12x)
 function calculateTrackDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -137,7 +47,7 @@ function calculateEta(distanceKm: number, speedKmh: number | null | undefined): 
 }
 
 export const LocationScreen: React.FC = () => {
-  const { selectedTrainNumber, setSelectedTrainNumber, sidebarCollapsed } = useApp();
+  const { selectedTrainNumber, setSelectedTrainNumber, sidebarCollapsed, selectedStationCode: contextStationCode, setSelectedStationCode: setContextStationCode } = useApp();
   const googleMapsApiKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_MAPS_API_KEY) || '';
   const [locations, setLocations] = useState<TrainLocation[]>([]);
   const [stations, setStations] = useState<CorridorStation[]>(DEFAULT_CORRIDOR_STATIONS);
@@ -162,6 +72,20 @@ export const LocationScreen: React.FC = () => {
     const t = setTimeout(() => setFeedbackToast(null), 3500);
     return () => clearTimeout(t);
   }, [feedbackToast]);
+
+  // Handle external selection from Global Search
+  useEffect(() => {
+    if (contextStationCode && stations.length > 0) {
+      const target = stations.find((s) => s.code.toLowerCase() === contextStationCode.toLowerCase());
+      if (target) {
+        setSelectedStationCode(target.code);
+        setSelectedEntity(target);
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.flyTo([target.latitude, target.longitude], 12, { duration: 1.2 });
+        }
+      }
+    }
+  }, [contextStationCode, stations]);
 
   // Fetch corridor stations and train locations
   useEffect(() => {

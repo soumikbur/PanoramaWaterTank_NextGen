@@ -49,6 +49,12 @@ interface AppContextType {
   toggleSidebar: () => void;
   selectedTrainNumber: string;
   setSelectedTrainNumber: (trainNum: string) => void;
+  selectedTankId: string | null;
+  setSelectedTankId: (id: string | null) => void;
+  selectedDeviceId: string | null;
+  setSelectedDeviceId: (id: string | null) => void;
+  selectedStationCode: string | null;
+  setSelectedStationCode: (code: string | null) => void;
   regions: RegionSummary[];
   refreshData: () => Promise<void>;
   refreshRegions: () => Promise<void>;
@@ -83,6 +89,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [selectedTrainNumber, setSelectedTrainNumber] = useState<string>('12002');
+  const [selectedTankId, setSelectedTankId] = useState<string | null>(null);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const [selectedStationCode, setSelectedStationCode] = useState<string | null>(null);
   const [regions, setRegions] = useState<RegionSummary[]>([]);
 
   // 1. Session verification on startup
@@ -301,6 +310,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         toggleSidebar,
         selectedTrainNumber,
         setSelectedTrainNumber,
+        selectedTankId,
+        setSelectedTankId,
+        selectedDeviceId,
+        setSelectedDeviceId,
+        selectedStationCode,
+        setSelectedStationCode,
         regions,
         refreshData,
         refreshRegions,

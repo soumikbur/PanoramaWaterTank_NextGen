@@ -26,11 +26,17 @@ import {
 } from 'lucide-react';
 
 export const WaterTankScreen: React.FC = () => {
-  const { tanks, liveTank, connectionStatus, refreshData } = useApp();
+  const { tanks, liveTank, connectionStatus, refreshData, selectedTankId: contextTankId, setSelectedTankId: setContextTankId } = useApp();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'ONLINE' | 'OFFLINE' | 'LOW_LEVEL'>('ALL');
-  const [selectedTankId, setSelectedTankId] = useState<string | null>(null);
+  const [selectedTankId, setSelectedTankId] = useState<string | null>(contextTankId || null);
+
+  useEffect(() => {
+    if (contextTankId) {
+      setSelectedTankId(contextTankId);
+    }
+  }, [contextTankId]);
 
   // Fallback to liveTank if tanks array is initially empty
   const allTanks: TankLiveStatus[] = useMemo(() => {
