@@ -1,0 +1,50 @@
+# Node & Vite dependencies
+node_modules/
+apps/mobile/node_modules/
+apps/mobile/dist/
+
+# Python & Backend runtime
+venv/
+backend/venv/
+backend/__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+backend/.pytest_cache/
+.pytest_cache/
+backend/*.db
+*.db
+*.sqlite
+*.sqlite3
+
+# C++ Qt build artifacts & binaries
+build/
+dist/
+release/
+bin/
+*_autogen/
+CMakeFiles/
+CMakeCache.txt
+*.user
+*.dir/
+
+# Environment files & Secrets
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# Logs and temporary execution outputs
+*.log
+apps/mobile/*.log
+audit_out*.log
+audit_err*.log
+multi_res_*.log
+*.tmp
+
+# Vercel project configuration and cache
+.vercel
+
+# Operating System Files
+.DS_Store
+Thumbs.db

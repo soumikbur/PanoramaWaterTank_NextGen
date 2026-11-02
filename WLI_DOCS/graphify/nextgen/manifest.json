@@ -1,0 +1,284 @@
+{
+  "app/ApplicationController.cpp": {
+    "mtime": 1793351142.615932,
+    "seen": 1793351860.1741889,
+    "ast_hash": "0bf45dff19a2445bf6d729493dd3b515",
+    "semantic_hash": "0bf45dff19a2445bf6d729493dd3b515"
+  },
+  "app/ApplicationController.h": {
+    "mtime": 1793351113.0062132,
+    "seen": 1793351860.1741974,
+    "ast_hash": "30516c4261a5ae4864823a09d09221b9",
+    "semantic_hash": "30516c4261a5ae4864823a09d09221b9"
+  },
+  "app/main.cpp": {
+    "mtime": 1793351150.986628,
+    "seen": 1793351860.174202,
+    "ast_hash": "9c93f4de8f780e79bcf634203962cc35",
+    "semantic_hash": "9c93f4de8f780e79bcf634203962cc35"
+  },
+  "src/configuration/SettingsManager.cpp": {
+    "mtime": 1790685124.0,
+    "seen": 1793351860.1742046,
+    "ast_hash": "0a8812534654670558ee2985fee2ac0c",
+    "semantic_hash": "0a8812534654670558ee2985fee2ac0c"
+  },
+  "src/configuration/SettingsManager.h": {
+    "mtime": 1790684874.0,
+    "seen": 1793351860.1742072,
+    "ast_hash": "fb530f89610ba2def0390c9715fba93b",
+    "semantic_hash": "fb530f89610ba2def0390c9715fba93b"
+  },
+  "src/core/DisplayPerformanceManager.cpp": {
+    "mtime": 1789115202.0,
+    "seen": 1793351860.1742094,
+    "ast_hash": "9dd646cb7d658896e4bfbf8870562341",
+    "semantic_hash": "9dd646cb7d658896e4bfbf8870562341"
+  },
+  "src/core/DisplayPerformanceManager.h": {
+    "mtime": 1789111808.0,
+    "seen": 1793351860.1742113,
+    "ast_hash": "7842103ba7746941b3c732cfe6307e41",
+    "semantic_hash": "7842103ba7746941b3c732cfe6307e41"
+  },
+  "src/core/HistoryExporter.cpp": {
+    "mtime": 1787122700.0,
+    "seen": 1793351860.1742132,
+    "ast_hash": "475b4a163330836e71c702e4667b34b6",
+    "semantic_hash": "475b4a163330836e71c702e4667b34b6"
+  },
+  "src/core/HistoryExporter.h": {
+    "mtime": 1787121426.0,
+    "seen": 1793351860.1742146,
+    "ast_hash": "0e5a6f299ea02b305a2e9983725f3bb1",
+    "semantic_hash": "0e5a6f299ea02b305a2e9983725f3bb1"
+  },
+  "src/core/Logger.cpp": {
+    "mtime": 1784167366.0,
+    "seen": 1793351860.1742163,
+    "ast_hash": "1e11a50a0fb4066785a95c052b80792c",
+    "semantic_hash": "1e11a50a0fb4066785a95c052b80792c"
+  },
+  "src/core/Logger.h": {
+    "mtime": 1784167398.0,
+    "seen": 1793351860.1742177,
+    "ast_hash": "ea3143bcf6d1920f639d17dafc9d740a",
+    "semantic_hash": "ea3143bcf6d1920f639d17dafc9d740a"
+  },
+  "src/core/TimeManager.cpp": {
+    "mtime": 1783710088.0,
+    "seen": 1793351860.1742198,
+    "ast_hash": "8f2bf3fed5692831ec48253e191bc1a1",
+    "semantic_hash": "8f2bf3fed5692831ec48253e191bc1a1"
+  },
+  "src/core/TimeManager.h": {
+    "mtime": 1783635560.0,
+    "seen": 1793351860.1742213,
+    "ast_hash": "b903747f5f37b1c5577d20f40f1e8fda",
+    "semantic_hash": "b903747f5f37b1c5577d20f40f1e8fda"
+  },
+  "src/core/VolumeCalculator.cpp": {
+    "mtime": 1788158530.0,
+    "seen": 1793351860.1742232,
+    "ast_hash": "da138dd008228f74ee9063119bbd560a",
+    "semantic_hash": "da138dd008228f74ee9063119bbd560a"
+  },
+  "src/core/VolumeCalculator.h": {
+    "mtime": 1788158524.0,
+    "seen": 1793351860.1742244,
+    "ast_hash": "6b4c00d229d1ba6ce960d996ac0179f5",
+    "semantic_hash": "6b4c00d229d1ba6ce960d996ac0179f5"
+  },
+  "src/domain/LocationTypes.h": {
+    "mtime": 1788775322.0,
+    "seen": 1793351860.1742258,
+    "ast_hash": "d946c38faa4fb0673d978b157ae37bd0",
+    "semantic_hash": "d946c38faa4fb0673d978b157ae37bd0"
+  },
+  "src/domain/RailwayManager.cpp": {
+    "mtime": 1789119012.0,
+    "seen": 1793351860.1742272,
+    "ast_hash": "4e6d8a86e13aa4f41af1dd41bd8cecef",
+    "semantic_hash": "4e6d8a86e13aa4f41af1dd41bd8cecef"
+  },
+  "src/domain/RailwayManager.h": {
+    "mtime": 1788961056.0,
+    "seen": 1793351860.1742284,
+    "ast_hash": "f3e0006fdce28ecd072f6999fceb3a38",
+    "semantic_hash": "f3e0006fdce28ecd072f6999fceb3a38"
+  },
+  "src/domain/TankModel.cpp": {
+    "mtime": 1793350978.6314316,
+    "seen": 1793351860.1742303,
+    "ast_hash": "2fff12ae0cb2cd4c3cf24011e3ba6e36",
+    "semantic_hash": "2fff12ae0cb2cd4c3cf24011e3ba6e36"
+  },
+  "src/domain/TankModel.h": {
+    "mtime": 1789386324.0,
+    "seen": 1793351860.1742318,
+    "ast_hash": "9340a693202b4193d4198e32fbfe6545",
+    "semantic_hash": "9340a693202b4193d4198e32fbfe6545"
+  },
+  "src/domain/TrainConfigProvider.cpp": {
+    "mtime": 1789119022.0,
+    "seen": 1793351860.1742334,
+    "ast_hash": "f17c6f5c48a5653f0d3702da056289a9",
+    "semantic_hash": "f17c6f5c48a5653f0d3702da056289a9"
+  },
+  "src/domain/TrainConfigProvider.h": {
+    "mtime": 1788860660.0,
+    "seen": 1793351860.1742349,
+    "ast_hash": "8b80dc571b7fedb6b8db0ea06898dd40",
+    "semantic_hash": "8b80dc571b7fedb6b8db0ea06898dd40"
+  },
+  "src/domain/TrainManager.cpp": {
+    "mtime": 1789119322.0,
+    "seen": 1793351860.1742373,
+    "ast_hash": "f4ca176830a72d99363c22e512d2659c",
+    "semantic_hash": "f4ca176830a72d99363c22e512d2659c"
+  },
+  "src/domain/TrainManager.h": {
+    "mtime": 1789119296.0,
+    "seen": 1793351860.1742387,
+    "ast_hash": "f45482a60ba0d4b18050edcb25a1fc7d",
+    "semantic_hash": "f45482a60ba0d4b18050edcb25a1fc7d"
+  },
+  "src/networking/ApiClient.cpp": {
+    "mtime": 1789394024.0,
+    "seen": 1793351860.17424,
+    "ast_hash": "2e210aff985cd65f27731d0ca2b2e86e",
+    "semantic_hash": "2e210aff985cd65f27731d0ca2b2e86e"
+  },
+  "src/networking/ApiClient.h": {
+    "mtime": 1789118654.0,
+    "seen": 1793351860.1742415,
+    "ast_hash": "0fa27350f1361a9f5acee849661425fd",
+    "semantic_hash": "0fa27350f1361a9f5acee849661425fd"
+  },
+  "src/networking/ConnectionManager.cpp": {
+    "mtime": 1789118874.0,
+    "seen": 1793351860.174243,
+    "ast_hash": "bca01481a9465ef2cab61ecb49a69165",
+    "semantic_hash": "bca01481a9465ef2cab61ecb49a69165"
+  },
+  "src/networking/ConnectionManager.h": {
+    "mtime": 1790684954.0,
+    "seen": 1793351860.1742446,
+    "ast_hash": "1f95aab1c33d949f0fd4692520bffc05",
+    "semantic_hash": "1f95aab1c33d949f0fd4692520bffc05"
+  },
+  "src/repository/DatabaseManager.cpp": {
+    "mtime": 1789119702.0,
+    "seen": 1793351860.1742458,
+    "ast_hash": "9b1861c745706da1779986763363a742",
+    "semantic_hash": "9b1861c745706da1779986763363a742"
+  },
+  "src/repository/DatabaseManager.h": {
+    "mtime": 1788949382.0,
+    "seen": 1793351860.1742475,
+    "ast_hash": "b01dd35d6af90f2a1eff8feb945c3fa5",
+    "semantic_hash": "b01dd35d6af90f2a1eff8feb945c3fa5"
+  },
+  "src/repository/TankRepository.cpp": {
+    "mtime": 1793103554.072418,
+    "seen": 1793351860.1742487,
+    "ast_hash": "fd001186c18ca965c59c2e77cbec224a",
+    "semantic_hash": "fd001186c18ca965c59c2e77cbec224a"
+  },
+  "src/repository/TankRepository.h": {
+    "mtime": 1789118884.0,
+    "seen": 1793351860.1742501,
+    "ast_hash": "876fed8575c5ceed4bd78220d5bfe775",
+    "semantic_hash": "876fed8575c5ceed4bd78220d5bfe775"
+  },
+  "src/security/AuthManager.cpp": {
+    "mtime": 1788954300.0,
+    "seen": 1793351860.1742518,
+    "ast_hash": "13efb37c3fa20e396e310b3a52f44fde",
+    "semantic_hash": "13efb37c3fa20e396e310b3a52f44fde"
+  },
+  "src/security/AuthManager.h": {
+    "mtime": 1788944770.0,
+    "seen": 1793351860.1742532,
+    "ast_hash": "b430a354ca5e2853cf285b1720ba307d",
+    "semantic_hash": "b430a354ca5e2853cf285b1720ba307d"
+  },
+  "src/security/PermissionManager.cpp": {
+    "mtime": 1788850998.0,
+    "seen": 1793351860.1742547,
+    "ast_hash": "62c395af5055f5112f2d9c480aceb354",
+    "semantic_hash": "62c395af5055f5112f2d9c480aceb354"
+  },
+  "src/security/PermissionManager.h": {
+    "mtime": 1788850992.0,
+    "seen": 1793351860.174256,
+    "ast_hash": "ed4f4de06f7e895f1c4891d06470a584",
+    "semantic_hash": "ed4f4de06f7e895f1c4891d06470a584"
+  },
+  "src/security/Types.h": {
+    "mtime": 1783007652.0,
+    "seen": 1793351860.1742578,
+    "ast_hash": "05c1d2422c59f06ffc0ee19fada42f9a",
+    "semantic_hash": "05c1d2422c59f06ffc0ee19fada42f9a"
+  },
+  "src/services/ApplicationStateManager.cpp": {
+    "mtime": 1788772534.0,
+    "seen": 1793351860.174259,
+    "ast_hash": "fd12dd6e33db45b9a76e565b2702da38",
+    "semantic_hash": "fd12dd6e33db45b9a76e565b2702da38"
+  },
+  "src/services/ApplicationStateManager.h": {
+    "mtime": 1788763726.0,
+    "seen": 1793351860.1742604,
+    "ast_hash": "8cbb882606384541ed5e930f977efe09",
+    "semantic_hash": "8cbb882606384541ed5e930f977efe09"
+  },
+  "src/services/LocationManager.cpp": {
+    "mtime": 1793351608.9430525,
+    "seen": 1793351860.174262,
+    "ast_hash": "43fa5290a7dea25ee71b114e92fc15b3",
+    "semantic_hash": "43fa5290a7dea25ee71b114e92fc15b3"
+  },
+  "src/services/LocationManager.h": {
+    "mtime": 1793351602.892371,
+    "seen": 1793351860.1742632,
+    "ast_hash": "47c88eb311d2519658eaf8586a56bb89",
+    "semantic_hash": "47c88eb311d2519658eaf8586a56bb89"
+  },
+  "src/services/SearchManager.cpp": {
+    "mtime": 1788861062.0,
+    "seen": 1793351860.174265,
+    "ast_hash": "579000e12d3a41c3592fbfd32a6030ad",
+    "semantic_hash": "579000e12d3a41c3592fbfd32a6030ad"
+  },
+  "src/services/SearchManager.h": {
+    "mtime": 1788851084.0,
+    "seen": 1793351860.1742663,
+    "ast_hash": "82a53b027cb9d7cd6173bb07c9df9408",
+    "semantic_hash": "82a53b027cb9d7cd6173bb07c9df9408"
+  },
+  "src/telemetry/MqttConfig.cpp": {
+    "mtime": 1790684790.0,
+    "seen": 1793351860.174269,
+    "ast_hash": "2ceabf9360e5a9d9ccf9b4f7c37d2fdc",
+    "semantic_hash": "2ceabf9360e5a9d9ccf9b4f7c37d2fdc"
+  },
+  "src/telemetry/MqttConfig.h": {
+    "mtime": 1790685116.0,
+    "seen": 1793351860.1742702,
+    "ast_hash": "8e37f374b75ed58078e74d3c83b57af7",
+    "semantic_hash": "8e37f374b75ed58078e74d3c83b57af7"
+  },
+  "src/telemetry/MqttService.cpp": {
+    "mtime": 1790685218.0,
+    "seen": 1793351860.1742716,
+    "ast_hash": "99ead192b6123c4d93a6b8ed6fb0fd45",
+    "semantic_hash": "99ead192b6123c4d93a6b8ed6fb0fd45"
+  },
+  "src/telemetry/MqttService.h": {
+    "mtime": 1790684804.0,
+    "seen": 1793351860.174273,
+    "ast_hash": "3cbb668e939f5b522a5c27634ab3c35b",
+    "semantic_hash": "3cbb668e939f5b522a5c27634ab3c35b"
+  }
+}

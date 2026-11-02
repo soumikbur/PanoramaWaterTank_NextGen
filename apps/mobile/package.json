@@ -1,0 +1,89 @@
+{
+  "name": "panorama-water-tank-hmi",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "description": "Panorama Water Tank Monitor — NextGen React Native Industrial SCADA/HMI Application",
+  "scripts": {
+    "start": "vite",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "electron": "electron electron/main.cjs",
+    "package:dir": "vite build && electron-builder --dir",
+    "package:all": "vite build && electron-builder --win"
+  },
+  "build": {
+    "appId": "com.panorama.watertank.hmi",
+    "productName": "Panorama Water Tank Monitor",
+    "copyright": "Copyright © 2026 Panorama Railway SCADA Systems",
+    "directories": {
+      "output": "../../release",
+      "buildResources": "electron/assets"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../../backend/dist/panorama-backend",
+        "to": "backend",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/assets/icon.ico",
+      "artifactName": "PanoramaWaterTank-Setup.${ext}",
+      "executableName": "PanoramaWaterTank",
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Panorama Water Tank Monitor",
+      "artifactName": "PanoramaWaterTank-Setup.exe"
+    }
+  },
+  "dependencies": {
+    "@types/leaflet": "^1.9.22",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^0.378.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-native-web": "^0.19.13"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/react-native": "^0.73.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "cross-env": "^10.1.0",
+    "electron": "^45.1.0",
+    "electron-builder": "^26.18.0",
+    "typescript": "^5.4.5",
+    "vite": "^5.4.14",
+    "wait-on": "^9.5.1"
+  }
+}

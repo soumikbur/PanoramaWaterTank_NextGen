@@ -1,0 +1,296 @@
+{
+  "src/backend/AuthManager.cpp": {
+    "mtime": 1788954300.0,
+    "seen": 1793350363.2920103,
+    "ast_hash": "13efb37c3fa20e396e310b3a52f44fde",
+    "semantic_hash": "13efb37c3fa20e396e310b3a52f44fde"
+  },
+  "src/backend/AuthManager.h": {
+    "mtime": 1788944770.0,
+    "seen": 1793350363.292016,
+    "ast_hash": "b430a354ca5e2853cf285b1720ba307d",
+    "semantic_hash": "b430a354ca5e2853cf285b1720ba307d"
+  },
+  "src/backend/PermissionManager.cpp": {
+    "mtime": 1788850998.0,
+    "seen": 1793350363.2920184,
+    "ast_hash": "62c395af5055f5112f2d9c480aceb354",
+    "semantic_hash": "62c395af5055f5112f2d9c480aceb354"
+  },
+  "src/backend/PermissionManager.h": {
+    "mtime": 1788850992.0,
+    "seen": 1793350363.2920196,
+    "ast_hash": "ed4f4de06f7e895f1c4891d06470a584",
+    "semantic_hash": "ed4f4de06f7e895f1c4891d06470a584"
+  },
+  "src/backend/Types.h": {
+    "mtime": 1783007652.0,
+    "seen": 1793350363.2920208,
+    "ast_hash": "05c1d2422c59f06ffc0ee19fada42f9a",
+    "semantic_hash": "05c1d2422c59f06ffc0ee19fada42f9a"
+  },
+  "src/calculations/VolumeCalculator.cpp": {
+    "mtime": 1788158530.0,
+    "seen": 1793350363.2920218,
+    "ast_hash": "da138dd008228f74ee9063119bbd560a",
+    "semantic_hash": "da138dd008228f74ee9063119bbd560a"
+  },
+  "src/calculations/VolumeCalculator.h": {
+    "mtime": 1788158524.0,
+    "seen": 1793350363.2920227,
+    "ast_hash": "6b4c00d229d1ba6ce960d996ac0179f5",
+    "semantic_hash": "6b4c00d229d1ba6ce960d996ac0179f5"
+  },
+  "src/controllers/DashboardController.cpp": {
+    "mtime": 1783007716.0,
+    "seen": 1793350363.2920237,
+    "ast_hash": "0eff7394540a014e2e4ed77df0584190",
+    "semantic_hash": "0eff7394540a014e2e4ed77df0584190"
+  },
+  "src/controllers/DashboardController.h": {
+    "mtime": 1783007716.0,
+    "seen": 1793350363.2920246,
+    "ast_hash": "98799935a9a8ff49dc01a2a72e23b276",
+    "semantic_hash": "98799935a9a8ff49dc01a2a72e23b276"
+  },
+  "src/logging/Logger.cpp": {
+    "mtime": 1784167366.0,
+    "seen": 1793350363.2920256,
+    "ast_hash": "1e11a50a0fb4066785a95c052b80792c",
+    "semantic_hash": "1e11a50a0fb4066785a95c052b80792c"
+  },
+  "src/logging/Logger.h": {
+    "mtime": 1784167398.0,
+    "seen": 1793350363.2920272,
+    "ast_hash": "ea3143bcf6d1920f639d17dafc9d740a",
+    "semantic_hash": "ea3143bcf6d1920f639d17dafc9d740a"
+  },
+  "src/main.cpp": {
+    "mtime": 1793107043.5669606,
+    "seen": 1793350363.292029,
+    "ast_hash": "06257ac629fca655f6c4c4340c75682e",
+    "semantic_hash": "06257ac629fca655f6c4c4340c75682e"
+  },
+  "src/models/LocationTypes.h": {
+    "mtime": 1788775322.0,
+    "seen": 1793350363.29203,
+    "ast_hash": "d946c38faa4fb0673d978b157ae37bd0",
+    "semantic_hash": "d946c38faa4fb0673d978b157ae37bd0"
+  },
+  "src/models/RailwayManager.cpp": {
+    "mtime": 1789119012.0,
+    "seen": 1793350363.2920315,
+    "ast_hash": "4e6d8a86e13aa4f41af1dd41bd8cecef",
+    "semantic_hash": "4e6d8a86e13aa4f41af1dd41bd8cecef"
+  },
+  "src/models/RailwayManager.h": {
+    "mtime": 1788961056.0,
+    "seen": 1793350363.292033,
+    "ast_hash": "f3e0006fdce28ecd072f6999fceb3a38",
+    "semantic_hash": "f3e0006fdce28ecd072f6999fceb3a38"
+  },
+  "src/models/TankModel.cpp": {
+    "mtime": 1789393986.0,
+    "seen": 1793350363.2920346,
+    "ast_hash": "80b112e6def25db5176a8e70d775997a",
+    "semantic_hash": "80b112e6def25db5176a8e70d775997a"
+  },
+  "src/models/TankModel.h": {
+    "mtime": 1789386324.0,
+    "seen": 1793350363.292036,
+    "ast_hash": "9340a693202b4193d4198e32fbfe6545",
+    "semantic_hash": "9340a693202b4193d4198e32fbfe6545"
+  },
+  "src/models/TrainConfigProvider.cpp": {
+    "mtime": 1789119022.0,
+    "seen": 1793350363.2920375,
+    "ast_hash": "f17c6f5c48a5653f0d3702da056289a9",
+    "semantic_hash": "f17c6f5c48a5653f0d3702da056289a9"
+  },
+  "src/models/TrainConfigProvider.h": {
+    "mtime": 1788860660.0,
+    "seen": 1793350363.2920394,
+    "ast_hash": "8b80dc571b7fedb6b8db0ea06898dd40",
+    "semantic_hash": "8b80dc571b7fedb6b8db0ea06898dd40"
+  },
+  "src/models/TrainManager.cpp": {
+    "mtime": 1789119322.0,
+    "seen": 1793350363.292041,
+    "ast_hash": "f4ca176830a72d99363c22e512d2659c",
+    "semantic_hash": "f4ca176830a72d99363c22e512d2659c"
+  },
+  "src/models/TrainManager.h": {
+    "mtime": 1789119296.0,
+    "seen": 1793350363.2920427,
+    "ast_hash": "f45482a60ba0d4b18050edcb25a1fc7d",
+    "semantic_hash": "f45482a60ba0d4b18050edcb25a1fc7d"
+  },
+  "src/mqtt/MqttConfig.cpp": {
+    "mtime": 1790684790.0,
+    "seen": 1793350363.2920444,
+    "ast_hash": "2ceabf9360e5a9d9ccf9b4f7c37d2fdc",
+    "semantic_hash": "2ceabf9360e5a9d9ccf9b4f7c37d2fdc"
+  },
+  "src/mqtt/MqttConfig.h": {
+    "mtime": 1790685116.0,
+    "seen": 1793350363.2920463,
+    "ast_hash": "8e37f374b75ed58078e74d3c83b57af7",
+    "semantic_hash": "8e37f374b75ed58078e74d3c83b57af7"
+  },
+  "src/mqtt/MqttService.cpp": {
+    "mtime": 1790685218.0,
+    "seen": 1793350363.292048,
+    "ast_hash": "99ead192b6123c4d93a6b8ed6fb0fd45",
+    "semantic_hash": "99ead192b6123c4d93a6b8ed6fb0fd45"
+  },
+  "src/mqtt/MqttService.h": {
+    "mtime": 1790684804.0,
+    "seen": 1793350363.2920494,
+    "ast_hash": "3cbb668e939f5b522a5c27634ab3c35b",
+    "semantic_hash": "3cbb668e939f5b522a5c27634ab3c35b"
+  },
+  "src/network/ApiClient.cpp": {
+    "mtime": 1789394024.0,
+    "seen": 1793350363.2920506,
+    "ast_hash": "2e210aff985cd65f27731d0ca2b2e86e",
+    "semantic_hash": "2e210aff985cd65f27731d0ca2b2e86e"
+  },
+  "src/network/ApiClient.h": {
+    "mtime": 1789118654.0,
+    "seen": 1793350363.2920523,
+    "ast_hash": "0fa27350f1361a9f5acee849661425fd",
+    "semantic_hash": "0fa27350f1361a9f5acee849661425fd"
+  },
+  "src/network/ConnectionManager.cpp": {
+    "mtime": 1789118874.0,
+    "seen": 1793350363.2920537,
+    "ast_hash": "bca01481a9465ef2cab61ecb49a69165",
+    "semantic_hash": "bca01481a9465ef2cab61ecb49a69165"
+  },
+  "src/network/ConnectionManager.h": {
+    "mtime": 1790684954.0,
+    "seen": 1793350363.2920554,
+    "ast_hash": "1f95aab1c33d949f0fd4692520bffc05",
+    "semantic_hash": "1f95aab1c33d949f0fd4692520bffc05"
+  },
+  "src/network/UbidotsClient.cpp": {
+    "mtime": 1784526108.0,
+    "seen": 1793350363.2920568,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "src/network/UbidotsClient.h": {
+    "mtime": 1784526080.0,
+    "seen": 1793350363.2920587,
+    "ast_hash": "7f5d238f73b4ca297435301065dc6138",
+    "semantic_hash": "7f5d238f73b4ca297435301065dc6138"
+  },
+  "src/repository/DatabaseManager.cpp": {
+    "mtime": 1789119702.0,
+    "seen": 1793350363.2920601,
+    "ast_hash": "9b1861c745706da1779986763363a742",
+    "semantic_hash": "9b1861c745706da1779986763363a742"
+  },
+  "src/repository/DatabaseManager.h": {
+    "mtime": 1788949382.0,
+    "seen": 1793350363.2920618,
+    "ast_hash": "b01dd35d6af90f2a1eff8feb945c3fa5",
+    "semantic_hash": "b01dd35d6af90f2a1eff8feb945c3fa5"
+  },
+  "src/repository/TankRepository.cpp": {
+    "mtime": 1793103554.072418,
+    "seen": 1793350363.2920635,
+    "ast_hash": "fd001186c18ca965c59c2e77cbec224a",
+    "semantic_hash": "fd001186c18ca965c59c2e77cbec224a"
+  },
+  "src/repository/TankRepository.h": {
+    "mtime": 1789118884.0,
+    "seen": 1793350363.292065,
+    "ast_hash": "876fed8575c5ceed4bd78220d5bfe775",
+    "semantic_hash": "876fed8575c5ceed4bd78220d5bfe775"
+  },
+  "src/services/LocationManager.cpp": {
+    "mtime": 1789134048.0,
+    "seen": 1793350363.2920668,
+    "ast_hash": "c13a5f23954de6ec379f5972863ca0e0",
+    "semantic_hash": "c13a5f23954de6ec379f5972863ca0e0"
+  },
+  "src/services/LocationManager.h": {
+    "mtime": 1789133668.0,
+    "seen": 1793350363.2920682,
+    "ast_hash": "b7b76aefd7410c3fe36c9ca650ec4dee",
+    "semantic_hash": "b7b76aefd7410c3fe36c9ca650ec4dee"
+  },
+  "src/services/SearchManager.cpp": {
+    "mtime": 1788861062.0,
+    "seen": 1793350363.29207,
+    "ast_hash": "579000e12d3a41c3592fbfd32a6030ad",
+    "semantic_hash": "579000e12d3a41c3592fbfd32a6030ad"
+  },
+  "src/services/SearchManager.h": {
+    "mtime": 1788851084.0,
+    "seen": 1793350363.2920713,
+    "ast_hash": "82a53b027cb9d7cd6173bb07c9df9408",
+    "semantic_hash": "82a53b027cb9d7cd6173bb07c9df9408"
+  },
+  "src/settings/SettingsManager.cpp": {
+    "mtime": 1790685124.0,
+    "seen": 1793350363.2920728,
+    "ast_hash": "0a8812534654670558ee2985fee2ac0c",
+    "semantic_hash": "0a8812534654670558ee2985fee2ac0c"
+  },
+  "src/settings/SettingsManager.h": {
+    "mtime": 1790684874.0,
+    "seen": 1793350363.292074,
+    "ast_hash": "fb530f89610ba2def0390c9715fba93b",
+    "semantic_hash": "fb530f89610ba2def0390c9715fba93b"
+  },
+  "src/state/ApplicationStateManager.cpp": {
+    "mtime": 1788772534.0,
+    "seen": 1793350363.2920756,
+    "ast_hash": "fd12dd6e33db45b9a76e565b2702da38",
+    "semantic_hash": "fd12dd6e33db45b9a76e565b2702da38"
+  },
+  "src/state/ApplicationStateManager.h": {
+    "mtime": 1788763726.0,
+    "seen": 1793350363.2920775,
+    "ast_hash": "8cbb882606384541ed5e930f977efe09",
+    "semantic_hash": "8cbb882606384541ed5e930f977efe09"
+  },
+  "src/utilities/DisplayPerformanceManager.cpp": {
+    "mtime": 1789115202.0,
+    "seen": 1793350363.2920802,
+    "ast_hash": "9dd646cb7d658896e4bfbf8870562341",
+    "semantic_hash": "9dd646cb7d658896e4bfbf8870562341"
+  },
+  "src/utilities/DisplayPerformanceManager.h": {
+    "mtime": 1789111808.0,
+    "seen": 1793350363.2920814,
+    "ast_hash": "7842103ba7746941b3c732cfe6307e41",
+    "semantic_hash": "7842103ba7746941b3c732cfe6307e41"
+  },
+  "src/utilities/HistoryExporter.cpp": {
+    "mtime": 1787122700.0,
+    "seen": 1793350363.2920833,
+    "ast_hash": "475b4a163330836e71c702e4667b34b6",
+    "semantic_hash": "475b4a163330836e71c702e4667b34b6"
+  },
+  "src/utilities/HistoryExporter.h": {
+    "mtime": 1787121426.0,
+    "seen": 1793350363.2920847,
+    "ast_hash": "0e5a6f299ea02b305a2e9983725f3bb1",
+    "semantic_hash": "0e5a6f299ea02b305a2e9983725f3bb1"
+  },
+  "src/utilities/TimeManager.cpp": {
+    "mtime": 1783710088.0,
+    "seen": 1793350363.2920864,
+    "ast_hash": "8f2bf3fed5692831ec48253e191bc1a1",
+    "semantic_hash": "8f2bf3fed5692831ec48253e191bc1a1"
+  },
+  "src/utilities/TimeManager.h": {
+    "mtime": 1783635560.0,
+    "seen": 1793350363.2920876,
+    "ast_hash": "b903747f5f37b1c5577d20f40f1e8fda",
+    "semantic_hash": "b903747f5f37b1c5577d20f40f1e8fda"
+  }
+}

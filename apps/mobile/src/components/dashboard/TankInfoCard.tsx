@@ -1,0 +1,109 @@
+import React from 'react';
+import { colors, metrics, typography } from '../../theme';
+import { BaseCard } from '../common/BaseCard';
+import { InfoRow } from '../common/InfoRow';
+import { TankLiveStatus } from '../../types';
+
+interface TankInfoCardProps {
+  tank: TankLiveStatus | null;
+  mqttStatus?: string;
+  connectionState?: string;
+  style?: React.CSSProperties;
+}
+
+export const TankInfoCard: React.FC<TankInfoCardProps> = ({
+  tank,
+  mqttStatus,
+  connectionState,
+  style,
+}) => {
+  const hasData = tank?.levelPercent != null && tank?.hasTelemetry !== false;
+  const tankName = tank?.tankName || 'Primary Storage Tank';
+  const device = tank?.deviceUid || tank?.deviceId || 'N/A';
+  const trainCoach = tank?.trainNumber
+    ? `${tank.trainNumber}${tank.coachNumber ? ` / ${tank.coachNumber}` : ''}`
+    : 'N/A';
+  const voltage = tank?.batteryVoltage != null ? `${tank.batteryVoltage.toFixed(2)} V` : 'N/A';
+  const gpsLocation = (tank?.latitude != null && tank?.longitude != null)
+    ? `${tank.latitude.toFixed(4)}°, ${tank.longitude.toFixed(4)}°`
+    : 'N/A';
+  const temperature = tank?.temperature != null ? `${tank.temperature.toFixed(2)} °C` : 'N/A';
+  const lastUpdated = tank?.lastUpdate
+    ? new Date(tank.lastUpdate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : 'Awaiting Telemetry';
+  const sensorStatus = !hasData ? 'Awaiting Data' : tank?.alarmStatus === 'SENSOR_FAULT' ? 'Fault' : 'Healthy';
+  const tankHeight = `${(tank?.maxHeightCm ?? 50.0).toFixed(2)} cm`;
+  const capacity = `${(tank?.capacityLiters ?? 20.0).toFixed(2)} L`;
+  const realMqttStatus = mqttStatus || (hasData ? (tank?.isStale ? 'Stale Data' : 'Receiving telemetry') : 'Connected — Awaiting Telemetry');
+  const realConnState = connectionState || (hasData ? (tank?.isOnline ? 'Online' : 'Offline') : 'Awaiting Data');
+
+  const Divider = () => (
+    <div style={{ height: '1px', backgroundColor: colors.divider, width: '100%', margin: '0' }} />
+  );
+
+  return (
+    <BaseCard padding={metrics.cardPadding} style={{ minHeight: `${metrics.tankCardMinHeight}px`, ...style }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: `${metrics.infoRowSpacing}px` }}>
+        <span
+          style={{
+            fontFamily: typography.fontFamily,
+            fontSize: typography.dashCardTitle.fontSize,
+            fontWeight: typography.dashCardTitle.fontWeight,
+            color: colors.textPrimary,
+            marginBottom: '10px',
+          }}
+        >
+          Tank Information
+        </span>
+
+        <InfoRow label="Tank Name" value={tankName} />
+        <Divider />
+
+        <InfoRow label="Device" value={device} />
+        <Divider />
+
+        <InfoRow label="Train / Coach" value={trainCoach} />
+        <Divider />
+
+        <InfoRow label="Battery / Voltage" value={voltage} />
+        <Divider />
+
+        <InfoRow label="GPS Location" value={gpsLocation} />
+        <Divider />
+
+        <InfoRow
+          label="MQTT Status"
+          value={realMqttStatus}
+          valueColor={realMqttStatus.includes('Receiving') ? colors.success : colors.warning}
+        />
+        <Divider />
+
+        <InfoRow label="Temperature" value={temperature} />
+        <Divider />
+
+        <InfoRow
+          label="Connection"
+          value={realConnState}
+          valueColor={realConnState === 'Online' ? colors.success : colors.offline}
+        />
+        <Divider />
+
+        <InfoRow label="Last Updated" value={lastUpdated} />
+        <Divider />
+
+        <InfoRow
+          label="Sensor Status"
+          value={sensorStatus}
+          valueColor={sensorStatus === 'Healthy' ? colors.success : colors.critical}
+        />
+        <Divider />
+
+        <InfoRow label="Tank Height" value={tankHeight} />
+        <Divider />
+
+        <InfoRow label="Tank Capacity" value={capacity} />
+      </div>
+    </BaseCard>
+  );
+};
+

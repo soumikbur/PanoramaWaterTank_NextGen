@@ -1,0 +1,101 @@
+{
+  "dashboard": {
+    "screenshot": "C:\\Users\\User\\Documents\\Antigravity_soumik\\PanoramaWaterTank_NextGen\\WLI_DOCS\\audit_screenshots\\audit_test_c_dashboard.png",
+    "clicked": true,
+    "hasFakeCoords": false,
+    "hasFakeLevel": false,
+    "hasFakeVoltage": false,
+    "hasWaiting": true,
+    "snippet": "💧 🏠 Water Tank Dashboard Real-time telemetry, capacity level & diagnostic indicators 🔍 [ADMIN] admin ONLINE ⚙️ Logout 04:58:35 PM October 31, 2026 💧 PANORAMA Water Tank NextGen 🚆 12002 · Shatabdi NR Northern Railway Corridor Coaches: 1 Tanks: 2 Online: 1 Offline: 0 Alerts: 0 Normal OPERATIONS 🚆 Train Management 📊 Dashboard 🚰 All Tanks 💻 Devices 📍 Location & GPS ⚠️ Alerts 📈 History 📋 Re"
+  },
+  "trains": {
+    "screenshot": "C:\\Users\\User\\Documents\\Antigravity_soumik\\PanoramaWaterTank_NextGen\\WLI_DOCS\\audit_screenshots\\audit_test_c_trains.png",
+    "clicked": true,
+    "hasFakeCoords": false,
+    "hasFakeLevel": false,
+    "hasFakeVoltage": false,
+    "hasWaiting": false,
+    "snippet": "💧 🏠 Train Management Railway Fleet Operations & Consist Management 🔍 [ADMIN] admin ONLINE ⚙️ Logout 04:58:36 PM October 31, 2026 💧 PANORAMA Water Tank NextGen 🚆 12002 · Shatabdi NR Northern Railway Corridor Coaches: 1 Tanks: 2 Online: 1 Offline: 0 Alerts: 0 Normal OPERATIONS 🚆 Train Management 📊 Dashboard 🚰 All Tanks 💻 Devices 📍 Location & GPS ⚠️ Alerts 📈 History 📋 Reports SYSTEM & FLE"
+  },
+  "watertank": {
+    "screenshot": "C:\\Users\\User\\Documents\\Antigravity_soumik\\PanoramaWaterTank_NextGen\\WLI_DOCS\\audit_screenshots\\audit_test_c_watertank.png",
+    "clicked": true,
+    "hasFakeCoords": false,
+    "hasFakeLevel": false,
+    "hasFakeVoltage": false,
+    "hasWaiting": true,
+    "snippet": "💧 🏠 Water Tank Monitor High-precision volume calculation & dual-tank telemetry 🔍 [ADMIN] admin ONLINE ⚙️ Logout 04:58:38 PM October 31, 2026 💧 PANORAMA Water Tank NextGen 🚆 12002 · Shatabdi NR Northern Railway Corridor Coaches: 1 Tanks: 2 Online: 1 Offline: 0 Alerts: 0 Normal OPERATIONS 🚆 Train Management 📊 Dashboard 🚰 All Tanks 💻 Devices 📍 Location & GPS ⚠️ Alerts 📈 History 📋 Reports "
+  },
+  "devices": {
+    "screenshot": "C:\\Users\\User\\Documents\\Antigravity_soumik\\PanoramaWaterTank_NextGen\\WLI_DOCS\\audit_screenshots\\audit_test_c_devices.png",
+    "clicked": true,
+    "hasFakeCoords": false,
+    "hasFakeLevel": false,
+    "hasFakeVoltage": false,
+    "hasWaiting": false,
+    "snippet": "💧 🏠 Edge Device Fleet ESP32-S3 + EC200U 4G IoT Gateway telematics & hardware status 🔍 [ADMIN] admin ONLINE ⚙️ Logout 04:58:39 PM October 31, 2026 💧 PANORAMA Water Tank NextGen 🚆 12002 · Shatabdi NR Northern Railway Corridor Coaches: 1 Tanks: 2 Online: 1 Offline: 0 Alerts: 0 Normal OPERATIONS 🚆 Train Management 📊 Dashboard 🚰 All Tanks 💻 Devices 📍 Location & GPS ⚠️ Alerts 📈 History 📋 Rep"
+  },
+  "location": {
+    "screenshot": "C:\\Users\\User\\Documents\\Antigravity_soumik\\PanoramaWaterTank_NextGen\\WLI_DOCS\\audit_screenshots\\audit_test_c_location.png",
+    "clicked": true,
+    "hasFakeCoords": false,
+    "hasFakeLevel": false,
+    "hasFakeVoltage": false,
+    "hasWaiting": false,
+    "snippet": "💧 🏠 GNSS GPS Tracking Real-time consist location, velocity vector & corridor tracking 🔍 [ADMIN] admin ONLINE ⚙️ Logout 04:58:40 PM October 31, 2026 💧 PANORAMA Water Tank NextGen 🚆 12002 · Shatabdi NR Northern Railway Corridor Coaches: 1 Tanks: 2 Online: 1 Offline: 0 Alerts: 0 Normal OPERATIONS 🚆 Train Management 📊 Dashboard 🚰 All Tanks 💻 Devices 📍 Location & GPS ⚠️ Alerts 📈 History 📋 R"
+  },
+  "alerts": {
+    "screenshot": "C:\\Users\\User\\Documents\\Antigravity_soumik\\PanoramaWaterTank_NextGen\\WLI_DOCS\\audit_screenshots\\audit_test_c_alerts.png",
+    "clicked": true,
+    "hasFakeCoords": false,
+    "hasFakeLevel": false,
+    "hasFakeVoltage": false,
+    "hasWaiting": false,
+    "snippet": "💧 🏠 Alerts & Alarm Management Active system alarms, critical thresholds & acknowledgments 🔍 [ADMIN] admin ONLINE ⚙️ Logout 04:58:41 PM October 31, 2026 💧 PANORAMA Water Tank NextGen 🚆 12002 · Shatabdi NR Northern Railway Corridor Coaches: 1 Tanks: 2 Online: 1 Offline: 0 Alerts: 0 Normal OPERATIONS 🚆 Train Management 📊 Dashboard 🚰 All Tanks 💻 Devices 📍 Location & GPS ⚠️ Alerts 📈 History "
+  },
+  "history": {
+    "screenshot": "C:\\Users\\User\\Documents\\Antigravity_soumik\\PanoramaWaterTank_NextGen\\WLI_DOCS\\audit_screenshots\\audit_test_c_history.png",
+    "clicked": true,
+    "hasFakeCoords": false,
+    "hasFakeLevel": false,
+    "hasFakeVoltage": false,
+    "hasWaiting": false,
+    "snippet": "💧 🏠 Historical Telemetry Logs Downsampled multi-interval sensor time-series & CSV export 🔍 [ADMIN] admin ONLINE ⚙️ Logout 04:58:43 PM October 31, 2026 💧 PANORAMA Water Tank NextGen 🚆 12002 · Shatabdi NR Northern Railway Corridor Coaches: 1 Tanks: 2 Online: 1 Offline: 0 Alerts: 0 Normal OPERATIONS 🚆 Train Management 📊 Dashboard 🚰 All Tanks 💻 Devices 📍 Location & GPS ⚠️ Alerts 📈 History \ud83d"
+  },
+  "reports": {
+    "screenshot": "C:\\Users\\User\\Documents\\Antigravity_soumik\\PanoramaWaterTank_NextGen\\WLI_DOCS\\audit_screenshots\\audit_test_c_reports.png",
+    "clicked": true,
+    "hasFakeCoords": false,
+    "hasFakeLevel": false,
+    "hasFakeVoltage": false,
+    "hasWaiting": true,
+    "snippet": "💧 🏠 Operational Reports Water consumption analysis, refill logs & compliance audit 🔍 [ADMIN] admin ONLINE ⚙️ Logout 04:58:44 PM October 31, 2026 💧 PANORAMA Water Tank NextGen 🚆 12002 · Shatabdi NR Northern Railway Corridor Coaches: 1 Tanks: 2 Online: 1 Offline: 0 Alerts: 0 Normal OPERATIONS 🚆 Train Management 📊 Dashboard 🚰 All Tanks 💻 Devices 📍 Location & GPS ⚠️ Alerts 📈 History 📋 Repo"
+  },
+  "settings": {
+    "screenshot": "C:\\Users\\User\\Documents\\Antigravity_soumik\\PanoramaWaterTank_NextGen\\WLI_DOCS\\audit_screenshots\\audit_test_c_settings.png",
+    "clicked": true,
+    "hasFakeCoords": false,
+    "hasFakeLevel": false,
+    "hasFakeVoltage": false,
+    "hasWaiting": false,
+    "snippet": "💧 🏠 System Settings & Geometry MQTT broker credentials, tank dimensions & sensor calibration 🔍 [ADMIN] admin ONLINE ⚙️ Logout 04:58:45 PM October 31, 2026 💧 PANORAMA Water Tank NextGen 🚆 12002 · Shatabdi NR Northern Railway Corridor Coaches: 1 Tanks: 2 Online: 1 Offline: 0 Alerts: 0 Normal OPERATIONS 🚆 Train Management 📊 Dashboard 🚰 All Tanks 💻 Devices 📍 Location & GPS ⚠️ Alerts 📈 Histo"
+  },
+  "users": {
+    "screenshot": "C:\\Users\\User\\Documents\\Antigravity_soumik\\PanoramaWaterTank_NextGen\\WLI_DOCS\\audit_screenshots\\audit_test_c_users.png",
+    "clicked": true,
+    "hasFakeCoords": false,
+    "hasFakeLevel": false,
+    "hasFakeVoltage": false,
+    "hasWaiting": false,
+    "snippet": "💧 🏠 User Management & RBAC Operator accounts, security policies & role-based permissions 🔍 [ADMIN] admin ONLINE ⚙️ Logout 04:58:46 PM October 31, 2026 💧 PANORAMA Water Tank NextGen 🚆 12002 · Shatabdi NR Northern Railway Corridor Coaches: 1 Tanks: 2 Online: 1 Offline: 0 Alerts: 0 Normal OPERATIONS 🚆 Train Management 📊 Dashboard 🚰 All Tanks 💻 Devices 📍 Location & GPS ⚠️ Alerts 📈 History \ud83d"
+  },
+  "logs": {
+    "screenshot": "C:\\Users\\User\\Documents\\Antigravity_soumik\\PanoramaWaterTank_NextGen\\WLI_DOCS\\audit_screenshots\\audit_test_c_logs.png",
+    "clicked": true,
+    "hasFakeCoords": false,
+    "hasFakeLevel": false,
+    "hasFakeVoltage": false,
+    "hasWaiting": false,
+    "snippet": "💧 🏠 Diagnostics & Event Logs Raw edge payloads, connection handshakes & audit trails 🔍 [ADMIN] admin ONLINE ⚙️ Logout 04:58:48 PM October 31, 2026 💧 PANORAMA Water Tank NextGen 🚆 12002 · Shatabdi NR Northern Railway Corridor Coaches: 1 Tanks: 2 Online: 1 Offline: 0 Alerts: 0 Normal OPERATIONS 🚆 Train Management 📊 Dashboard 🚰 All Tanks 💻 Devices 📍 Location & GPS ⚠️ Alerts 📈 History 📋 Re"
+  }
+}

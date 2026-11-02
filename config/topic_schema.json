@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PanoramaTelemetryTopicSchema",
+  "description": "Schema definition for messages published to panorama/telemetry/{deviceId}",
+  "type": "object",
+  "required": ["uid", "trno", "chno", "wlp1", "wlvl", "dt"],
+  "properties": {
+    "uid": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64
+    },
+    "trno": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32
+    },
+    "chno": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32
+    },
+    "wlp1": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 150.0
+    },
+    "wlp2": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 150.0
+    },
+    "wlvl": {
+      "type": "boolean"
+    },
+    "wlv2": {
+      "type": "boolean"
+    },
+    "lat": {
+      "type": "number"
+    },
+    "long": {
+      "type": "number"
+    },
+    "lon": {
+      "type": "number"
+    },
+    "alt": {
+      "type": "number"
+    },
+    "speed": {
+      "type": "number"
+    },
+    "sats": {
+      "type": "integer"
+    },
+    "v1": {
+      "type": "number"
+    },
+    "v2": {
+      "type": "number"
+    },
+    "dt": {
+      "type": "string"
+    },
+    "time": {
+      "type": "string"
+    }
+  }
+}
+

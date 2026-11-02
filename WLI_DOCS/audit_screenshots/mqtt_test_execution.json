@@ -1,0 +1,117 @@
+{
+  "Test_B": {
+    "status": "FAIL",
+    "live_tank": {
+      "tankId": "391dde8e-c6b9-4d0b-83b6-c548d4f59cfb",
+      "deviceId": "280b6fb0-0639-452a-81d3-2e14c6069fe8",
+      "deviceUid": "0026004D4B42501120353332",
+      "trainNumber": "12002",
+      "coachNumber": "B4",
+      "tankName": "Coach B4 Primary Tank",
+      "levelPercent": 74.5,
+      "rawLevelPercent": 74.5,
+      "volumeLiters": 14.9,
+      "heightCm": 37.25,
+      "capacityLiters": 20.0,
+      "maxHeightCm": 50.0,
+      "crossSectionalAreaM2": 0.04,
+      "rank": "GOOD",
+      "alarmStatus": "STALE_DATA",
+      "batteryVoltage": 12.8,
+      "isOnline": true,
+      "hasTelemetry": true,
+      "isStale": true,
+      "lastUpdate": "2026-10-31T11:27:38"
+    },
+    "location": {
+      "train_number": "12002",
+      "coach_number": "B4",
+      "is_online": true,
+      "has_gps": true,
+      "current_latitude": 27.1751,
+      "current_longitude": 78.0421,
+      "current_altitude": 169.0,
+      "current_speed_kmh": 65.5,
+      "satellites": 10,
+      "last_update": "2026-10-31T11:27:38",
+      "waypoints": [
+        {
+          "latitude": 27.1751,
+          "longitude": 78.0421,
+          "altitude": 169.0,
+          "speed_kmh": 65.5,
+          "satellites": 10,
+          "timestamp": "2026-10-31T11:27:38"
+        }
+      ]
+    },
+    "alarms_count": 0
+  },
+  "Test_C": {
+    "status": "FAIL",
+    "live_tank": {
+      "tankId": "391dde8e-c6b9-4d0b-83b6-c548d4f59cfb",
+      "deviceId": "280b6fb0-0639-452a-81d3-2e14c6069fe8",
+      "deviceUid": "0026004D4B42501120353332",
+      "trainNumber": "12002",
+      "coachNumber": "B4",
+      "tankName": "Coach B4 Primary Tank",
+      "levelPercent": 74.5,
+      "rawLevelPercent": 74.5,
+      "volumeLiters": 14.9,
+      "heightCm": 37.25,
+      "capacityLiters": 20.0,
+      "maxHeightCm": 50.0,
+      "crossSectionalAreaM2": 0.04,
+      "rank": "GOOD",
+      "alarmStatus": "STALE_DATA",
+      "batteryVoltage": 12.8,
+      "isOnline": true,
+      "hasTelemetry": true,
+      "isStale": true,
+      "lastUpdate": "2026-10-31T11:27:38"
+    },
+    "location": {
+      "train_number": "12002",
+      "coach_number": "B4",
+      "is_online": true,
+      "has_gps": true,
+      "current_latitude": 27.1751,
+      "current_longitude": 78.0421,
+      "current_altitude": 169.0,
+      "current_speed_kmh": 65.5,
+      "satellites": 10,
+      "last_update": "2026-10-31T11:27:38",
+      "waypoints": [
+        {
+          "latitude": 27.1751,
+          "longitude": 78.0421,
+          "altitude": 169.0,
+          "speed_kmh": 65.5,
+          "satellites": 10,
+          "timestamp": "2026-10-31T11:27:38"
+        },
+        {
+          "latitude": 27.1751,
+          "longitude": 78.0421,
+          "altitude": 169.0,
+          "speed_kmh": 65.5,
+          "satellites": 10,
+          "timestamp": "2026-10-31T00:00:00"
+        }
+      ]
+    },
+    "datapoints": 2
+  },
+  "Test_D": {
+    "status": "PASS",
+    "backend_alive": true,
+    "retained_level": 74.5
+  },
+  "Test_E": {
+    "status": "PASS",
+    "is_stale": true,
+    "alarm_status": "STALE_DATA",
+    "levelPercent": 74.5
+  }
+}

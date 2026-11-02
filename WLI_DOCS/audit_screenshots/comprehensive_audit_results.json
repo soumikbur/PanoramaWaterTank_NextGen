@@ -1,0 +1,99 @@
+{
+  "timestamp": "2026-11-02T09:19:34.811Z",
+  "pass1_auth": {
+    "unauthenticatedRedirect": true,
+    "invalidCredentialsRejected": true,
+    "adminLoginSuccessful": true,
+    "logoutSuccessful": true,
+    "operatorRoleGating": {
+      "hasOperatorBadge": true,
+      "adminSectionsHidden": true,
+      "hasSettingsNav": false,
+      "hasUsersNav": false,
+      "hasLogsNav": false
+    }
+  },
+  "pass2_visual": {
+    "dashboard": {
+      "label": "Dashboard",
+      "zeroEmojis": true,
+      "noFakeCoords": true,
+      "noFakeLevel": true
+    },
+    "trains": {
+      "label": "Train Management",
+      "zeroEmojis": true,
+      "noFakeCoords": true,
+      "noFakeLevel": true
+    },
+    "watertank": {
+      "label": "All Tanks",
+      "zeroEmojis": true,
+      "noFakeCoords": true,
+      "noFakeLevel": true
+    },
+    "devices": {
+      "label": "Devices",
+      "zeroEmojis": true,
+      "noFakeCoords": true,
+      "noFakeLevel": true
+    },
+    "location": {
+      "label": "Location & GPS",
+      "zeroEmojis": true,
+      "noFakeCoords": true,
+      "noFakeLevel": true
+    },
+    "alerts": {
+      "label": "Alerts",
+      "zeroEmojis": true,
+      "noFakeCoords": true,
+      "noFakeLevel": true
+    },
+    "history": {
+      "label": "History",
+      "zeroEmojis": true,
+      "noFakeCoords": true,
+      "noFakeLevel": true
+    },
+    "reports": {
+      "label": "Reports",
+      "zeroEmojis": true,
+      "noFakeCoords": true,
+      "noFakeLevel": true
+    },
+    "settings": {
+      "label": "Settings",
+      "zeroEmojis": true,
+      "noFakeCoords": true,
+      "noFakeLevel": true
+    },
+    "users": {
+      "label": "User Management",
+      "zeroEmojis": true,
+      "noFakeCoords": true,
+      "noFakeLevel": true
+    },
+    "logs": {
+      "label": "System Logs",
+      "zeroEmojis": true,
+      "noFakeCoords": true,
+      "noFakeLevel": true
+    }
+  },
+  "pass3_interactions": {
+    "trainsModal": true,
+    "locationControls": [
+      "Center on Train",
+      "Fit Corridor"
+    ],
+    "reportsTabs": true,
+    "settingsControls": [
+      "Read From Device",
+      "Test MQTT Broker"
+    ],
+    "usersModal": true
+  },
+  "pass4_mqtt_telemetry": {},
+  "pass5_regression": {}
+}

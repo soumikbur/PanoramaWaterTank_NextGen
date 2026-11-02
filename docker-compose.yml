@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: panorama-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-panorama_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-panorama_secure_pass_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-panorama_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-panorama_app} -d ${POSTGRES_DB:-panorama_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: panorama-mosquitto
+    restart: unless-stopped
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+      - "${MQTT_TLS_PORT:-8883}:8883"
+    volumes:
+      - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: panorama-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-panorama_app}:${POSTGRES_PASSWORD:-panorama_secure_pass_2026}@postgres:5432/${POSTGRES_DB:-panorama_db}
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: 1883
+      SECRET_KEY: ${SECRET_KEY:-super_secret_jwt_key_panorama_water_tank_2026}
+    ports:
+      - "8000:8000"
+
+volumes:
+  postgres_data:
+  mosquitto_data:
+  mosquitto_log:
+
