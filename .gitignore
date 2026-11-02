@@ -47,6 +47,7 @@ multi_res_*.log
 
 # Graphify cache
 graphify-out/cache/
+test_artifacts/
 
 # Operating System Files
 .DS_Store

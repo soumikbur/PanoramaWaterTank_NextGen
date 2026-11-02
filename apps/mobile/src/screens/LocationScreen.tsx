@@ -7,6 +7,8 @@ import { TrainLocation, CorridorStation, DEFAULT_CORRIDOR_STATIONS } from '../ty
 import {
   Maximize2,
   Minimize2,
+  Expand,
+  Shrink,
   Layers,
   Crosshair,
   Navigation,
@@ -54,11 +56,13 @@ export const LocationScreen: React.FC = () => {
   const [selectedStationCode, setSelectedStationCode] = useState<string>('');
   const [selectedEntity, setSelectedEntity] = useState<CorridorStation | null>(null);
   const [isMapExpanded, setIsMapExpanded] = useState<boolean>(false);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isCorridorExpanded, setIsCorridorExpanded] = useState<boolean>(false);
   const [tileMode, setTileMode] = useState<'street' | 'satellite'>('street');
   const [tileError, setTileError] = useState<boolean>(false);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
 
+  const mapWrapperRef = useRef<HTMLDivElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
@@ -405,13 +409,88 @@ export const LocationScreen: React.FC = () => {
     }
   }, [activeTrainLoc, hasGps, isStale]);
 
-  // Resizes map upon container/sidebar expansion
+  const handleToggleFullscreen = () => {
+    if (!isFullscreen) {
+      setIsFullscreen(true);
+      if (mapWrapperRef.current?.requestFullscreen) {
+        mapWrapperRef.current.requestFullscreen().catch(() => {});
+      }
+      setFeedbackToast('Entered fullscreen view. Press Escape or click Exit Fullscreen to exit.');
+    } else {
+      exitFullscreen();
+    }
+  };
+
+  const exitFullscreen = () => {
+    setIsFullscreen(false);
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+    setFeedbackToast('Exited fullscreen view.');
+  };
+
+  const handleToggleExpand = () => {
+    setIsMapExpanded((prev) => {
+      const next = !prev;
+      setFeedbackToast(next ? 'Expanded map view: enlarged layout active.' : 'Restored standard map layout.');
+      return next;
+    });
+  };
+
+  // Fullscreen change listener
   useEffect(() => {
-    const timer = setTimeout(() => {
-      mapInstanceRef.current?.invalidateSize();
-    }, 220);
-    return () => clearTimeout(timer);
-  }, [sidebarCollapsed, isMapExpanded]);
+    const handleFullscreenChange = () => {
+      const isDocFs = !!document.fullscreenElement;
+      if (!isDocFs && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, [isFullscreen]);
+
+  // Escape key listener for fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        exitFullscreen();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
+
+  // Resizes map upon container/sidebar expansion or fullscreen toggling
+  useEffect(() => {
+    const updateMapDimensions = () => {
+      const map = mapInstanceRef.current;
+      if (!map) return;
+
+      const currentCenter = map.getCenter();
+      const currentZoom = map.getZoom();
+
+      map.invalidateSize({ animate: false });
+
+      if (currentCenter) {
+        map.setView(currentCenter, currentZoom, { animate: false });
+      }
+    };
+
+    updateMapDimensions();
+    const t1 = setTimeout(updateMapDimensions, 60);
+    const t2 = setTimeout(updateMapDimensions, 180);
+    const t3 = setTimeout(updateMapDimensions, 350);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [sidebarCollapsed, isMapExpanded, isFullscreen]);
 
   // Actions
   const handleCenterTrain = () => {
@@ -515,7 +594,7 @@ export const LocationScreen: React.FC = () => {
       )}
 
       {/* Google Maps JS API Engine Status Notification */}
-      {!googleMapsApiKey && (
+      {!googleMapsApiKey && !isMapExpanded && !isFullscreen && (
         <div
           style={{
             backgroundColor: '#F8FAFC',
@@ -562,24 +641,36 @@ export const LocationScreen: React.FC = () => {
 
       {/* 1. Main Map Section (Dominant Geographic View) */}
       <div
+        ref={mapWrapperRef}
+        id="location-map-wrapper"
         style={{
           backgroundColor: colors.surface,
-          border: `1px solid ${colors.border}`,
-          borderRadius: `${metrics.cardRadius}px`,
-          position: 'relative',
+          border: isFullscreen ? 'none' : `1px solid ${colors.border}`,
+          borderRadius: isFullscreen ? '0px' : `${metrics.cardRadius}px`,
+          position: isFullscreen ? 'fixed' : 'relative',
+          top: isFullscreen ? 0 : 'auto',
+          left: isFullscreen ? 0 : 'auto',
+          right: isFullscreen ? 0 : 'auto',
+          bottom: isFullscreen ? 0 : 'auto',
+          width: isFullscreen ? '100vw' : '100%',
+          height: isFullscreen ? '100vh' : (isMapExpanded ? '780px' : '520px'),
+          zIndex: isFullscreen ? 99999 : 1,
           overflow: 'hidden',
-          boxShadow: colors.shadowSubtle,
+          boxShadow: isFullscreen ? 'none' : colors.shadowSubtle,
           display: 'flex',
           flexDirection: 'column',
+          transition: isFullscreen ? 'none' : 'height 0.25s ease-in-out',
         }}
       >
         {/* Geographic Map Container */}
         <div
           ref={mapContainerRef}
+          id="location-map-container"
           style={{
             width: '100%',
-            height: isMapExpanded ? '720px' : '480px',
-            transition: 'height 0.25s ease-in-out',
+            height: '100%',
+            flex: 1,
+            minHeight: 0,
             position: 'relative',
             zIndex: 1,
             backgroundColor: '#0F172A',
@@ -707,8 +798,75 @@ export const LocationScreen: React.FC = () => {
               border: `1px solid ${colors.border}`,
             }}
           >
-            {/* 1. Google Maps Live */}
+            {/* 1. Expand Map Control */}
             <button
+              id="map-expand-btn"
+              onClick={handleToggleExpand}
+              title={isMapExpanded ? 'Restore Normal Map Size' : 'Enlarge Map in Layout'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '6px 11px',
+                borderRadius: '6px',
+                border: `1px solid ${isMapExpanded ? colors.primaryBorder : colors.borderStrong}`,
+                backgroundColor: isMapExpanded ? colors.primarySurface : '#FFFFFF',
+                color: isMapExpanded ? colors.primary : colors.textPrimary,
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {isMapExpanded ? <Shrink size={13} /> : <Expand size={13} />}
+              <span>{isMapExpanded ? 'Normal View' : 'Expand Map'}</span>
+            </button>
+
+            {/* 2. Fullscreen Control */}
+            <button
+              id="map-fullscreen-btn"
+              onClick={handleToggleFullscreen}
+              title={isFullscreen ? 'Exit Fullscreen View (Esc)' : 'Expand to Fullscreen View'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '6px 11px',
+                borderRadius: '6px',
+                border: isFullscreen ? '1px solid #1D4ED8' : `1px solid ${colors.borderStrong}`,
+                backgroundColor: isFullscreen ? '#2563EB' : '#FFFFFF',
+                color: isFullscreen ? '#FFFFFF' : colors.textPrimary,
+                fontSize: '11px',
+                fontWeight: isFullscreen ? 700 : 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                boxShadow: isFullscreen ? '0 2px 8px rgba(37, 99, 235, 0.4)' : 'none',
+              }}
+            >
+              {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+              <span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+              {isFullscreen && (
+                <span
+                  style={{
+                    fontSize: '9px',
+                    fontWeight: 500,
+                    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                    padding: '1px 5px',
+                    borderRadius: '3px',
+                    marginLeft: '2px',
+                  }}
+                >
+                  Esc
+                </span>
+              )}
+            </button>
+
+            {/* Toolbar Divider */}
+            <div style={{ width: '1px', height: '18px', backgroundColor: colors.borderStrong, margin: '0 2px' }} />
+
+            {/* 3. Google Maps Live */}
+            <button
+              id="map-googlemaps-btn"
               onClick={handleOpenGoogleMaps}
               title="Open Route in Google Maps Live View"
               style={{
@@ -727,28 +885,6 @@ export const LocationScreen: React.FC = () => {
             >
               <ExternalLink size={13} color="#0284C7" />
               <span>Google Maps Live</span>
-            </button>
-
-            {/* 2. Expand Map */}
-            <button
-              onClick={() => setIsMapExpanded(!isMapExpanded)}
-              title={isMapExpanded ? 'Collapse Map' : 'Expand Map View'}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '6px 10px',
-                borderRadius: '6px',
-                border: `1px solid ${isMapExpanded ? colors.primaryBorder : colors.borderStrong}`,
-                backgroundColor: isMapExpanded ? colors.primarySurface : '#FFFFFF',
-                color: isMapExpanded ? colors.primary : colors.textPrimary,
-                fontSize: '11px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              {isMapExpanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-              <span>{isMapExpanded ? 'Normal' : 'Expand Map'}</span>
             </button>
 
             {/* 3. Satellite */}
