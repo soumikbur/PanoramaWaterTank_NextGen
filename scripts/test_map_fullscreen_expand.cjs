@@ -44,9 +44,14 @@ async function runTest() {
     return null;
   };
 
-  // Wait for initial render: either login page or dashboard shell
+  // Wait for initial render: wait until spinner is gone and either login form or dashboard navigation mounts
   console.log('[TEST] Waiting for application shell or login page...');
-  await waitFor(() => Boolean(document.querySelector('input[type="password"]') || document.getElementById('nav-location') || document.body.innerText.includes('Panorama')));
+  await waitFor(() => {
+    const isSpinner = document.body.innerText.includes('Initializing Panorama SCADA Console');
+    const hasPassword = Boolean(document.querySelector('input[type="password"]'));
+    const hasNav = Boolean(document.getElementById('nav-location'));
+    return !isSpinner && (hasPassword || hasNav);
+  }, 20000);
 
   // Check if LoginScreen is active; if so, perform login
   const isLoginPage = await win.webContents.executeJavaScript(`
@@ -57,23 +62,23 @@ async function runTest() {
     console.log('[TEST] Login form detected. Logging in as Administrator...');
     await win.webContents.executeJavaScript(`
       (() => {
-        const adminBtn = Array.from(document.querySelectorAll('button')).find(b => b.textContent && (b.textContent.includes('Admin Quick Fill') || b.textContent.includes('Admin')));
-        if (adminBtn) {
-          adminBtn.click();
-        } else {
-          const userInputs = document.querySelectorAll('input');
-          if (userInputs[0]) userInputs[0].value = 'admin';
-          if (userInputs[1]) userInputs[1].value = 'admin123';
-          userInputs[0]?.dispatchEvent(new Event('input', { bubbles: true }));
-          userInputs[1]?.dispatchEvent(new Event('input', { bubbles: true }));
+        const userInputs = document.querySelectorAll('input');
+        if (userInputs[0]) {
+          userInputs[0].value = 'admin';
+          userInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
         }
-        const submitBtn = document.querySelector('button[type="submit"]') || Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Sign In') || b.textContent.includes('Log In'));
+        if (userInputs[1]) {
+          userInputs[1].value = 'admin123';
+          userInputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        const submitBtn = document.querySelector('button[type="submit"]') || Array.from(document.querySelectorAll('button')).find(b => b.textContent && (b.textContent.includes('Sign In') || b.textContent.includes('Log In')));
         if (submitBtn) submitBtn.click();
       })()
     `);
 
     // Wait for login transition to dashboard
-    await waitFor(() => Boolean(document.getElementById('nav-location') || Array.from(document.querySelectorAll('button, span, div')).find(el => el.textContent && el.textContent.trim() === 'Location & GPS')));
+    console.log('[TEST] Waiting for dashboard after login...');
+    await waitFor(() => Boolean(document.getElementById('nav-location') || Array.from(document.querySelectorAll('button, span, div')).find(el => el.textContent && el.textContent.trim() === 'Location & GPS')), 20000);
   }
 
   // Navigate to Location & GPS screen
