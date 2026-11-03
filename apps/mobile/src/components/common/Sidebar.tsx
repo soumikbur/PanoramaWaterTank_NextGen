@@ -18,6 +18,7 @@ import {
   ChevronRight,
   Shield,
   Activity,
+  LucideIcon,
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -37,7 +38,7 @@ export const Sidebar: React.FC = () => {
   const isAdmin = currentUser?.role === 'ADMIN';
 
   // 8 Main Operational Navigation Items
-  const primaryNavItems: { id: ScreenName; label: string; icon: React.FC<{ size?: number; className?: string }> }[] = [
+  const primaryNavItems: { id: ScreenName; label: string; icon: LucideIcon }[] = [
     { id: 'trains', label: 'Train Management', icon: Train },
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'watertank', label: 'All Tanks', icon: Gauge },
@@ -49,14 +50,14 @@ export const Sidebar: React.FC = () => {
   ];
 
   // System & Management Navigation Items (Admin Only)
-  const systemNavItems: { id: ScreenName; label: string; icon: React.FC<{ size?: number; className?: string }> }[] = [
+  const systemNavItems: { id: ScreenName; label: string; icon: LucideIcon }[] = [
     { id: 'settings', label: 'Settings', icon: SettingsIcon },
     { id: 'users', label: 'User Management', icon: UsersIcon },
     { id: 'logs', label: 'System Logs', icon: ScrollText },
   ];
 
   // Train summary metrics
-  const onlineDevicesCount = devices.filter((d) => d.is_online).length;
+  const onlineDevicesCount = devices.filter((d) => d.isOnline ?? d.is_online).length;
   const offlineDevicesCount = devices.length - onlineDevicesCount;
   const totalTanksCount = devices.length * 2;
   const totalAlertsCount = activeAlarms.length;

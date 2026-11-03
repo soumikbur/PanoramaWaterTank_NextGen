@@ -68,9 +68,9 @@ async def export_history_csv(
             device.train_number if device else "12002",
             device.coach_number if device else "B4",
             device.uid if device else "",
-            f"{r.level_percent:.1f}",
-            f"{r.volume_liters:.1f}",
-            f"{r.height_cm:.1f}",
+            f"{r.level_percent:.1f}" if r.level_percent is not None else "",
+            f"{r.volume_liters:.1f}" if r.volume_liters is not None else "",
+            f"{r.height_cm:.1f}" if r.height_cm is not None else "",
             f"{r.battery_v1:.2f}" if r.battery_v1 is not None else "12.00",
             "NORMAL" if r.sensor_valid else "FAULT"
         ])

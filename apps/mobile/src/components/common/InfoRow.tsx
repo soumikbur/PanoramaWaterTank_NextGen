@@ -5,10 +5,18 @@ interface InfoRowProps {
   label: string;
   value: string | number;
   valueColor?: string;
+  highlight?: boolean;
   style?: React.CSSProperties;
 }
 
-export const InfoRow: React.FC<InfoRowProps> = ({ label, value, valueColor = colors.textPrimary, style }) => {
+export const InfoRow: React.FC<InfoRowProps> = ({
+  label,
+  value,
+  valueColor = colors.textPrimary,
+  highlight = false,
+  style,
+}) => {
+  const effectiveColor = highlight ? colors.primary : valueColor;
   const valStr = String(value ?? '');
   const isLong = valStr.length > 20;
 
@@ -45,7 +53,7 @@ export const InfoRow: React.FC<InfoRowProps> = ({ label, value, valueColor = col
           fontFamily: typography.fontFamily,
           fontSize: isLong ? '10px' : '12px',
           fontWeight: 700,
-          color: valueColor,
+          color: effectiveColor,
           textAlign: 'right',
           overflow: 'hidden',
           textOverflow: 'ellipsis',

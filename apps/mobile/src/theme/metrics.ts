@@ -25,13 +25,28 @@ export const metrics = {
 
   // Card & Container Sizing
   cardRadius: 8,
+  radiusLarge: 12,
   cardPadding: 16,
   cardSpacing: 14,
+  tankCardMinHeight: 240,
+  summaryCardHeight: 100,
+  summaryIconBadgeSize: 40,
+  summaryIconBadgeRadius: 8,
+  infoRowSpacing: 8,
+
+  // Indicators & Badges
+  rankIndicatorHeight: 36,
+
+  // Chart Sizing
+  chartLineThickness: 2.5,
+  chartPointRadius: 3,
 
   // Vessel Drawing Constants
   topRadius: 12,
   bottomRadius: 18,
   vesselWidth: 260,
+  vesselPreferredWidth: 260,
+  rulerPreferredWidth: 60,
 
   // Control Heights
   inputHeight: 36,

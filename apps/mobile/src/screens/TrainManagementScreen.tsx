@@ -65,7 +65,7 @@ export const TrainManagementScreen: React.FC = () => {
   };
 
   const handleDeleteTrain = async (trainNumber: string) => {
-    if (currentUser.role !== 'ADMIN') {
+    if (currentUser?.role !== 'ADMIN') {
       alert('Only administrators can remove trains from the fleet.');
       return;
     }
@@ -642,7 +642,7 @@ export const TrainManagementScreen: React.FC = () => {
                       <span>Consist</span>
                       <ChevronRight size={12} />
                     </button>
-                    {currentUser.role === 'ADMIN' && (
+                    {currentUser?.role === 'ADMIN' && (
                       <>
                         <button
                           onClick={() => handleOpenEditTrainModal(train)}

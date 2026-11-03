@@ -112,7 +112,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
 
   const applyScale = (scaleStr: string) => {
-    const factor = scaleFactors[scaleStr] ?? (parseFloat(scaleStr) / 100) ?? 1.2;
+    const factor = scaleFactors[scaleStr] ?? ((parseFloat(scaleStr) / 100) || 1.2);
     if (typeof document !== 'undefined') {
       document.documentElement.style.setProperty('--app-scale', `${factor}`);
       (document.documentElement.style as any).zoom = `${factor}`;

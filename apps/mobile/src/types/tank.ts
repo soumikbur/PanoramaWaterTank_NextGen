@@ -8,6 +8,7 @@ export interface TankLiveStatus {
   trainNumber: string;
   coachNumber: string;
   tankName: string;
+  tankIndex?: number;
   levelPercent: number | null;
   rawLevelPercent: number | null;
   volumeLiters: number | null;

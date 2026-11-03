@@ -6,7 +6,7 @@ import { UserProfile } from '../types';
 import { Users as UsersIcon, UserPlus, Trash2, X, ShieldAlert, User } from 'lucide-react';
 
 export const UsersScreen: React.FC = () => {
-  const { currentUser } = useApp();
+  const { currentUser, setCurrentUser } = useApp();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isAddUserOpen, setIsAddUserOpen] = useState<boolean>(false);

@@ -306,8 +306,8 @@ async def test_device_connection(payload: Optional[Dict[str, Any]] = None, db: A
     repo = SettingsRepository(db)
     host_setting = await repo.get("device.host")
     port_setting = await repo.get("device.port")
-    host = host_setting.value if host_setting else "192.168.4.1"
-    port = int(port_setting.value) if port_setting else 80
+    host = host_setting if host_setting is not None else "192.168.4.1"
+    port = int(port_setting) if port_setting is not None else 80
 
     target = f"{host}:{port}"
     import socket
@@ -315,16 +315,15 @@ async def test_device_connection(payload: Optional[Dict[str, Any]] = None, db: A
     start = time.perf_counter()
     reachable = False
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1.0)
-        result = sock.connect_ex((str(host), port))
-        sock.close()
-        elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
-        if result == 0:
-            reachable = True
-            msg = f"Connected to {target} successfully"
-        else:
-            msg = f"Connection to {target} failed (code {result})"
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1.0)
+            result = sock.connect_ex((str(host), port))
+            elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
+            if result == 0:
+                reachable = True
+                msg = f"Connected to {target} successfully"
+            else:
+                msg = f"Connection to {target} failed (code {result})"
     except Exception as e:
         elapsed_ms = None
         msg = f"Connection failed: {str(e)}"

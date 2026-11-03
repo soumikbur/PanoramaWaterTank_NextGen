@@ -83,14 +83,14 @@ export const AlertsScreen: React.FC = () => {
           bgColor: isCrit ? '#FEF2F2' : '#FFFBEB',
           borderColor: isCrit ? '#FECACA' : '#FDE68A',
           textColor: isCrit ? '#991B1B' : '#92400E',
-          title: a.alarmType.replace(/_/g, ' '),
+          title: (a.alarmType || 'ALARM').replace(/_/g, ' '),
           description: a.message || `Telemetry parameter violated configured safety limit (${a.thresholdValue}%).`,
           currentValue: a.triggerValue != null ? `${a.triggerValue.toFixed(1)}%` : 'Active',
           threshold: a.thresholdValue != null ? `${a.thresholdValue.toFixed(1)}%` : 'Threshold',
           timestamp: a.triggeredAt ? new Date(a.triggeredAt).toLocaleTimeString() : nowTime,
           acknowledged: a.status === 'ACKNOWLEDGED',
           statusText: a.status === 'ACKNOWLEDGED' ? 'Acknowledged' : 'Active Alarm',
-          type: a.alarmType.includes('SENSOR') ? 'sensor' : 'level',
+          type: (a.alarmType || '').includes('SENSOR') ? 'sensor' : 'level',
         });
       });
       return list;

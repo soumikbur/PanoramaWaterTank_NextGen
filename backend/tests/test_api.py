@@ -100,3 +100,31 @@ async def test_csv_export():
         assert response.status_code == 200
         assert "text/csv" in response.headers["content-type"]
         assert "Timestamp,Train_Number,Coach_Number" in response.text
+
+
+@pytest.mark.asyncio
+async def test_device_connection_endpoint():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/api/v1/settings/test-device")
+        assert response.status_code == 200
+        data = response.json()
+        assert "target" in data
+        assert "status" in data
+        assert "reachable" in data
+
+
+@pytest.mark.asyncio
+async def test_cors_preflight():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.options(
+            "/api/v1/health",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "GET"
+            }
+        )
+        assert response.status_code == 200
+        assert response.headers.get("access-control-allow-origin") == "http://localhost:3000"
+        assert response.headers.get("access-control-allow-credentials") == "true"

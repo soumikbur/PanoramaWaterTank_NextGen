@@ -7,7 +7,13 @@ export interface Device {
   hardwareVersion: string;
   firmwareVersion: string;
   isOnline: boolean;
+  is_online?: boolean;
+  train_number?: string;
+  coach_number?: string;
+  hardware_version?: string;
+  firmware_version?: string;
   lastSeenAt: string | null;
+  last_seen_at?: string | null;
   primaryLevel?: number;
   secondaryLevel?: number;
   hasActiveAlarm: boolean;

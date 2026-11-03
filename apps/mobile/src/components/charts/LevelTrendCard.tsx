@@ -3,18 +3,45 @@ import { colors, metrics, typography } from '../../theme';
 import { BaseCard } from '../common/BaseCard';
 import { TrendChart, TrendPoint } from './TrendChart';
 import { useApp } from '../../state/AppContext';
+import { ApiClient } from '../../api/client';
 
 interface LevelTrendCardProps {
   tankId?: string;
+  height?: number;
+  dataPoints?: any[];
   style?: React.CSSProperties;
 }
 
-export const LevelTrendCard: React.FC<LevelTrendCardProps> = ({ style }) => {
-  const { liveTank, telemetryHistory } = useApp();
+export const LevelTrendCard: React.FC<LevelTrendCardProps> = ({ tankId, height, dataPoints, style }) => {
+  const { liveTank } = useApp();
+  const [historyPoints, setHistoryPoints] = useState<any[]>(dataPoints || []);
 
   const [rangeIndex, setRangeIndex] = useState(0); // 0: 12 Hours, 1: 24 Hours, 2: 7 Days
   const rangeLabels = ['12 Hours', '24 Hours', '7 Days'];
   const rangeHours = [12, 24, 168];
+
+  useEffect(() => {
+    let mounted = true;
+    if (dataPoints) {
+      setHistoryPoints(dataPoints);
+      return;
+    }
+    const targetId = tankId || liveTank?.tankId;
+    if (!targetId) return;
+    const rangeStr = rangeIndex === 2 ? '7d' : rangeIndex === 1 ? '24h' : '12h';
+    ApiClient.fetchTelemetryHistory(targetId, rangeStr)
+      .then((res) => {
+        if (mounted && res?.dataPoints) {
+          setHistoryPoints(res.dataPoints);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load level trend:', err);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [tankId, liveTank?.tankId, rangeIndex, dataPoints]);
 
   const currentDurationMs = rangeHours[rangeIndex] * 3600 * 1000;
   const now = Date.now();
@@ -52,15 +79,15 @@ export const LevelTrendCard: React.FC<LevelTrendCardProps> = ({ style }) => {
     return labels;
   })();
 
-  // Transform telemetryHistory into TrendPoint array strictly from real telemetry
+  // Transform historyPoints into TrendPoint array strictly from real telemetry
   const trendPoints: TrendPoint[] = (() => {
-    const source = telemetryHistory && telemetryHistory.length > 0 ? telemetryHistory : [];
+    const source = historyPoints && historyPoints.length > 0 ? historyPoints : [];
 
     if (source.length === 0) {
       return [];
     }
 
-    return source.map((pt, idx) => {
+    return source.map((pt: any, idx: number) => {
       const ptTime = new Date(pt.timestamp).getTime();
       let xRatio = (ptTime - plotStartMs) / currentDurationMs;
       xRatio = Math.max(0.0, Math.min(1.0, isNaN(xRatio) ? idx / (source.length - 1 || 1) : xRatio));
@@ -73,12 +100,12 @@ export const LevelTrendCard: React.FC<LevelTrendCardProps> = ({ style }) => {
   })();
 
   const hasData = trendPoints.length > 0;
-  const lastUpdated = liveTank?.timestamp
-    ? new Date(liveTank.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  const lastUpdated = liveTank?.lastUpdate
+    ? new Date(liveTank.lastUpdate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : 'Live Polling';
 
   return (
-    <BaseCard padding={metrics.cardPadding} style={{ minHeight: `${metrics.tankCardMinHeight}px`, ...style }}>
+    <BaseCard padding={metrics.cardPadding} style={{ minHeight: `${metrics.tankCardMinHeight}px`, height, ...style }}>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '8px' }}>
         {/* Card Header Row */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

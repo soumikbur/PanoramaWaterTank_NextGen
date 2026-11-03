@@ -4,6 +4,7 @@ Implements the exact downsampling algorithm used in the legacy C++ HistoryExport
 to reduce dense time-series telemetry to ~100 points for chart rendering while
 preserving critical peaks, valleys, and trend shapes.
 """
+import math
 from typing import List, Tuple, Dict, Any
 from datetime import datetime
 
@@ -94,6 +95,6 @@ class LTTBDownsampler:
 
 
 def math_floor(x: float) -> int:
-    """Fast integer floor."""
-    return int(x)
+    """Exact floor integer."""
+    return math.floor(x)
 
