@@ -666,9 +666,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/api/client.ts": {
-    "mtime": 1793624540.3241086,
-    "seen": 1793624746.1366284,
-    "ast_hash": "59ebc909f7ef993a5179addc73adc828",
+    "mtime": 1793707961.4672296,
+    "seen": 1793708374.2213452,
+    "ast_hash": "3c647d2b9effe096eef8df5a9ce8a651",
     "semantic_hash": ""
   },
   "apps/mobile/src/components/charts/LevelTrendCard.tsx": {
@@ -822,9 +822,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/services/websocket.ts": {
-    "mtime": 1793624551.6570055,
-    "seen": 1793624746.1389112,
-    "ast_hash": "b6f20f2fca3911a52cdb260e53943bf7",
+    "mtime": 1793707977.6314156,
+    "seen": 1793708374.225305,
+    "ast_hash": "442525e80ab019afb57f6b2a1ecc34d9",
     "semantic_hash": ""
   },
   "apps/mobile/src/state/AppContext.tsx": {
@@ -1026,9 +1026,9 @@
     "semantic_hash": ""
   },
   "backend/app/main.py": {
-    "mtime": 1793706464.1052504,
-    "seen": 1793706576.360255,
-    "ast_hash": "df14bc27ad0cb947c08bfd157848f5ec",
+    "mtime": 1793708306.6757114,
+    "seen": 1793708374.2337756,
+    "ast_hash": "cbfbf9359d728249ecc0ed1ad57b6146",
     "semantic_hash": ""
   },
   "backend/app/models/__init__.py": {
@@ -1230,9 +1230,9 @@
     "semantic_hash": ""
   },
   "backend/tests/test_api.py": {
-    "mtime": 1793706488.8169603,
-    "seen": 1793706576.365692,
-    "ast_hash": "aa3f1230b5e88be65432b6b37d49bcf8",
+    "mtime": 1793708073.9552486,
+    "seen": 1793708374.2413983,
+    "ast_hash": "a019f185777d4f2627f3b309efd6af36",
     "semantic_hash": ""
   },
   "backend/tests/test_calculator.py": {
@@ -3258,9 +3258,9 @@
     "semantic_hash": ""
   },
   "scripts/sync_dist.js": {
-    "mtime": 1793620401.6941597,
-    "seen": 1793621078.078452,
-    "ast_hash": "9e5dcdeb86aa7b4b6944c25373484a1b",
+    "mtime": 1793708018.073656,
+    "seen": 1793708374.24433,
+    "ast_hash": "dfb0a66e2ef6c135cfc650f56acb5453",
     "semantic_hash": ""
   },
   "scripts/test_map_fullscreen_expand.cjs": {
@@ -3276,9 +3276,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/scripts/build.cjs": {
-    "mtime": 1793624785.5585122,
-    "seen": 1793625899.1309385,
-    "ast_hash": "b56c9b1736533d676d6286f93e61feca",
+    "mtime": 1793708006.7749932,
+    "seen": 1793708374.2210941,
+    "ast_hash": "2b185a3d3cd850f86e1b3ab2ac7ea3d4",
     "semantic_hash": ""
   },
   "apps/mobile/scripts/dev.cjs": {
@@ -3311,10 +3311,22 @@
     "ast_hash": "e67f0dbda75542bb7c839e519a2d7176",
     "semantic_hash": ""
   },
-  "backend/app/templates/landing.py": {
-    "mtime": 1793706409.0538242,
-    "seen": 1793706576.3644636,
-    "ast_hash": "7ba75514a42d9f16c426065610f7ac05",
+  "backend/static/assets/index.js": {
+    "mtime": 1793708083.4053595,
+    "seen": 1793708374.2411764,
+    "ast_hash": "c52edc60c79e6cb68b2eff7a3f42a8b1",
+    "semantic_hash": ""
+  },
+  "scripts/verify_react_production_app.cjs": {
+    "mtime": 1793708121.0619476,
+    "seen": 1793708374.2445898,
+    "ast_hash": "ee2268af87932158d793994cd830dc15",
+    "semantic_hash": ""
+  },
+  "backend/static/index.html": {
+    "mtime": 1793708083.40636,
+    "seen": 1793708374.2698967,
+    "ast_hash": "b04769e82ff898f848bfac981d1eabac",
     "semantic_hash": ""
   },
   "apps/mobile/package-lock.json": {

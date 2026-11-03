@@ -7,16 +7,16 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
+from typing import Optional
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 
 from app.core.config import settings
 from app.core.database import init_db
 from app.mqtt.client import mqtt_service
 from app.api.v1 import api_router
-from app.templates.landing import get_landing_html
 
 # Configure logging
 logging.basicConfig(
@@ -77,21 +77,48 @@ app.add_middleware(
 # Mount API Routers
 app.include_router(api_router)
 
-# Mount static file directory if present
+# Resolve static file directory with candidate fallbacks
+_base_project_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_static_candidates = [
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static"),
+    os.path.join(_base_project_dir, "backend", "static"),
+    os.path.join(_base_project_dir, "dist"),
+    os.path.join(_base_project_dir, "apps", "mobile", "dist"),
+]
 _static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
-if not os.path.exists(_static_dir):
-    _static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "dist")
+for _c in _static_candidates:
+    if os.path.exists(_c) and os.path.exists(os.path.join(_c, "index.html")):
+        _static_dir = _c
+        break
+
+# Mount static asset directories
+_assets_dir = os.path.join(_static_dir, "assets")
+if os.path.exists(_assets_dir):
+    app.mount("/assets", StaticFiles(directory=_assets_dir), name="assets")
 
 if os.path.exists(_static_dir):
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 
 @app.get("/", tags=["Root"])
-async def root(request: Request, format: str = None):
-    """Root metadata and interactive industrial landing page endpoint."""
+async def root(request: Request, format: Optional[str] = None):
+    """Serve the React production application shell or API metadata."""
     accept = request.headers.get("accept", "")
-    if format == "html" or "text/html" in accept:
-        return HTMLResponse(content=get_landing_html(settings.APP_NAME, settings.APP_VERSION))
+    # Explicit JSON requests return system API metadata
+    if format == "json" or ("application/json" in accept and "text/html" not in accept):
+        return {
+            "app": settings.APP_NAME,
+            "version": settings.APP_VERSION,
+            "documentation": "/docs",
+            "health": "/api/v1/health",
+            "liveTank": "/api/v1/tanks/live"
+        }
+
+    # Serve the compiled React application
+    index_file = os.path.join(_static_dir, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file, media_type="text/html")
+
     return {
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
@@ -99,4 +126,29 @@ async def root(request: Request, format: str = None):
         "health": "/api/v1/health",
         "liveTank": "/api/v1/tanks/live"
     }
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa_fallback(full_path: str):
+    """SPA fallback routing for React application direct URLs and refreshes."""
+    if (
+        full_path.startswith("api/")
+        or full_path == "api"
+        or full_path.startswith("docs")
+        or full_path.startswith("redoc")
+        or full_path.startswith("openapi.json")
+        or full_path.startswith("assets/")
+        or full_path.startswith("static/")
+    ):
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
+
+    candidate = os.path.join(_static_dir, full_path)
+    if os.path.isfile(candidate):
+        return FileResponse(candidate)
+
+    index_file = os.path.join(_static_dir, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file, media_type="text/html")
+
+    return JSONResponse(status_code=404, content={"detail": "Not Found"})
 

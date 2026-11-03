@@ -48,7 +48,7 @@ async function build() {
     <meta name="theme-color" content="#1976D2" />
     <meta name="description" content="Panorama Water Tank Monitor — NextGen Railway Coach SCADA & HMI System" />
     <title>Panorama Water Tank Monitor — Railway SCADA/HMI</title>
-    <link rel="stylesheet" href="./assets/index.css" />
+    <link rel="stylesheet" href="/assets/index.css" />
     <style>
       * { box-sizing: border-box; }
       body {
@@ -70,7 +70,7 @@ async function build() {
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <script type="module" src="./assets/index.js"></script>
+    <script type="module" src="/assets/index.js"></script>
   </body>
 </html>`;
   fs.writeFileSync(path.join(distDir, 'index.html'), htmlContent, 'utf8');
@@ -81,6 +81,11 @@ async function build() {
     fs.mkdirSync(rootDist, { recursive: true });
     fs.cpSync(distDir, rootDist, { recursive: true, force: true });
   }
+
+  // Sync to backend static directory
+  const backendStatic = path.resolve(__dirname, '../../../backend/static');
+  fs.mkdirSync(backendStatic, { recursive: true });
+  fs.cpSync(distDir, backendStatic, { recursive: true, force: true });
 
   const duration = Date.now() - start;
   console.log(`[BUILD] Build completed successfully in ${duration}ms! Output: ${distDir}`);
