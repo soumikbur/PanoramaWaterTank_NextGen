@@ -3137,28 +3137,10 @@
     "ast_hash": "0a05ddd169ea3afba628373f1a129f46",
     "semantic_hash": ""
   },
-  "apps/mobile/vercel.json": {
-    "mtime": 1793625844.935484,
-    "seen": 1793625899.1347492,
-    "ast_hash": "118a99a1b6cc8fbbc65b3dd3fd30dd5c",
-    "semantic_hash": ""
-  },
-  "apps/mobile/verify_live_vercel.cjs": {
-    "mtime": 1793613569.4695895,
-    "seen": 1793615313.9854717,
-    "ast_hash": "26fb94f084b83ef0d188d439aa8357cd",
-    "semantic_hash": ""
-  },
-  "vercel.json": {
-    "mtime": 1793625841.1021318,
-    "seen": 1793625899.1455386,
-    "ast_hash": "118a99a1b6cc8fbbc65b3dd3fd30dd5c",
-    "semantic_hash": ""
-  },
   "WLI_DOCS/deployment/DEPLOYMENT_WORKFLOW.md": {
-    "mtime": 1793612957.0059445,
-    "seen": 1793615313.9975605,
-    "ast_hash": "808d70a4b9ee0a8b7672e52ec7829d21",
+    "mtime": 1793690585.665398,
+    "seen": 1793690621.6210463,
+    "ast_hash": "ce9396427b576b41ab75dd5b4ac5dee0",
     "semantic_hash": ""
   },
   "WLI_DOCS/reports/UI_OPTIMIZATION_AUDIT.md": {
@@ -3291,18 +3273,6 @@
     "mtime": 1793622750.5057793,
     "seen": 1793622835.6482024,
     "ast_hash": "378607136ee6e044858c070afb2f72c0",
-    "semantic_hash": ""
-  },
-  "scripts/vercel_build.js": {
-    "mtime": 1793624229.4174128,
-    "seen": 1793624746.145996,
-    "ast_hash": "347b394646c1c398087e3aac6a990c41",
-    "semantic_hash": ""
-  },
-  "scripts/vercel_install.js": {
-    "mtime": 1793624229.4846473,
-    "seen": 1793624746.1459978,
-    "ast_hash": "5e5f9f5f387f263a46610fea6c7ed306",
     "semantic_hash": ""
   },
   "apps/mobile/scripts/build.cjs": {

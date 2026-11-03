@@ -29,12 +29,10 @@ This document establishes the official production deployment architecture and co
 | **Local Project Path** | `C:\Users\User\Documents\Antigravity_soumik\PanoramaWaterTank_NextGen` |
 | **GitHub Repository** | `https://github.com/soumikbur/PanoramaWaterTank_NextGen` |
 | **Default Production Branch** | `main` |
-| **Target Hosting Platform** | Vercel (Edge Network / Web Application) |
+| **Target Hosting Platform** | Local Industrial HMI / Standalone Electron & Embedded Server (Vercel Disabled) |
 | **Project Name** | `panoramawatertank-nextgen` |
-| **Deployment URL** | `https://panoramawatertank-nextgen.vercel.app` (or temporary claim: `https://brisk-granite-l88zzc8.tmp.now`) |
-| **Frontend Framework** | Vite + React 18 + TypeScript + Tailwind CSS |
-| **Root Directory** | `apps/mobile` (or repository root with configured `vercel.json`) |
-| **Install Command** | `npm install` |
+| **Deployment Mode** | Local Desktop HMI, SCADA Edge, and Local Web Services |
+| **Frontend Framework** | React 18 + TypeScript + esbuild standalone |
 | **Build Command** | `npm run build` |
 | **Output Directory** | `dist` |
 
@@ -82,13 +80,11 @@ git commit -m "feat(module): description of verified improvements"
 git push origin main
 ```
 
-### Step 4: Automatic Vercel Deployment
-Pushes to the `main` branch automatically trigger Vercel continuous deployment:
-- Vercel checks out the latest commit.
-- Runs `cd apps/mobile && npm install`.
-- Executes `npm run build`.
-- Deploys static bundles to global CDN edges.
-- Routes all virtual paths to `index.html` via SPA rewrites.
+### Step 4: Local Packaging & Verification
+The repository is maintained exclusively as a GitHub-hosted development and desktop/embedded SCADA project. All cloud/Vercel continuous deployment activities are permanently disabled:
+- Standalone builds are executed locally via `npm run build`.
+- Electron and native packaging are handled via `npm run package:all` or `npm run electron`.
+- The repository does not trigger cloud deployments upon push.
 
 ---
 
@@ -116,29 +112,22 @@ After deployment succeeds:
 
 ## 6. Rollback Procedure
 
-If a breaking defect is detected in production:
-1. **Instant Rollback via Vercel Dashboard**:
-   - Navigate to **Deployments** in the Vercel dashboard.
-   - Select the last known stable deployment.
-   - Click the three dots (`...`) and select **Promote to Production**.
-2. **Rollback via Git**:
+If a breaking defect is detected in a build:
+1. **Rollback via Git**:
    ```bash
    git revert HEAD
    git push origin main
    ```
-   Vercel will immediately build and deploy the reverted state.
+2. Re-run local build and tests:
+   ```bash
+   npm run build
+   ```
 
 ---
 
-## 7. Backend & MQTT Hosting Requirements
+## 7. Backend & MQTT Operational Architecture
 
-- **Frontend on Vercel**: The React/Vite web application operates as a static Single Page Application distributed globally via Vercel's edge network.
-- **Backend Architecture**: The Python/FastAPI backend (`backend/app/main.py`) contains a persistent, long-running MQTT client (`app.mqtt.client.mqtt_service`) and SQLite storage (`panorama_dev.db`). Because Vercel serverless functions terminate execution upon request completion, long-running MQTT daemon threads must be hosted on a persistent container or VM runtime (e.g., Railway, Fly.io, AWS EC2, or on-premise industrial server).
+- **Local Industrial SCADA / HMI**: The NextGen web application operates as a high-performance local HMI and Electron desktop client interfacing with real-time hardware telemetry.
+- **Backend Architecture**: The Python/FastAPI backend (`backend/app/main.py`) contains a persistent, long-running MQTT client (`app.mqtt.client.mqtt_service`) and SQLite storage (`panorama_dev.db`).
 - **Client Fallback**: The NextGen web client gracefully handles backend connectivity: when the live backend/broker is temporarily unreachable, the UI displays clear disconnection badges rather than crashing.
-
----
-
-## 8. Known Limitations & Upgrades
-- *Anonymous Deployment Expiration*: The temporary deployment claim URL expires 60 minutes after creation. Permanent deployments require linking the GitHub repository in the Vercel dashboard or logging in via `vercel login`.
-- *Browser Direct MQTT*: Browsers cannot establish raw TCP sockets (`mqtt://`); browser-direct MQTT requires an MQTT-over-WebSocket broker listener (`ws://` or `wss://`) configured with appropriate CORS/TLS policies.
 
