@@ -56,6 +56,9 @@ interface AppContextType {
   selectedStationCode: string | null;
   setSelectedStationCode: (code: string | null) => void;
   regions: RegionSummary[];
+  displayScale: string;
+  setDisplayScale: (scale: string) => void;
+  resetDisplayScale: () => void;
   refreshData: () => Promise<void>;
   refreshRegions: () => Promise<void>;
   acknowledgeAlarm: (alarmId: string, comment?: string) => Promise<void>;
@@ -93,6 +96,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [selectedStationCode, setSelectedStationCode] = useState<string | null>(null);
   const [regions, setRegions] = useState<RegionSummary[]>([]);
+
+  // Global Display Scaling
+  const scaleFactors: Record<string, number> = {
+    '90%': 0.9,
+    '100%': 1.0,
+    '110%': 1.1,
+    '120%': 1.2,
+    '130%': 1.3,
+    '150%': 1.5,
+  };
+
+  const [displayScale, setDisplayScaleState] = useState<string>(() => {
+    return localStorage.getItem('panorama_display_scale') || '120%';
+  });
+
+  const applyScale = (scaleStr: string) => {
+    const factor = scaleFactors[scaleStr] ?? (parseFloat(scaleStr) / 100) ?? 1.2;
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.setProperty('--app-scale', `${factor}`);
+      (document.documentElement.style as any).zoom = `${factor}`;
+      if (document.body) {
+        (document.body.style as any).zoom = `${factor}`;
+      }
+      window.dispatchEvent(new Event('resize'));
+    }
+  };
+
+  const setDisplayScale = (newScale: string) => {
+    setDisplayScaleState(newScale);
+    localStorage.setItem('panorama_display_scale', newScale);
+    applyScale(newScale);
+  };
+
+  const resetDisplayScale = () => {
+    setDisplayScale('120%');
+  };
+
+  useEffect(() => {
+    applyScale(displayScale);
+  }, []);
 
   // 1. Session verification on startup
   useEffect(() => {
@@ -353,6 +396,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         selectedStationCode,
         setSelectedStationCode,
         regions,
+        displayScale,
+        setDisplayScale,
+        resetDisplayScale,
         refreshData,
         refreshRegions,
         acknowledgeAlarm,

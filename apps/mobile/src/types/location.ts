@@ -16,6 +16,7 @@ export interface TrainLocation {
   coach_number: string;
   is_online: boolean;
   has_gps?: boolean;
+  is_simulated?: boolean;
   current_latitude?: number | null;
   current_longitude?: number | null;
   current_altitude?: number | null;

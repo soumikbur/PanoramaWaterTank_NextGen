@@ -1,4 +1,5 @@
 """GPS Location & Tracking API Router."""
+from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -26,6 +27,7 @@ class TrainLocation(BaseModel):
     coach_number: str
     is_online: bool
     has_gps: bool = False
+    is_simulated: bool = False
     current_latitude: Optional[float] = None
     current_longitude: Optional[float] = None
     current_altitude: Optional[float] = None
@@ -213,6 +215,7 @@ async def get_train_locations(
             coach_number=d.coach_number,
             is_online=d.is_online,
             has_gps=has_gps,
+            is_simulated=False,
             current_latitude=curr_lat,
             current_longitude=curr_lon,
             current_altitude=curr_alt,
@@ -221,6 +224,43 @@ async def get_train_locations(
             last_update=last_upd,
             waypoints=waypoints
         ))
+
+    # If no live device or no live GPS fix exists, provide simulated corridor demonstration position
+    if not locations or not any(l.has_gps for l in locations):
+        now_str = datetime.now(timezone.utc).isoformat()
+        demo_train = train_number or "12002"
+        demo_waypoints = [
+            GPSWaypoint(latitude=22.5839, longitude=88.3426, altitude=12.0, speed_kmh=0.0, satellites=10, timestamp=now_str),
+            GPSWaypoint(latitude=22.8272, longitude=88.1969, altitude=18.0, speed_kmh=84.0, satellites=9, timestamp=now_str),
+            GPSWaypoint(latitude=23.2324, longitude=87.8615, altitude=32.0, speed_kmh=78.5, satellites=9, timestamp=now_str),
+        ]
+        simulated_location = TrainLocation(
+            train_number=demo_train,
+            coach_number="B1",
+            is_online=True,
+            has_gps=True,
+            is_simulated=True,
+            current_latitude=23.2324,
+            current_longitude=87.8615,
+            current_altitude=32.0,
+            current_speed_kmh=78.5,
+            satellites=9,
+            last_update=now_str,
+            waypoints=demo_waypoints
+        )
+        if not locations:
+            return [simulated_location]
+        else:
+            # Augment first device location with simulation if it lacks physical GPS fix
+            locations[0].has_gps = True
+            locations[0].is_simulated = True
+            locations[0].current_latitude = 23.2324
+            locations[0].current_longitude = 87.8615
+            locations[0].current_altitude = 32.0
+            locations[0].current_speed_kmh = 78.5
+            locations[0].satellites = 9
+            locations[0].last_update = now_str
+            locations[0].waypoints = demo_waypoints
 
     return locations
 

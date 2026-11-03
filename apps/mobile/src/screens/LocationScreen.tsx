@@ -67,6 +67,7 @@ export const LocationScreen: React.FC = () => {
   const mapInstanceRef = useRef<L.Map | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const trainMarkerRef = useRef<L.Marker | null>(null);
+  const userMarkerRef = useRef<L.Marker | null>(null);
   const stationMarkersRef = useRef<Record<string, L.Marker | L.CircleMarker>>({});
   const polylineRef = useRef<L.Polyline | null>(null);
 
@@ -176,22 +177,43 @@ export const LocationScreen: React.FC = () => {
     if (!mapContainerRef.current) return;
 
     if (!mapInstanceRef.current) {
+      const regionBounds = L.latLngBounds([18.0, 82.0], [28.0, 93.0]);
+      const corridorBounds = L.latLngBounds([22.4, 86.8], [23.9, 88.5]);
       const map = L.map(mapContainerRef.current, {
         center: [23.2324, 87.8615], // Bardhaman/corridor center
         zoom: 9,
+        minZoom: 7,
+        maxZoom: 18,
+        maxBounds: regionBounds,
+        maxBoundsViscosity: 1.0,
+        worldCopyJump: false,
         zoomControl: false,
         attributionControl: true,
       });
 
+      map.fitBounds(corridorBounds, { padding: [40, 40] });
       mapInstanceRef.current = map;
     }
 
+    // Attach ResizeObserver to mapContainer to handle dynamic layouts & display scaling
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && mapContainerRef.current) {
+      ro = new ResizeObserver(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.invalidateSize({ animate: false });
+        }
+      });
+      ro.observe(mapContainerRef.current);
+    }
+
     return () => {
+      if (ro) ro.disconnect();
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
         tileLayerRef.current = null;
         trainMarkerRef.current = null;
+        userMarkerRef.current = null;
         stationMarkersRef.current = {};
         polylineRef.current = null;
       }
@@ -218,7 +240,10 @@ export const LocationScreen: React.FC = () => {
       : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
     const tileLayer = L.tileLayer(tileUrl, {
+      minZoom: 7,
       maxZoom: 18,
+      noWrap: true,
+      bounds: L.latLngBounds([18.0, 82.0], [28.0, 93.0]),
       attribution,
     });
 
@@ -379,7 +404,9 @@ export const LocationScreen: React.FC = () => {
         trainMarkerRef.current.setLatLng([lat, lon]);
       }
 
-      const statusBadge = isStale
+      const statusBadge = activeTrainLoc.is_simulated
+        ? '<span style="background-color: #E0F2FE; color: #0284C7; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">ROUTE SIMULATION</span>'
+        : isStale
         ? '<span style="background-color: #FEF3C7; color: #D97706; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">GNSS DATA STALE</span>'
         : '<span style="background-color: #ECFDF5; color: #16A34A; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">LIVE BEACON</span>';
 
@@ -508,28 +535,70 @@ export const LocationScreen: React.FC = () => {
   };
 
   const handleCurrentLocation = () => {
-    if (hasGps && activeTrainLoc?.current_latitude != null && activeTrainLoc?.current_longitude != null) {
-      mapInstanceRef.current?.setView([activeTrainLoc.current_latitude, activeTrainLoc.current_longitude], 14, {
-        animate: true,
-      });
-      setFeedbackToast(
-        `Physical GNSS Position: ${activeTrainLoc.current_latitude.toFixed(6)}° N, ${activeTrainLoc.current_longitude.toFixed(6)}° E`
-      );
-    } else {
-      setFeedbackToast('Searching for GPS fix: Satellite lock not yet acquired.');
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setFeedbackToast('Geolocation is not supported by your browser.');
+      return;
     }
+    setFeedbackToast('Detecting current browser geolocation...');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        const map = mapInstanceRef.current;
+        if (map) {
+          if (userMarkerRef.current) {
+            userMarkerRef.current.setLatLng([latitude, longitude]);
+          } else {
+            const userIconHtml = `
+              <div style="position: relative; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;">
+                <div style="position: absolute; width: 34px; height: 34px; border-radius: 50%; background-color: rgba(14, 165, 233, 0.35); animation: pulse 1.6s infinite;"></div>
+                <div style="position: absolute; width: 18px; height: 18px; border-radius: 50%; background-color: #0284C7; border: 2.5px solid #FFFFFF; box-shadow: 0 2px 8px rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center;">
+                  <div style="width: 6px; height: 6px; border-radius: 50%; background-color: #FFFFFF;"></div>
+                </div>
+              </div>
+            `;
+            const userIcon = L.divIcon({
+              html: userIconHtml,
+              className: 'user-loc-marker',
+              iconSize: [34, 34],
+              iconAnchor: [17, 17],
+            });
+            userMarkerRef.current = L.marker([latitude, longitude], { icon: userIcon })
+              .bindPopup(`
+                <div style="font-family: Inter, sans-serif; font-size: 12px; line-height: 1.4;">
+                  <strong style="color: #0284C7;">Your Current Location</strong><br/>
+                  <span style="color: #475569; font-size: 11px;">
+                    ${latitude.toFixed(5)}° N, ${longitude.toFixed(5)}° E
+                  </span>
+                </div>
+              `)
+              .addTo(map);
+          }
+          map.setView([latitude, longitude], 13, { animate: true });
+          userMarkerRef.current.openPopup();
+          setFeedbackToast(`Acquired Location: ${latitude.toFixed(4)}° N, ${longitude.toFixed(4)}° E`);
+        }
+      },
+      (err) => {
+        let msg = 'Could not acquire device geolocation.';
+        if (err.code === 1) {
+          msg = 'Geolocation access denied. Please allow browser location permissions to view position.';
+        } else if (err.code === 2) {
+          msg = 'Geolocation position unavailable.';
+        } else if (err.code === 3) {
+          msg = 'Geolocation request timed out.';
+        }
+        setFeedbackToast(msg);
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+    );
   };
 
   const handleOpenGoogleMaps = () => {
-    const origin = 'Howrah+Junction,+West+Bengal';
-    const destination = 'Asansol+Junction,+West+Bengal';
-    let gmapsUrl = `https://www.google.com/maps/dir/${origin}/${destination}`;
-
-    if (hasGps && activeTrainLoc?.current_latitude != null && activeTrainLoc?.current_longitude != null) {
-      gmapsUrl = `https://www.google.com/maps/search/?api=1&query=${activeTrainLoc.current_latitude},${activeTrainLoc.current_longitude}`;
-    }
+    const origin = '22.5839,88.3426'; // Howrah Junction
+    const destination = '23.6871,86.9746'; // Asansol Junction
+    const gmapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=transit`;
     window.open(gmapsUrl, '_blank', 'noopener,noreferrer');
-    setFeedbackToast('Opened route in Google Maps Live viewer');
+    setFeedbackToast('Opened Eastern Railway corridor (Howrah — Asansol) in Google Maps Live viewer');
   };
 
   const handleFitCorridor = () => {
@@ -590,52 +659,6 @@ export const LocationScreen: React.FC = () => {
         >
           <Info size={16} color="#38BDF8" />
           <span>{feedbackToast}</span>
-        </div>
-      )}
-
-      {/* Google Maps JS API Engine Status Notification */}
-      {!googleMapsApiKey && !isMapExpanded && !isFullscreen && (
-        <div
-          style={{
-            backgroundColor: '#F8FAFC',
-            border: '1px solid #E2E8F0',
-            borderRadius: '6px',
-            padding: '8px 14px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: '12px',
-            color: '#475569',
-            boxSizing: 'border-box',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ padding: '2px 6px', backgroundColor: '#EFF6FF', color: '#2563EB', fontWeight: 700, borderRadius: '4px', fontSize: '10px' }}>
-              SCADA MAP ENGINE
-            </span>
-            <span>
-              Google Maps JS API key (<code>VITE_GOOGLE_MAPS_API_KEY</code>) is not configured in environment. Using high-resolution Leaflet/OSM/Esri Satellite cartography with Eastern Railway corridor geometry.
-            </span>
-          </div>
-          <button
-            onClick={handleOpenGoogleMaps}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 10px',
-              borderRadius: '4px',
-              border: '1px solid #CBD5E1',
-              backgroundColor: '#FFFFFF',
-              color: '#0284C7',
-              fontSize: '11px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            <ExternalLink size={12} />
-            <span>Open in Google Maps Live</span>
-          </button>
         </div>
       )}
 
@@ -764,13 +787,21 @@ export const LocationScreen: React.FC = () => {
                 width: '8px',
                 height: '8px',
                 borderRadius: '50%',
-                backgroundColor: !hasGps ? '#94A3B8' : isStale ? '#D97706' : '#16A34A',
-                boxShadow: hasGps && !isStale ? '0 0 8px rgba(22, 163, 74, 0.6)' : 'none',
+                backgroundColor: !hasGps
+                  ? '#94A3B8'
+                  : activeTrainLoc?.is_simulated
+                  ? '#0284C7'
+                  : isStale
+                  ? '#D97706'
+                  : '#16A34A',
+                boxShadow: hasGps && !isStale ? (activeTrainLoc?.is_simulated ? '0 0 8px rgba(2, 132, 199, 0.6)' : '0 0 8px rgba(22, 163, 74, 0.6)') : 'none',
               }}
             />
             <span style={{ fontSize: '11px', fontWeight: 700, color: colors.textPrimary, whiteSpace: 'nowrap' }}>
               {!hasGps
                 ? 'GPS UNAVAILABLE'
+                : activeTrainLoc?.is_simulated
+                ? 'ROUTE DEMO (SIMULATED)'
                 : isStale
                 ? 'GNSS DATA STALE'
                 : `GPS FIX AVAILABLE (${activeTrainLoc?.satellites || 9} Satellites)`}
