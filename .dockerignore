@@ -1,0 +1,16 @@
+.git
+.github
+node_modules
+apps
+dist
+venv
+backend/venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.coverage
+htmlcov
+audit_screenshots
+test_artifacts
+WLI_DOCS

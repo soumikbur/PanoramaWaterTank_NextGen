@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: panorama-water-tank-backend
+    runtime: python
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ENV
+        value: production
+      - key: DEBUG
+        value: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///panorama_dev.db
+      - key: CORS_ORIGINS
+        value: '["*"]'

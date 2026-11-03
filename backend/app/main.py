@@ -5,9 +5,11 @@ and registers API routes and WebSockets.
 """
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.core.config import settings
 from app.core.database import init_db
@@ -72,6 +74,14 @@ app.add_middleware(
 
 # Mount API Routers
 app.include_router(api_router)
+
+# Mount static file directory if present
+_static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+if not os.path.exists(_static_dir):
+    _static_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "dist")
+
+if os.path.exists(_static_dir):
+    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 
 @app.get("/", tags=["Root"])

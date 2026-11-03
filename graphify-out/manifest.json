@@ -1026,9 +1026,9 @@
     "semantic_hash": ""
   },
   "backend/app/main.py": {
-    "mtime": 1793190887.4570637,
-    "seen": 1793442655.9619458,
-    "ast_hash": "501f8e5c66067e205dc2ac058ab6ddc5",
+    "mtime": 1793694177.423325,
+    "seen": 1793694228.9159539,
+    "ast_hash": "b178dde2e934455be66ff990a27fbdbe",
     "semantic_hash": ""
   },
   "backend/app/models/__init__.py": {
@@ -3291,6 +3291,24 @@
     "mtime": 1793624786.5622368,
     "seen": 1793625899.130942,
     "ast_hash": "a15a7bc15ce0e3facc71e758317a2448",
+    "semantic_hash": ""
+  },
+  ".github/workflows/backend-ci.yml": {
+    "mtime": 1793694200.4162674,
+    "seen": 1793694228.8807397,
+    "ast_hash": "c2911855a2843bd3bbc36d6341b9323f",
+    "semantic_hash": ""
+  },
+  "railway.json": {
+    "mtime": 1793694149.069897,
+    "seen": 1793694228.925127,
+    "ast_hash": "6cadd995aa34511a4f768125110d538c",
+    "semantic_hash": ""
+  },
+  "render.yaml": {
+    "mtime": 1793694140.0088093,
+    "seen": 1793694228.9251308,
+    "ast_hash": "b5e5e871e2f2e0d52ac5ae560833b90a",
     "semantic_hash": ""
   },
   "apps/mobile/package-lock.json": {
