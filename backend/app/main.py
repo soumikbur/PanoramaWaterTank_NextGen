@@ -7,14 +7,16 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.core.config import settings
 from app.core.database import init_db
 from app.mqtt.client import mqtt_service
 from app.api.v1 import api_router
+from app.templates.landing import get_landing_html
 
 # Configure logging
 logging.basicConfig(
@@ -85,8 +87,11 @@ if os.path.exists(_static_dir):
 
 
 @app.get("/", tags=["Root"])
-async def root():
-    """Root metadata endpoint."""
+async def root(request: Request, format: str = None):
+    """Root metadata and interactive industrial landing page endpoint."""
+    accept = request.headers.get("accept", "")
+    if format == "html" or "text/html" in accept:
+        return HTMLResponse(content=get_landing_html(settings.APP_NAME, settings.APP_VERSION))
     return {
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,

@@ -36,3 +36,4 @@ jobs:
         working-directory: backend
         run: |
           python -c "from app.main import app; schema = app.openapi(); print('Validated OpenAPI paths:', len(schema['paths']))"
+

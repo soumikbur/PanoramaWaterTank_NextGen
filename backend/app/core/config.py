@@ -1,11 +1,28 @@
 """Application Configuration Settings using Pydantic Settings."""
+import os
+import shutil
+import tempfile
 from pathlib import Path
 from typing import List, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
 _BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
-_DEFAULT_DB_PATH = (_BACKEND_DIR / "panorama_dev.db").as_posix()
+
+# In serverless environments (e.g. Vercel, AWS Lambda), the deployment root is read-only.
+# Direct SQLite database writes to the writable /tmp directory if running in serverless mode.
+if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or os.environ.get("LAMBDA_TASK_ROOT"):
+    _tmp_dir = Path(tempfile.gettempdir())
+    _target_db = _tmp_dir / "panorama_dev.db"
+    _seed_db = _BACKEND_DIR / "panorama_dev.db"
+    if not _target_db.exists() and _seed_db.exists():
+        try:
+            shutil.copyfile(_seed_db, _target_db)
+        except Exception:
+            pass
+    _DEFAULT_DB_PATH = _target_db.as_posix()
+else:
+    _DEFAULT_DB_PATH = (_BACKEND_DIR / "panorama_dev.db").as_posix()
 
 
 class Settings(BaseSettings):

@@ -23,6 +23,19 @@ async def test_root_endpoint():
 
 
 @pytest.mark.asyncio
+async def test_root_html_landing_page():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/", headers={"Accept": "text/html,application/xhtml+xml"})
+        assert response.status_code == 200
+        assert "text/html" in response.headers.get("content-type", "")
+        assert "Panorama Water Tank Monitor" in response.text
+        assert "/docs" in response.text
+        assert "/api/v1/health" in response.text
+        assert "/api/v1/tanks/live" in response.text
+
+
+@pytest.mark.asyncio
 async def test_health_endpoint():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:

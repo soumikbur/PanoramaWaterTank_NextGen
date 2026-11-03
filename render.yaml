@@ -21,3 +21,4 @@ services:
         value: sqlite+aiosqlite:///panorama_dev.db
       - key: CORS_ORIGINS
         value: '["*"]'
+
