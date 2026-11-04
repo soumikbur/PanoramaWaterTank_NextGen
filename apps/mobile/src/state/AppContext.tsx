@@ -204,7 +204,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const refreshRegions = async () => {
     try {
       const data = await ApiClient.fetchRegionsSummary();
-      setRegions(data);
+      setRegions(Array.isArray(data) ? data : []);
     } catch (e) {
       console.warn('[AppContext] Error fetching regions:', e);
     }
@@ -227,7 +227,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setDevices(devList);
       setActiveAlarms(alarms);
       setAlarmStats(stats);
-      if (regs.length > 0) setRegions(regs);
+      if (Array.isArray(regs) && regs.length > 0) setRegions(regs);
     } catch (e) {
       console.warn('[AppContext] Error refreshing data:', e);
     }

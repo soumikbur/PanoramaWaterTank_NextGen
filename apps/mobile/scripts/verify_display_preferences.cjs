@@ -21,8 +21,8 @@ const SCALE_FACTORS = {
 };
 
 const DEFAULT_PREFS = {
-  scale: '120%',
-  fontSize: 'large',
+  scale: '100%',
+  fontSize: 'small',
   layoutDensity: 'COMFORTABLE',
   contrastMode: 'STANDARD',
 };
@@ -35,7 +35,7 @@ function scaleToFontSize(scale) {
     case '120%': return 'large';
     case '130%': return 'extralarge';
     case '150%': return 'maximum';
-    default: return 'large';
+    default: return 'small';
   }
 }
 
@@ -82,14 +82,14 @@ function resetPreferences(username) {
 
 console.log('[VERIFY] Starting Display Preferences Test Suite...');
 
-// 1. Initial Default State
+// 1. Initial Default State (Must be 100% Small)
 localStorage.clear();
 const initial = loadPreferences();
-assert.strictEqual(initial.scale, '120%');
-assert.strictEqual(initial.fontSize, 'large');
+assert.strictEqual(initial.scale, '100%');
+assert.strictEqual(initial.fontSize, 'small');
 assert.strictEqual(initial.layoutDensity, 'COMFORTABLE');
 assert.strictEqual(initial.contrastMode, 'STANDARD');
-console.log('✓ 1. Initial default preferences match (120% Large, Comfortable, Standard)');
+console.log('✓ 1. Initial default preferences match (100% Small, Comfortable, Standard)');
 
 // 2. User Isolation Test (admin vs operator)
 savePreferences({ scale: '150%', fontSize: 'maximum', layoutDensity: 'COMPACT', contrastMode: 'HIGH_CONTRAST' }, 'admin');
@@ -104,15 +104,15 @@ assert.strictEqual(operatorPrefs.scale, '90%');
 assert.strictEqual(operatorPrefs.contrastMode, 'STANDARD');
 console.log('✓ 2. User isolation verified: admin (150% High Contrast) != operator (90% Standard)');
 
-// 3. Reset Preferences Test
+// 3. Reset Preferences Test (Must restore 100% default)
 const resetAdmin = resetPreferences('admin');
-assert.strictEqual(resetAdmin.scale, '120%');
+assert.strictEqual(resetAdmin.scale, '100%');
 const loadedAdminAfterReset = loadPreferences('admin');
-assert.strictEqual(loadedAdminAfterReset.scale, '120%');
+assert.strictEqual(loadedAdminAfterReset.scale, '100%');
 // Operator preferences should remain untouched
 const operatorStill90 = loadPreferences('operator');
 assert.strictEqual(operatorStill90.scale, '90%');
-console.log('✓ 3. Reset to default restores defaults for admin while preserving operator settings');
+console.log('✓ 3. Reset to default restores 100% default for admin while preserving operator settings');
 
 // 4. Legacy migration test
 localStorage.clear();

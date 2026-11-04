@@ -1,51 +1,68 @@
 /**
  * Global CSS Variables and Design Tokens
- * Supports independent display scaling for the authenticated environment
- * while preserving a fixed scale for authentication.
+ *
+ * Implements centralized design-token-based scaling system using CSS custom properties
+ * and relative units (rem, em, calc) for intelligent responsive scaling.
  */
 
 :root {
   /* Display Scaling Defaults */
   --app-scale: 1;
   --font-scale: 1;
+  --space-scale: 1;
   --base-font-size: 14px;
 
-  /* Typography Scale */
-  --font-page-heading: 24px;
-  --font-section-heading: 19px;
-  --font-card-heading: 16px;
-  --font-body: 14px;
-  --font-sidebar: 14px;
-  --font-table: 13px;
-  --font-secondary: 12px;
-  --font-buttons: 14px;
-  --font-inputs: 14px;
-  --font-caption: 11px;
-  --font-display-title: 30px;
-  --font-display-stat: 44px;
+  /* Relative Typography Design Tokens (scaled by --font-scale) */
+  --font-xs: calc(0.6875rem * var(--font-scale, 1));   /* ~11px */
+  --font-sm: calc(0.8125rem * var(--font-scale, 1));   /* ~13px */
+  --font-base: calc(0.875rem * var(--font-scale, 1));  /* ~14px */
+  --font-md: calc(1rem * var(--font-scale, 1));        /* ~16px */
+  --font-lg: calc(1.1875rem * var(--font-scale, 1));   /* ~19px */
+  --font-xl: calc(1.5rem * var(--font-scale, 1));      /* ~24px */
+  --font-2xl: calc(1.875rem * var(--font-scale, 1));   /* ~30px */
+  --font-stat: calc(2.75rem * var(--font-scale, 1));   /* ~44px */
 
-  /* Spacing Scale */
-  --space-2: 2px;
-  --space-4: 4px;
-  --space-6: 6px;
-  --space-8: 8px;
-  --space-10: 10px;
-  --space-12: 12px;
-  --space-14: 14px;
-  --space-16: 16px;
-  --space-20: 20px;
-  --space-24: 24px;
-  --space-32: 32px;
+  /* Semantic Typography Tokens */
+  --font-page-heading: var(--font-xl);
+  --font-section-heading: var(--font-lg);
+  --font-card-heading: var(--font-md);
+  --font-card-title: calc(1.125rem * var(--font-scale, 1)); /* ~18px */
+  --font-body: var(--font-base);
+  --font-sidebar: var(--font-base);
+  --font-table: var(--font-sm);
+  --font-secondary: calc(0.75rem * var(--font-scale, 1));  /* ~12px */
+  --font-buttons: var(--font-base);
+  --font-inputs: var(--font-base);
+  --font-caption: var(--font-xs);
+  --font-display-title: var(--font-2xl);
+  --font-display-stat: var(--font-stat);
+  --font-value-large: calc(1.375rem * var(--font-scale, 1)); /* ~22px */
+
+  /* Spacing Scale (Relative scaled spacing) */
+  --space-2: calc(2px * var(--space-scale, 1));
+  --space-4: calc(4px * var(--space-scale, 1));
+  --space-6: calc(6px * var(--space-scale, 1));
+  --space-8: calc(8px * var(--space-scale, 1));
+  --space-10: calc(10px * var(--space-scale, 1));
+  --space-12: calc(12px * var(--space-scale, 1));
+  --space-14: calc(14px * var(--space-scale, 1));
+  --space-16: calc(16px * var(--space-scale, 1));
+  --space-20: calc(20px * var(--space-scale, 1));
+  --space-24: calc(24px * var(--space-scale, 1));
+  --space-32: calc(32px * var(--space-scale, 1));
 
   /* Layout Dimensions */
-  --header-height: 72px;
-  --sidebar-width: 224px;
-  --sidebar-collapsed-width: 64px;
-  --footer-height: 28px;
+  --header-base-height: 4.5rem; /* 72px baseline */
+  --header-height: calc(var(--header-base-height) * var(--app-scale, 1));
+  --sidebar-base-width: 14rem;  /* 224px baseline */
+  --sidebar-width: calc(var(--sidebar-base-width) * var(--app-scale, 1));
+  --sidebar-collapsed-width: 4rem; /* 64px fixed */
+  --footer-base-height: 1.75rem; /* 28px baseline */
+  --footer-height: calc(var(--footer-base-height) * var(--app-scale, 1));
   --card-radius: 8px;
-  --card-padding: 16px;
-  --input-height: 36px;
-  --button-height: 36px;
+  --card-padding: calc(1rem * var(--app-scale, 1));
+  --input-height: calc(2.25rem * var(--app-scale, 1));
+  --button-height: calc(2.25rem * var(--app-scale, 1));
 
   /* Color Palette */
   --color-primary: #1976D2;

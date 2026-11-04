@@ -2,7 +2,7 @@
  * AuthLayout.tsx — Isolated Authentication Environment Layout
  *
  * Dedicated layout container for login, credential recovery, and access portals.
- * Strictly guarantees fixed default styling (scale 1.0, base font size 14px, zoom: 1),
+ * Strictly guarantees fixed default styling (scale 1.0, base font size 14px),
  * preventing authentication screens from inheriting application display scaling or zoom.
  */
 
@@ -54,7 +54,6 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
         overflowY: 'auto',
         overflowX: 'hidden',
         position: 'relative',
-        zoom: 1,
       }}
     >
       <div className="auth-card-container">

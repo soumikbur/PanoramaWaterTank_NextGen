@@ -22,7 +22,8 @@ export const RankIndicator: React.FC<RankIndicatorProps> = ({ fillPercentage, st
     <BaseCard
       padding={14}
       style={{
-        height: `${metrics.rankIndicatorHeight}px`,
+        minHeight: '124px',
+        height: 'auto',
         boxSizing: 'border-box',
         ...style,
       }}

@@ -46,7 +46,11 @@ export const ReportsScreen: React.FC = () => {
     for (let i = 1; i < historyPoints.length; i++) {
       const prev = historyPoints[i - 1];
       const curr = historyPoints[i];
-      const diff = curr.volumeLiters - prev.volumeLiters;
+      const prevL = prev.levelPercent ?? 0;
+      const prevV = prev.volumeLiters ?? ((prevL / 100.0) * (liveTank?.capacityLiters ?? 20.0));
+      const currL = curr.levelPercent ?? 0;
+      const currV = curr.volumeLiters ?? ((currL / 100.0) * (liveTank?.capacityLiters ?? 20.0));
+      const diff = currV - prevV;
       if (diff < -0.05) {
         consumed += Math.abs(diff);
       } else if (diff > 1.0) {
@@ -54,8 +58,8 @@ export const ReportsScreen: React.FC = () => {
         refills.push({
           time: new Date(curr.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           date: new Date(curr.timestamp).toLocaleDateString(),
-          start: `${prev.levelPercent.toFixed(1)}% (${prev.volumeLiters.toFixed(1)} L)`,
-          end: `${curr.levelPercent.toFixed(1)}% (${curr.volumeLiters.toFixed(1)} L)`,
+          start: `${prevL.toFixed(1)}% (${prevV.toFixed(1)} L)`,
+          end: `${currL.toFixed(1)}% (${currV.toFixed(1)} L)`,
           added: `+${diff.toFixed(1)} L`,
         });
       }
@@ -277,9 +281,9 @@ export const ReportsScreen: React.FC = () => {
                     }}
                   >
                     <span style={{ fontWeight: 600, color: '#0F172A' }}>{new Date(row.timestamp).toLocaleTimeString()}</span>
-                    <span style={{ color: '#2563EB', fontWeight: 600 }}>{row.levelPercent.toFixed(1)}%</span>
-                    <span style={{ color: '#0F172A' }}>{row.volumeLiters.toFixed(1)} L</span>
-                    <span style={{ color: '#64748B' }}>{row.heightCm.toFixed(1)} cm</span>
+                    <span style={{ color: '#2563EB', fontWeight: 600 }}>{row.levelPercent != null ? `${row.levelPercent.toFixed(1)}%` : 'N/A'}</span>
+                    <span style={{ color: '#0F172A' }}>{row.volumeLiters != null ? `${row.volumeLiters.toFixed(1)} L` : 'N/A'}</span>
+                    <span style={{ color: '#64748B' }}>{row.heightCm != null ? `${row.heightCm.toFixed(1)} cm` : 'N/A'}</span>
                   </div>
                 ))}
               </>

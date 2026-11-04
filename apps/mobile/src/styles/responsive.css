@@ -1,22 +1,87 @@
 /**
  * Responsive Layout & Density Styles
- * Optimizes layouts across desktop resolutions (1366x768, 1440x900, 1600x900, 1920x1080, 1280x720, 1024x768, 768x1024).
+ * Centralized design-token scaling system for the authenticated application.
+ * Optimizes layouts across viewports: 1366x768, 1440x900, 1600x900, 1920x1080, 2560x1440.
  */
 
-/* Main Authenticated Layout Container */
+/* Main Authenticated Layout Container — NEVER use zoom or scale() */
 .app-layout {
   display: flex;
   flex-direction: column;
+  width: 100%;
   height: 100vh;
-  width: 100vw;
-  max-width: 100vw;
   max-height: 100vh;
   overflow: hidden;
   box-sizing: border-box;
   position: relative;
+  font-size: calc(var(--base-font-size, 14px) * var(--font-scale, 1));
 }
 
-/* Contrast Modes */
+/* ========================================================================= */
+/* SCALE PRESETS (Design-Token Adaptive Architecture)                        */
+/* ========================================================================= */
+
+/* 1. Compact — 90% */
+.app-layout.scale-90 {
+  --app-scale: 0.9;
+  --font-scale: 0.9;
+  --space-scale: 0.9;
+  --card-padding: 0.75rem;
+  --header-height: 3.75rem;
+  --sidebar-width: 12.5rem;
+}
+
+/* 2. Small (DEFAULT) — 100% */
+.app-layout.scale-100 {
+  --app-scale: 1.0;
+  --font-scale: 1.0;
+  --space-scale: 1.0;
+  --card-padding: 1rem;
+  --header-height: 4.5rem;
+  --sidebar-width: 14rem;
+}
+
+/* 3. Normal — 110% */
+.app-layout.scale-110 {
+  --app-scale: 1.1;
+  --font-scale: 1.1;
+  --space-scale: 1.05;
+  --card-padding: 1.05rem;
+  --header-height: 4.75rem;
+  --sidebar-width: 14.5rem;
+}
+
+/* 4. Large — 120% */
+.app-layout.scale-120 {
+  --app-scale: 1.2;
+  --font-scale: 1.2;
+  --space-scale: 1.1;
+  --card-padding: 1.1rem;
+  --header-height: 4.875rem;
+  --sidebar-width: 15rem;
+}
+
+/* 5. Extra Large — 130% */
+.app-layout.scale-130 {
+  --app-scale: 1.3;
+  --font-scale: 1.3;
+  --space-scale: 1.15;
+  --card-padding: 1.15rem;
+  --header-height: 5rem;
+  --sidebar-width: 15.5rem;
+}
+
+/* 6. Maximum — 150% */
+.app-layout.scale-150 {
+  --app-scale: 1.5;
+  --font-scale: 1.5;
+  --space-scale: 1.2;
+  --card-padding: 1.2rem;
+  --header-height: 5.25rem;
+  --sidebar-width: 16rem;
+}
+
+/* High Contrast & Layout Density Modes */
 .app-layout.contrast-high_contrast {
   --color-border: #94A3B8;
   --color-border-strong: #64748B;
@@ -28,44 +93,144 @@
   border-color: #64748B !important;
 }
 
-/* Layout Density Modes */
 .app-layout.density-compact {
-  --card-padding: 10px;
-  --space-16: 10px;
-  --space-14: 8px;
-  --space-12: 8px;
-  --header-height: 60px;
-}
-
-.app-layout.density-compact .scada-card {
-  padding: 10px !important;
+  --card-padding: 0.625rem !important;
+  --header-height: 3.75rem !important;
 }
 
 .app-layout.density-comfortable {
-  --card-padding: 16px;
-  --header-height: 72px;
+  --card-padding: 1rem;
+}
+
+/* ========================================================================= */
+/* INLINE FONT-SIZE DESIGN TOKEN MAP (Scoped strictly to .app-layout)         */
+/* ========================================================================= */
+.app-layout [style*="font-size: 9px"],
+.app-layout [style*="font-size:9px"] {
+  font-size: calc(9px * var(--font-scale, 1)) !important;
+}
+.app-layout [style*="font-size: 10px"],
+.app-layout [style*="font-size:10px"] {
+  font-size: calc(10px * var(--font-scale, 1)) !important;
+}
+.app-layout [style*="font-size: 11px"],
+.app-layout [style*="font-size:11px"] {
+  font-size: calc(11px * var(--font-scale, 1)) !important;
+}
+.app-layout [style*="font-size: 12px"],
+.app-layout [style*="font-size:12px"] {
+  font-size: calc(12px * var(--font-scale, 1)) !important;
+}
+.app-layout [style*="font-size: 13px"],
+.app-layout [style*="font-size:13px"] {
+  font-size: calc(13px * var(--font-scale, 1)) !important;
+}
+.app-layout [style*="font-size: 14px"],
+.app-layout [style*="font-size:14px"] {
+  font-size: calc(14px * var(--font-scale, 1)) !important;
+}
+.app-layout [style*="font-size: 15px"],
+.app-layout [style*="font-size:15px"] {
+  font-size: calc(15px * var(--font-scale, 1)) !important;
+}
+.app-layout [style*="font-size: 16px"],
+.app-layout [style*="font-size:16px"] {
+  font-size: calc(16px * var(--font-scale, 1)) !important;
+}
+.app-layout [style*="font-size: 18px"],
+.app-layout [style*="font-size:18px"] {
+  font-size: calc(18px * var(--font-scale, 1)) !important;
+}
+.app-layout [style*="font-size: 20px"],
+.app-layout [style*="font-size:20px"] {
+  font-size: calc(20px * var(--font-scale, 1)) !important;
+}
+.app-layout [style*="font-size: 22px"],
+.app-layout [style*="font-size:22px"] {
+  font-size: calc(22px * var(--font-scale, 1)) !important;
+}
+.app-layout [style*="font-size: 24px"],
+.app-layout [style*="font-size:24px"] {
+  font-size: calc(24px * var(--font-scale, 1)) !important;
+}
+.app-layout [style*="font-size: 26px"],
+.app-layout [style*="font-size:26px"] {
+  font-size: calc(26px * var(--font-scale, 1)) !important;
+}
+.app-layout [style*="font-size: 30px"],
+.app-layout [style*="font-size:30px"] {
+  font-size: calc(30px * var(--font-scale, 1)) !important;
+}
+.app-layout [style*="font-size: 44px"],
+.app-layout [style*="font-size:44px"] {
+  font-size: calc(44px * var(--font-scale, 1)) !important;
+}
+.app-layout [style*="font-size: 48px"],
+.app-layout [style*="font-size:48px"] {
+  font-size: calc(48px * var(--font-scale, 1)) !important;
+}
+
+/* ========================================================================= */
+/* RESPONSIVE GRID & OVERFLOW PREVENTION                                     */
+/* ========================================================================= */
+.app-layout * {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Header & Sidebar responsive adaptivity */
+.app-layout header {
+  height: var(--header-height, 72px) !important;
+}
+
+.app-layout aside {
+  width: var(--sidebar-width, 224px) !important;
+  min-width: var(--sidebar-width, 224px) !important;
+  max-width: var(--sidebar-width, 224px) !important;
+}
+
+/* Dashboard 3-Card Row Adaptive Grid */
+.dashboard-main-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr));
+  gap: var(--space-14, 14px);
+  align-items: stretch;
+}
+
+/* Adaptive multi-column wrapping at higher scaling */
+.app-layout.scale-130 .dashboard-main-grid,
+.app-layout.scale-150 .dashboard-main-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+}
+
+.dashboard-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  gap: var(--space-14, 14px);
+}
+
+.app-layout.scale-130 .dashboard-summary-grid,
+.app-layout.scale-150 .dashboard-summary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
 }
 
 /* Responsive Viewport Breakpoints */
-
-/* 1. Large Displays (1920x1080 and above) */
 @media (min-width: 1920px) {
   .app-grid-responsive {
     grid-template-columns: repeat(4, 1fr) !important;
   }
 }
 
-/* 2. Standard Desktop (1440x900 to 1600x900) */
-@media (min-width: 1367px) and (max-width: 1600px) {
+@media (min-width: 1367px) and (max-width: 1919px) {
   .app-grid-responsive {
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
   }
 }
 
-/* 3. Compact Desktop (1280x720 to 1366x768) */
 @media (max-width: 1366px) {
-  .app-layout {
-    font-size: calc(var(--base-font-size, 14px) * 0.95);
+  .dashboard-main-grid {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+    gap: 12px;
   }
   .app-grid-responsive {
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important;
@@ -73,10 +238,12 @@
   }
 }
 
-/* 4. Small Desktop & Landscape Tablet (1024x768) */
 @media (max-width: 1024px) {
-  .app-layout {
-    font-size: calc(var(--base-font-size, 14px) * 0.9);
+  .dashboard-main-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
   .app-grid-responsive {
     grid-template-columns: repeat(2, 1fr) !important;
@@ -84,8 +251,10 @@
   }
 }
 
-/* 5. Portrait Tablet (768x1024) */
 @media (max-width: 768px) {
+  .dashboard-summary-grid {
+    grid-template-columns: 1fr;
+  }
   .app-grid-responsive {
     grid-template-columns: 1fr !important;
   }

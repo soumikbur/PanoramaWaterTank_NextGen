@@ -58,9 +58,9 @@ export const SettingsScreen: React.FC = () => {
   // Section 2: Appearance & Display
   const scalePresets = [
     { label: 'Compact', value: '90%' },
-    { label: 'Small', value: '100%' },
+    { label: 'Small', value: '100%', isDefault: true },
     { label: 'Normal', value: '110%' },
-    { label: 'Large', value: '120%', isDefault: true },
+    { label: 'Large', value: '120%' },
     { label: 'Extra Large', value: '130%' },
     { label: 'Maximum', value: '150%' },
   ];
@@ -474,6 +474,7 @@ export const SettingsScreen: React.FC = () => {
           borderRadius: `${metrics.cardRadius}px`,
           padding: '6px',
           overflowX: 'auto',
+          flexWrap: 'wrap',
         }}
       >
         {sections.map((sec) => {
@@ -739,7 +740,7 @@ export const SettingsScreen: React.FC = () => {
                     fontWeight: 600,
                     cursor: 'pointer',
                   }}
-                  title="Reset to 120% default scale"
+                  title="Reset to 100% default scale"
                 >
                   <RotateCcw size={12} />
                   <span>Reset to Default</span>
@@ -803,9 +804,9 @@ export const SettingsScreen: React.FC = () => {
             <div style={{ marginTop: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748B', marginBottom: '6px' }}>
                 <span>90% (Compact)</span>
-                <span>100% (Small)</span>
+                <span style={{ fontWeight: 700, color: '#2563EB' }}>100% (Small • Default)</span>
                 <span>110% (Normal)</span>
-                <span style={{ fontWeight: 700, color: '#2563EB' }}>120% (Large • Default)</span>
+                <span>120% (Large)</span>
                 <span>130% (Extra Large)</span>
                 <span>150% (Maximum)</span>
               </div>
@@ -814,7 +815,7 @@ export const SettingsScreen: React.FC = () => {
                 min="90"
                 max="150"
                 step="10"
-                value={parseInt(displayScale) || 120}
+                value={parseInt(displayScale) || 100}
                 onChange={(e) => setDisplayScale(`${e.target.value}%` as ScalePreset)}
                 style={{
                   width: '100%',

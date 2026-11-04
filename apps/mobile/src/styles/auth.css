@@ -3,14 +3,14 @@
  *
  * Guarantees that the login screen, access forms, and auth dialogs ALWAYS
  * render with fixed default dimensions, perfectly centered horizontally and
- * vertically without inheriting application scaling or zoom.
+ * vertically without inheriting application display scaling or zoom.
  */
 
 .auth-layout {
   --app-scale: 1 !important;
   --font-scale: 1 !important;
+  --space-scale: 1 !important;
   --base-font-size: 14px !important;
-  zoom: 1 !important;
   font-size: 14px !important;
 
   display: flex !important;

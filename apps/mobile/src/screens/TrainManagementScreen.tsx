@@ -153,7 +153,8 @@ export const TrainManagementScreen: React.FC = () => {
   };
 
   // Filter regions or trains if global search is active
-  const filteredRegions = regions.map((r) => {
+  const safeRegions = Array.isArray(regions) ? regions : [];
+  const filteredRegions = safeRegions.map((r) => {
     if (!searchQuery) return r;
     const q = searchQuery.toLowerCase();
     const matchingTrains = r.trains.filter(
@@ -337,7 +338,7 @@ export const TrainManagementScreen: React.FC = () => {
           >
             {filteredRegions.map((r) => {
               const isNormal = r.status === 'All Normal';
-              const isCrit = r.status.includes('Critical');
+              const isCrit = Boolean(r.status && r.status.includes('Critical'));
 
               return (
                 <div

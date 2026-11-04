@@ -75,6 +75,7 @@ export class ApiClient {
   // Users Management
   static async fetchUsers(): Promise<UserProfile[]> {
     const list = await this.request<any[]>('/users');
+    if (!Array.isArray(list)) return [];
     return list.map((u) => ({
       id: u.id,
       username: u.username,

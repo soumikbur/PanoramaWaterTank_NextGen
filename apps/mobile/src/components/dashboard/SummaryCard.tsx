@@ -87,7 +87,8 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({
     <BaseCard
       padding={metrics.cardPadding}
       style={{
-        height: `${metrics.summaryCardHeight}px`,
+        minHeight: '110px',
+        height: 'auto',
         boxSizing: 'border-box',
         ...style,
       }}

@@ -1,5 +1,16 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import L from 'leaflet';
+
+// Guard against Leaflet Issue #3997: teardown transition race condition when component unmounts
+if (typeof L !== 'undefined' && L.DomUtil && (L.DomUtil as any)._safePositionPatched !== true) {
+  const origGetPosition = L.DomUtil.getPosition;
+  L.DomUtil.getPosition = function (el: HTMLElement) {
+    if (!el) return new L.Point(0, 0);
+    return origGetPosition.call(L.DomUtil, el);
+  };
+  (L.DomUtil as any)._safePositionPatched = true;
+}
+
 import { colors, typography, metrics } from '../theme';
 import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
@@ -102,10 +113,10 @@ export const LocationScreen: React.FC = () => {
           ApiClient.fetchLocations().catch(() => []),
         ]);
         if (isMounted) {
-          if (corridorData && corridorData.length > 0) {
+          if (Array.isArray(corridorData) && corridorData.length > 0) {
             setStations(corridorData);
           }
-          if (locsData) {
+          if (Array.isArray(locsData)) {
             setLocations(locsData);
           }
         }
@@ -122,7 +133,8 @@ export const LocationScreen: React.FC = () => {
     };
   }, []);
 
-  const activeTrainLoc = locations.find((l) => l.train_number === selectedTrainNumber) || locations[0] || null;
+  const safeLocations = Array.isArray(locations) ? locations : [];
+  const activeTrainLoc = safeLocations.find((l) => l.train_number === selectedTrainNumber) || safeLocations[0] || null;
 
   const hasGps = Boolean(
     activeTrainLoc?.has_gps &&
@@ -189,6 +201,9 @@ export const LocationScreen: React.FC = () => {
         worldCopyJump: false,
         zoomControl: false,
         attributionControl: true,
+        zoomAnimation: false,
+        fadeAnimation: false,
+        markerZoomAnimation: false,
       });
 
       map.fitBounds(corridorBounds, { padding: [40, 40] });
@@ -209,7 +224,18 @@ export const LocationScreen: React.FC = () => {
     return () => {
       if (ro) ro.disconnect();
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        try {
+          mapInstanceRef.current.stop();
+          mapInstanceRef.current.closePopup();
+          mapInstanceRef.current.eachLayer((layer) => {
+            try {
+              mapInstanceRef.current?.removeLayer(layer);
+            } catch (e) {}
+          });
+          mapInstanceRef.current.remove();
+        } catch (e) {
+          // Swallow any in-flight Leaflet teardown animation race conditions
+        }
         mapInstanceRef.current = null;
         tileLayerRef.current = null;
         trainMarkerRef.current = null;

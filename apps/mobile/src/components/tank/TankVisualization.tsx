@@ -183,13 +183,14 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
         </span>
 
         {/* Row: Left (Tank + Scale) | Right (Level %, Height, Volume, Status) */}
-        <div style={{ display: 'flex', flex: 1, gap: '12px' }}>
+        <div style={{ display: 'flex', flex: 1, gap: '12px', flexWrap: 'wrap', alignItems: 'stretch' }}>
           {/* Left: Tank Vessel + Vertical Scale */}
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'stretch' }}>
-            {/* Vessel Container (140px width) */}
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'stretch', flex: '1 1 200px', minWidth: '180px', maxWidth: '300px' }}>
+            {/* Vessel Container */}
             <div
               style={{
-                width: `${metrics.vesselPreferredWidth}px`,
+                flex: 1,
+                minWidth: '130px',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -306,7 +307,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
           </div>
 
           {/* Right Column: Values, Sub-Cards, & Status */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ flex: '1 1 140px', minWidth: '130px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <span
               style={{
                 fontFamily: typography.fontFamily,

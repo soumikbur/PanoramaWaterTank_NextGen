@@ -112,8 +112,8 @@ export const HistoryScreen: React.FC = () => {
         timeStr: formatDateTime(new Date(t)),
         timeOnlyStr: formatTimeOnly(new Date(t)),
         level: pVal,
-        heightCm: p.heightCm,
-        volumeLiters: p.volumeLiters,
+        heightCm: p.heightCm != null ? p.heightCm : ((pVal / 100.0) * maxHeightCm),
+        volumeLiters: p.volumeLiters != null ? p.volumeLiters : ((pVal / 100.0) * capacityLiters),
         status: st,
       };
     });
@@ -479,15 +479,15 @@ export const HistoryScreen: React.FC = () => {
                 </span>
 
                 <span style={{ fontSize: '12px', fontWeight: 'bold', color: colors.primary, fontFamily: typography.fontFamily }}>
-                  {pt.level.toFixed(2)}%
+                  {pt.level != null ? `${pt.level.toFixed(2)}%` : 'N/A'}
                 </span>
 
                 <span style={{ fontSize: '12px', fontWeight: 500, color: '#0F172A', fontFamily: typography.fontFamily }}>
-                  {pt.heightCm.toFixed(1)} cm
+                  {pt.heightCm != null ? `${pt.heightCm.toFixed(1)} cm` : 'N/A'}
                 </span>
 
                 <span style={{ fontSize: '12px', color: '#64748B', fontFamily: typography.fontFamily }}>
-                  {pt.volumeLiters.toFixed(1)} L
+                  {pt.volumeLiters != null ? `${pt.volumeLiters.toFixed(1)} L` : 'N/A'}
                 </span>
 
                 <div>

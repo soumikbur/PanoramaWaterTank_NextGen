@@ -1,10 +1,11 @@
 /**
  * AppLayout.tsx — Authenticated Application Environment Layout
  *
- * Scopes display scaling, layout density, and contrast modes strictly to the
- * authenticated shell, completely isolating the unauthenticated / login environment.
- * Ensures the root viewport remains at 1.0 while #app-root applies scoped zoom and
- * inverse dimensions to guarantee full screen coverage without coordinate distortion.
+ * Scopes display scaling, typography, layout density, and contrast modes strictly
+ * to the authenticated shell using a centralized design-token system (--app-scale, --font-scale).
+ * Completely isolates the authentication environment.
+ *
+ * Never uses CSS zoom or transform: scale(). Fills the browser viewport naturally at 100% width and height.
  */
 
 import React, { useEffect } from 'react';
@@ -17,7 +18,7 @@ interface AppLayoutProps {
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
-  const { displayScaleFactor, layoutDensity, contrastMode } = useDisplayPreferences();
+  const { displayScale, displayScaleFactor, layoutDensity, contrastMode } = useDisplayPreferences();
 
   useEffect(() => {
     // Notify resize listeners (Leaflet maps, charts, virtualized lists) of scaling adjustments
@@ -37,28 +38,30 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     }
   }, []);
 
-  const scale = displayScaleFactor || 1.2;
-  const invWidth = `${100 / scale}vw`;
-  const invHeight = `${100 / scale}vh`;
+  const scale = displayScaleFactor || 1.0;
+  const scaleClass = `scale-${(displayScale || '100%').replace('%', '')}`;
 
   return (
     <div
       id="app-root"
-      className={`app-layout density-${layoutDensity.toLowerCase()} contrast-${contrastMode.toLowerCase()}`}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        width: invWidth,
-        height: invHeight,
-        maxHeight: invHeight,
-        zoom: scale,
-        overflow: 'hidden',
-        position: 'relative',
-        backgroundColor: colors.background,
-        fontFamily: typography.fontFamily,
-        color: colors.textPrimary,
-        boxSizing: 'border-box',
-      }}
+      className={`app-layout ${scaleClass} density-${layoutDensity.toLowerCase()} contrast-${contrastMode.toLowerCase()}`}
+      style={
+        {
+          '--app-scale': scale,
+          '--font-scale': scale,
+          display: 'flex',
+          flexDirection: 'column',
+          width: '100%',
+          height: '100vh',
+          maxHeight: '100vh',
+          overflow: 'hidden',
+          position: 'relative',
+          backgroundColor: colors.background,
+          fontFamily: typography.fontFamily,
+          color: colors.textPrimary,
+          boxSizing: 'border-box',
+        } as React.CSSProperties
+      }
     >
       {children}
     </div>

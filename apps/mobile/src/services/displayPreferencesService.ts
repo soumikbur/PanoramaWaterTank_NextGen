@@ -4,6 +4,8 @@
  * Centralizes user-specific display scaling, typography preferences, layout density,
  * and visual contrast modes. Persists settings across reloads and browser restarts
  * with user-level isolation.
+ *
+ * Global default scale is 100% (Small / Standard SCADA baseline).
  */
 
 export type ScalePreset = '90%' | '100%' | '110%' | '120%' | '130%' | '150%';
@@ -27,8 +29,8 @@ export const SCALE_FACTORS: Record<ScalePreset, number> = {
 };
 
 export const DEFAULT_DISPLAY_PREFERENCES: DisplayPreferences = {
-  scale: '120%',
-  fontSize: 'large',
+  scale: '100%',
+  fontSize: 'small',
   layoutDensity: 'COMFORTABLE',
   contrastMode: 'STANDARD',
 };
@@ -111,7 +113,7 @@ export class DisplayPreferencesService {
   }
 
   /**
-   * Reset display preferences to default (120% Large, Comfortable, Standard).
+   * Reset display preferences to default (100% Small, Comfortable, Standard).
    */
   static resetPreferences(username?: string | null): DisplayPreferences {
     const defaults = { ...DEFAULT_DISPLAY_PREFERENCES };
@@ -120,7 +122,7 @@ export class DisplayPreferencesService {
   }
 
   /**
-   * Numeric scale factor (0.9 to 1.5).
+   * Numeric scale factor (0.9 to 1.5). Default is 1.0.
    */
   static getScaleFactor(scale: ScalePreset | string): number {
     if (scale in SCALE_FACTORS) {
@@ -130,7 +132,7 @@ export class DisplayPreferencesService {
     if (!isNaN(parsed) && parsed > 0) {
       return Math.max(0.8, Math.min(1.8, parsed / 100));
     }
-    return 1.2;
+    return 1.0;
   }
 
   static scaleToFontSize(scale: ScalePreset): DisplayPreferences['fontSize'] {
@@ -148,7 +150,7 @@ export class DisplayPreferencesService {
       case '150%':
         return 'maximum';
       default:
-        return 'large';
+        return 'small';
     }
   }
 

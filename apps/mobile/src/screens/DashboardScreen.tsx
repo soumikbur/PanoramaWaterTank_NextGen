@@ -15,19 +15,13 @@ export const DashboardScreen: React.FC = () => {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: `${metrics.cardSpacing}px`,
+        gap: 'var(--space-14, 14px)',
         boxSizing: 'border-box',
+        width: '100%',
       }}
     >
-      {/* SECTION 1: Top 3-Card Row (Responsive Auto-Fit) */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-          gap: `${metrics.cardSpacing}px`,
-          alignItems: 'stretch',
-        }}
-      >
+      {/* SECTION 1: Top 3-Card Row (Responsive Auto-Fit Grid) */}
+      <div className="dashboard-main-grid">
         <TankVisualization tank={liveTank} />
         <LevelTrendCard tankId={liveTank?.tankId} />
         <TankInfoCard
@@ -36,10 +30,10 @@ export const DashboardScreen: React.FC = () => {
         />
       </div>
 
-      {/* SECTION 2: Water Level Indicator (Rank) Bar (124px height) */}
+      {/* SECTION 2: Water Level Indicator (Rank) Bar */}
       <RankIndicator fillPercentage={liveTank?.levelPercent ?? 0} />
 
-      {/* SECTION 3: Bottom 5-Card Summary Grid (122px height) */}
+      {/* SECTION 3: Bottom 5-Card Summary Grid */}
       <SummaryGrid tank={liveTank} />
     </div>
   );
