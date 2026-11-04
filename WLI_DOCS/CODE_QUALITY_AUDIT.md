@@ -195,3 +195,4 @@ Output: apps/mobile/dist -> synced to root dist and backend/static
 | **Mounting Shell** | react-native AppRegistry | **React 18 createRoot** | Standard DOM mounting, eliminated unnecessary alias |
 | **Unslop Prosaic Scan** | Untested | **0 violations across 142 files** | Cleaned docstrings and checked against banned phrases |
 | **Production Architecture** | Single FastAPI ASGI | **Single FastAPI ASGI** | Preserved zero-Vite serverless deployment |
+

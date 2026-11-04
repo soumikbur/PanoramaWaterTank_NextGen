@@ -4,6 +4,8 @@ import { AppProvider, useApp } from './state/AppContext';
 import { Header } from './components/common/Header';
 import { Sidebar } from './components/common/Sidebar';
 import { Footer } from './components/common/Footer';
+import { DisplayPreferencesProvider } from './context/DisplayPreferencesContext';
+import { AppLayout } from './components/layout/AppLayout';
 
 // Screens
 import { LoginScreen } from './screens/LoginScreen';
@@ -59,7 +61,7 @@ const MainContent: React.FC = () => {
 };
 
 const AppShell: React.FC = () => {
-  const { isAuthenticated, authLoading, activeScreen } = useApp();
+  const { isAuthenticated, authLoading, activeScreen, currentUser } = useApp();
 
   if (authLoading) {
     return (
@@ -98,24 +100,15 @@ const AppShell: React.FC = () => {
   }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100vh',
-        width: '100vw',
-        overflow: 'hidden',
-        backgroundColor: colors.background,
-        fontFamily: typography.fontFamily,
-        color: colors.textPrimary,
-      }}
-    >
-      <Header />
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <Sidebar />
-        <MainContent />
-      </div>
-    </div>
+    <DisplayPreferencesProvider activeUsername={currentUser?.username}>
+      <AppLayout>
+        <Header />
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          <Sidebar />
+          <MainContent />
+        </div>
+      </AppLayout>
+    </DisplayPreferencesProvider>
   );
 };
 

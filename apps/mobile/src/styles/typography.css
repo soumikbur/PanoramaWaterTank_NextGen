@@ -1,0 +1,100 @@
+/**
+ * Typography System
+ * Implements the baseline typography scale matching industrial SCADA standards.
+ * Dynamically scales in the authenticated application environment.
+ */
+
+.app-layout {
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headings */
+.app-layout h1,
+.app-heading-main {
+  font-size: var(--font-page-heading, 24px);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.2px;
+  color: var(--color-text-primary, #0F172A);
+  margin: 0;
+}
+
+.app-layout h2,
+.app-heading-section {
+  font-size: var(--font-section-heading, 19px);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0px;
+  color: var(--color-text-primary, #0F172A);
+  margin: 0;
+}
+
+.app-layout h3,
+.app-heading-card {
+  font-size: var(--font-card-heading, 16px);
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0px;
+  color: var(--color-text-primary, #0F172A);
+  margin: 0;
+}
+
+/* Body & Paragraphs */
+.app-layout p,
+.app-body-text {
+  font-size: var(--font-body, 14px);
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--color-text-secondary, #475569);
+  margin: 0;
+}
+
+/* Secondary & Captions */
+.app-text-secondary {
+  font-size: var(--font-secondary, 12px);
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--color-text-muted, #64748B);
+}
+
+.app-text-caption {
+  font-size: var(--font-caption, 11px);
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--color-text-placeholder, #94A3B8);
+}
+
+/* Tables */
+.app-table th {
+  font-size: var(--font-table, 13px);
+  font-weight: 600;
+  color: var(--color-text-secondary, #475569);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.app-table td {
+  font-size: var(--font-table, 13px);
+  font-weight: 500;
+  color: var(--color-text-primary, #0F172A);
+}
+
+/* Form Controls & Buttons */
+.app-layout button,
+.app-button {
+  font-family: inherit;
+  font-size: var(--font-buttons, 14px);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.app-layout input,
+.app-layout select,
+.app-layout textarea {
+  font-family: inherit;
+  font-size: var(--font-inputs, 14px);
+  font-weight: 400;
+  line-height: 1.4;
+}

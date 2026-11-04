@@ -1,0 +1,66 @@
+/**
+ * Global CSS Variables and Design Tokens
+ * Supports independent display scaling for the authenticated environment
+ * while preserving a fixed scale for authentication.
+ */
+
+:root {
+  /* Display Scaling Defaults */
+  --app-scale: 1;
+  --font-scale: 1;
+  --base-font-size: 14px;
+
+  /* Typography Scale */
+  --font-page-heading: 24px;
+  --font-section-heading: 19px;
+  --font-card-heading: 16px;
+  --font-body: 14px;
+  --font-sidebar: 14px;
+  --font-table: 13px;
+  --font-secondary: 12px;
+  --font-buttons: 14px;
+  --font-inputs: 14px;
+  --font-caption: 11px;
+  --font-display-title: 30px;
+  --font-display-stat: 44px;
+
+  /* Spacing Scale */
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --space-12: 12px;
+  --space-14: 14px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+
+  /* Layout Dimensions */
+  --header-height: 72px;
+  --sidebar-width: 224px;
+  --sidebar-collapsed-width: 64px;
+  --footer-height: 28px;
+  --card-radius: 8px;
+  --card-padding: 16px;
+  --input-height: 36px;
+  --button-height: 36px;
+
+  /* Color Palette */
+  --color-primary: #1976D2;
+  --color-primary-hover: #1565C0;
+  --color-primary-subtle: #E3F2FD;
+  --color-background: #F5F7FB;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #F8FAFC;
+  --color-border: #E2E8F0;
+  --color-border-strong: #CBD5E1;
+  --color-text-primary: #0F172A;
+  --color-text-secondary: #475569;
+  --color-text-muted: #64748B;
+  --color-text-placeholder: #94A3B8;
+  --color-critical: #EF4444;
+  --color-warning: #F59E0B;
+  --color-success: #10B981;
+}

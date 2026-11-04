@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { colors, typography, metrics } from '../theme';
 import { useApp } from '../state/AppContext';
+import { useDisplayPreferences } from '../context/DisplayPreferencesContext';
+import { ScalePreset } from '../services/displayPreferencesService';
 import { ApiClient } from '../api/client';
 import {
   Settings as SettingsIcon,
@@ -32,12 +34,19 @@ export const SettingsScreen: React.FC = () => {
     refreshData,
     currentUser,
     connectionStatus,
-    displayScale,
-    setDisplayScale,
-    resetDisplayScale,
     selectedTrainNumber,
     setSelectedTrainNumber,
   } = useApp();
+
+  const {
+    displayScale,
+    setDisplayScale,
+    layoutDensity,
+    setLayoutDensity,
+    contrastMode,
+    setContrastMode,
+    resetDisplayPreferences,
+  } = useDisplayPreferences();
 
   const isAdmin = currentUser?.role === 'ADMIN';
 
@@ -55,8 +64,6 @@ export const SettingsScreen: React.FC = () => {
     { label: 'Extra Large', value: '130%' },
     { label: 'Maximum', value: '150%' },
   ];
-  const [uiContrast, setUiContrast] = useState<'STANDARD' | 'HIGH_CONTRAST'>('STANDARD');
-  const [layoutDensity, setLayoutDensity] = useState<'COMFORTABLE' | 'COMPACT'>('COMFORTABLE');
 
   // Section 3: Device Configuration & Calibration
   const [deviceHost, setDeviceHost] = useState('192.168.4.1');
@@ -717,7 +724,8 @@ export const SettingsScreen: React.FC = () => {
                 </span>
 
                 <button
-                  onClick={resetDisplayScale}
+                  id="btn-reset-display-scale"
+                  onClick={resetDisplayPreferences}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -752,7 +760,7 @@ export const SettingsScreen: React.FC = () => {
                 return (
                   <button
                     key={preset.value}
-                    onClick={() => setDisplayScale(preset.value)}
+                    onClick={() => setDisplayScale(preset.value as ScalePreset)}
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
@@ -807,7 +815,7 @@ export const SettingsScreen: React.FC = () => {
                 max="150"
                 step="10"
                 value={parseInt(displayScale) || 120}
-                onChange={(e) => setDisplayScale(`${e.target.value}%`)}
+                onChange={(e) => setDisplayScale(`${e.target.value}%` as ScalePreset)}
                 style={{
                   width: '100%',
                   cursor: 'pointer',
@@ -830,15 +838,15 @@ export const SettingsScreen: React.FC = () => {
                 ].map((c) => (
                   <button
                     key={c.id}
-                    onClick={() => setUiContrast(c.id as any)}
+                    onClick={() => setContrastMode(c.id as any)}
                     style={{
                       flex: 1,
                       padding: '8px 12px',
                       borderRadius: '6px',
-                      border: `1px solid ${uiContrast === c.id ? '#2563EB' : colors.borderStrong}`,
-                      backgroundColor: uiContrast === c.id ? '#EFF6FF' : '#FFFFFF',
-                      color: uiContrast === c.id ? '#1D4ED8' : colors.textPrimary,
-                      fontWeight: uiContrast === c.id ? 700 : 500,
+                      border: `1px solid ${contrastMode === c.id ? '#2563EB' : colors.borderStrong}`,
+                      backgroundColor: contrastMode === c.id ? '#EFF6FF' : '#FFFFFF',
+                      color: contrastMode === c.id ? '#1D4ED8' : colors.textPrimary,
+                      fontWeight: contrastMode === c.id ? 700 : 500,
                       cursor: 'pointer',
                       fontSize: '12px',
                     }}

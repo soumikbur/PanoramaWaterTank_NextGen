@@ -1,0 +1,9 @@
+/**
+ * Styles Entrypoint
+ * Bundles variables, authentication isolation, typography, and responsive layouts.
+ */
+
+@import './variables.css';
+@import './auth.css';
+@import './typography.css';
+@import './responsive.css';

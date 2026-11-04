@@ -1,0 +1,95 @@
+/**
+ * Responsive Layout & Density Styles
+ * Optimizes layouts across desktop resolutions (1366x768, 1440x900, 1600x900, 1920x1080, 1280x720, 1024x768, 768x1024).
+ */
+
+/* Main Authenticated Layout Container */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  max-width: 100vw;
+  max-height: 100vh;
+  overflow: hidden;
+  box-sizing: border-box;
+  position: relative;
+}
+
+/* Contrast Modes */
+.app-layout.contrast-high_contrast {
+  --color-border: #94A3B8;
+  --color-border-strong: #64748B;
+  --color-text-secondary: #1E293B;
+}
+
+.app-layout.contrast-high_contrast .scada-card,
+.app-layout.contrast-high_contrast table {
+  border-color: #64748B !important;
+}
+
+/* Layout Density Modes */
+.app-layout.density-compact {
+  --card-padding: 10px;
+  --space-16: 10px;
+  --space-14: 8px;
+  --space-12: 8px;
+  --header-height: 60px;
+}
+
+.app-layout.density-compact .scada-card {
+  padding: 10px !important;
+}
+
+.app-layout.density-comfortable {
+  --card-padding: 16px;
+  --header-height: 72px;
+}
+
+/* Responsive Viewport Breakpoints */
+
+/* 1. Large Displays (1920x1080 and above) */
+@media (min-width: 1920px) {
+  .app-grid-responsive {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+}
+
+/* 2. Standard Desktop (1440x900 to 1600x900) */
+@media (min-width: 1367px) and (max-width: 1600px) {
+  .app-grid-responsive {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
+  }
+}
+
+/* 3. Compact Desktop (1280x720 to 1366x768) */
+@media (max-width: 1366px) {
+  .app-layout {
+    font-size: calc(var(--base-font-size, 14px) * 0.95);
+  }
+  .app-grid-responsive {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important;
+    gap: 12px !important;
+  }
+}
+
+/* 4. Small Desktop & Landscape Tablet (1024x768) */
+@media (max-width: 1024px) {
+  .app-layout {
+    font-size: calc(var(--base-font-size, 14px) * 0.9);
+  }
+  .app-grid-responsive {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+}
+
+/* 5. Portrait Tablet (768x1024) */
+@media (max-width: 768px) {
+  .app-grid-responsive {
+    grid-template-columns: 1fr !important;
+  }
+  .hide-on-tablet {
+    display: none !important;
+  }
+}

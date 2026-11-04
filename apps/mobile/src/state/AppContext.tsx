@@ -13,6 +13,7 @@ import {
 } from '../types';
 import { ApiClient } from '../api/client';
 import { wsService } from '../services/websocket';
+import { DisplayPreferencesService, ScalePreset } from '../services/displayPreferencesService';
 
 export type ScreenName =
   | 'login'
@@ -97,45 +98,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [selectedStationCode, setSelectedStationCode] = useState<string | null>(null);
   const [regions, setRegions] = useState<RegionSummary[]>([]);
 
-  // Global Display Scaling
-  const scaleFactors: Record<string, number> = {
-    '90%': 0.9,
-    '100%': 1.0,
-    '110%': 1.1,
-    '120%': 1.2,
-    '130%': 1.3,
-    '150%': 1.5,
-  };
-
+  // Global Display Scaling preferences (delegated to DisplayPreferencesService)
   const [displayScale, setDisplayScaleState] = useState<string>(() => {
-    return localStorage.getItem('panorama_display_scale') || '120%';
+    return DisplayPreferencesService.loadPreferences().scale;
   });
-
-  const applyScale = (scaleStr: string) => {
-    const factor = scaleFactors[scaleStr] ?? ((parseFloat(scaleStr) / 100) || 1.2);
-    if (typeof document !== 'undefined') {
-      document.documentElement.style.setProperty('--app-scale', `${factor}`);
-      (document.documentElement.style as any).zoom = `${factor}`;
-      if (document.body) {
-        (document.body.style as any).zoom = `${factor}`;
-      }
-      window.dispatchEvent(new Event('resize'));
-    }
-  };
 
   const setDisplayScale = (newScale: string) => {
     setDisplayScaleState(newScale);
-    localStorage.setItem('panorama_display_scale', newScale);
-    applyScale(newScale);
+    const prefs = DisplayPreferencesService.loadPreferences(currentUser?.username);
+    DisplayPreferencesService.savePreferences(
+      {
+        ...prefs,
+        scale: newScale as ScalePreset,
+        fontSize: DisplayPreferencesService.scaleToFontSize(newScale as ScalePreset),
+      },
+      currentUser?.username
+    );
   };
 
   const resetDisplayScale = () => {
-    setDisplayScale('120%');
+    const defaults = DisplayPreferencesService.resetPreferences(currentUser?.username);
+    setDisplayScaleState(defaults.scale);
   };
 
+  // Synchronize display scale whenever authenticated user session changes
   useEffect(() => {
-    applyScale(displayScale);
-  }, []);
+    if (currentUser?.username) {
+      const prefs = DisplayPreferencesService.loadPreferences(currentUser.username);
+      setDisplayScaleState(prefs.scale);
+    }
+  }, [currentUser?.username]);
 
   // 1. Session verification on startup
   useEffect(() => {
@@ -360,6 +352,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const logout = () => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.zoom = '';
+      if (document.body) {
+        document.body.style.zoom = '';
+      }
+    }
     ApiClient.logout();
     setIsAuthenticated(false);
     setCurrentUser(null);

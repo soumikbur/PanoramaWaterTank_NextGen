@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { colors, typography, radii, spacing } from '../theme';
 import { useApp } from '../state/AppContext';
+import { AuthLayout } from '../components/auth/AuthLayout';
 import { Droplet, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export const LoginScreen: React.FC = () => {
@@ -36,20 +37,7 @@ export const LoginScreen: React.FC = () => {
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        width: '100vw',
-        backgroundColor: colors.background,
-        fontFamily: typography.fontFamily,
-        padding: spacing.md,
-        boxSizing: 'border-box',
-      }}
-    >
+    <AuthLayout>
       {/* Brand Header */}
       <div
         style={{
@@ -399,6 +387,6 @@ export const LoginScreen: React.FC = () => {
       >
         Panorama SCADA System v2.0.0 &bull; Northern Railway Division &bull; Strictly Authorized Access
       </div>
-    </div>
+    </AuthLayout>
   );
 };
