@@ -102,7 +102,13 @@ export const TrendChart: React.FC<TrendChartProps> = ({
       {/* SVG Curve & Area */}
       {pts.length > 0 && (
         <svg width={w} height={h} style={{ position: 'absolute', top: 0, left: 0 }}>
-          {areaPath && <path d={areaPath} fill={areaColor} />}
+          {areaPath && (
+            <path
+              d={areaPath}
+              fill={areaColor}
+              style={{ transition: 'd 220ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)), fill 200ms ease' }}
+            />
+          )}
           {linePath && (
             <path
               d={linePath}
@@ -111,6 +117,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({
               strokeWidth={metrics.chartLineThickness}
               strokeLinecap="round"
               strokeLinejoin="round"
+              style={{ transition: 'd 220ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)), stroke 200ms ease' }}
             />
           )}
           {samplePts.map((p, idx) => (
@@ -122,6 +129,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({
               fill={lineColor}
               stroke="#FFFFFF"
               strokeWidth="1.5"
+              style={{ transition: 'cx 200ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)), cy 200ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1))' }}
             />
           ))}
         </svg>
@@ -143,6 +151,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({
             whiteSpace: 'nowrap',
             zIndex: 10,
             boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+            transition: 'left 200ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)), top 200ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)), opacity 150ms ease',
           }}
         >
           {lastPt.value.toFixed(2)}%
@@ -163,6 +172,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({
             border: `2.5px solid ${lineColor}`,
             boxSizing: 'border-box',
             zIndex: 11,
+            transition: 'left 200ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)), top 200ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1))',
           }}
         />
       )}

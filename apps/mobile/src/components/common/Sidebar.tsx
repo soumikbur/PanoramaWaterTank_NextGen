@@ -66,6 +66,7 @@ export const Sidebar: React.FC = () => {
 
   return (
     <aside
+      className="sidebar-container"
       style={{
         width: sidebarWidth,
         minWidth: sidebarWidth,
@@ -261,6 +262,7 @@ export const Sidebar: React.FC = () => {
             <button
               key={item.id}
               data-screen={item.id}
+              className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
               onClick={() => setActiveScreen(item.id)}
               title={sidebarCollapsed ? item.label : undefined}
               style={{
@@ -320,6 +322,7 @@ export const Sidebar: React.FC = () => {
               <button
                 key={item.id}
                 data-screen={item.id}
+                className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
                 onClick={() => setActiveScreen(item.id)}
                 title={sidebarCollapsed ? item.label : undefined}
                 style={{

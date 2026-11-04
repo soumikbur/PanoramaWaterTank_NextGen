@@ -536,6 +536,7 @@ export const WaterTankScreen: React.FC = () => {
       {/* 5. Detailed Tank Drawer (Slides in from right) */}
       {selectedTank && (
         <div
+          className="drawer-slide-in"
           style={{
             position: 'fixed',
             top: 0,

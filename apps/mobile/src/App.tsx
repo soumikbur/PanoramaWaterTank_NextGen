@@ -35,6 +35,8 @@ const MainContent: React.FC = () => {
       }}
     >
       <main
+        key={activeScreen}
+        className='page-transition'
         style={{
           flex: 1,
           padding: '16px',

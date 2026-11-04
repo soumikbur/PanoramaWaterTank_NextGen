@@ -80,4 +80,12 @@
   --color-critical: #EF4444;
   --color-warning: #F59E0B;
   --color-success: #10B981;
+
+  /* Global Subtle Animation & Transition System Tokens */
+  --transition-fast: 140ms;
+  --transition-normal: 200ms;
+  --transition-slow: 260ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
 }

@@ -925,6 +925,7 @@ export const TrainManagementScreen: React.FC = () => {
       {/* 5. ADD TRAIN MODAL DIALOG */}
       {isAddModalOpen && (
         <div
+          className="modal-backdrop"
           style={{
             position: 'fixed',
             top: 0,
@@ -939,6 +940,7 @@ export const TrainManagementScreen: React.FC = () => {
           }}
         >
           <div
+            className="modal-dialog"
             style={{
               backgroundColor: '#FFFFFF',
               borderRadius: '10px',
@@ -1143,6 +1145,7 @@ export const TrainManagementScreen: React.FC = () => {
       {/* Edit Train Modal */}
       {isEditModalOpen && (
         <div
+          className="modal-backdrop"
           style={{
             position: 'fixed',
             inset: 0,
@@ -1155,6 +1158,7 @@ export const TrainManagementScreen: React.FC = () => {
           }}
         >
           <div
+            className="modal-dialog"
             style={{
               backgroundColor: '#FFFFFF',
               borderRadius: '8px',

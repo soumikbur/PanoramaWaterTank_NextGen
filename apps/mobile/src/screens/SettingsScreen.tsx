@@ -1889,6 +1889,7 @@ export const SettingsScreen: React.FC = () => {
       {/* Factory Reset Modal */}
       {isFactoryResetModalOpen && (
         <div
+          className="modal-backdrop"
           style={{
             position: 'fixed',
             top: 0,
@@ -1904,6 +1905,7 @@ export const SettingsScreen: React.FC = () => {
           }}
         >
           <div
+            className="modal-dialog"
             style={{
               backgroundColor: '#FFFFFF',
               borderRadius: '12px',

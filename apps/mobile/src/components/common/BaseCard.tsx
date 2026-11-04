@@ -22,6 +22,7 @@ export const BaseCard: React.FC<BaseCardProps> = ({
 }) => {
   return (
     <div
+      className="interactive-card"
       style={{
         backgroundColor: colors.surface,
         borderRadius: `${metrics.radiusLarge}px`,

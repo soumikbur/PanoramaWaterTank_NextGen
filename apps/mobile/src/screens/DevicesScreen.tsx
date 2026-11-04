@@ -740,6 +740,7 @@ export const DevicesScreen: React.FC = () => {
       {/* 5. Slide-in Device Detail Drawer (Right Side Sheet, 440px) */}
       {selectedDevice && (
         <div
+          className="drawer-slide-in"
           style={{
             position: 'fixed',
             top: 0,
@@ -880,6 +881,7 @@ export const DevicesScreen: React.FC = () => {
       {/* Add Device Modal */}
       {isAddModalOpen && (
         <div
+          className="modal-backdrop"
           style={{
             position: 'fixed',
             inset: 0,
@@ -892,6 +894,7 @@ export const DevicesScreen: React.FC = () => {
           }}
         >
           <div
+            className="modal-dialog"
             style={{
               backgroundColor: '#FFFFFF',
               borderRadius: '8px',
@@ -1007,6 +1010,7 @@ export const DevicesScreen: React.FC = () => {
       {/* Edit Device Modal */}
       {isEditModalOpen && deviceToEdit && (
         <div
+          className="modal-backdrop"
           style={{
             position: 'fixed',
             inset: 0,
@@ -1019,6 +1023,7 @@ export const DevicesScreen: React.FC = () => {
           }}
         >
           <div
+            className="modal-dialog"
             style={{
               backgroundColor: '#FFFFFF',
               borderRadius: '8px',

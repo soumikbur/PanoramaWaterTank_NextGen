@@ -1,0 +1,268 @@
+/**
+ * Global Subtle Animation & Transition System
+ *
+ * Provides a lightweight, GPU-accelerated animation system tailored for an
+ * industrial railway SCADA monitoring environment.
+ *
+ * Core principles:
+ * 1. Minimal & Purposeful: Enhance user orientation and interaction feedback without distraction.
+ * 2. GPU-Accelerated: Strictly use opacity and transform (translateY/scale) to eliminate layout thrashing.
+ * 3. Fast Easing: Standard 180-250ms duration with cubic-bezier(0.2, 0, 0, 1).
+ * 4. Zero Lag: Instantaneous click dispatch; no blocking or artificial delays.
+ * 5. Full Accessibility: Total neutralization under prefers-reduced-motion: reduce.
+ */
+
+/* ========================================================================= */
+/* 1. Page Navigation Transitions                                            */
+/* ========================================================================= */
+
+.page-transition {
+  animation: pageEnter 220ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) both;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+}
+
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ========================================================================= */
+/* 2. Sidebar Navigation Transitions                                         */
+/* ========================================================================= */
+
+.sidebar-container {
+  transition: width var(--transition-normal, 200ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+              min-width var(--transition-normal, 200ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+              max-width var(--transition-normal, 200ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) !important;
+}
+
+.sidebar-nav-item {
+  transition: background-color var(--transition-normal, 200ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+              border-color var(--transition-normal, 200ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+              color var(--transition-normal, 200ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+              transform var(--transition-fast, 140ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1));
+}
+
+.sidebar-nav-item:hover {
+  background-color: var(--color-surface-alt, #F8FAFC) !important;
+}
+
+.sidebar-nav-item.active {
+  background-color: #EFF6FF !important;
+}
+
+.sidebar-nav-item:active {
+  transform: scale(0.99);
+}
+
+.sidebar-nav-item svg {
+  transition: transform var(--transition-fast, 140ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1));
+}
+
+.sidebar-nav-item:hover svg {
+  transform: scale(1.08);
+}
+
+/* ========================================================================= */
+/* 3. Interactive Cards & Metric Elevation                                  */
+/* ========================================================================= */
+
+.interactive-card {
+  transition: transform var(--transition-normal, 200ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+              box-shadow var(--transition-normal, 200ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+              border-color var(--transition-normal, 200ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1));
+}
+
+.interactive-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08) !important;
+}
+
+.metric-enter {
+  animation: metricEnter 240ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) both;
+}
+
+@keyframes metricEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ========================================================================= */
+/* 4. Buttons, Form Inputs & Table Interactions                             */
+/* ========================================================================= */
+
+button {
+  transition: background-color var(--transition-fast, 140ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+              border-color var(--transition-fast, 140ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+              color var(--transition-fast, 140ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+              box-shadow var(--transition-fast, 140ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+              transform var(--transition-fast, 140ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1));
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+input, select, textarea {
+  transition: border-color var(--transition-fast, 140ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+              box-shadow var(--transition-fast, 140ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+              background-color var(--transition-fast, 140ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1));
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--color-primary, #2563EB) !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.16) !important;
+}
+
+/* Table row interactive hover */
+tbody tr {
+  transition: background-color var(--transition-fast, 140ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1));
+}
+
+tbody tr:hover {
+  background-color: var(--color-surface-alt, #F8FAFC);
+}
+
+/* ========================================================================= */
+/* 5. Modals & Dialog Transitions                                            */
+/* ========================================================================= */
+
+.modal-backdrop {
+  animation: fadeIn var(--transition-fast, 140ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) both;
+}
+
+.modal-dialog {
+  animation: modalEnter var(--transition-normal, 200ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) both;
+}
+
+.drawer-slide-in {
+  animation: drawerSlideIn var(--transition-normal, 200ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) both;
+}
+
+@keyframes drawerSlideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ========================================================================= */
+/* 6. Notification Toasts & Alerts                                           */
+/* ========================================================================= */
+
+.toast-slide-enter {
+  animation: toastSlide 220ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) both;
+}
+
+@keyframes toastSlide {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ========================================================================= */
+/* 7. Loading Skeletons & Subtle Shimmer                                     */
+/* ========================================================================= */
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite ease-in-out;
+  border-radius: 4px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ========================================================================= */
+/* 8. Map Markers & Leaflet Hardware Acceleration                            */
+/* ========================================================================= */
+
+.custom-train-marker {
+  transition: transform 400ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) !important;
+}
+
+.station-marker {
+  transition: transform var(--transition-normal, 200ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)),
+              filter var(--transition-normal, 200ms) var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) !important;
+}
+
+.station-marker:hover {
+  transform: scale(1.12);
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.25));
+}
+
+.station-marker.marker-selected {
+  transform: scale(1.18);
+  filter: drop-shadow(0 6px 12px rgba(37, 99, 235, 0.45));
+}
+
+/* ========================================================================= */
+/* 9. Accessibility — Reduced Motion Support                                 */
+/* ========================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ========================================================================= */
+/* 10. Authentication Layout Isolation                                       */
+/* ========================================================================= */
+
+.auth-layout,
+.auth-layout * {
+  animation: none !important;
+  transform: none !important;
+}
+
+.auth-layout {
+  animation: fadeIn 200ms ease-out both !important;
+}

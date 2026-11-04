@@ -23,8 +23,14 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
 
   const [wavePhase, setWavePhase] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const targetFillRef = useRef(fillPercentage);
+  const animatedFillRef = useRef(fillPercentage);
 
-  // Wave phase animation loop (0 to 2*PI over 4000ms)
+  useEffect(() => {
+    targetFillRef.current = fillPercentage;
+  }, [fillPercentage]);
+
+  // Wave phase animation loop (0 to 2*PI over 4000ms) with smooth fluid level interpolation
   useEffect(() => {
     let start: number | null = null;
     let animId: number;
@@ -33,6 +39,15 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
       if (!start) start = timestamp;
       const progress = (timestamp - start) % 4000;
       setWavePhase((progress / 4000) * Math.PI * 2);
+
+      const target = targetFillRef.current;
+      const current = animatedFillRef.current;
+      if (Math.abs(target - current) < 0.05) {
+        animatedFillRef.current = target;
+      } else {
+        animatedFillRef.current = current + (target - current) * 0.08;
+      }
+
       animId = requestAnimationFrame(animate);
     };
 
@@ -74,7 +89,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
     // 2. CLIP water fill to inner tank body
     ctx.clip();
 
-    const waterH = h * (fillPercentage / 100.0);
+    const waterH = h * (animatedFillRef.current / 100.0);
     if (waterH > 0) {
       const waterTopY = h - waterH;
 

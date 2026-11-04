@@ -290,6 +290,7 @@ export const UsersScreen: React.FC = () => {
       {/* Add User Modal */}
       {isAddUserOpen && (
         <div
+          className="modal-backdrop"
           style={{
             position: 'fixed',
             top: 0,
@@ -304,6 +305,7 @@ export const UsersScreen: React.FC = () => {
           }}
         >
           <div
+            className="modal-dialog"
             style={{
               backgroundColor: '#FFFFFF',
               borderRadius: '10px',
