@@ -31,6 +31,7 @@ export const BaseCard: React.FC<BaseCardProps> = ({
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
+        flexShrink: 0,
         boxSizing: 'border-box',
         transition: 'all 0.15s ease-in-out',
         ...style,

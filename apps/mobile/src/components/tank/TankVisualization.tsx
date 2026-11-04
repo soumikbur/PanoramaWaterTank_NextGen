@@ -184,7 +184,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
 
   return (
     <BaseCard padding={metrics.cardPadding} style={{ minHeight: `${metrics.tankCardMinHeight}px`, ...style }}>
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '10px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', gap: '10px' }}>
         {/* Card Title */}
         <span
           style={{
@@ -251,12 +251,12 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
               </div>
 
               {/* Canvas Tank Body */}
-              <div style={{ flex: 1, width: '100%', minHeight: '190px', position: 'relative' }}>
+              <div style={{ width: '100%', height: '220px', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <canvas
                   ref={canvasRef}
                   width={metrics.vesselPreferredWidth}
                   height={220}
-                  style={{ width: '100%', height: '100%', display: 'block' }}
+                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }}
                 />
               </div>
             </div>
@@ -485,16 +485,17 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
         {/* Bottom Full-width Light Blue Tank Capacity Banner */}
         <div
           style={{
-            height: '30px',
+            minHeight: '30px',
             borderRadius: '6px',
             backgroundColor: colors.primarySurface,
             border: '1px solid #DBEAFE',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            paddingLeft: '14px',
-            paddingRight: '14px',
+            padding: '6px 14px',
             boxSizing: 'border-box',
+            flexWrap: 'wrap',
+            gap: '8px',
           }}
         >
           <span

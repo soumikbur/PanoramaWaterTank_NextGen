@@ -96,14 +96,12 @@ export const WaterTankScreen: React.FC = () => {
 
   return (
     <div style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column', gap: metrics.space16 }}>
-      {/* Scrollable Container with Right Margin when Drawer is open */}
+      {/* Main Tanks Container */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
           gap: metrics.space16,
-          marginRight: selectedTank ? '480px' : '0',
-          transition: 'margin-right 250ms ease-out',
         }}
       >
         {/* 1. Header with Title & Aggregate Cards */}
@@ -533,6 +531,23 @@ export const WaterTankScreen: React.FC = () => {
         )}
       </div>
 
+      {/* Backdrop overlay for Drawer */}
+      {selectedTank && (
+        <div
+          onClick={() => setSelectedTankId(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(2px)',
+            zIndex: 999,
+          }}
+        />
+      )}
+
       {/* 5. Detailed Tank Drawer (Slides in from right) */}
       {selectedTank && (
         <div
@@ -543,9 +558,9 @@ export const WaterTankScreen: React.FC = () => {
             right: 0,
             bottom: 0,
             width: '480px',
-            maxWidth: '90vw',
+            maxWidth: '100vw',
             backgroundColor: '#FFFFFF',
-            boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
+            boxShadow: '-6px 0 28px rgba(0,0,0,0.20)',
             zIndex: 1000,
             display: 'flex',
             flexDirection: 'column',

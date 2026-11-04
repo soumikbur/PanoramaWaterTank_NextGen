@@ -761,6 +761,7 @@ export const SettingsScreen: React.FC = () => {
                 return (
                   <button
                     key={preset.value}
+                    id={`btn-scale-preset-${preset.value.replace('%', '')}`}
                     onClick={() => setDisplayScale(preset.value as ScalePreset)}
                     style={{
                       display: 'flex',

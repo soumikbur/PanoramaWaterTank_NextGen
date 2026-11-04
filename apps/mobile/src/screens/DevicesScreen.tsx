@@ -234,14 +234,12 @@ export const DevicesScreen: React.FC = () => {
 
   return (
     <div style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column', gap: metrics.space16 }}>
-      {/* Scrollable Container with Right Margin when Drawer is open */}
+      {/* Main Devices Container */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
           gap: metrics.space16,
-          marginRight: selectedDevice ? '460px' : '0',
-          transition: 'margin-right 250ms ease-out',
         }}
       >
         {/* 1. Page Header with Title & Action Controls */}
@@ -737,6 +735,23 @@ export const DevicesScreen: React.FC = () => {
         </BaseCard>
       </div>
 
+      {/* Backdrop overlay for Device Drawer */}
+      {selectedDevice && (
+        <div
+          onClick={() => setSelectedDevice(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(2px)',
+            zIndex: 999,
+          }}
+        />
+      )}
+
       {/* 5. Slide-in Device Detail Drawer (Right Side Sheet, 440px) */}
       {selectedDevice && (
         <div
@@ -747,10 +762,11 @@ export const DevicesScreen: React.FC = () => {
             right: 0,
             bottom: 0,
             width: '440px',
+            maxWidth: '100vw',
             backgroundColor: '#FFFFFF',
             borderLeft: '1px solid #CBD5E1',
-            boxShadow: '-4px 0 16px rgba(0,0,0,0.08)',
-            zIndex: 100,
+            boxShadow: '-6px 0 28px rgba(0,0,0,0.20)',
+            zIndex: 1000,
             display: 'flex',
             flexDirection: 'column',
             boxSizing: 'border-box',
