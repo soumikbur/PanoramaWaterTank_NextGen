@@ -32,6 +32,7 @@ import {
   ChevronDown,
   X,
   Info,
+  Globe,
 } from 'lucide-react';
 
 // Great-circle Haversine formula with calibrated railway track winding factor (1.12x)
@@ -57,6 +58,36 @@ function calculateEta(distanceKm: number, speedKmh: number | null | undefined): 
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
   return `${hours}h ${mins}m`;
+}
+
+const WORLD_MAP_BOUNDS: L.LatLngBoundsExpression = [
+  [-85.05112878, -180],
+  [85.05112878, 180],
+];
+
+function calculateRouteCorridorBounds(
+  stationList: CorridorStation[],
+  trainLoc: TrainLocation | null,
+  hasTrainGps: boolean
+): L.LatLngBounds {
+  const points: [number, number][] = [];
+  if (Array.isArray(stationList)) {
+    stationList.forEach((st) => {
+      if (st && typeof st.latitude === 'number' && typeof st.longitude === 'number') {
+        points.push([st.latitude, st.longitude]);
+      }
+    });
+  }
+
+  if (points.length === 0) {
+    points.push([22.5839, 88.3426], [23.6871, 86.9746]);
+  }
+
+  if (hasTrainGps && trainLoc && typeof trainLoc.current_latitude === 'number' && typeof trainLoc.current_longitude === 'number') {
+    points.push([trainLoc.current_latitude, trainLoc.current_longitude]);
+  }
+
+  return L.latLngBounds(points);
 }
 
 export const LocationScreen: React.FC = () => {
@@ -184,29 +215,33 @@ export const LocationScreen: React.FC = () => {
     return refillStations.find((s) => s.code === 'BWN') || refillStations[0];
   }, [enrichedStations, hasGps]);
 
-  // Initialize Leaflet Map
+  // Initialize Leaflet Map with Single World Bounds & Full Zoom Range
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
     if (!mapInstanceRef.current) {
-      const regionBounds = L.latLngBounds([18.0, 82.0], [28.0, 93.0]);
-      const corridorBounds = L.latLngBounds([22.4, 86.8], [23.9, 88.5]);
+      const worldBounds = L.latLngBounds(WORLD_MAP_BOUNDS);
       const map = L.map(mapContainerRef.current, {
         center: [23.2324, 87.8615], // Bardhaman/corridor center
-        zoom: 9,
-        minZoom: 7,
-        maxZoom: 18,
-        maxBounds: regionBounds,
+        zoom: 8,
+        minZoom: 2,
+        maxZoom: 19,
+        maxBounds: worldBounds,
         maxBoundsViscosity: 1.0,
         worldCopyJump: false,
         zoomControl: false,
         attributionControl: true,
-        zoomAnimation: false,
-        fadeAnimation: false,
-        markerZoomAnimation: false,
+        zoomAnimation: true,
+        fadeAnimation: true,
+        markerZoomAnimation: true,
       });
 
-      map.fitBounds(corridorBounds, { padding: [40, 40] });
+      const initialRouteBounds = calculateRouteCorridorBounds(stations, activeTrainLoc, hasGps);
+      map.fitBounds(initialRouteBounds, {
+        padding: [60, 60],
+        maxZoom: 8,
+        animate: false,
+      });
       mapInstanceRef.current = map;
     }
 
@@ -221,7 +256,16 @@ export const LocationScreen: React.FC = () => {
       ro.observe(mapContainerRef.current);
     }
 
+    // Window resize listener
+    const handleWindowResize = () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize({ animate: false });
+      }
+    };
+    window.addEventListener('resize', handleWindowResize);
+
     return () => {
+      window.removeEventListener('resize', handleWindowResize);
       if (ro) ro.disconnect();
       if (mapInstanceRef.current) {
         try {
@@ -246,10 +290,43 @@ export const LocationScreen: React.FC = () => {
     };
   }, []);
 
-  // Manage Tile Layer (Street vs. Satellite)
+  // Ensure initial corridor bounds are fitted once station telemetry is ready
+  const hasInitialFitDoneRef = useRef<boolean>(false);
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || hasInitialFitDoneRef.current || stations.length === 0) return;
+
+    const corridorBounds = calculateRouteCorridorBounds(stations, activeTrainLoc, hasGps);
+    map.fitBounds(corridorBounds, {
+      padding: [60, 60],
+      maxZoom: 8,
+      animate: false,
+    });
+    hasInitialFitDoneRef.current = true;
+  }, [stations, activeTrainLoc, hasGps]);
+
+  // Center on active train when train selection changes
+  const prevTrainNumberRef = useRef(selectedTrainNumber);
+  useEffect(() => {
+    if (prevTrainNumberRef.current !== selectedTrainNumber) {
+      prevTrainNumberRef.current = selectedTrainNumber;
+      if (hasGps && activeTrainLoc?.current_latitude != null && activeTrainLoc?.current_longitude != null) {
+        mapInstanceRef.current?.setView([activeTrainLoc.current_latitude, activeTrainLoc.current_longitude], 12, {
+          animate: true,
+        });
+        setSelectedStationCode('TRAIN');
+        setFeedbackToast(`Centered on Train ${selectedTrainNumber}`);
+      }
+    }
+  }, [selectedTrainNumber, hasGps, activeTrainLoc]);
+
+  // Manage Tile Layer (Street vs. Satellite) - Single World, No Wrap, Preserves Center & Zoom
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
+
+    const currentCenter = map.getCenter();
+    const currentZoom = map.getZoom();
 
     if (tileLayerRef.current) {
       map.removeLayer(tileLayerRef.current);
@@ -266,10 +343,13 @@ export const LocationScreen: React.FC = () => {
       : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
     const tileLayer = L.tileLayer(tileUrl, {
-      minZoom: 7,
-      maxZoom: 18,
+      minZoom: 2,
+      maxZoom: 19,
       noWrap: true,
-      bounds: L.latLngBounds([18.0, 82.0], [28.0, 93.0]),
+      bounds: [
+        [-85.05112878, -180],
+        [85.05112878, 180],
+      ],
       attribution,
     });
 
@@ -278,6 +358,11 @@ export const LocationScreen: React.FC = () => {
 
     tileLayer.addTo(map);
     tileLayerRef.current = tileLayer;
+
+    // Preserve the current geographical center and zoom across tile layer switches
+    if (currentCenter && currentZoom != null) {
+      map.setView(currentCenter, currentZoom, { animate: false });
+    }
   }, [tileMode]);
 
   // Draw Corridor Track Polyline and Station Markers with Vector SVG Icons (No Unicode Emoji)
@@ -291,7 +376,9 @@ export const LocationScreen: React.FC = () => {
       polylineRef.current = null;
     }
 
-    const corridorCoords: L.LatLngExpression[] = stations.map((s) => [s.latitude, s.longitude]);
+    const corridorCoords: [number, number][] = stations
+      .filter((s) => s && typeof s.latitude === 'number' && typeof s.longitude === 'number')
+      .map((s) => [s.latitude, s.longitude]);
 
     const isSatellite = tileMode === 'satellite';
     const polyline = L.polyline(corridorCoords, {
@@ -629,12 +716,31 @@ export const LocationScreen: React.FC = () => {
 
   const handleFitCorridor = () => {
     if (!mapInstanceRef.current || stations.length === 0) return;
-    const bounds = L.latLngBounds(stations.map((s) => [s.latitude, s.longitude]));
-    if (hasGps && activeTrainLoc?.current_latitude != null && activeTrainLoc?.current_longitude != null) {
-      bounds.extend([activeTrainLoc.current_latitude, activeTrainLoc.current_longitude]);
-    }
-    mapInstanceRef.current.fitBounds(bounds, { padding: [40, 40] });
+    const bounds = calculateRouteCorridorBounds(stations, activeTrainLoc, hasGps);
+    mapInstanceRef.current.fitBounds(bounds, {
+      padding: [60, 60],
+      maxZoom: 8,
+      animate: true,
+    });
     setFeedbackToast('Map viewport fitted to Eastern Railway Corridor (Howrah to Asansol)');
+  };
+
+  const handleWorldView = () => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    map.fitBounds(
+      [
+        [-85, -180],
+        [85, 180],
+      ],
+      {
+        padding: [10, 10],
+        animate: true,
+      }
+    );
+    setSelectedStationCode('');
+    setSelectedEntity(null);
+    setFeedbackToast('Switched to Global World View');
   };
 
   const handleLocateStation = (st: CorridorStation) => {
@@ -724,7 +830,7 @@ export const LocationScreen: React.FC = () => {
             minHeight: 0,
             position: 'relative',
             zIndex: 1,
-            backgroundColor: '#0F172A',
+            backgroundColor: tileMode === 'satellite' ? '#0B132B' : '#E2E8F0',
           }}
         >
           {/* Upper-Left Information Banner: Next Refill Facility */}
@@ -953,6 +1059,7 @@ export const LocationScreen: React.FC = () => {
                 setTileMode(nextMode);
                 setFeedbackToast(`Switched map layer to ${nextMode === 'satellite' ? 'Esri Satellite Imagery' : 'OpenStreetMap Standard Cartography'}`);
               }}
+              id="map-satellite-btn"
               title="Toggle Satellite Imagery"
               style={{
                 display: 'flex',
@@ -975,6 +1082,7 @@ export const LocationScreen: React.FC = () => {
             {/* 4. Current Location */}
             <button
               onClick={handleCurrentLocation}
+              id="map-currentloc-btn"
               title="Center on Physical GPS Telemetry"
               style={{
                 display: 'flex',
@@ -997,6 +1105,7 @@ export const LocationScreen: React.FC = () => {
             {/* 5. Center Train */}
             <button
               onClick={handleCenterTrain}
+              id="map-centertrain-btn"
               title="Center on Selected Train"
               style={{
                 display: 'flex',
@@ -1016,10 +1125,11 @@ export const LocationScreen: React.FC = () => {
               <span>Center Train</span>
             </button>
 
-            {/* 6. Fit Corridor */}
+            {/* 5. World View */}
             <button
-              onClick={handleFitCorridor}
-              title="Fit Viewport to Corridor Extents"
+              id="map-worldview-btn"
+              onClick={handleWorldView}
+              title="Display Entire World View"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1032,16 +1142,43 @@ export const LocationScreen: React.FC = () => {
                 fontSize: '11px',
                 fontWeight: 600,
                 cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <Globe size={13} color="#2563EB" />
+              <span>World View</span>
+            </button>
+
+            {/* 6. Fit Corridor */}
+            <button
+              id="map-fitcorridor-btn"
+              onClick={handleFitCorridor}
+              title="Fit Viewport to Eastern Railway Corridor"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: `1px solid ${colors.borderStrong}`,
+                backgroundColor: '#FFFFFF',
+                color: colors.textPrimary,
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
               }}
             >
               <Navigation size={13} color="#0D9488" />
               <span>Fit Corridor</span>
             </button>
 
-            {/* 6. Zoom In */}
+            {/* 9. Zoom In */}
             <button
+              id="map-zoomin-btn"
               onClick={handleZoomIn}
               title="Zoom In"
+              aria-label="Zoom In"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1058,10 +1195,12 @@ export const LocationScreen: React.FC = () => {
               <Plus size={14} />
             </button>
 
-            {/* 7. Zoom Out */}
+            {/* 10. Zoom Out */}
             <button
+              id="map-zoomout-btn"
               onClick={handleZoomOut}
               title="Zoom Out"
+              aria-label="Zoom Out"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1304,10 +1443,7 @@ export const LocationScreen: React.FC = () => {
                 return (
                   <tr
                     key={st.code}
-                    onClick={() => {
-                      setSelectedStationCode(st.code);
-                      setSelectedEntity(st);
-                    }}
+                    onClick={() => handleLocateStation(st)}
                     style={{
                       borderBottom: `1px solid ${colors.borderSubtle}`,
                       backgroundColor: isSelected
