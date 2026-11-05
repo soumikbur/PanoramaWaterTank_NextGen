@@ -13,7 +13,7 @@ from app.core.security import verify_password, create_access_token, get_password
 from app.models.user import User
 from app.models.audit import AuditEvent
 from app.models.base import utc_now
-from app.schemas.auth import UserLogin, Token, UserOut, ChangePasswordRequest
+from app.schemas.auth import UserLogin, Token, UserOut, ChangePasswordRequest, EmployeeRegistrationRequest
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -42,6 +42,8 @@ async def get_current_user(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive")
     if user.account_status == "LOCKED":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is locked due to security restrictions")
+    if user.account_status in ("PENDING_APPROVAL", "REJECTED"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account registration is pending administrator approval or was rejected")
 
     # Update last activity timestamp
     user.last_activity_at = utc_now()
@@ -139,6 +141,19 @@ async def login(credentials: UserLogin, request: Request, db: AsyncSession = Dep
             detail="Incorrect username or password"
         )
 
+    if user.account_status == "PENDING_APPROVAL":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your employee registration request has been submitted and is awaiting administrator approval."
+        )
+
+    if user.account_status == "REJECTED":
+        reason_msg = f" Reason: {user.rejection_reason}" if user.rejection_reason else ""
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Your employee registration request was rejected by the administrator.{reason_msg}"
+        )
+
     if not user.is_active or user.account_status == "INACTIVE":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -223,3 +238,122 @@ async def change_password(
     await db.commit()
 
     return {"status": "SUCCESS", "message": "Password updated successfully."}
+
+
+@router.post("/register", status_code=status.HTTP_201_CREATED)
+async def register_employee(
+    registration: EmployeeRegistrationRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """Register a new railway employee. Account remains PENDING_APPROVAL until approved by an administrator."""
+    raw_username = registration.username.strip()
+    clean_username = raw_username if raw_username.startswith("@") else f"@{raw_username}"
+
+    if clean_username.lower() in ("@admin", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username @admin is reserved for root system administration."
+        )
+
+    if len(registration.password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 6 characters long."
+        )
+    if registration.password != registration.confirmPassword:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Passwords do not match."
+        )
+
+    # Check for existing username
+    existing_user = await db.execute(select(User).where(User.username.ilike(clean_username)))
+    if existing_user.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Username '{clean_username}' is already registered."
+        )
+
+    # Check for existing email
+    if registration.email:
+        existing_email = await db.execute(select(User).where(User.email.ilike(registration.email.strip())))
+        if existing_email.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Email '{registration.email}' is already registered."
+            )
+
+    # Check for existing employee ID
+    if registration.employeeId:
+        existing_emp_id = await db.execute(select(User).where(User.employee_id.ilike(registration.employeeId.strip())))
+        if existing_emp_id.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Employee ID '{registration.employeeId}' is already registered."
+            )
+
+    dob = None
+    if registration.dateOfBirth:
+        try:
+            dob = datetime.fromisoformat(registration.dateOfBirth)
+        except Exception:
+            pass
+
+    joining = utc_now()
+    if registration.joiningDate:
+        try:
+            joining = datetime.fromisoformat(registration.joiningDate)
+        except Exception:
+            pass
+
+    new_employee = User(
+        username=clean_username,
+        hashed_password=get_password_hash(registration.password),
+        full_name=registration.fullName.strip(),
+        email=registration.email.strip().lower() if registration.email else None,
+        phone=registration.phone.strip(),
+        employee_id=registration.employeeId.strip().upper(),
+        designation=registration.designation.strip(),
+        department=registration.department.strip(),
+        division_region=registration.divisionRegion.strip(),
+        date_of_birth=dob,
+        gender=registration.gender.strip() if registration.gender else None,
+        residential_address=registration.residentialAddress.strip() if registration.residentialAddress else None,
+        assigned_location=registration.assignedLocation.strip() if registration.assignedLocation else None,
+        reporting_manager=registration.reportingManager.strip() if registration.reportingManager else None,
+        document_name=registration.documentName.strip() if registration.documentName else None,
+        document_url=registration.documentData if registration.documentData else None,
+        joining_date=joining,
+        role="EMPLOYEE",  # Strictly EMPLOYEE, never ADMIN
+        account_status="PENDING_APPROVAL",
+        is_active=False,
+        must_change_password=False,
+        registration_date=utc_now(),
+    )
+
+    db.add(new_employee)
+    await db.commit()
+    await db.refresh(new_employee)
+
+    client_ip = request.client.host if request.client else "unknown"
+    db.add(AuditEvent(
+        user_id=new_employee.id,
+        action="REGISTRATION_SUBMITTED",
+        target_type="EMPLOYEE_REGISTRATION",
+        target_id=new_employee.username,
+        details=json.dumps({
+            "employee_id": new_employee.employee_id,
+            "department": new_employee.department,
+            "ip": client_ip
+        }),
+        ip_address=client_ip
+    ))
+    await db.commit()
+
+    return {
+        "message": "Your employee registration request has been submitted and is awaiting administrator approval.",
+        "registration_id": new_employee.id,
+        "username": new_employee.username,
+        "status": "PENDING_APPROVAL"
+    }

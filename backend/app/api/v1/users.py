@@ -16,7 +16,8 @@ from app.schemas.auth import (
     UserCreate,
     UserUpdate,
     ResetPasswordRequest,
-    UpdateStatusRequest
+    UpdateStatusRequest,
+    RegistrationActionRequest
 )
 from app.api.v1.auth import get_current_admin_user
 
@@ -122,6 +123,147 @@ async def create_user(
     await db.commit()
 
     return new_user
+
+
+@router.get("/registrations", response_model=List[UserOut])
+async def list_registrations(
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """List employee registration requests with optional status and search filtering."""
+    stmt = select(User).order_by(desc(User.created_at))
+    filters = []
+
+    if status and status.upper() != "ALL":
+        filters.append(User.account_status == status.upper())
+    else:
+        filters.append(User.account_status.in_(["PENDING_APPROVAL", "REJECTED", "ACTIVE"]))
+
+    if search:
+        s = f"%{search.strip()}%"
+        filters.append(
+            or_(
+                User.username.ilike(s),
+                User.full_name.ilike(s),
+                User.email.ilike(s),
+                User.employee_id.ilike(s),
+                User.department.ilike(s),
+                User.designation.ilike(s),
+            )
+        )
+
+    if filters:
+        stmt = stmt.where(and_(*filters))
+
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
+@router.get("/registrations/{reg_id}", response_model=UserOut)
+async def get_registration_detail(
+    reg_id: str,
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Retrieve complete details for a specific registration request."""
+    result = await db.execute(select(User).where(User.id == reg_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration record not found.")
+    return user
+
+
+@router.post("/registrations/{reg_id}/approve", response_model=UserOut)
+async def approve_registration(
+    reg_id: str,
+    request: Request,
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Approve a pending employee registration request."""
+    result = await db.execute(select(User).where(User.id == reg_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration record not found.")
+
+    if user.account_status == "ACTIVE":
+        return user
+
+    user.account_status = "ACTIVE"
+    user.is_active = True
+    user.role = "EMPLOYEE"
+    user.approved_at = utc_now()
+    user.approved_by = current_admin.username
+    user.updated_at = utc_now()
+
+    client_ip = request.client.host if request.client else "unknown"
+    db.add(AuditEvent(
+        user_id=current_admin.id,
+        action="REGISTRATION_APPROVED",
+        target_type="EMPLOYEE_REGISTRATION",
+        target_id=user.username,
+        details=json.dumps({
+            "employee_id": user.employee_id,
+            "approved_by": current_admin.username,
+            "ip": client_ip
+        }),
+        ip_address=client_ip
+    ))
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@router.post("/registrations/{reg_id}/reject", response_model=UserOut)
+async def reject_registration(
+    reg_id: str,
+    action_data: RegistrationActionRequest,
+    request: Request,
+    current_admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Reject an employee registration request with reason."""
+    result = await db.execute(select(User).where(User.id == reg_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration record not found.")
+
+    if user.role == "ADMIN" or user.username in ("@admin", "admin"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot reject root administrator.")
+
+    rejection_reason = (action_data.rejection_reason or "").strip()
+    if not rejection_reason:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A rejection reason is required to reject an employee registration."
+        )
+
+    user.account_status = "REJECTED"
+    user.is_active = False
+    user.rejection_reason = rejection_reason
+    user.approved_at = None
+    user.approved_by = current_admin.username
+    user.updated_at = utc_now()
+
+    client_ip = request.client.host if request.client else "unknown"
+    db.add(AuditEvent(
+        user_id=current_admin.id,
+        action="REGISTRATION_REJECTED",
+        target_type="EMPLOYEE_REGISTRATION",
+        target_id=user.username,
+        details=json.dumps({
+            "employee_id": user.employee_id,
+            "rejected_by": current_admin.username,
+            "reason": rejection_reason,
+            "ip": client_ip
+        }),
+        ip_address=client_ip
+    ))
+    await db.commit()
+    await db.refresh(user)
+    return user
 
 
 @router.get("/{user_id}", response_model=UserOut)

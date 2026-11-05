@@ -267,6 +267,29 @@ function createServer() {
       return;
     }
 
+    if (pathname.startsWith('/api/v1/users/registrations')) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify([
+        {
+          id: 'reg-001',
+          username: '@applicant1',
+          full_name: 'Ananya Sharma',
+          email: 'ananya@railnet.gov.in',
+          phone: '+91-98300-11111',
+          employee_id: 'EMP-901',
+          department: 'Rolling Stock Operations',
+          designation: 'Assistant Station Controller',
+          division_region: 'Eastern Railway (Howrah)',
+          role: 'EMPLOYEE',
+          account_status: 'PENDING_APPROVAL',
+          is_active: false,
+          registration_date: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        }
+      ]));
+      return;
+    }
+
     if (pathname === '/api/v1/users') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify([

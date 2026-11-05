@@ -58,6 +58,17 @@ class UserOut(BaseModel):
     joiningDate: Optional[datetime] = Field(None, alias="joining_date")
     lastLoginAt: Optional[datetime] = Field(None, alias="last_login_at")
     lastActivityAt: Optional[datetime] = Field(None, alias="last_activity_at")
+    dateOfBirth: Optional[datetime] = Field(None, alias="date_of_birth")
+    gender: Optional[str] = None
+    residentialAddress: Optional[str] = Field(None, alias="residential_address")
+    assignedLocation: Optional[str] = Field(None, alias="assigned_location")
+    reportingManager: Optional[str] = Field(None, alias="reporting_manager")
+    documentName: Optional[str] = Field(None, alias="document_name")
+    documentUrl: Optional[str] = Field(None, alias="document_url")
+    registrationDate: Optional[datetime] = Field(None, alias="registration_date")
+    approvedAt: Optional[datetime] = Field(None, alias="approved_at")
+    approvedBy: Optional[str] = Field(None, alias="approved_by")
+    rejectionReason: Optional[str] = Field(None, alias="rejection_reason")
     createdAt: datetime = Field(..., alias="created_at")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
@@ -87,4 +98,38 @@ class ResetPasswordRequest(BaseModel):
 
 
 class UpdateStatusRequest(BaseModel):
-    account_status: str  # ACTIVE, INACTIVE, LOCKED
+    account_status: str  # ACTIVE, INACTIVE, LOCKED, PENDING_APPROVAL, REJECTED
+
+
+class EmployeeRegistrationRequest(BaseModel):
+    fullName: str = Field(..., alias="full_name")
+    dateOfBirth: Optional[str] = Field(None, alias="date_of_birth")
+    gender: Optional[str] = None
+    email: EmailStr
+    phone: str
+    residentialAddress: Optional[str] = Field(None, alias="residential_address")
+
+    employeeId: str = Field(..., alias="employee_id")
+    designation: str
+    department: str
+    joiningDate: Optional[str] = Field(None, alias="joining_date")
+    divisionRegion: str = Field("Eastern Railway (Howrah)", alias="division_region")
+    assignedLocation: Optional[str] = Field(None, alias="assigned_location")
+    reportingManager: Optional[str] = Field(None, alias="reporting_manager")
+
+    username: str
+    password: str
+    confirmPassword: str = Field(..., alias="confirm_password")
+
+    documentName: Optional[str] = Field(None, alias="document_name")
+    documentData: Optional[str] = Field(None, alias="document_data")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class RegistrationActionRequest(BaseModel):
+    action: Optional[str] = "REJECT"
+    rejection_reason: Optional[str] = None
+    designation: Optional[str] = None
+    department: Optional[str] = None
+

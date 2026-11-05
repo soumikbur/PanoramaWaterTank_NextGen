@@ -4,9 +4,11 @@ import { useApp } from '../state/AppContext';
 import { AuthLayout } from '../components/auth/AuthLayout';
 import { Droplet, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, KeyRound } from 'lucide-react';
 import { ApiClient } from '../api/client';
+import { RegisterScreen } from './RegisterScreen';
 
 export const LoginScreen: React.FC = () => {
   const { login, setActiveScreen, currentUser } = useApp();
+  const [authMode, setAuthMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -19,6 +21,10 @@ export const LoginScreen: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changeError, setChangeError] = useState<string | null>(null);
   const [changeLoading, setChangeLoading] = useState(false);
+
+  if (authMode === 'REGISTER') {
+    return <RegisterScreen onBackToLogin={() => setAuthMode('LOGIN')} />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,6 +128,7 @@ export const LoginScreen: React.FC = () => {
 
       {/* Main Authentication Card */}
       <div
+        className="auth-card-entrance"
         style={{
           width: '100%',
           maxWidth: '420px',
@@ -153,6 +160,7 @@ export const LoginScreen: React.FC = () => {
         {errorMessage && (
           <div
             id="login-error-banner"
+            className="auth-error-enter"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -315,6 +323,7 @@ export const LoginScreen: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
+            className="auth-button"
             style={{
               width: '100%',
               height: '42px',
@@ -337,6 +346,19 @@ export const LoginScreen: React.FC = () => {
             <span>{loading ? 'Authenticating...' : 'Sign In to Console'}</span>
             {!loading && <ArrowRight size={16} />}
           </button>
+
+          {/* New Employee Registration Switch */}
+          <div style={{ marginTop: '16px', textAlign: 'center', fontSize: '12px', color: colors.textSecondary }}>
+            New Employee?{' '}
+            <button
+              type="button"
+              id="btn-switch-to-register"
+              onClick={() => { setErrorMessage(null); setAuthMode('REGISTER'); }}
+              style={{ background: 'none', border: 'none', color: colors.primary, fontWeight: 600, cursor: 'pointer', padding: 0 }}
+            >
+              Register Here
+            </button>
+          </div>
         </form>
       </div>
 

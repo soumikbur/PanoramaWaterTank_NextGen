@@ -14,6 +14,7 @@ import {
   TrainOverviewItem,
   TrainConsist,
   UserProfile,
+  EmployeeRegistrationPayload,
   TrainLocation
 } from '../types';
 
@@ -292,6 +293,162 @@ export class ApiClient {
 
   static async fetchUserActivity(userId: string): Promise<any[]> {
     return this.request<any[]>(`/users/${userId}/activity`);
+  }
+
+  // Employee Registration & Approval Workflow
+  static async registerEmployee(payload: EmployeeRegistrationPayload): Promise<{
+    message: string;
+    registration_id: string;
+    username: string;
+    status: string;
+  }> {
+    return this.request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        full_name: payload.fullName,
+        date_of_birth: payload.dateOfBirth,
+        gender: payload.gender,
+        email: payload.email,
+        phone: payload.phone,
+        residential_address: payload.residentialAddress,
+        employee_id: payload.employeeId,
+        designation: payload.designation,
+        department: payload.department,
+        joining_date: payload.joiningDate,
+        division_region: payload.divisionRegion,
+        assigned_location: payload.assignedLocation,
+        reporting_manager: payload.reportingManager,
+        username: payload.username,
+        password: payload.password,
+        confirm_password: payload.confirmPassword,
+        document_name: payload.documentName,
+        document_data: payload.documentData,
+      }),
+    });
+  }
+
+  static async fetchRegistrations(params?: {
+    status?: string;
+    search?: string;
+  }): Promise<UserProfile[]> {
+    const query = new URLSearchParams();
+    if (params?.status) query.append('status', params.status);
+    if (params?.search) query.append('search', params.search);
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const list = await this.request<any[]>(`/users/registrations${queryString}`);
+    if (!Array.isArray(list)) return [];
+    return list.map((u) => ({
+      id: u.id,
+      username: u.username,
+      full_name: u.full_name || u.fullName,
+      email: u.email,
+      phone: u.phone,
+      employee_id: u.employee_id || u.employeeId,
+      designation: u.designation,
+      department: u.department,
+      division_region: u.division_region || u.divisionRegion,
+      role: u.role,
+      account_status: u.account_status || u.accountStatus || 'PENDING_APPROVAL',
+      is_active: u.is_active ?? u.isActive ?? false,
+      must_change_password: u.must_change_password ?? u.mustChangePassword ?? false,
+      joining_date: u.joining_date || u.joiningDate,
+      date_of_birth: u.date_of_birth || u.dateOfBirth,
+      gender: u.gender,
+      residential_address: u.residential_address || u.residentialAddress,
+      assigned_location: u.assigned_location || u.assignedLocation,
+      reporting_manager: u.reporting_manager || u.reportingManager,
+      document_name: u.document_name || u.documentName,
+      document_url: u.document_url || u.documentUrl,
+      registration_date: u.registration_date || u.registrationDate,
+      approved_at: u.approved_at || u.approvedAt,
+      approved_by: u.approved_by || u.approvedBy,
+      rejection_reason: u.rejection_reason || u.rejectionReason,
+      last_login_at: u.last_login_at || u.lastLoginAt,
+      last_activity_at: u.last_activity_at || u.lastActivityAt,
+      created_at: u.created_at || u.createdAt,
+    }));
+  }
+
+  static async getRegistrationDetail(regId: string): Promise<UserProfile> {
+    const u = await this.request<any>(`/users/registrations/${regId}`);
+    return {
+      id: u.id,
+      username: u.username,
+      full_name: u.full_name || u.fullName,
+      email: u.email,
+      phone: u.phone,
+      employee_id: u.employee_id || u.employeeId,
+      designation: u.designation,
+      department: u.department,
+      division_region: u.division_region || u.divisionRegion,
+      role: u.role,
+      account_status: u.account_status || u.accountStatus,
+      is_active: u.is_active ?? u.isActive ?? false,
+      must_change_password: u.must_change_password ?? u.mustChangePassword ?? false,
+      joining_date: u.joining_date || u.joiningDate,
+      date_of_birth: u.date_of_birth || u.dateOfBirth,
+      gender: u.gender,
+      residential_address: u.residential_address || u.residentialAddress,
+      assigned_location: u.assigned_location || u.assignedLocation,
+      reporting_manager: u.reporting_manager || u.reportingManager,
+      document_name: u.document_name || u.documentName,
+      document_url: u.document_url || u.documentUrl,
+      registration_date: u.registration_date || u.registrationDate,
+      approved_at: u.approved_at || u.approvedAt,
+      approved_by: u.approved_by || u.approvedBy,
+      rejection_reason: u.rejection_reason || u.rejectionReason,
+      last_login_at: u.last_login_at || u.lastLoginAt,
+      last_activity_at: u.last_activity_at || u.lastActivityAt,
+      created_at: u.created_at || u.createdAt,
+    };
+  }
+
+  static async approveRegistration(regId: string): Promise<UserProfile> {
+    const u = await this.request<any>(`/users/registrations/${regId}/approve`, {
+      method: 'POST',
+    });
+    return {
+      id: u.id,
+      username: u.username,
+      full_name: u.full_name || u.fullName,
+      email: u.email,
+      phone: u.phone,
+      employee_id: u.employee_id || u.employeeId,
+      designation: u.designation,
+      department: u.department,
+      division_region: u.division_region || u.divisionRegion,
+      role: u.role,
+      account_status: u.account_status || u.accountStatus,
+      is_active: u.is_active ?? u.isActive ?? true,
+      must_change_password: u.must_change_password ?? u.mustChangePassword ?? false,
+      joining_date: u.joining_date || u.joiningDate,
+      approved_at: u.approved_at || u.approvedAt,
+      approved_by: u.approved_by || u.approvedBy,
+      created_at: u.created_at || u.createdAt,
+    };
+  }
+
+  static async rejectRegistration(regId: string, rejectionReason: string): Promise<UserProfile> {
+    const u = await this.request<any>(`/users/registrations/${regId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ rejection_reason: rejectionReason }),
+    });
+    return {
+      id: u.id,
+      username: u.username,
+      full_name: u.full_name || u.fullName,
+      email: u.email,
+      phone: u.phone,
+      employee_id: u.employee_id || u.employeeId,
+      designation: u.designation,
+      department: u.department,
+      division_region: u.division_region || u.divisionRegion,
+      role: u.role,
+      account_status: u.account_status || u.accountStatus,
+      is_active: false,
+      rejection_reason: u.rejection_reason || u.rejectionReason,
+      created_at: u.created_at || u.createdAt,
+    };
   }
 
   // Trains and Fleet Management

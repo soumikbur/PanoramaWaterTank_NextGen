@@ -86,3 +86,4 @@ Administrators can securely reset employee passwords without exposing plain text
 | `/api/v1/users/{id}/status` | `PATCH` | Update status to `ACTIVE`, `INACTIVE`, or `LOCKED`. Clears failed attempts if unlocked. |
 | `/api/v1/users/{id}` | `DELETE` | Permanently remove employee record (protected against root admin). |
 | `/api/v1/users/{id}/activity` | `GET` | Fetch recent security and authentication audit events for the employee. |
+

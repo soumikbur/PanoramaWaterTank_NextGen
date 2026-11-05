@@ -92,3 +92,4 @@ flowchart LR
   - Graphify path tracing confirms that no execution path from `POST /api/v1/auth/change-password` or `DELETE /api/v1/users/{id}` can alter or delete the `@admin` account.
 - **Frontend Storage Isolation**:
   - `DisplayPreferencesService.getStorageKey` strips leading `@` characters to ensure that `@admin` maps deterministically to `panorama_display_preferences_admin`, preventing storage key collisions or unauthorized preference inheritance.
+

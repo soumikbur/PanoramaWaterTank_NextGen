@@ -113,3 +113,4 @@ python backend/scripts/recover_admin.py --reset "YourNewSecureAdminPassword@2026
 - [ ] Authenticate with `@admin` / `Admin@123` -> verify full access to all 11 modules.
 - [ ] Authenticate with `@employee` / `Employee@123` -> verify access to operational views, and verify that navigating to `/settings`, `/users`, or `/logs` renders the **Access Restricted** screen.
 - [ ] Test temporary password change workflow for an employee flagged with `must_change_password: true`.
+

@@ -64,6 +64,17 @@ def _sync_schema_migration(sync_conn) -> None:
                 ("last_login_at", "DATETIME"),
                 ("last_activity_at", "DATETIME"),
                 ("failed_login_attempts", "INTEGER DEFAULT 0"),
+                ("date_of_birth", "DATETIME"),
+                ("gender", "VARCHAR(16)"),
+                ("residential_address", "VARCHAR(255)"),
+                ("assigned_location", "VARCHAR(128)"),
+                ("reporting_manager", "VARCHAR(128)"),
+                ("document_name", "VARCHAR(255)"),
+                ("document_url", "VARCHAR(255)"),
+                ("registration_date", "DATETIME"),
+                ("approved_at", "DATETIME"),
+                ("approved_by", "VARCHAR(64)"),
+                ("rejection_reason", "VARCHAR(255)"),
             ]
             for col_name, col_type in new_columns:
                 if col_name not in existing_cols:

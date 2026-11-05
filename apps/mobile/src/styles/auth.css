@@ -73,6 +73,14 @@
   font-size: 13px !important;
   font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
   border-radius: 6px !important;
+  border: 1px solid #CBD5E1 !important;
+  transition: border-color 160ms cubic-bezier(0.2, 0, 0, 1), box-shadow 160ms cubic-bezier(0.2, 0, 0, 1), background-color 160ms cubic-bezier(0.2, 0, 0, 1) !important;
+}
+
+.auth-input:focus {
+  border-color: #2563EB !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16) !important;
+  outline: none !important;
 }
 
 .auth-button {
@@ -81,6 +89,34 @@
   font-size: 13px !important;
   font-weight: 600 !important;
   border-radius: 6px !important;
+  cursor: pointer !important;
+  transition: background-color 160ms cubic-bezier(0.2, 0, 0, 1), transform 140ms cubic-bezier(0.2, 0, 0, 1), box-shadow 160ms cubic-bezier(0.2, 0, 0, 1), filter 140ms ease !important;
+}
+
+.auth-button:hover:not(:disabled) {
+  filter: brightness(1.05);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
+}
+
+.auth-button:active:not(:disabled) {
+  transform: scale(0.99) !important;
+}
+
+.auth-register-card {
+  width: 100%;
+  max-width: 620px;
+  background-color: #FFFFFF;
+  border-radius: 12px;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.08);
+  padding: 32px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+  .auth-register-card {
+    padding: 20px 16px !important;
+  }
 }
 
 @media (max-height: 700px) {

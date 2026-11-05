@@ -29,6 +29,17 @@ erDiagram
         varchar department
         varchar division_region
         date joining_date
+        date date_of_birth
+        varchar gender
+        varchar residential_address
+        varchar assigned_location
+        varchar reporting_manager
+        varchar document_name
+        varchar document_url
+        timestamptz registration_date
+        timestamptz approved_at
+        varchar approved_by
+        varchar rejection_reason
         varchar role
         varchar account_status
         boolean is_active

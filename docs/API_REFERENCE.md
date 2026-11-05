@@ -75,6 +75,13 @@ Allows an authenticated employee to change their password.
 
 ---
 
+### 1.4 POST /api/v1/auth/register
+Public registration endpoint for new railway employees. Creates a profile with role EMPLOYEE and status PENDING_APPROVAL.
+- **Request Body**: EmployeeRegistrationRequest
+- **Response 201 Created**: Returns registration confirmation with registration_id, username, and account_status: PENDING_APPROVAL.
+
+---
+
 ## 2. Fleet & Device Endpoints
 
 ### 2.1 GET `/api/v1/devices`
@@ -380,6 +387,20 @@ Permanently deletes an employee.
 
 ### 8.8 GET `/api/v1/users/{id}/activity`
 Returns the recent security and authentication audit history for the specified user.
+
+---
+
+### 8.9 GET /api/v1/users/registrations
+Lists pending and historical employee registration requests with optional status and search filters.
+
+### 8.10 GET /api/v1/users/registrations/{id}
+Retrieves complete application dossier for a specific registration request.
+
+### 8.11 POST /api/v1/users/registrations/{id}/approve
+Approves an employee application and transitions account status to ACTIVE.
+
+### 8.12 POST /api/v1/users/registrations/{id}/reject
+Rejects an employee application. Mandatory rejection reason required.
 
 ---
 

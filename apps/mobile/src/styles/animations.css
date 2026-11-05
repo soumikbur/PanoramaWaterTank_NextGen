@@ -252,15 +252,101 @@ tbody tr:hover {
 }
 
 /* ========================================================================= */
-/* 10. Authentication Layout Isolation                                       */
+/* 10. Authentication & Registration Layout Animations                       */
 /* ========================================================================= */
 
-.auth-layout,
-.auth-layout * {
-  animation: none !important;
-  transform: none !important;
+.auth-layout {
+  animation: authFadeIn 220ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) both;
 }
 
-.auth-layout {
-  animation: fadeIn 200ms ease-out both !important;
+.auth-card-entrance {
+  animation: authCardEnter 240ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) both;
+}
+
+.auth-view-switch {
+  animation: authViewSwitch 220ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) both;
+}
+
+.auth-error-enter {
+  animation: errorSlideDown 180ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) both;
+}
+
+@keyframes authFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes authCardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes authViewSwitch {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes errorSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Tab content and wizard stepper transitions */
+.tab-content-enter {
+  animation: tabEnter 180ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) both;
+}
+
+@keyframes tabEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Dashboard staggered card entrance */
+.dashboard-main-grid > div:nth-child(1) {
+  animation: cardEnter 200ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) both;
+}
+.dashboard-main-grid > div:nth-child(2) {
+  animation: cardEnter 240ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) both;
+}
+.dashboard-main-grid > div:nth-child(3) {
+  animation: cardEnter 280ms var(--ease-standard, cubic-bezier(0.2, 0, 0, 1)) both;
+}
+
+@keyframes cardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

@@ -165,3 +165,4 @@ RBAC is enforced on both backend API routes and the client interface:
 | `/api/v1/settings/apply` | POST | `ADMIN` | 403 Forbidden |
 | `/api/v1/settings/factory-reset` | POST | `ADMIN` | 403 Forbidden |
 | `/api/v1/tanks/*`, `/trains/*` | GET | `ADMIN` / `EMPLOYEE` | 401 Unauthorized |
+
