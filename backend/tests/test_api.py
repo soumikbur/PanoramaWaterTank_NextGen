@@ -57,15 +57,26 @@ async def test_health_endpoint():
 async def test_auth_login():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Test Admin login
         response = await client.post(
             "/api/v1/auth/login",
-            json={"username": "admin", "password": "admin123"}
+            json={"username": "@admin", "password": "Admin@123"}
         )
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
         assert data["token_type"] == "bearer"
-        assert data["user"]["username"] == "admin"
+        assert data["user"]["role"] == "ADMIN"
+
+        # Test Employee login
+        response_emp = await client.post(
+            "/api/v1/auth/login",
+            json={"username": "@employee", "password": "Employee@123"}
+        )
+        assert response_emp.status_code == 200
+        data_emp = response_emp.json()
+        assert "access_token" in data_emp
+        assert data_emp["user"]["role"] == "EMPLOYEE"
 
 
 @pytest.mark.asyncio

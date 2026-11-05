@@ -40,7 +40,8 @@ const LEGACY_STORAGE_KEY = 'panorama_display_scale';
 
 function getStorageKey(username?: string | null): string {
   if (username && username.trim().length > 0) {
-    return `${BASE_STORAGE_KEY}_${username.trim().toLowerCase()}`;
+    const clean = username.trim().toLowerCase().replace(/^@/, '');
+    return `${BASE_STORAGE_KEY}_${clean}`;
   }
   return BASE_STORAGE_KEY;
 }

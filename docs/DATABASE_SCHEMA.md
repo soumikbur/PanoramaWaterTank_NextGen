@@ -22,9 +22,22 @@ erDiagram
         varchar username UK
         varchar hashed_password
         varchar full_name
+        varchar email
+        varchar phone
+        varchar employee_id
+        varchar designation
+        varchar department
+        varchar division_region
+        date joining_date
         varchar role
+        varchar account_status
         boolean is_active
+        boolean must_change_password
+        integer failed_login_attempts
+        timestamptz last_login_at
+        timestamptz last_activity_at
         timestamptz created_at
+        timestamptz updated_at
     }
 
     DEVICES {
@@ -125,7 +138,7 @@ erDiagram
 ## 2. Table Specifications & DDL
 
 ### 2.1 Table: `users`
-Manages authorized operators, administrators, and system accounts.
+Manages authorized railway personnel, administrators, and system accounts with full employee lifecycle governance.
 
 ```sql
 CREATE TABLE users (
@@ -134,15 +147,35 @@ CREATE TABLE users (
     hashed_password VARCHAR(255) NOT NULL,
     full_name VARCHAR(128) NOT NULL,
     email VARCHAR(255) UNIQUE,
-    role VARCHAR(32) NOT NULL DEFAULT 'OPERATOR' CHECK (role IN ('ADMIN', 'OPERATOR', 'VIEWER')),
+    phone VARCHAR(32),
+    employee_id VARCHAR(32),
+    designation VARCHAR(64),
+    department VARCHAR(64),
+    division_region VARCHAR(64),
+    joining_date DATE,
+    role VARCHAR(32) NOT NULL DEFAULT 'EMPLOYEE' CHECK (role IN ('ADMIN', 'EMPLOYEE', 'OPERATOR', 'VIEWER')),
+    account_status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE' CHECK (account_status IN ('ACTIVE', 'INACTIVE', 'LOCKED')),
     is_active BOOLEAN NOT NULL DEFAULT true,
+    must_change_password BOOLEAN NOT NULL DEFAULT false,
+    failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+    last_login_at TIMESTAMPTZ,
+    last_activity_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
 
 CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX idx_users_employee_id ON users(employee_id);
+CREATE INDEX idx_users_department ON users(department);
+CREATE INDEX idx_users_status ON users(account_status);
 ```
+
+#### Defensive Migration & Seeding Note
+The application implements an automated startup migration (`_sync_schema_migration` in `backend/app/core/database.py`) that checks the underlying engine (SQLite or PostgreSQL) and dynamically adds missing columns to existing databases without data loss.
+
+Upon startup, `seed_initial_accounts` ensures the authoritative root administrator `@admin` (`Admin@123`) and initial employee `@employee` (`Employee@123`) accounts exist with secure bcrypt hashes and proper permissions.
+
 
 ### 2.2 Table: `devices`
 Represents edge monitoring nodes installed on railway coaches.

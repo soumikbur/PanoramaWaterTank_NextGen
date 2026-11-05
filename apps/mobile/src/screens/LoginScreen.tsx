@@ -1,16 +1,24 @@
 import React, { useState } from 'react';
-import { colors, typography, radii, spacing } from '../theme';
+import { colors, typography, radii } from '../theme';
 import { useApp } from '../state/AppContext';
 import { AuthLayout } from '../components/auth/AuthLayout';
-import { Droplet, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Droplet, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, KeyRound } from 'lucide-react';
+import { ApiClient } from '../api/client';
 
 export const LoginScreen: React.FC = () => {
-  const { login } = useApp();
+  const { login, setActiveScreen, currentUser } = useApp();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Forced temporary password change modal state
+  const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changeError, setChangeError] = useState<string | null>(null);
+  const [changeLoading, setChangeLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,10 +38,32 @@ export const LoginScreen: React.FC = () => {
     }
   };
 
-  const handleQuickFill = (u: string, p: string) => {
-    setUsername(u);
-    setPassword(p);
-    setErrorMessage(null);
+  const handleUpdateTemporaryPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPassword.trim()) {
+      setChangeError('New password is required.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setChangeError('Password must be at least 6 characters long.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setChangeError('Passwords do not match.');
+      return;
+    }
+
+    try {
+      setChangeLoading(true);
+      setChangeError(null);
+      await ApiClient.changePassword(newPassword.trim());
+      setMustChangePassword(false);
+      setActiveScreen('dashboard');
+    } catch (err: any) {
+      setChangeError(err.message || 'Failed to update password.');
+    } finally {
+      setChangeLoading(false);
+    }
   };
 
   return (
@@ -70,6 +100,7 @@ export const LoginScreen: React.FC = () => {
             color: colors.textPrimary,
             margin: 0,
             letterSpacing: '0.2px',
+            textAlign: 'center',
           }}
         >
           Panorama Water Tank Monitor
@@ -82,6 +113,7 @@ export const LoginScreen: React.FC = () => {
             fontWeight: 500,
             letterSpacing: '0.4px',
             textTransform: 'uppercase',
+            textAlign: 'center',
           }}
         >
           NextGen Railway SCADA / HMI Telematics Portal
@@ -179,7 +211,7 @@ export const LoginScreen: React.FC = () => {
                 autoComplete="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. admin or operator"
+                placeholder="Enter username (e.g. @admin or @employee)"
                 style={{
                   width: '100%',
                   height: '40px',
@@ -306,74 +338,6 @@ export const LoginScreen: React.FC = () => {
             {!loading && <ArrowRight size={16} />}
           </button>
         </form>
-
-        {/* Quick-Select Credentials Panel for Operators/Reviewers */}
-        <div
-          style={{
-            marginTop: '24px',
-            paddingTop: '18px',
-            borderTop: `1px solid ${colors.border}`,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontSize: '11px',
-              fontWeight: 600,
-              color: colors.textMuted,
-              textTransform: 'uppercase',
-              letterSpacing: '0.4px',
-              marginBottom: '10px',
-            }}
-          >
-            <ShieldCheck size={14} color={colors.primary} />
-            <span>Authorized Test Accounts</span>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            <button
-              id="btn-quick-admin"
-              type="button"
-              onClick={() => handleQuickFill('admin', 'admin123')}
-              style={{
-                padding: '8px',
-                backgroundColor: colors.surfaceAlt,
-                border: `1px solid ${colors.border}`,
-                borderRadius: radii.sm,
-                fontSize: '11px',
-                color: colors.textSecondary,
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <div style={{ fontWeight: 700, color: colors.primary }}>Admin Role</div>
-              <div style={{ color: colors.textMuted, fontSize: '10px', marginTop: '2px' }}>admin / admin123</div>
-            </button>
-
-            <button
-              id="btn-quick-operator"
-              type="button"
-              onClick={() => handleQuickFill('operator', 'operator123')}
-              style={{
-                padding: '8px',
-                backgroundColor: colors.surfaceAlt,
-                border: `1px solid ${colors.border}`,
-                borderRadius: radii.sm,
-                fontSize: '11px',
-                color: colors.textSecondary,
-                cursor: 'pointer',
-                textAlign: 'left',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <div style={{ fontWeight: 700, color: colors.successText }}>Operator Role</div>
-              <div style={{ color: colors.textMuted, fontSize: '10px', marginTop: '2px' }}>operator / operator123</div>
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Footer System Info */}
@@ -385,8 +349,143 @@ export const LoginScreen: React.FC = () => {
           textAlign: 'center',
         }}
       >
-        Panorama SCADA System v2.0.0 &bull; Northern Railway Division &bull; Strictly Authorized Access
+        Panorama SCADA System v2.0.0 &bull; Eastern Railway Division &bull; Strictly Authorized Access
       </div>
+
+      {/* Mandatory Temporary Password Update Modal */}
+      {mustChangePassword && (
+        <div
+          className="modal-backdrop"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '440px',
+              backgroundColor: '#FFFFFF',
+              borderRadius: radii.md,
+              boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
+              padding: '28px',
+              boxSizing: 'border-box',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '8px',
+                  backgroundColor: '#EFF6FF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: colors.primary,
+                }}
+              >
+                <KeyRound size={20} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: colors.textPrimary }}>
+                  Password Change Required
+                </h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: colors.textMuted }}>
+                  A temporary password was issued for your account. Please set a new password to proceed.
+                </p>
+              </div>
+            </div>
+
+            {changeError && (
+              <div
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: colors.criticalSurface,
+                  color: colors.critical,
+                  fontSize: '12px',
+                  marginBottom: '14px',
+                }}
+              >
+                {changeError}
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateTemporaryPassword} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '4px' }}>
+                  New Permanent Password
+                </label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Minimum 6 characters"
+                  required
+                  style={{
+                    width: '100%',
+                    height: '38px',
+                    padding: '0 12px',
+                    borderRadius: radii.sm,
+                    border: `1px solid ${colors.borderStrong}`,
+                    fontSize: '13px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '4px' }}>
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Re-type new password"
+                  required
+                  style={{
+                    width: '100%',
+                    height: '38px',
+                    padding: '0 12px',
+                    borderRadius: radii.sm,
+                    border: `1px solid ${colors.borderStrong}`,
+                    fontSize: '13px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={changeLoading}
+                style={{
+                  marginTop: '6px',
+                  height: '40px',
+                  backgroundColor: colors.primary,
+                  color: '#FFFFFF',
+                  borderRadius: radii.sm,
+                  border: 'none',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: changeLoading ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {changeLoading ? 'Updating Password...' : 'Save Password & Enter Console'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </AuthLayout>
   );
 };

@@ -177,3 +177,55 @@ stateDiagram-v2
   - In the interim, the frontend falls back to periodic REST polling (`GET /api/v1/tanks/live`) every 5 seconds.
   - Once restored, the header transitions to **CONNECTED** (Green) and restores the live WebSocket stream.
 
+---
+
+## 7. Authentication, RBAC & Security Governance Architecture
+
+### 7.1 Security Architecture Overview
+
+The system enforces enterprise-grade identity governance, strict Role-Based Access Control (RBAC), and zero-trust credential isolation across the full stack.
+
+```mermaid
+flowchart TD
+    Client["React Native / Web Client"]
+    AuthEndpoint["POST /api/v1/auth/login"]
+    UserMgmt["/api/v1/users (CRUD, Reset, Lock)"]
+    AdminProtected["/api/v1/settings/* (Apply, Reset)"]
+    OpProtected["/api/v1/tanks, trains, alerts"]
+
+    Client -->|1. Credentials (@admin / @employee)| AuthEndpoint
+    AuthEndpoint -->|2. Verify Bcrypt Hash| DB[(Authoritative Database)]
+    AuthEndpoint -->|3. Issue JWT Token| Client
+
+    Client -->|4. Bearer JWT + Role: ADMIN| AdminProtected
+    Client -->|5. Bearer JWT + Role: ADMIN| UserMgmt
+    Client -->|6. Bearer JWT + Role: EMPLOYEE| OpProtected
+    Client -.->|7. Blocked: 403 Forbidden| AdminProtected
+    Client -.->|8. Blocked: 403 Forbidden| UserMgmt
+```
+
+### 7.2 Identity & Roles Specification
+
+| Dimension | Administrator (`ADMIN`) | Employee (`EMPLOYEE`) |
+| :--- | :--- | :--- |
+| **Primary Account** | `@admin` | `@employee` |
+| **Initial Password** | `Admin@123` | `Employee@123` |
+| **System Scope** | Full operational + administrative console access across all 11 modules | Standard railway operations (Dashboard, Trains, Tanks, Devices, Location, Alerts, History, Reports) |
+| **Restricted Modules** | None | **Settings**, **Employee Management**, **System Logs** |
+| **Password Governance** | In-app password change strictly prohibited (HTTP 403). Developer-controlled CLI recovery script only (`recover_admin.py`). | Managed by Administrator. Forced password change supported on temporary password login (`must_change_password=True`). |
+| **Account Lifecycle** | Protected root account; cannot be deactivated, locked, or deleted. | Administrator can activate, deactivate, lock, unlock, and delete employee profiles. |
+
+### 7.3 Defense-in-Depth Enforcement Layers
+
+1. **Database Schema Enforcement**:
+   - Defensive schema migration ensuring SQLite and PostgreSQL support extended employee attributes (`employee_id`, `department`, `designation`, `account_status`, `failed_login_attempts`, `must_change_password`).
+   - Passwords stored exclusively as high-entropy bcrypt hashes with automatic seeding for `@admin` and `@employee`.
+2. **Backend Gateway Enforcement**:
+   - Dependency injection guards: `get_current_user` validates JWT expiration and active account status; `get_current_admin_user` rejects non-`ADMIN` principals with HTTP 403 Forbidden.
+   - Brute-force protection: Accounts automatically transition to `LOCKED` upon 5 consecutive failed authentication attempts.
+3. **Frontend Presentation & Route Guards**:
+   - Client-side navigation guards render an **Access Restricted** barrier for unauthorized routes.
+   - Clean login screen: Zero credentials or test account quick-fill buttons displayed in DOM bundles.
+   - Storage isolation: User preferences indexed per authenticated user, preventing cross-account state pollution.
+
+

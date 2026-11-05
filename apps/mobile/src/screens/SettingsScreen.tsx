@@ -50,6 +50,32 @@ export const SettingsScreen: React.FC = () => {
 
   const isAdmin = currentUser?.role === 'ADMIN';
 
+  if (!isAdmin) {
+    return (
+      <div
+        style={{
+          padding: '48px',
+          textAlign: 'center',
+          backgroundColor: '#FFFFFF',
+          borderRadius: '8px',
+          border: '1px solid #E2E8F0',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '12px',
+        }}
+      >
+        <ShieldAlert size={40} color={colors.critical} />
+        <h2 style={{ color: '#0F172A', fontSize: '18px', fontWeight: 700, margin: 0 }}>
+          Access Restricted
+        </h2>
+        <p style={{ color: '#64748B', fontSize: '13px', margin: 0, maxWidth: '400px' }}>
+          Administrative settings and system configuration require administrator authorization. Please sign in as an Administrator to modify configuration parameters.
+        </p>
+      </div>
+    );
+  }
+
   // Section 1: General Settings
   const [systemName, setSystemName] = useState('Panorama Water Tank SCADA & HMI — Eastern Railway');
   const [scadaMode, setScadaMode] = useState<'PRODUCTION' | 'SIMULATION' | 'MAINTENANCE'>('PRODUCTION');

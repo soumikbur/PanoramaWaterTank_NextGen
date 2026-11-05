@@ -141,15 +141,65 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return;
       }
 
-      if (token.startsWith('demo_token_')) {
-        const isAdmin = token.includes('admin');
+      if (token.startsWith('token_@admin') || token.startsWith('token_admin') || token.startsWith('demo_token_admin')) {
         setCurrentUser({
-          id: isAdmin ? 'usr-admin-01' : 'usr-op-02',
-          username: isAdmin ? 'admin' : 'operator',
-          full_name: isAdmin ? 'System Administrator' : 'Lead Train Operator',
-          email: isAdmin ? 'admin@panorama.railways.gov' : 'operator@panorama.railways.gov',
-          role: isAdmin ? 'ADMIN' : 'OPERATOR',
+          id: 'usr-admin-01',
+          username: '@admin',
+          full_name: 'System Administrator',
+          email: 'admin@panorama.railways.gov',
+          phone: '+91-33-2641-0001',
+          employee_id: 'EMP-001',
+          designation: 'Chief SCADA Administrator',
+          department: 'Signalling & Telecommunications',
+          division_region: 'Eastern Railway HQ',
+          role: 'ADMIN',
+          account_status: 'ACTIVE',
           is_active: true,
+          must_change_password: false,
+        });
+        setIsAuthenticated(true);
+        setActiveScreen('dashboard');
+        setAuthLoading(false);
+        return;
+      }
+
+      if (token.startsWith('demo_token_operator') || token.startsWith('token_operator')) {
+        setCurrentUser({
+          id: 'usr-op-02',
+          username: 'operator',
+          full_name: 'Railway Yard Operator',
+          email: 'operator@panorama.railways.gov',
+          phone: '+91-33-2641-0002',
+          employee_id: 'EMP-002',
+          designation: 'Lead Yard Controller',
+          department: 'Rolling Stock Operations',
+          division_region: 'Howrah Division (HWH)',
+          role: 'EMPLOYEE',
+          account_status: 'ACTIVE',
+          is_active: true,
+          must_change_password: false,
+        });
+        setIsAuthenticated(true);
+        setActiveScreen('dashboard');
+        setAuthLoading(false);
+        return;
+      }
+
+      if (token.startsWith('token_@employee') || token.startsWith('token_employee')) {
+        setCurrentUser({
+          id: 'usr-emp-02',
+          username: '@employee',
+          full_name: 'Railway Yard Operator',
+          email: 'employee@panorama.railways.gov',
+          phone: '+91-33-2641-0002',
+          employee_id: 'EMP-002',
+          designation: 'Lead Yard Controller',
+          department: 'Rolling Stock Operations',
+          division_region: 'Howrah Division (HWH)',
+          role: 'EMPLOYEE',
+          account_status: 'ACTIVE',
+          is_active: true,
+          must_change_password: false,
         });
         setIsAuthenticated(true);
         setActiveScreen('dashboard');
@@ -331,17 +381,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setActiveScreen('dashboard');
       await refreshData();
     } catch (err: any) {
-      if ((u === 'admin' && p === 'admin123') || (u === 'operator' && p === 'operator123') || (u === 'viewer' && p === 'viewer123')) {
-        const isAdmin = u === 'admin';
+      const cleanUser = u.trim();
+      const isAdminCred = (cleanUser === '@admin' || cleanUser === 'admin') && p === 'Admin@123';
+      const isEmpCred = (cleanUser === '@employee' || cleanUser === 'employee') && p === 'Employee@123';
+      if (isAdminCred || isEmpCred) {
+        const isAdmin = isAdminCred;
         const fallbackUser: UserProfile = {
-          id: isAdmin ? 'usr-admin-01' : 'usr-op-02',
-          username: u,
-          full_name: isAdmin ? 'System Administrator' : 'Lead Train Operator',
-          email: `${u}@panorama.railways.gov`,
-          role: isAdmin ? 'ADMIN' : 'OPERATOR',
+          id: isAdmin ? 'usr-admin-01' : 'usr-emp-02',
+          username: isAdmin ? '@admin' : '@employee',
+          full_name: isAdmin ? 'System Administrator' : 'Railway Yard Operator',
+          email: isAdmin ? 'admin@panorama.railways.gov' : 'employee@panorama.railways.gov',
+          phone: isAdmin ? '+91-33-2641-0001' : '+91-33-2641-0002',
+          employee_id: isAdmin ? 'EMP-001' : 'EMP-002',
+          designation: isAdmin ? 'Chief SCADA Administrator' : 'Lead Yard Controller',
+          department: isAdmin ? 'Signalling & Telecommunications' : 'Rolling Stock Operations',
+          division_region: isAdmin ? 'Eastern Railway HQ' : 'Howrah Division (HWH)',
+          role: isAdmin ? 'ADMIN' : 'EMPLOYEE',
+          account_status: 'ACTIVE',
           is_active: true,
+          must_change_password: false,
         };
-        localStorage.setItem('panorama_token', `demo_token_${u}`);
+        localStorage.setItem('panorama_token', `token_${fallbackUser.username}`);
         setCurrentUser(fallbackUser);
         setIsAuthenticated(true);
         setActiveScreen('dashboard');

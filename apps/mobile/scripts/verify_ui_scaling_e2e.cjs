@@ -72,8 +72,16 @@ function createServer() {
     }
 
     if (pathname === '/api/v1/auth/me') {
+      const authHeader = req.headers['authorization'] || '';
+      const isOperator = authHeader.includes('operator') || authHeader.includes('employee');
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
+      res.end(JSON.stringify(isOperator ? {
+        id: 'usr-op-01',
+        username: 'operator',
+        full_name: 'Field Operations Operator',
+        role: 'EMPLOYEE',
+        is_active: true,
+      } : {
         id: 'usr-admin-01',
         username: 'admin',
         full_name: 'System Administrator',

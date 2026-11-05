@@ -58,22 +58,25 @@ function createServer() {
       req.on('end', () => {
         try {
           const parsed = JSON.parse(body);
-          if (parsed.username === 'invalid' || parsed.password === 'wrong') {
+          const cleanUser = (parsed.username || '').trim().toLowerCase();
+          if (cleanUser === 'invalid' || parsed.password === 'wrong') {
             res.writeHead(401, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ detail: 'Invalid railway username or security key.' }));
             return;
           }
-          const role = parsed.username === 'operator' ? 'OPERATOR' : 'ADMIN';
+          const isAdmin = cleanUser === '@admin' || cleanUser === 'admin';
+          const role = isAdmin ? 'ADMIN' : 'EMPLOYEE';
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
-            access_token: `demo_token_${role.toLowerCase()}`,
+            access_token: `token_${cleanUser}`,
             token_type: 'bearer',
             user: {
-              id: `usr-${role.toLowerCase()}-01`,
-              username: parsed.username || 'admin',
-              full_name: role === 'ADMIN' ? 'System Administrator' : 'Field Operator',
+              id: isAdmin ? 'usr-admin-01' : 'usr-emp-02',
+              username: isAdmin ? '@admin' : '@employee',
+              full_name: isAdmin ? 'System Administrator' : 'Railway Yard Operator',
               role: role,
               is_active: true,
+              must_change_password: false,
             }
           }));
         } catch (e) {
@@ -86,14 +89,15 @@ function createServer() {
 
     if (pathname === '/api/v1/auth/me') {
       const authHeader = req.headers['authorization'] || '';
-      const isOperator = authHeader.includes('operator');
+      const isEmployee = authHeader.includes('employee') || authHeader.includes('operator');
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
-        id: isOperator ? 'usr-operator-01' : 'usr-admin-01',
-        username: isOperator ? 'operator' : 'admin',
-        full_name: isOperator ? 'Field Operator' : 'System Administrator',
-        role: isOperator ? 'OPERATOR' : 'ADMIN',
+        id: isEmployee ? 'usr-emp-02' : 'usr-admin-01',
+        username: isEmployee ? '@employee' : '@admin',
+        full_name: isEmployee ? 'Railway Yard Operator' : 'System Administrator',
+        role: isEmployee ? 'EMPLOYEE' : 'ADMIN',
         is_active: true,
+        must_change_password: false,
       }));
       return;
     }
@@ -266,8 +270,32 @@ function createServer() {
     if (pathname === '/api/v1/users') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify([
-        { id: 'usr-admin-01', username: 'admin', full_name: 'System Administrator', role: 'ADMIN', is_active: true, created_at: '2026-01-01' },
-        { id: 'usr-operator-01', username: 'operator', full_name: 'Field Operator', role: 'OPERATOR', is_active: true, created_at: '2026-01-02' }
+        {
+          id: 'usr-admin-01',
+          username: '@admin',
+          full_name: 'System Administrator',
+          role: 'ADMIN',
+          employee_id: 'EMP-001',
+          department: 'Signalling & Telecommunications',
+          designation: 'Chief SCADA Administrator',
+          account_status: 'ACTIVE',
+          is_active: true,
+          must_change_password: false,
+          created_at: '2026-01-01',
+        },
+        {
+          id: 'usr-emp-02',
+          username: '@employee',
+          full_name: 'Railway Yard Operator',
+          role: 'EMPLOYEE',
+          employee_id: 'EMP-002',
+          department: 'Rolling Stock Operations',
+          designation: 'Lead Yard Controller',
+          account_status: 'ACTIVE',
+          is_active: true,
+          must_change_password: false,
+          created_at: '2026-01-02',
+        }
       ]));
       return;
     }
@@ -377,17 +405,31 @@ app.whenReady().then(async () => {
     assert(authState.cardWidth <= 445, 'Auth card is properly constrained (width=' + authState.cardWidth + 'px)');
     assert(authState.scrollW <= authState.winW + 2, 'No horizontal scrollbar on login screen');
 
+    const noTestAccounts = await win.webContents.executeJavaScript(\`
+      (() => {
+        const text = (document.body && document.body.innerText) || '';
+        const hasQuickAdmin = !!document.getElementById('btn-quick-admin');
+        const hasTestAccountsText = text.toUpperCase().includes('AUTHORIZED TEST ACCOUNTS');
+        return !hasQuickAdmin && !hasTestAccountsText;
+      })()
+    \`);
+    assert(noTestAccounts, 'Authorized Test Accounts section is completely removed from DOM');
+
     // Test 1.2: Invalid login triggers error message banner
     await win.webContents.executeJavaScript(\`
       (() => {
+        const setVal = (el, val) => {
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+          setter.call(el, val);
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        };
         const u = document.getElementById('login-username');
         const p = document.getElementById('login-password');
         const f = document.querySelector('form');
         if (u && p && f) {
-          u.value = 'invalid';
-          u.dispatchEvent(new Event('input', { bubbles: true }));
-          p.value = 'wrong';
-          p.dispatchEvent(new Event('input', { bubbles: true }));
+          setVal(u, 'invalid');
+          setVal(p, 'wrong');
           f.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         }
       })()
@@ -398,19 +440,23 @@ app.whenReady().then(async () => {
     \`);
     assert(hasErrorBanner, 'Invalid credentials show error banner (#login-error-banner)');
 
-    // Test 1.3: Quick fill Admin login
+    // Test 1.3: Admin login with @admin credentials
     await win.webContents.executeJavaScript(\`
       (() => {
-        const btnAdmin = document.getElementById('btn-quick-admin');
-        if (btnAdmin) btnAdmin.click();
-      })()
-    \`);
-    await new Promise(r => setTimeout(r, 200));
-
-    await win.webContents.executeJavaScript(\`
-      (() => {
-        const submitBtn = document.querySelector('button[type="submit"]');
-        if (submitBtn) submitBtn.click();
+        const setVal = (el, val) => {
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+          setter.call(el, val);
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+        const u = document.getElementById('login-username');
+        const p = document.getElementById('login-password');
+        const f = document.querySelector('form');
+        if (u && p && f) {
+          setVal(u, '@admin');
+          setVal(p, 'Admin@123');
+          f.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        }
       })()
     \`);
     await new Promise(r => setTimeout(r, 800));

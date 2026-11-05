@@ -45,7 +45,7 @@ export class ApiClient {
   }
 
   // Auth
-  static async login(username: string, password: string): Promise<{ access_token: string; user: UserProfile }> {
+  static async login(username: string, password: string): Promise<{ access_token: string; user: UserProfile; must_change_password?: boolean }> {
     const res = await this.request<any>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
@@ -53,7 +53,29 @@ export class ApiClient {
     if (res.access_token) {
       localStorage.setItem('panorama_token', res.access_token);
     }
-    return res;
+    return {
+      access_token: res.access_token,
+      user: {
+        id: res.user.id,
+        username: res.user.username,
+        full_name: res.user.fullName || res.user.full_name,
+        email: res.user.email,
+        phone: res.user.phone,
+        employee_id: res.user.employeeId || res.user.employee_id,
+        designation: res.user.designation,
+        department: res.user.department,
+        division_region: res.user.divisionRegion || res.user.division_region,
+        role: res.user.role,
+        account_status: res.user.accountStatus || res.user.account_status || 'ACTIVE',
+        is_active: res.user.isActive ?? res.user.is_active ?? true,
+        must_change_password: res.user.mustChangePassword ?? res.user.must_change_password ?? res.must_change_password ?? false,
+        joining_date: res.user.joiningDate || res.user.joining_date,
+        last_login_at: res.user.lastLoginAt || res.user.last_login_at,
+        last_activity_at: res.user.lastActivityAt || res.user.last_activity_at,
+        created_at: res.user.createdAt || res.user.created_at,
+      },
+      must_change_password: res.must_change_password ?? res.user.must_change_password ?? false,
+    };
   }
 
   static async fetchCurrentUser(): Promise<UserProfile> {
@@ -63,38 +85,213 @@ export class ApiClient {
       username: res.username,
       full_name: res.fullName || res.full_name,
       email: res.email,
+      phone: res.phone,
+      employee_id: res.employeeId || res.employee_id,
+      designation: res.designation,
+      department: res.department,
+      division_region: res.divisionRegion || res.division_region,
       role: res.role,
+      account_status: res.accountStatus || res.account_status || 'ACTIVE',
       is_active: res.isActive ?? res.is_active ?? true,
+      must_change_password: res.mustChangePassword ?? res.must_change_password ?? false,
+      joining_date: res.joiningDate || res.joining_date,
+      last_login_at: res.lastLoginAt || res.last_login_at,
+      last_activity_at: res.lastActivityAt || res.last_activity_at,
+      created_at: res.createdAt || res.created_at,
     };
+  }
+
+  static async changePassword(newPassword: string, currentPassword?: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        new_password: newPassword,
+        current_password: currentPassword,
+      }),
+    });
   }
 
   static logout(): void {
     localStorage.removeItem('panorama_token');
   }
 
-  // Users Management
-  static async fetchUsers(): Promise<UserProfile[]> {
-    const list = await this.request<any[]>('/users');
+  // Users & Employee Management
+  static async fetchUsers(params?: {
+    search?: string;
+    department?: string;
+    designation?: string;
+    account_status?: string;
+    role?: string;
+  }): Promise<UserProfile[]> {
+    const query = new URLSearchParams();
+    if (params?.search) query.append('search', params.search);
+    if (params?.department) query.append('department', params.department);
+    if (params?.designation) query.append('designation', params.designation);
+    if (params?.account_status) query.append('account_status', params.account_status);
+    if (params?.role) query.append('role', params.role);
+
+    const queryString = query.toString() ? `?${query.toString()}` : '';
+    const list = await this.request<any[]>(`/users${queryString}`);
     if (!Array.isArray(list)) return [];
     return list.map((u) => ({
       id: u.id,
       username: u.username,
       full_name: u.full_name || u.fullName,
       email: u.email,
+      phone: u.phone,
+      employee_id: u.employee_id || u.employeeId,
+      designation: u.designation,
+      department: u.department,
+      division_region: u.division_region || u.divisionRegion,
       role: u.role,
+      account_status: u.account_status || u.accountStatus || 'ACTIVE',
       is_active: u.is_active ?? u.isActive ?? true,
+      must_change_password: u.must_change_password ?? u.mustChangePassword ?? false,
+      joining_date: u.joining_date || u.joiningDate,
+      last_login_at: u.last_login_at || u.lastLoginAt,
+      last_activity_at: u.last_activity_at || u.lastActivityAt,
+      created_at: u.created_at || u.createdAt,
     }));
   }
 
-  static async createUser(user: { username: string; password: string; full_name: string; email?: string; role: string }): Promise<UserProfile> {
-    return this.request<UserProfile>('/users', {
+  static async createUser(user: {
+    username: string;
+    password?: string;
+    full_name: string;
+    email?: string;
+    phone?: string;
+    employee_id?: string;
+    designation?: string;
+    department?: string;
+    division_region?: string;
+    role?: string;
+    account_status?: string;
+    must_change_password?: boolean;
+  }): Promise<UserProfile> {
+    const res = await this.request<any>('/users', {
       method: 'POST',
-      body: JSON.stringify(user),
+      body: JSON.stringify({
+        username: user.username,
+        password: user.password,
+        fullName: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        employeeId: user.employee_id,
+        designation: user.designation,
+        department: user.department,
+        divisionRegion: user.division_region,
+        role: user.role,
+        accountStatus: user.account_status,
+        mustChangePassword: user.must_change_password ?? true,
+      }),
     });
+    return {
+      id: res.id,
+      username: res.username,
+      full_name: res.fullName || res.full_name,
+      email: res.email,
+      phone: res.phone,
+      employee_id: res.employeeId || res.employee_id,
+      designation: res.designation,
+      department: res.department,
+      division_region: res.divisionRegion || res.division_region,
+      role: res.role,
+      account_status: res.accountStatus || res.account_status || 'ACTIVE',
+      is_active: res.isActive ?? res.is_active ?? true,
+      must_change_password: res.mustChangePassword ?? res.must_change_password ?? false,
+      created_at: res.createdAt || res.created_at,
+    };
+  }
+
+  static async updateUser(
+    userId: string,
+    user: {
+      full_name?: string;
+      email?: string;
+      phone?: string;
+      employee_id?: string;
+      designation?: string;
+      department?: string;
+      division_region?: string;
+      role?: string;
+      account_status?: string;
+      is_active?: boolean;
+    }
+  ): Promise<UserProfile> {
+    const res = await this.request<any>(`/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        fullName: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        employeeId: user.employee_id,
+        designation: user.designation,
+        department: user.department,
+        divisionRegion: user.division_region,
+        role: user.role,
+        accountStatus: user.account_status,
+        isActive: user.is_active,
+      }),
+    });
+    return {
+      id: res.id,
+      username: res.username,
+      full_name: res.fullName || res.full_name,
+      email: res.email,
+      phone: res.phone,
+      employee_id: res.employeeId || res.employee_id,
+      designation: res.designation,
+      department: res.department,
+      division_region: res.divisionRegion || res.division_region,
+      role: res.role,
+      account_status: res.accountStatus || res.account_status || 'ACTIVE',
+      is_active: res.isActive ?? res.is_active ?? true,
+      must_change_password: res.mustChangePassword ?? res.must_change_password ?? false,
+    };
+  }
+
+  static async resetEmployeePassword(
+    userId: string,
+    newPassword?: string,
+    forceChangeNextLogin: boolean = true
+  ): Promise<{ status: string; message: string; temporary_password: string; must_change_password: boolean }> {
+    return this.request<{ status: string; message: string; temporary_password: string; must_change_password: boolean }>(
+      `/users/${userId}/reset-password`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          new_password: newPassword,
+          force_change_next_login: forceChangeNextLogin,
+        }),
+      }
+    );
+  }
+
+  static async updateUserStatus(
+    userId: string,
+    accountStatus: 'ACTIVE' | 'INACTIVE' | 'LOCKED'
+  ): Promise<UserProfile> {
+    const res = await this.request<any>(`/users/${userId}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ account_status: accountStatus }),
+    });
+    return {
+      id: res.id,
+      username: res.username,
+      full_name: res.fullName || res.full_name,
+      email: res.email,
+      role: res.role,
+      account_status: res.accountStatus || res.account_status,
+      is_active: res.isActive ?? res.is_active,
+    };
   }
 
   static async deleteUser(userId: string): Promise<void> {
     await this.request(`/users/${userId}`, { method: 'DELETE' });
+  }
+
+  static async fetchUserActivity(userId: string): Promise<any[]> {
+    return this.request<any[]>(`/users/${userId}/activity`);
   }
 
   // Trains and Fleet Management

@@ -12,12 +12,12 @@ Authorization: Bearer <jwt_access_token>
 ```
 
 ### 1.1 POST `/api/v1/auth/login`
-Authenticates an operator or administrator and issues a JWT token.
+Authenticates an operator or administrator and issues a JWT token. Automatically normalizes usernames (e.g. `@admin` and `admin` resolve to `@admin`).
 - **Request Body**:
 ```json
 {
-  "username": "admin",
-  "password": "Password123!"
+  "username": "@admin",
+  "password": "Admin@123"
 }
 ```
 - **Response `200 OK`**:
@@ -26,14 +26,52 @@ Authenticates an operator or administrator and issues a JWT token.
   "access_token": "eyJhbGciOiJIUzI1NiIsInR5c...",
   "token_type": "bearer",
   "expires_in": 86400,
+  "must_change_password": false,
   "user": {
     "id": "11111111-2222-3333-4444-555555555555",
-    "username": "admin",
+    "username": "@admin",
     "fullName": "System Administrator",
-    "role": "ADMIN"
+    "email": "admin@panorama.railways.gov",
+    "phone": "+91-33-2641-0001",
+    "employeeId": "EMP-001",
+    "designation": "Chief SCADA Administrator",
+    "department": "Signalling & Telecommunications",
+    "divisionRegion": "Eastern Railway HQ",
+    "role": "ADMIN",
+    "accountStatus": "ACTIVE",
+    "isActive": true,
+    "mustChangePassword": false,
+    "lastLoginAt": "2026-11-05T08:00:00Z"
   }
 }
 ```
+- **Error Responses**:
+  - `401 Unauthorized`: Invalid railway credentials, or account is `INACTIVE` or `LOCKED`.
+
+### 1.2 GET `/api/v1/auth/me`
+Returns the currently authenticated user's profile based on the JWT Bearer token.
+- **Headers**: `Authorization: Bearer <token>`
+- **Response `200 OK`**: Same as `user` object above.
+
+### 1.3 POST `/api/v1/auth/change-password`
+Allows an authenticated employee to change their password.
+- **Headers**: `Authorization: Bearer <token>`
+- **Request Body**:
+```json
+{
+  "current_password": "Employee@123",
+  "new_password": "NewEmployeePassword@2026"
+}
+```
+- **Response `200 OK`**:
+```json
+{
+  "message": "Password updated successfully"
+}
+```
+- **Error Responses**:
+  - `403 Forbidden`: Returned if called by an `ADMIN` account (*Administrator passwords cannot be changed in-app. Use the secure developer recovery CLI tool.*).
+  - `400 Bad Request`: Password too short (< 6 characters) or current password incorrect.
 
 ---
 
@@ -227,7 +265,7 @@ Timestamp,Train_Number,Coach_Number,Device_UID,Level_Percent,Volume_Liters,Heigh
 ### 7.1 Endpoint: `WS /api/v1/ws/live`
 Clients connect to receive sub-second push notifications without polling.
 
-#### Client $\rightarrow$ Server Frame: Subscription
+#### Client -> Server Frame: Subscription
 ```json
 {
   "action": "SUBSCRIBE",
@@ -235,7 +273,7 @@ Clients connect to receive sub-second push notifications without polling.
 }
 ```
 
-#### Server $\rightarrow$ Client Frame: Telemetry Update
+#### Server -> Client Frame: Telemetry Update
 ```json
 {
   "event": "TELEMETRY_UPDATE",
@@ -255,7 +293,7 @@ Clients connect to receive sub-second push notifications without polling.
 }
 ```
 
-#### Server $\rightarrow$ Client Frame: Alarm Event
+#### Server -> Client Frame: Alarm Event
 ```json
 {
   "event": "ALARM_TRIGGERED",
@@ -269,3 +307,88 @@ Clients connect to receive sub-second push notifications without polling.
 }
 ```
 
+---
+
+## 8. Employee Management Endpoints (Admin Only)
+
+All endpoints in this section require `Authorization: Bearer <token>` and `role: ADMIN`. Calls by non-admin accounts return `403 Forbidden`.
+
+### 8.1 GET `/api/v1/users`
+Lists railway personnel with optional search and filters.
+- **Query Parameters**:
+  - `search` (string, optional): Search by name, username, employee ID, designation, or email.
+  - `department` (string, optional): Filter by department.
+  - `role` (string, optional): Filter by `ADMIN` or `EMPLOYEE`.
+  - `account_status` (string, optional): Filter by `ACTIVE`, `INACTIVE`, or `LOCKED`.
+- **Response `200 OK`**: Array of `UserOut` objects.
+
+### 8.2 POST `/api/v1/users`
+Registers a new railway employee.
+- **Request Body**:
+```json
+{
+  "username": "@rajesh.kumar",
+  "password": "InitialTempPassword123",
+  "full_name": "Rajesh Kumar",
+  "email": "rajesh.kumar@panorama.railways.gov",
+  "phone": "+91-98300-12345",
+  "employee_id": "EMP-045",
+  "designation": "Yard Supervisor",
+  "department": "Rolling Stock Operations",
+  "division_region": "Howrah Division (HWH)",
+  "role": "EMPLOYEE",
+  "must_change_password": true
+}
+```
+- **Response `201 Created`**: Returns created `UserOut` object.
+
+### 8.3 GET `/api/v1/users/{id}`
+Fetches detailed employee profile by ID.
+
+### 8.4 PUT `/api/v1/users/{id}`
+Updates editable employee attributes (full name, email, phone, designation, department, division/region, role).
+
+### 8.5 POST `/api/v1/users/{id}/reset-password`
+Resets an employee's password.
+- **Request Body**:
+```json
+{
+  "new_password": "NewTemporaryPassword2026!",
+  "must_change_password": true
+}
+```
+- **Response `200 OK`**:
+```json
+{
+  "message": "Password reset successfully",
+  "must_change_password": true
+}
+```
+
+### 8.6 PATCH `/api/v1/users/{id}/status`
+Updates account status (`ACTIVE`, `INACTIVE`, `LOCKED`). Unlocking an account resets `failed_login_attempts` to 0.
+- **Request Body**:
+```json
+{
+  "account_status": "ACTIVE"
+}
+```
+
+### 8.7 DELETE `/api/v1/users/{id}`
+Permanently deletes an employee.
+- **Guardrail**: Root `@admin` account cannot be deleted (returns `400 Bad Request`).
+
+### 8.8 GET `/api/v1/users/{id}/activity`
+Returns the recent security and authentication audit history for the specified user.
+
+---
+
+## 9. Protected System Administration Endpoints (Admin Only)
+
+### 9.1 POST `/api/v1/settings/apply`
+Applies unified railway SCADA geometry, thresholds, MQTT parameters, and server configurations.
+- **Requires**: `ADMIN` role (returns `403 Forbidden` if called by `EMPLOYEE`).
+
+### 9.2 POST `/api/v1/settings/factory-reset`
+Restores system parameters to factory baseline.
+- **Requires**: `ADMIN` role (returns `403 Forbidden` if called by `EMPLOYEE`).

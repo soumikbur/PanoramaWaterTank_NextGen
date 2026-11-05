@@ -13,6 +13,8 @@ from app.repositories.tank_repo import TankRepository
 from app.repositories.device_repo import DeviceRepository
 from app.schemas.settings import SettingItem, SettingUpdate
 from app.mqtt.client import mqtt_service
+from app.api.v1.auth import get_current_admin_user
+from app.models.user import User
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 
@@ -159,7 +161,11 @@ async def get_unified_config(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/apply")
-async def apply_unified_config(payload: UnifiedSettingsPayload, db: AsyncSession = Depends(get_db)):
+async def apply_unified_config(
+    payload: UnifiedSettingsPayload,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
     """Validate and atomically apply configuration changes across DB and primary tank entity."""
     # Validation
     if payload.alarm_critical_percent >= payload.alarm_warning_percent:
@@ -260,7 +266,10 @@ async def read_device_configuration(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/factory-reset")
-async def factory_reset_settings(db: AsyncSession = Depends(get_db)):
+async def factory_reset_settings(
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
     """Reset all configuration settings and tank physical parameters to factory defaults."""
     repo = SettingsRepository(db)
     tank_repo = TankRepository(db)
