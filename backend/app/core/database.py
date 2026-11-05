@@ -75,6 +75,7 @@ def _sync_schema_migration(sync_conn) -> None:
                 ("approved_at", "DATETIME"),
                 ("approved_by", "VARCHAR(64)"),
                 ("rejection_reason", "VARCHAR(255)"),
+                ("token_version", "INTEGER DEFAULT 1"),
             ]
             for col_name, col_type in new_columns:
                 if col_name not in existing_cols:

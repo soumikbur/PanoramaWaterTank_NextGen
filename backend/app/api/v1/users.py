@@ -363,6 +363,7 @@ async def reset_employee_password(
     new_pwd = payload.new_password if payload.new_password and payload.new_password.strip() else f"EmpReset@{secrets.randbelow(900000) + 100000}"
     user.hashed_password = get_password_hash(new_pwd)
     user.must_change_password = payload.force_change_next_login
+    user.token_version = (user.token_version or 1) + 1
     user.updated_at = utc_now()
 
     client_ip = request.client.host if request.client else "unknown"
@@ -412,6 +413,8 @@ async def update_account_status(
     user.is_active = (new_st == "ACTIVE")
     if new_st == "ACTIVE":
         user.failed_login_attempts = 0
+    else:
+        user.token_version = (user.token_version or 1) + 1
 
     user.updated_at = utc_now()
     await db.commit()

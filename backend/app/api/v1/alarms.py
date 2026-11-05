@@ -9,6 +9,9 @@ from app.repositories.alarm_repo import AlarmRepository
 from app.repositories.device_repo import DeviceRepository
 from app.schemas.alarm import AlarmOut, AlarmAcknowledge, AlarmStats
 from app.models.alarm import Alarm
+from app.models.user import User
+from app.models.audit import AuditEvent
+from app.api.v1.auth import get_current_user
 
 router = APIRouter(prefix="/alarms", tags=["Alarms"])
 
@@ -50,9 +53,10 @@ async def list_alarms(
 async def acknowledge_alarm(
     alarm_id: str,
     ack_data: AlarmAcknowledge,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Acknowledge an active alarm."""
+    """Acknowledge an active alarm (Authenticated Users)."""
     alarm_repo = AlarmRepository(db)
     alarm = await alarm_repo.acknowledge_alarm(
         alarm_id=alarm_id,
@@ -61,6 +65,14 @@ async def acknowledge_alarm(
     if not alarm:
         raise HTTPException(status_code=404, detail="Alarm not found or already acknowledged/resolved")
 
+    # Audit log acknowledgment
+    db.add(AuditEvent(
+        user_id=current_user.id,
+        action="ACKNOWLEDGE_ALARM",
+        target_type="ALARM",
+        target_id=alarm_id,
+        details=f"Acknowledged by {current_user.username}: {ack_data.comment or 'No comment'}"
+    ))
     await db.commit()
     return AlarmOut.model_validate(alarm)
 

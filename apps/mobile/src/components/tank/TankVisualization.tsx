@@ -90,7 +90,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
     ctx.clip();
 
     const waterH = h * (animatedFillRef.current / 100.0);
-    if (waterH > 0) {
+    if (hasData && waterH > 0) {
       const waterTopY = h - waterH;
 
       // Linear Gradient Fill
@@ -136,6 +136,33 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
       ctx.lineWidth = 2.0;
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.40)';
       ctx.stroke();
+    } else if (!hasData) {
+      // Elegant telemetry standby visualization: subtle level guides & ambient scan beam
+      ctx.save();
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = 'rgba(203, 213, 225, 0.55)';
+      ctx.lineWidth = 1;
+      for (let y = h * 0.25; y < h; y += h * 0.25) {
+        ctx.beginPath();
+        ctx.moveTo(12, y);
+        ctx.lineTo(w - 12, y);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+
+      const scanY = (Math.sin(wavePhase * 0.5) * 0.5 + 0.5) * (h - 40) + 20;
+      const scanGrad = ctx.createLinearGradient(0, scanY - 14, 0, scanY + 14);
+      scanGrad.addColorStop(0, 'rgba(14, 165, 233, 0.0)');
+      scanGrad.addColorStop(0.5, 'rgba(14, 165, 233, 0.12)');
+      scanGrad.addColorStop(1, 'rgba(14, 165, 233, 0.0)');
+      ctx.fillStyle = scanGrad;
+      ctx.fillRect(0, scanY - 14, w, 28);
+
+      ctx.fillStyle = '#64748B';
+      ctx.font = '600 11px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Awaiting Telemetry', w / 2, h / 2);
+      ctx.restore();
     }
 
     ctx.restore(); // End clipping
@@ -156,7 +183,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
     ctx.lineWidth = 2.0;
     ctx.strokeStyle = colors.tankOutline;
     ctx.stroke();
-  }, [fillPercentage, wavePhase, isOverflow]);
+  }, [fillPercentage, wavePhase, isOverflow, hasData]);
 
   const severity = !hasData
     ? 'Neutral'
@@ -337,13 +364,13 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
             <span
               style={{
                 fontFamily: typography.fontFamily,
-                fontSize: typography.dashPercentage.fontSize,
+                fontSize: hasData ? typography.dashPercentage.fontSize : '18px',
                 fontWeight: typography.dashPercentage.fontWeight,
                 color: isOverflow ? colors.critical : colors.primary,
                 lineHeight: 1.1,
               }}
             >
-              {hasData ? `${fillPercentage.toFixed(2)}%` : 'N/A'}
+              {hasData ? `${fillPercentage.toFixed(2)}%` : 'Awaiting Telemetry'}
             </span>
 
             {/* 1. Water Height Card Block */}
@@ -388,7 +415,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
                   color: colors.textPrimary,
                 }}
               >
-                {hasData && waterHeightCm != null ? `${waterHeightCm.toFixed(2)} cm` : 'N/A'}
+                {hasData && waterHeightCm != null ? `${waterHeightCm.toFixed(2)} cm` : 'Awaiting Data'}
               </span>
               <span
                 style={{
@@ -443,7 +470,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
                   color: colors.textPrimary,
                 }}
               >
-                {hasData && waterVolumeLiters != null ? `${waterVolumeLiters.toFixed(2)} L` : 'N/A'}
+                {hasData && waterVolumeLiters != null ? `${waterVolumeLiters.toFixed(2)} L` : 'Awaiting Data'}
               </span>
               <span
                 style={{

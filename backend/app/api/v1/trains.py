@@ -13,6 +13,8 @@ from app.models.telemetry import TelemetryReading
 from app.repositories.device_repo import DeviceRepository
 from app.repositories.tank_repo import TankRepository
 from app.repositories.telemetry_repo import TelemetryRepository
+from app.api.v1.auth import get_current_admin_user
+from app.models.user import User
 
 router = APIRouter(prefix="/trains", tags=["Trains"])
 
@@ -290,8 +292,12 @@ async def get_train_consist(train_number: str, db: AsyncSession = Depends(get_db
 
 
 @router.post("", status_code=201)
-async def create_train(data: TrainCreate, db: AsyncSession = Depends(get_db)):
-    """Add a new train to the fleet registry."""
+async def create_train(
+    data: TrainCreate,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Add a new train to the fleet registry (Admin Only)."""
     reg = data.region.upper()
     if reg not in REGION_CONFIG:
         raise HTTPException(status_code=400, detail=f"Invalid region. Choose from {list(REGION_CONFIG.keys())}")
@@ -317,20 +323,23 @@ async def create_train(data: TrainCreate, db: AsyncSession = Depends(get_db)):
             coach_number=coach,
             name=f"{data.name} Coach {coach}"
         )
-        # Create primary tank
-        await tank_repo.create(
-            device_id=device.id,
-            tank_index=1,
-            name=f"Coach {coach} Primary Tank",
-            capacity_liters=data.tank_capacity or 20.0
-        )
+        # device_repo.create_or_update auto-provisions tanks 1 & 2
+        primary_tank = await tank_repo.get_by_device_and_index(device.id, 1)
+        if primary_tank and data.tank_capacity:
+            primary_tank.capacity_liters = data.tank_capacity
+        await db.commit()
 
     return {"message": "Train registered successfully", "train_number": data.train_number}
 
 
 @router.put("/{train_number}")
-async def update_train(train_number: str, data: TrainUpdate, db: AsyncSession = Depends(get_db)):
-    """Update train metadata."""
+async def update_train(
+    train_number: str,
+    data: TrainUpdate,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update train metadata (Admin Only)."""
     if train_number not in TRAIN_METADATA:
         TRAIN_METADATA[train_number] = {
             "name": f"Train {train_number}",
@@ -349,8 +358,12 @@ async def update_train(train_number: str, data: TrainUpdate, db: AsyncSession = 
 
 
 @router.delete("/{train_number}")
-async def delete_train(train_number: str, db: AsyncSession = Depends(get_db)):
-    """Remove a train from the fleet registry."""
+async def delete_train(
+    train_number: str,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Remove a train from the fleet registry (Admin Only)."""
     if train_number in TRAIN_METADATA:
         del TRAIN_METADATA[train_number]
 

@@ -122,12 +122,17 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({
 
         {/* Value */}
         <span
+          title={value}
           style={{
             fontFamily: typography.fontFamily,
-            fontSize: typography.dashValue.fontSize,
+            fontSize: value.length > 12 ? '14px' : typography.dashValue.fontSize,
             fontWeight: typography.dashValue.fontWeight,
             color: valueColor,
             lineHeight: 1.1,
+            whiteSpace: 'nowrap',
+            textOverflow: 'ellipsis',
+            overflow: 'hidden',
+            maxWidth: '100%',
           }}
         >
           {value}

@@ -117,7 +117,16 @@ async def test_csv_export():
 async def test_device_connection_endpoint():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post("/api/v1/settings/test-device")
+        # Unauthenticated request should be rejected with 401
+        unauth_resp = await client.post("/api/v1/settings/test-device")
+        assert unauth_resp.status_code == 401
+
+        # Authenticated user succeeds
+        login_res = await client.post("/api/v1/auth/login", json={"username": "@admin", "password": "Admin@123"})
+        token = login_res.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        response = await client.post("/api/v1/settings/test-device", headers=headers)
         assert response.status_code == 200
         data = response.json()
         assert "target" in data

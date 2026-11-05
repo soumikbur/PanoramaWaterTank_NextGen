@@ -2,6 +2,41 @@
 
 The NextGen backend provides an OpenAPI 3.1 compliant REST API and a real-time WebSocket protocol under the `/api/v1` namespace.
 
+### 1.4 POST `/api/v1/auth/register`
+Public registration endpoint for new railway employees. Creates a profile with role `EMPLOYEE` and status `PENDING_APPROVAL`. Prevents unauthorized assignment of administrative roles.
+- **Request Body**:
+```json
+{
+  "full_name": "Debashis Mukherjee",
+  "date_of_birth": "1988-06-15",
+  "gender": "Male",
+  "email": "debashis.m@railnet.gov.in",
+  "phone": "+91-98300-88899",
+  "residential_address": "12/B Railway Colony, Howrah",
+  "employee_id": "EMP-882",
+  "designation": "Station Yard Controller",
+  "department": "Rolling Stock Operations",
+  "division_region": "Eastern Railway (Howrah)",
+  "assigned_location": "Howrah Yard Platform 1-6",
+  "reporting_manager": "Chief Yard Master",
+  "username": "debashis_m",
+  "password": "Railway#2026Security",
+  "confirm_password": "Railway#2026Security",
+  "document_name": "Railway_Service_ID.pdf"
+}
+```
+- **Response `201 Created`**:
+```json
+{
+  "message": "Employee registration submitted successfully. Your request is pending administrator review and approval.",
+  "registration_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "username": "@debashis_m",
+  "account_status": "PENDING_APPROVAL"
+}
+```
+- **Error Responses**:
+  - `400 Bad Request`: Username, email, or employee ID already exists; passwords do not match; password length < 6.
+
 ---
 
 ## 1. Authentication & Security
@@ -73,6 +108,41 @@ Allows an authenticated employee to change their password.
   - `403 Forbidden`: Returned if called by an `ADMIN` account (*Administrator passwords cannot be changed in-app. Use the secure developer recovery CLI tool.*).
   - `400 Bad Request`: Password too short (< 6 characters) or current password incorrect.
 
+### 1.4 POST `/api/v1/auth/register`
+Public registration endpoint for new railway employees. Creates a profile with role `EMPLOYEE` and status `PENDING_APPROVAL`. Prevents unauthorized assignment of administrative roles.
+- **Request Body**:
+```json
+{
+  "full_name": "Debashis Mukherjee",
+  "date_of_birth": "1988-06-15",
+  "gender": "Male",
+  "email": "debashis.m@railnet.gov.in",
+  "phone": "+91-98300-88899",
+  "residential_address": "12/B Railway Colony, Howrah",
+  "employee_id": "EMP-882",
+  "designation": "Station Yard Controller",
+  "department": "Rolling Stock Operations",
+  "division_region": "Eastern Railway (Howrah)",
+  "assigned_location": "Howrah Yard Platform 1-6",
+  "reporting_manager": "Chief Yard Master",
+  "username": "debashis_m",
+  "password": "Railway#2026Security",
+  "confirm_password": "Railway#2026Security",
+  "document_name": "Railway_Service_ID.pdf"
+}
+```
+- **Response `201 Created`**:
+```json
+{
+  "message": "Employee registration submitted successfully. Your request is pending administrator review and approval.",
+  "registration_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "username": "@debashis_m",
+  "account_status": "PENDING_APPROVAL"
+}
+```
+- **Error Responses**:
+  - `400 Bad Request`: Username, email, or employee ID already exists; passwords do not match; password length < 6.
+
 ---
 
 ### 1.4 POST /api/v1/auth/register
@@ -131,6 +201,41 @@ Retrieves granular edge engineering parameters (ADC voltages, GPS, signal streng
 }
 ```
 
+### 1.4 POST `/api/v1/auth/register`
+Public registration endpoint for new railway employees. Creates a profile with role `EMPLOYEE` and status `PENDING_APPROVAL`. Prevents unauthorized assignment of administrative roles.
+- **Request Body**:
+```json
+{
+  "full_name": "Debashis Mukherjee",
+  "date_of_birth": "1988-06-15",
+  "gender": "Male",
+  "email": "debashis.m@railnet.gov.in",
+  "phone": "+91-98300-88899",
+  "residential_address": "12/B Railway Colony, Howrah",
+  "employee_id": "EMP-882",
+  "designation": "Station Yard Controller",
+  "department": "Rolling Stock Operations",
+  "division_region": "Eastern Railway (Howrah)",
+  "assigned_location": "Howrah Yard Platform 1-6",
+  "reporting_manager": "Chief Yard Master",
+  "username": "debashis_m",
+  "password": "Railway#2026Security",
+  "confirm_password": "Railway#2026Security",
+  "document_name": "Railway_Service_ID.pdf"
+}
+```
+- **Response `201 Created`**:
+```json
+{
+  "message": "Employee registration submitted successfully. Your request is pending administrator review and approval.",
+  "registration_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "username": "@debashis_m",
+  "account_status": "PENDING_APPROVAL"
+}
+```
+- **Error Responses**:
+  - `400 Bad Request`: Username, email, or employee ID already exists; passwords do not match; password length < 6.
+
 ---
 
 ## 3. Water Tank Endpoints
@@ -175,6 +280,41 @@ Updates geometric parameters and alarm thresholds for a tank.
 }
 ```
 
+### 1.4 POST `/api/v1/auth/register`
+Public registration endpoint for new railway employees. Creates a profile with role `EMPLOYEE` and status `PENDING_APPROVAL`. Prevents unauthorized assignment of administrative roles.
+- **Request Body**:
+```json
+{
+  "full_name": "Debashis Mukherjee",
+  "date_of_birth": "1988-06-15",
+  "gender": "Male",
+  "email": "debashis.m@railnet.gov.in",
+  "phone": "+91-98300-88899",
+  "residential_address": "12/B Railway Colony, Howrah",
+  "employee_id": "EMP-882",
+  "designation": "Station Yard Controller",
+  "department": "Rolling Stock Operations",
+  "division_region": "Eastern Railway (Howrah)",
+  "assigned_location": "Howrah Yard Platform 1-6",
+  "reporting_manager": "Chief Yard Master",
+  "username": "debashis_m",
+  "password": "Railway#2026Security",
+  "confirm_password": "Railway#2026Security",
+  "document_name": "Railway_Service_ID.pdf"
+}
+```
+- **Response `201 Created`**:
+```json
+{
+  "message": "Employee registration submitted successfully. Your request is pending administrator review and approval.",
+  "registration_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "username": "@debashis_m",
+  "account_status": "PENDING_APPROVAL"
+}
+```
+- **Error Responses**:
+  - `400 Bad Request`: Username, email, or employee ID already exists; passwords do not match; password length < 6.
+
 ---
 
 ## 4. Telemetry & Historical Trends
@@ -212,6 +352,41 @@ Returns aggregated time-series data with LTTB (Largest-Triangle-Three-Buckets) d
 }
 ```
 
+### 1.4 POST `/api/v1/auth/register`
+Public registration endpoint for new railway employees. Creates a profile with role `EMPLOYEE` and status `PENDING_APPROVAL`. Prevents unauthorized assignment of administrative roles.
+- **Request Body**:
+```json
+{
+  "full_name": "Debashis Mukherjee",
+  "date_of_birth": "1988-06-15",
+  "gender": "Male",
+  "email": "debashis.m@railnet.gov.in",
+  "phone": "+91-98300-88899",
+  "residential_address": "12/B Railway Colony, Howrah",
+  "employee_id": "EMP-882",
+  "designation": "Station Yard Controller",
+  "department": "Rolling Stock Operations",
+  "division_region": "Eastern Railway (Howrah)",
+  "assigned_location": "Howrah Yard Platform 1-6",
+  "reporting_manager": "Chief Yard Master",
+  "username": "debashis_m",
+  "password": "Railway#2026Security",
+  "confirm_password": "Railway#2026Security",
+  "document_name": "Railway_Service_ID.pdf"
+}
+```
+- **Response `201 Created`**:
+```json
+{
+  "message": "Employee registration submitted successfully. Your request is pending administrator review and approval.",
+  "registration_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "username": "@debashis_m",
+  "account_status": "PENDING_APPROVAL"
+}
+```
+- **Error Responses**:
+  - `400 Bad Request`: Username, email, or employee ID already exists; passwords do not match; password length < 6.
+
 ---
 
 ## 5. Alarms & Notifications
@@ -247,6 +422,41 @@ Acknowledges an active alarm event.
 }
 ```
 
+### 1.4 POST `/api/v1/auth/register`
+Public registration endpoint for new railway employees. Creates a profile with role `EMPLOYEE` and status `PENDING_APPROVAL`. Prevents unauthorized assignment of administrative roles.
+- **Request Body**:
+```json
+{
+  "full_name": "Debashis Mukherjee",
+  "date_of_birth": "1988-06-15",
+  "gender": "Male",
+  "email": "debashis.m@railnet.gov.in",
+  "phone": "+91-98300-88899",
+  "residential_address": "12/B Railway Colony, Howrah",
+  "employee_id": "EMP-882",
+  "designation": "Station Yard Controller",
+  "department": "Rolling Stock Operations",
+  "division_region": "Eastern Railway (Howrah)",
+  "assigned_location": "Howrah Yard Platform 1-6",
+  "reporting_manager": "Chief Yard Master",
+  "username": "debashis_m",
+  "password": "Railway#2026Security",
+  "confirm_password": "Railway#2026Security",
+  "document_name": "Railway_Service_ID.pdf"
+}
+```
+- **Response `201 Created`**:
+```json
+{
+  "message": "Employee registration submitted successfully. Your request is pending administrator review and approval.",
+  "registration_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "username": "@debashis_m",
+  "account_status": "PENDING_APPROVAL"
+}
+```
+- **Error Responses**:
+  - `400 Bad Request`: Username, email, or employee ID already exists; passwords do not match; password length < 6.
+
 ---
 
 ## 6. CSV Data Export
@@ -264,6 +474,41 @@ Streams telemetry readings formatted as an RFC 4180 CSV document.
 Timestamp,Train_Number,Coach_Number,Device_UID,Level_Percent,Volume_Liters,Height_cm,Battery_V1,Status
 2026-10-28T12:00:00Z,12002,B4,0026004D4B42501120353332,76.5,15.3,38.3,12.65,NORMAL
 ```
+
+### 1.4 POST `/api/v1/auth/register`
+Public registration endpoint for new railway employees. Creates a profile with role `EMPLOYEE` and status `PENDING_APPROVAL`. Prevents unauthorized assignment of administrative roles.
+- **Request Body**:
+```json
+{
+  "full_name": "Debashis Mukherjee",
+  "date_of_birth": "1988-06-15",
+  "gender": "Male",
+  "email": "debashis.m@railnet.gov.in",
+  "phone": "+91-98300-88899",
+  "residential_address": "12/B Railway Colony, Howrah",
+  "employee_id": "EMP-882",
+  "designation": "Station Yard Controller",
+  "department": "Rolling Stock Operations",
+  "division_region": "Eastern Railway (Howrah)",
+  "assigned_location": "Howrah Yard Platform 1-6",
+  "reporting_manager": "Chief Yard Master",
+  "username": "debashis_m",
+  "password": "Railway#2026Security",
+  "confirm_password": "Railway#2026Security",
+  "document_name": "Railway_Service_ID.pdf"
+}
+```
+- **Response `201 Created`**:
+```json
+{
+  "message": "Employee registration submitted successfully. Your request is pending administrator review and approval.",
+  "registration_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "username": "@debashis_m",
+  "account_status": "PENDING_APPROVAL"
+}
+```
+- **Error Responses**:
+  - `400 Bad Request`: Username, email, or employee ID already exists; passwords do not match; password length < 6.
 
 ---
 
@@ -313,6 +558,41 @@ Clients connect to receive sub-second push notifications without polling.
   }
 }
 ```
+
+### 1.4 POST `/api/v1/auth/register`
+Public registration endpoint for new railway employees. Creates a profile with role `EMPLOYEE` and status `PENDING_APPROVAL`. Prevents unauthorized assignment of administrative roles.
+- **Request Body**:
+```json
+{
+  "full_name": "Debashis Mukherjee",
+  "date_of_birth": "1988-06-15",
+  "gender": "Male",
+  "email": "debashis.m@railnet.gov.in",
+  "phone": "+91-98300-88899",
+  "residential_address": "12/B Railway Colony, Howrah",
+  "employee_id": "EMP-882",
+  "designation": "Station Yard Controller",
+  "department": "Rolling Stock Operations",
+  "division_region": "Eastern Railway (Howrah)",
+  "assigned_location": "Howrah Yard Platform 1-6",
+  "reporting_manager": "Chief Yard Master",
+  "username": "debashis_m",
+  "password": "Railway#2026Security",
+  "confirm_password": "Railway#2026Security",
+  "document_name": "Railway_Service_ID.pdf"
+}
+```
+- **Response `201 Created`**:
+```json
+{
+  "message": "Employee registration submitted successfully. Your request is pending administrator review and approval.",
+  "registration_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "username": "@debashis_m",
+  "account_status": "PENDING_APPROVAL"
+}
+```
+- **Error Responses**:
+  - `400 Bad Request`: Username, email, or employee ID already exists; passwords do not match; password length < 6.
 
 ---
 
@@ -387,6 +667,41 @@ Permanently deletes an employee.
 
 ### 8.8 GET `/api/v1/users/{id}/activity`
 Returns the recent security and authentication audit history for the specified user.
+
+### 1.4 POST `/api/v1/auth/register`
+Public registration endpoint for new railway employees. Creates a profile with role `EMPLOYEE` and status `PENDING_APPROVAL`. Prevents unauthorized assignment of administrative roles.
+- **Request Body**:
+```json
+{
+  "full_name": "Debashis Mukherjee",
+  "date_of_birth": "1988-06-15",
+  "gender": "Male",
+  "email": "debashis.m@railnet.gov.in",
+  "phone": "+91-98300-88899",
+  "residential_address": "12/B Railway Colony, Howrah",
+  "employee_id": "EMP-882",
+  "designation": "Station Yard Controller",
+  "department": "Rolling Stock Operations",
+  "division_region": "Eastern Railway (Howrah)",
+  "assigned_location": "Howrah Yard Platform 1-6",
+  "reporting_manager": "Chief Yard Master",
+  "username": "debashis_m",
+  "password": "Railway#2026Security",
+  "confirm_password": "Railway#2026Security",
+  "document_name": "Railway_Service_ID.pdf"
+}
+```
+- **Response `201 Created`**:
+```json
+{
+  "message": "Employee registration submitted successfully. Your request is pending administrator review and approval.",
+  "registration_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "username": "@debashis_m",
+  "account_status": "PENDING_APPROVAL"
+}
+```
+- **Error Responses**:
+  - `400 Bad Request`: Username, email, or employee ID already exists; passwords do not match; password length < 6.
 
 ---
 

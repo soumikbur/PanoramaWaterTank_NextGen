@@ -46,6 +46,7 @@ export const Header: React.FC = () => {
     liveTank,
     devices,
     regions,
+    mqttBrokerStatus,
     setSelectedTrainNumber,
     setSelectedTankId,
     setSelectedDeviceId,
@@ -1043,7 +1044,7 @@ export const Header: React.FC = () => {
             borderRadius: '16px',
             padding: '3px 10px',
           }}
-          title={isConnected ? 'MQTT Broker TLS Connected' : 'Broker Disconnected'}
+          title={`SCADA Link: ${connectionStatus}\nMQTT Broker: ${mqttBrokerStatus}\nTelemetry Stream: ${liveTank?.hasTelemetry !== false && liveTank?.levelPercent != null ? 'Active' : 'Awaiting Telemetry'}`}
         >
           <div
             style={{

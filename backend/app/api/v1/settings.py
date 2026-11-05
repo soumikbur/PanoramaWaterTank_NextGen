@@ -13,7 +13,7 @@ from app.repositories.tank_repo import TankRepository
 from app.repositories.device_repo import DeviceRepository
 from app.schemas.settings import SettingItem, SettingUpdate
 from app.mqtt.client import mqtt_service
-from app.api.v1.auth import get_current_admin_user
+from app.api.v1.auth import get_current_admin_user, get_current_user
 from app.models.user import User
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
@@ -295,8 +295,8 @@ async def factory_reset_settings(
 
 
 @router.post("/test-mqtt")
-async def test_mqtt_connection():
-    """Test the MQTT broker connectivity status."""
+async def test_mqtt_connection(current_user: User = Depends(get_current_user)):
+    """Test the MQTT broker connectivity status (Authenticated Users)."""
     is_online = mqtt_service.is_connected
     host = mqtt_service.client._host if (mqtt_service.client and hasattr(mqtt_service.client, "_host")) else "broker.hivemq.com"
     return {
@@ -310,8 +310,12 @@ async def test_mqtt_connection():
 
 
 @router.post("/test-device")
-async def test_device_connection(payload: Optional[Dict[str, Any]] = None, db: AsyncSession = Depends(get_db)):
-    """Test connection to Water Monitoring Device REST endpoint."""
+async def test_device_connection(
+    payload: Optional[Dict[str, Any]] = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Test connection to Water Monitoring Device REST endpoint (Authenticated Users)."""
     repo = SettingsRepository(db)
     host_setting = await repo.get("device.host")
     port_setting = await repo.get("device.port")
@@ -347,8 +351,13 @@ async def test_device_connection(payload: Optional[Dict[str, Any]] = None, db: A
 
 
 @router.put("/{key}")
-async def update_setting(key: str, update: SettingUpdate, db: AsyncSession = Depends(get_db)):
-    """Update a specific configuration setting."""
+async def update_setting(
+    key: str,
+    update: SettingUpdate,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update a specific configuration setting (Admin Only)."""
     repo = SettingsRepository(db)
     await repo.set(key, update.value)
     await db.commit()

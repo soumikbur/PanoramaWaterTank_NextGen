@@ -14,6 +14,8 @@ from app.repositories.alarm_repo import AlarmRepository
 from app.schemas.tank import TankLiveStatus, TankUpdate, TankOut
 from app.services.calculator import VolumeCalculator
 from app.services.alarm_service import AlarmService
+from app.api.v1.auth import get_current_admin_user
+from app.models.user import User
 
 router = APIRouter(prefix="/tanks", tags=["Tanks"])
 
@@ -137,16 +139,33 @@ async def get_live_tank_status(db: AsyncSession = Depends(get_db)):
 async def update_tank_geometry(
     tank_id: str,
     update_data: TankUpdate,
+    admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Update tank physical dimensions and alarm thresholds."""
+    """Update tank physical dimensions and alarm thresholds (Admin Only)."""
+    if update_data.capacityLiters is not None and update_data.capacityLiters <= 0:
+        raise HTTPException(status_code=400, detail="Tank capacity must be a positive number.")
+    if update_data.heightCm is not None and update_data.heightCm <= 0:
+        raise HTTPException(status_code=400, detail="Tank height must be a positive number.")
+    if update_data.areaM2 is not None and update_data.areaM2 <= 0:
+        raise HTTPException(status_code=400, detail="Tank area must be a positive number.")
+
     tank_repo = TankRepository(db)
     tank = await tank_repo.get_by_id(tank_id)
     if not tank:
         raise HTTPException(status_code=404, detail="Tank not found")
 
+    crit = update_data.criticalThresholdPercent if update_data.criticalThresholdPercent is not None else tank.critical_threshold_percent
+    warn = update_data.warningThresholdPercent if update_data.warningThresholdPercent is not None else tank.warning_threshold_percent
+    over = update_data.overflowThresholdPercent if update_data.overflowThresholdPercent is not None else tank.overflow_threshold_percent
+
+    if crit >= warn:
+        raise HTTPException(status_code=400, detail="Critical threshold must be strictly lower than warning threshold.")
+    if warn >= over:
+        raise HTTPException(status_code=400, detail="Warning threshold must be strictly lower than overflow threshold.")
+
     if update_data.name is not None:
-        tank.name = update_data.name
+        tank.name = update_data.name.strip()
     if update_data.capacityLiters is not None:
         tank.capacity_liters = update_data.capacityLiters
     if update_data.heightCm is not None:

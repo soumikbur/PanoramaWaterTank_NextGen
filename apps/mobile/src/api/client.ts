@@ -113,6 +113,18 @@ export class ApiClient {
   }
 
   static logout(): void {
+    const token = localStorage.getItem('panorama_token');
+    if (token) {
+      try {
+        fetch(`${API_BASE}/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }).catch(() => {});
+      } catch {}
+    }
     localStorage.removeItem('panorama_token');
   }
 
@@ -576,6 +588,18 @@ export class ApiClient {
       method: 'POST',
       body: JSON.stringify({ comment }),
     });
+  }
+
+  // System Health
+  static async fetchHealth(): Promise<{
+    status: string;
+    app: string;
+    version: string;
+    database: string;
+    mqttBroker: string;
+    activeWebSockets: number;
+  }> {
+    return this.request('/health');
   }
 
   // Settings

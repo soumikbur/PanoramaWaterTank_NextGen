@@ -40,6 +40,7 @@ interface AppContextType {
   activeAlarms: AlarmItem[];
   alarmStats: AlarmStats;
   connectionStatus: 'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED';
+  mqttBrokerStatus: 'CONNECTED' | 'DISCONNECTED' | 'UNKNOWN';
   currentTime: string;
   currentDate: string;
   currentUser: UserProfile | null;
@@ -88,6 +89,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [activeAlarms, setActiveAlarms] = useState<AlarmItem[]>([]);
   const [alarmStats, setAlarmStats] = useState<AlarmStats>(defaultStats);
   const [connectionStatus, setConnectionStatus] = useState<'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED'>('DISCONNECTED');
+  const [mqttBrokerStatus, setMqttBrokerStatus] = useState<'CONNECTED' | 'DISCONNECTED' | 'UNKNOWN'>('UNKNOWN');
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -137,72 +139,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setIsAuthenticated(false);
         setCurrentUser(null);
         setActiveScreen('login');
-        setAuthLoading(false);
-        return;
-      }
-
-      if (token.startsWith('token_@admin') || token.startsWith('token_admin') || token.startsWith('demo_token_admin')) {
-        setCurrentUser({
-          id: 'usr-admin-01',
-          username: '@admin',
-          full_name: 'System Administrator',
-          email: 'admin@panorama.railways.gov',
-          phone: '+91-33-2641-0001',
-          employee_id: 'EMP-001',
-          designation: 'Chief SCADA Administrator',
-          department: 'Signalling & Telecommunications',
-          division_region: 'Eastern Railway HQ',
-          role: 'ADMIN',
-          account_status: 'ACTIVE',
-          is_active: true,
-          must_change_password: false,
-        });
-        setIsAuthenticated(true);
-        setActiveScreen('dashboard');
-        setAuthLoading(false);
-        return;
-      }
-
-      if (token.startsWith('demo_token_operator') || token.startsWith('token_operator')) {
-        setCurrentUser({
-          id: 'usr-op-02',
-          username: 'operator',
-          full_name: 'Railway Yard Operator',
-          email: 'operator@panorama.railways.gov',
-          phone: '+91-33-2641-0002',
-          employee_id: 'EMP-002',
-          designation: 'Lead Yard Controller',
-          department: 'Rolling Stock Operations',
-          division_region: 'Howrah Division (HWH)',
-          role: 'EMPLOYEE',
-          account_status: 'ACTIVE',
-          is_active: true,
-          must_change_password: false,
-        });
-        setIsAuthenticated(true);
-        setActiveScreen('dashboard');
-        setAuthLoading(false);
-        return;
-      }
-
-      if (token.startsWith('token_@employee') || token.startsWith('token_employee')) {
-        setCurrentUser({
-          id: 'usr-emp-02',
-          username: '@employee',
-          full_name: 'Railway Yard Operator',
-          email: 'employee@panorama.railways.gov',
-          phone: '+91-33-2641-0002',
-          employee_id: 'EMP-002',
-          designation: 'Lead Yard Controller',
-          department: 'Rolling Stock Operations',
-          division_region: 'Howrah Division (HWH)',
-          role: 'EMPLOYEE',
-          account_status: 'ACTIVE',
-          is_active: true,
-          must_change_password: false,
-        });
-        setIsAuthenticated(true);
-        setActiveScreen('dashboard');
         setAuthLoading(false);
         return;
       }
@@ -263,13 +199,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Fetch initial REST data
   const refreshData = async () => {
     try {
-      const [tank, allTanks, devList, alarms, stats, regs] = await Promise.all([
+      const [tank, allTanks, devList, alarms, stats, regs, health] = await Promise.all([
         ApiClient.fetchLiveTank().catch(() => null),
         ApiClient.fetchTanks().catch(() => []),
         ApiClient.fetchDevices().catch(() => []),
         ApiClient.fetchAlarms('ACTIVE').catch(() => []),
         ApiClient.fetchAlarmStats().catch(() => defaultStats),
         ApiClient.fetchRegionsSummary().catch(() => []),
+        ApiClient.fetchHealth().catch(() => null),
       ]);
 
       if (tank) setLiveTank(tank);
@@ -278,6 +215,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setActiveAlarms(alarms);
       setAlarmStats(stats);
       if (Array.isArray(regs) && regs.length > 0) setRegions(regs);
+      if (health?.mqttBroker) {
+        setMqttBrokerStatus(health.mqttBroker === 'CONNECTED' ? 'CONNECTED' : 'DISCONNECTED');
+      }
     } catch (e) {
       console.warn('[AppContext] Error refreshing data:', e);
     }
@@ -296,18 +236,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
 
     const unsubTelemetry = wsService.addEventListener('TELEMETRY_UPDATE', (data: any) => {
+      setMqttBrokerStatus('CONNECTED');
       setLiveTank((prev) => {
-        if (!prev) return prev;
+        const base = prev || {
+          tankId: data.tankId || 'primary-tank',
+          deviceId: data.deviceId || '',
+          deviceUid: data.deviceUid || 'DEV-WLI-01',
+          trainNumber: data.trainNumber || '12002',
+          coachNumber: data.coachNumber || 'C1',
+          tankName: data.tankName || 'Primary Storage Tank',
+          capacityLiters: 20.0,
+          maxHeightCm: 50.0,
+          crossSectionalAreaM2: 0.04,
+          rank: 'MODERATE' as const,
+          alarmStatus: 'NORMAL' as const,
+          isOnline: true,
+          levelPercent: null,
+          rawLevelPercent: null,
+          volumeLiters: null,
+          heightCm: null,
+          batteryVoltage: null,
+          temperature: null,
+          latitude: null,
+          longitude: null,
+          lastUpdate: null,
+        };
         return {
-          ...prev,
-          levelPercent: data.primaryLevel ?? prev.levelPercent,
-          rawLevelPercent: data.rawLevel ?? prev.rawLevelPercent,
-          volumeLiters: data.primaryVolume ?? prev.volumeLiters,
-          heightCm: data.primaryHeight ?? prev.heightCm,
-          rank: data.primaryRank ?? prev.rank,
-          alarmStatus: data.status ?? prev.alarmStatus,
-          batteryVoltage: data.batteryVoltage ?? prev.batteryVoltage,
+          ...base,
+          levelPercent: data.primaryLevel ?? base.levelPercent,
+          rawLevelPercent: data.rawLevel ?? base.rawLevelPercent,
+          volumeLiters: data.primaryVolume ?? base.volumeLiters,
+          heightCm: data.primaryHeight ?? base.heightCm,
+          rank: data.primaryRank ?? base.rank,
+          alarmStatus: data.status ?? base.alarmStatus,
+          batteryVoltage: data.batteryVoltage ?? base.batteryVoltage,
+          temperature: data.temperature ?? base.temperature,
+          latitude: data.latitude ?? base.latitude,
+          longitude: data.longitude ?? base.longitude,
           isOnline: data.isOnline ?? true,
+          hasTelemetry: true,
+          isStale: false,
           lastUpdate: data.timestamp ?? new Date().toISOString(),
         };
       });
@@ -325,7 +293,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               rank: data.primaryRank ?? t.rank,
               alarmStatus: data.status ?? t.alarmStatus,
               batteryVoltage: data.batteryVoltage ?? t.batteryVoltage,
+              temperature: data.temperature ?? t.temperature,
               isOnline: data.isOnline ?? true,
+              hasTelemetry: true,
+              isStale: false,
               lastUpdate: data.timestamp ?? new Date().toISOString(),
             };
           }
@@ -374,41 +345,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const login = async (u: string, p: string) => {
-    try {
-      const res = await ApiClient.login(u, p);
-      setCurrentUser(res.user);
-      setIsAuthenticated(true);
-      setActiveScreen('dashboard');
-      await refreshData();
-    } catch (err: any) {
-      const cleanUser = u.trim();
-      const isAdminCred = (cleanUser === '@admin' || cleanUser === 'admin') && p === 'Admin@123';
-      const isEmpCred = (cleanUser === '@employee' || cleanUser === 'employee') && p === 'Employee@123';
-      if (isAdminCred || isEmpCred) {
-        const isAdmin = isAdminCred;
-        const fallbackUser: UserProfile = {
-          id: isAdmin ? 'usr-admin-01' : 'usr-emp-02',
-          username: isAdmin ? '@admin' : '@employee',
-          full_name: isAdmin ? 'System Administrator' : 'Railway Yard Operator',
-          email: isAdmin ? 'admin@panorama.railways.gov' : 'employee@panorama.railways.gov',
-          phone: isAdmin ? '+91-33-2641-0001' : '+91-33-2641-0002',
-          employee_id: isAdmin ? 'EMP-001' : 'EMP-002',
-          designation: isAdmin ? 'Chief SCADA Administrator' : 'Lead Yard Controller',
-          department: isAdmin ? 'Signalling & Telecommunications' : 'Rolling Stock Operations',
-          division_region: isAdmin ? 'Eastern Railway HQ' : 'Howrah Division (HWH)',
-          role: isAdmin ? 'ADMIN' : 'EMPLOYEE',
-          account_status: 'ACTIVE',
-          is_active: true,
-          must_change_password: false,
-        };
-        localStorage.setItem('panorama_token', `token_${fallbackUser.username}`);
-        setCurrentUser(fallbackUser);
-        setIsAuthenticated(true);
-        setActiveScreen('dashboard');
-        return;
-      }
-      throw err;
-    }
+    const res = await ApiClient.login(u, p);
+    setCurrentUser(res.user);
+    setIsAuthenticated(true);
+    setActiveScreen('dashboard');
+    await refreshData();
   };
 
   const logout = () => {
@@ -437,6 +378,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         activeAlarms,
         alarmStats,
         connectionStatus,
+        mqttBrokerStatus,
         currentTime,
         currentDate,
         currentUser,

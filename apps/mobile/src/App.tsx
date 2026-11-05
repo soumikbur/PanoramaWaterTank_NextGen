@@ -39,7 +39,7 @@ const MainContent: React.FC = () => {
         className='page-transition'
         style={{
           flex: 1,
-          padding: '16px',
+          padding: '16px 16px 36px 16px',
           overflowY: 'auto',
           backgroundColor: colors.background,
           boxSizing: 'border-box',

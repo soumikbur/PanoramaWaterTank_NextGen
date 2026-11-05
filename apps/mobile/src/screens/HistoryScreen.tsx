@@ -199,7 +199,7 @@ export const HistoryScreen: React.FC = () => {
           >
             <div style={{ width: '6px', height: '6px', borderRadius: '3px', backgroundColor: '#10B981' }} />
             <span style={{ fontSize: '12px', fontWeight: 600, color: '#166534', fontFamily: typography.fontFamily }}>
-              Ubidots Cloud (90s sample interval)
+              MQTT / SCADA Telemetry Stream
             </span>
           </div>
 

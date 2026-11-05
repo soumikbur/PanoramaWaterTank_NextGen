@@ -26,6 +26,7 @@ export const Sidebar: React.FC = () => {
     activeScreen,
     setActiveScreen,
     connectionStatus,
+    mqttBrokerStatus,
     sidebarCollapsed,
     toggleSidebar,
     devices,
@@ -379,7 +380,9 @@ export const Sidebar: React.FC = () => {
               }}
             />
             <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 500 }}>
-              {isConnected ? 'MQTT Online' : 'MQTT Offline'}
+              {isConnected
+                ? (mqttBrokerStatus === 'CONNECTED' ? 'SCADA & MQTT Online' : 'SCADA Online')
+                : 'SCADA Offline'}
             </span>
           </div>
         )}

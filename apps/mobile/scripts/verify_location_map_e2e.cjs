@@ -120,6 +120,19 @@ function createServer() {
       return;
     }
 
+    if (pathname === '/api/v1/auth/me') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        id: 'usr-admin-01',
+        username: '@admin',
+        full_name: 'System Administrator',
+        role: 'ADMIN',
+        is_active: true,
+        must_change_password: false,
+      }));
+      return;
+    }
+
     if (pathname === '/api/v1/location/corridor' || pathname === '/api/v1/corridor/stations') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(MOCK_STATIONS));

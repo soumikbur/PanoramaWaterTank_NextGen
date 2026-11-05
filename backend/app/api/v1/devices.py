@@ -7,6 +7,8 @@ from app.core.database import get_db
 from app.repositories.device_repo import DeviceRepository
 from app.repositories.telemetry_repo import TelemetryRepository
 from app.schemas.device import DeviceOut, DeviceDiagnostics, DeviceCreate, DeviceUpdate
+from app.api.v1.auth import get_current_admin_user
+from app.models.user import User
 
 router = APIRouter(prefix="/devices", tags=["Devices"])
 
@@ -79,9 +81,10 @@ async def get_device_diagnostics(
 @router.post("", response_model=DeviceOut, status_code=201)
 async def create_device(
     payload: DeviceCreate,
+    admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Register a new edge monitoring device and auto-provision associated tanks."""
+    """Register a new edge monitoring device and auto-provision associated tanks (Admin Only)."""
     repo = DeviceRepository(db)
     existing = await repo.get_by_uid(payload.uid)
     if existing:
@@ -123,9 +126,10 @@ async def create_device(
 async def update_device(
     device_id: str,
     payload: DeviceUpdate,
+    admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Update device metadata, train/coach assignment, and firmware version."""
+    """Update device metadata, train/coach assignment, and firmware version (Admin Only)."""
     repo = DeviceRepository(db)
     device = await repo.get_by_id(device_id)
     if not device:
@@ -167,9 +171,10 @@ async def update_device(
 @router.delete("/{device_id}", status_code=200)
 async def delete_device(
     device_id: str,
+    admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Delete a device and its associated tanks."""
+    """Delete a device and its associated tanks (Admin Only)."""
     repo = DeviceRepository(db)
     success = await repo.delete(device_id)
     if not success:

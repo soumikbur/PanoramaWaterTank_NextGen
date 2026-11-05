@@ -10,6 +10,8 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import verify_password, create_access_token, get_password_hash, decode_access_token
+from app.core.rate_limit import login_limiter, registration_limiter
+from app.core.upload_validator import validate_document_upload
 from app.models.user import User
 from app.models.audit import AuditEvent
 from app.models.base import utc_now
@@ -45,6 +47,14 @@ async def get_current_user(
     if user.account_status in ("PENDING_APPROVAL", "REJECTED"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account registration is pending administrator approval or was rejected")
 
+    # Verify session revocation / token version
+    token_v = payload.get("v")
+    if token_v is not None and token_v != (user.token_version or 1):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has been revoked or expired. Please log in again."
+        )
+
     # Update last activity timestamp
     user.last_activity_at = utc_now()
     await db.commit()
@@ -66,8 +76,10 @@ async def get_current_admin_user(
 @router.post("/login", response_model=Token)
 async def login(credentials: UserLogin, request: Request, db: AsyncSession = Depends(get_db)):
     """Authenticate user and return JWT access token with audit recording."""
-    raw_user = credentials.username.strip()
     client_ip = request.client.host if request.client else "unknown"
+    login_limiter.check(client_ip)
+
+    raw_user = credentials.username.strip()
 
     # Match exact username or alias (@admin / admin, @employee / employee / operator)
     stmt = select(User).where(
@@ -77,47 +89,6 @@ async def login(credentials: UserLogin, request: Request, db: AsyncSession = Dep
     )
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
-
-    # Automatic initial fallback provisioning for fresh installs
-    if not user and raw_user in ("@admin", "admin") and credentials.password == "Admin@123":
-        user = User(
-            username="@admin",
-            hashed_password=get_password_hash("Admin@123"),
-            full_name="System Administrator",
-            email="admin@panorama.railways.gov",
-            phone="+91-33-2641-0001",
-            employee_id="EMP-001",
-            designation="Chief SCADA Administrator",
-            department="Signalling & Telecommunications",
-            division_region="Eastern Railway HQ",
-            role="ADMIN",
-            account_status="ACTIVE",
-            must_change_password=False,
-            is_active=True,
-        )
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
-
-    if not user and raw_user in ("@employee", "employee", "operator") and credentials.password in ("Employee@123", "operator123"):
-        user = User(
-            username="@employee",
-            hashed_password=get_password_hash("Employee@123"),
-            full_name="Railway Yard Operator",
-            email="employee@panorama.railways.gov",
-            phone="+91-33-2641-0002",
-            employee_id="EMP-002",
-            designation="Lead Yard Controller",
-            department="Rolling Stock Operations",
-            division_region="Howrah Division (HWH)",
-            role="EMPLOYEE",
-            account_status="ACTIVE",
-            must_change_password=False,
-            is_active=True,
-        )
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
 
     if not user or not verify_password(credentials.password, user.hashed_password):
         if user:
@@ -186,7 +157,7 @@ async def login(credentials: UserLogin, request: Request, db: AsyncSession = Dep
 
     expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     token = create_access_token(
-        data={"sub": user.username, "role": user.role, "id": user.id},
+        data={"sub": user.username, "role": user.role, "id": user.id, "v": user.token_version or 1},
         expires_delta=expires_delta
     )
 
@@ -203,6 +174,17 @@ async def login(credentials: UserLogin, request: Request, db: AsyncSession = Dep
 async def get_me(current_user: User = Depends(get_current_user)):
     """Return currently authenticated user profile."""
     return UserOut.model_validate(current_user)
+
+
+@router.post("/logout")
+async def logout(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Revoke current user session across all devices."""
+    current_user.token_version = (current_user.token_version or 1) + 1
+    await db.commit()
+    return {"status": "SUCCESS", "message": "Successfully logged out. Session revoked."}
 
 
 @router.post("/change-password")
@@ -224,6 +206,7 @@ async def change_password(
 
     current_user.hashed_password = get_password_hash(payload.new_password)
     current_user.must_change_password = False
+    current_user.token_version = (current_user.token_version or 1) + 1
     current_user.updated_at = utc_now()
 
     client_ip = request.client.host if request.client else "unknown"
@@ -247,6 +230,10 @@ async def register_employee(
     db: AsyncSession = Depends(get_db)
 ):
     """Register a new railway employee. Account remains PENDING_APPROVAL until approved by an administrator."""
+    client_ip = request.client.host if request.client else "unknown"
+    registration_limiter.check(client_ip)
+    validate_document_upload(registration.documentName, registration.documentData)
+
     raw_username = registration.username.strip()
     clean_username = raw_username if raw_username.startswith("@") else f"@{raw_username}"
 

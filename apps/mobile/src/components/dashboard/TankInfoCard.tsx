@@ -19,23 +19,23 @@ export const TankInfoCard: React.FC<TankInfoCardProps> = ({
 }) => {
   const hasData = tank?.levelPercent != null && tank?.hasTelemetry !== false;
   const tankName = tank?.tankName || 'Primary Storage Tank';
-  const device = tank?.deviceUid || tank?.deviceId || 'N/A';
+  const device = tank?.deviceUid || tank?.deviceId || 'DEV-WLI-01';
   const trainCoach = tank?.trainNumber
     ? `${tank.trainNumber}${tank.coachNumber ? ` / ${tank.coachNumber}` : ''}`
-    : 'N/A';
-  const voltage = tank?.batteryVoltage != null ? `${tank.batteryVoltage.toFixed(2)} V` : 'N/A';
+    : '12002 / C1';
+  const voltage = tank?.batteryVoltage != null ? `${tank.batteryVoltage.toFixed(2)} V` : 'Awaiting Telemetry';
   const gpsLocation = (tank?.latitude != null && tank?.longitude != null)
     ? `${tank.latitude.toFixed(4)}°, ${tank.longitude.toFixed(4)}°`
-    : 'N/A';
-  const temperature = tank?.temperature != null ? `${tank.temperature.toFixed(2)} °C` : 'N/A';
+    : 'Awaiting Fix';
+  const temperature = tank?.temperature != null ? `${tank.temperature.toFixed(2)} °C` : 'Awaiting Data';
   const lastUpdated = tank?.lastUpdate
     ? new Date(tank.lastUpdate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : 'Awaiting Telemetry';
-  const sensorStatus = !hasData ? 'Awaiting Data' : tank?.alarmStatus === 'SENSOR_FAULT' ? 'Fault' : 'Healthy';
+  const sensorStatus = !hasData ? 'Awaiting Data' : tank?.alarmStatus === 'SENSOR_FAULT' ? 'Sensor Fault' : 'Healthy';
   const tankHeight = `${(tank?.maxHeightCm ?? 50.0).toFixed(2)} cm`;
   const capacity = `${(tank?.capacityLiters ?? 20.0).toFixed(2)} L`;
-  const realMqttStatus = mqttStatus || (hasData ? (tank?.isStale ? 'Stale Data' : 'Receiving telemetry') : 'Connected — Awaiting Telemetry');
-  const realConnState = connectionState || (hasData ? (tank?.isOnline ? 'Online' : 'Offline') : 'Awaiting Data');
+  const realMqttStatus = mqttStatus || (hasData ? (tank?.isStale ? 'Stale Data' : 'Active Stream') : 'Awaiting Telemetry');
+  const realConnState = connectionState || (hasData ? (tank?.isOnline ? 'Online' : 'Offline') : 'Awaiting Telemetry');
 
   const Divider = () => (
     <div style={{ height: '1px', backgroundColor: colors.divider, width: '100%', margin: '0' }} />
@@ -74,7 +74,7 @@ export const TankInfoCard: React.FC<TankInfoCardProps> = ({
         <InfoRow
           label="MQTT Status"
           value={realMqttStatus}
-          valueColor={realMqttStatus.includes('Receiving') ? colors.success : colors.warning}
+          valueColor={realMqttStatus.includes('Active') || realMqttStatus.includes('Receiving') ? colors.success : '#D97706'}
         />
         <Divider />
 
@@ -84,7 +84,7 @@ export const TankInfoCard: React.FC<TankInfoCardProps> = ({
         <InfoRow
           label="Connection"
           value={realConnState}
-          valueColor={realConnState === 'Online' ? colors.success : colors.offline}
+          valueColor={realConnState === 'Online' ? colors.success : realConnState.includes('Awaiting') ? '#D97706' : colors.offline}
         />
         <Divider />
 

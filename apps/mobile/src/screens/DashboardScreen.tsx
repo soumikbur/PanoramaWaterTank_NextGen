@@ -26,12 +26,12 @@ export const DashboardScreen: React.FC = () => {
         <LevelTrendCard tankId={liveTank?.tankId} />
         <TankInfoCard
           tank={liveTank}
-          connectionState={connectionStatus === 'CONNECTED' ? 'Connected' : 'Offline'}
+          connectionState={liveTank?.isOnline ? 'Online' : (liveTank?.hasTelemetry !== false && liveTank?.levelPercent != null ? 'Offline' : 'Awaiting Telemetry')}
         />
       </div>
 
       {/* SECTION 2: Water Level Indicator (Rank) Bar */}
-      <RankIndicator fillPercentage={liveTank?.levelPercent ?? 0} />
+      <RankIndicator fillPercentage={liveTank?.hasTelemetry !== false ? liveTank?.levelPercent : null} />
 
       {/* SECTION 3: Bottom 5-Card Summary Grid */}
       <SummaryGrid tank={liveTank} />

@@ -84,6 +84,10 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
+    def model_post_init(self, __context):
+        if self.ENV.lower() == "production":
+            self.DEBUG = False
+
 
 settings = Settings()
 

@@ -43,6 +43,30 @@ export const LevelTrendCard: React.FC<LevelTrendCardProps> = ({ tankId, height, 
     };
   }, [tankId, liveTank?.tankId, rangeIndex, dataPoints]);
 
+  // Dynamically append new live telemetry readings as they arrive
+  useEffect(() => {
+    if (liveTank?.levelPercent != null && liveTank?.hasTelemetry !== false) {
+      const nowMs = liveTank.lastUpdate ? new Date(liveTank.lastUpdate).getTime() : Date.now();
+      setHistoryPoints((prev) => {
+        if (prev && prev.length > 0) {
+          const lastPt = prev[prev.length - 1];
+          const lastTime = new Date(lastPt.timestamp).getTime();
+          if (Math.abs(nowMs - lastTime) < 2000) return prev;
+        }
+        return [
+          ...(prev || []),
+          {
+            timestamp: liveTank.lastUpdate || new Date().toISOString(),
+            levelPercent: liveTank.levelPercent,
+            volumeLiters: liveTank.volumeLiters,
+            heightCm: liveTank.heightCm,
+          },
+        ];
+      });
+    }
+  }, [liveTank?.levelPercent, liveTank?.lastUpdate, liveTank?.hasTelemetry]);
+
+
   const currentDurationMs = rangeHours[rangeIndex] * 3600 * 1000;
   const now = Date.now();
   const plotStartMs = now - currentDurationMs;
@@ -211,14 +235,53 @@ export const LevelTrendCard: React.FC<LevelTrendCardProps> = ({ tankId, height, 
                   position: 'absolute',
                   inset: 0,
                   display: 'flex',
+                  flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: colors.textSecondary,
-                  fontFamily: typography.fontFamily,
-                  fontSize: '13px',
+                  backgroundColor: 'rgba(248, 250, 252, 0.88)',
+                  backdropFilter: 'blur(2px)',
+                  borderRadius: '6px',
+                  padding: '16px',
+                  textAlign: 'center',
+                  gap: '6px',
                 }}
               >
-                No water level history available
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    backgroundColor: '#E0F2FE',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0284C7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                  </svg>
+                </div>
+                <span
+                  style={{
+                    fontFamily: typography.fontFamily,
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: colors.textPrimary,
+                  }}
+                >
+                  Awaiting Historical Telemetry
+                </span>
+                <span
+                  style={{
+                    fontFamily: typography.fontFamily,
+                    fontSize: '11px',
+                    color: colors.textSecondary,
+                    maxWidth: '220px',
+                    lineHeight: 1.3,
+                  }}
+                >
+                  Live graph will populate as MQTT telemetry readings arrive
+                </span>
               </div>
             )}
           </div>

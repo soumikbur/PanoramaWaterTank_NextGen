@@ -57,10 +57,10 @@ export const SummaryGrid: React.FC<SummaryGridProps> = ({ tank, compact = false,
 
   return (
     <div
+      className="dashboard-summary-grid"
       style={{
-        display: 'grid',
-        gridTemplateColumns: compact ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(180px, 1fr))',
         gap: `${metrics.cardSpacing}px`,
+        ...(compact ? { gridTemplateColumns: 'repeat(2, 1fr)' } : {}),
         ...style,
       }}
     >
@@ -70,7 +70,7 @@ export const SummaryGrid: React.FC<SummaryGridProps> = ({ tank, compact = false,
         iconColor={colors.primary}
         valueColor={colors.primary}
         title="Water Level"
-        value={hasData && fillPercentage != null ? `${fillPercentage.toFixed(2)}%` : 'N/A'}
+        value={hasData && fillPercentage != null ? `${fillPercentage.toFixed(2)}%` : 'Awaiting Data'}
         subtitle={hasData && waterHeightCm != null ? `(${waterHeightCm.toFixed(2)} cm / ${tankHeightCm.toFixed(2)} cm)` : `(-- cm / ${tankHeightCm.toFixed(2)} cm)`}
       />
 
@@ -80,7 +80,7 @@ export const SummaryGrid: React.FC<SummaryGridProps> = ({ tank, compact = false,
         iconColor={colors.primary}
         valueColor={colors.textPrimary}
         title="Tank Volume"
-        value={hasData && waterVolumeLiters != null ? `${waterVolumeLiters.toFixed(2)} L` : 'N/A'}
+        value={hasData && waterVolumeLiters != null ? `${waterVolumeLiters.toFixed(2)} L` : 'Awaiting Data'}
         subtitle={`(of ${capacityLiters.toFixed(2)} L)`}
       />
 
@@ -100,7 +100,7 @@ export const SummaryGrid: React.FC<SummaryGridProps> = ({ tank, compact = false,
         iconColor={colors.warning}
         valueColor={colors.textPrimary}
         title="Temperature"
-        value={temperature != null ? `${temperature.toFixed(2)} °C` : 'N/A'}
+        value={temperature != null ? `${temperature.toFixed(2)} °C` : 'Awaiting Data'}
       />
 
       {/* 5. Last Updated */}
