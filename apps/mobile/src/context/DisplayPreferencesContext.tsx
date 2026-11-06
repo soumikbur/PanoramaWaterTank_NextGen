@@ -1,8 +1,8 @@
 /**
- * DisplayPreferencesContext.tsx
+ * Display Preferences Context — Light Mode Only
  *
- * Provides reactive display preferences (theme, scaling/zoom, typography, density, sidebar, dashboard)
- * across the authenticated application while ensuring complete isolation from the authentication environment.
+ * Provides reactive controls for Display Zoom (80%-125%) and Font Size (Small, Medium, Large).
+ * Enforces pure Light theme globally.
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
@@ -10,46 +10,59 @@ import {
   DisplayPreferences,
   DEFAULT_DISPLAY_PREFERENCES,
   DisplayPreferencesService,
-  ThemeMode,
-  ZoomLevel,
   FontSize,
-  Density,
-  SidebarMode,
-  DashboardPreferences,
+  ZOOM_MIN,
+  ZOOM_MAX,
+  ZOOM_STEP,
+  ZOOM_DEFAULT,
 } from '../services/displayPreferencesService';
 
 export interface DisplayPreferencesContextType {
   preferences: DisplayPreferences;
-  theme: ThemeMode;
-  resolvedTheme: 'light' | 'dark';
-  isDark: boolean;
-  zoom: ZoomLevel;
+  zoom: string; // e.g. '100%'
+  zoomPercent: number; // e.g. 100
+  fontSize: FontSize; // 'small' | 'medium' | 'large'
   zoomFactor: number;
-  fontSize: FontSize;
   fontSizeFactor: number;
-  density: Density;
-  sidebarMode: SidebarMode;
-  dashboard: DashboardPreferences;
 
-  // Setters
-  setTheme: (theme: ThemeMode) => void;
-  setZoom: (zoom: ZoomLevel) => void;
+  // Zoom controls
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetZoom: () => void;
+  setZoom: (zoom: string) => void;
+
+  // Font size control
   setFontSize: (size: FontSize) => void;
-  setDensity: (density: Density) => void;
-  setSidebarMode: (mode: SidebarMode) => void;
-  updateDashboardPreferences: (updates: Partial<DashboardPreferences>) => void;
-  updatePreferences: (updates: Partial<DisplayPreferences>) => void;
-  resetDisplayPreferences: () => void;
-  applyPreferencesForUser: (username: string | null) => void;
 
-  // Legacy compatibility
-  displayScale: ZoomLevel;
+  // Global reset
+  resetDisplayPreferences: () => void;
+
+  // Enforced Light Mode indicators
+  theme: 'light';
+  resolvedTheme: 'light';
+  isDark: boolean;
+  setTheme: (theme: any) => void;
+
+  // Legacy compatibility helpers
+  density: 'comfortable';
+  sidebarMode: 'expanded';
+  dashboard: {
+    showSummaryCards: boolean;
+    showSecondaryInfo: boolean;
+    layout: 'standard';
+  };
+  displayScale: string;
   displayScaleFactor: number;
-  layoutDensity: Density;
-  contrastMode: 'STANDARD' | 'HIGH_CONTRAST';
-  setDisplayScale: (scale: ZoomLevel) => void;
-  setLayoutDensity: (density: Density) => void;
-  setContrastMode: (mode: 'STANDARD' | 'HIGH_CONTRAST') => void;
+  layoutDensity: 'comfortable';
+  contrastMode: 'STANDARD';
+  setDensity: (density: any) => void;
+  setSidebarMode: (mode: any) => void;
+  updateDashboardPreferences: (updates: any) => void;
+  updatePreferences: (updates: Partial<DisplayPreferences>) => void;
+  applyPreferencesForUser: (username: string | null) => void;
+  setDisplayScale: (scale: string) => void;
+  setLayoutDensity: (density: any) => void;
+  setContrastMode: (mode: any) => void;
 }
 
 const DisplayPreferencesContext = createContext<DisplayPreferencesContextType | undefined>(undefined);
@@ -62,29 +75,6 @@ export const DisplayPreferencesProvider: React.FC<{
     return DisplayPreferencesService.loadPreferences(activeUsername);
   });
 
-  const [systemIsDark, setSystemIsDark] = useState<boolean>(() => {
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    return false;
-  });
-
-  // Listen for system theme changes in real-time
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return;
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (e: MediaQueryListEvent) => {
-      setSystemIsDark(e.matches);
-    };
-    if (media.addEventListener) {
-      media.addEventListener('change', handler);
-      return () => media.removeEventListener('change', handler);
-    } else if ((media as any).addListener) {
-      (media as any).addListener(handler);
-      return () => (media as any).removeListener(handler);
-    }
-  }, []);
-
   // Re-load preferences whenever active user changes
   useEffect(() => {
     const loaded = DisplayPreferencesService.loadPreferences(activeUsername);
@@ -92,65 +82,41 @@ export const DisplayPreferencesProvider: React.FC<{
     DisplayPreferencesService.applyToDOM(loaded);
   }, [activeUsername]);
 
-  // Apply to DOM whenever preferences or system theme changes
+  // Apply to DOM whenever preferences change
   useEffect(() => {
     DisplayPreferencesService.applyToDOM(preferences);
-  }, [preferences, systemIsDark]);
+  }, [preferences]);
 
-  const setTheme = useCallback((theme: ThemeMode) => {
+  const zoomPercent = DisplayPreferencesService.parseZoomPercent(preferences.zoom);
+  const zoomFactor = zoomPercent / 100.0;
+  const fontSizeFactor = DisplayPreferencesService.getFontSizeFactor(preferences.fontSize);
+
+  const setZoom = useCallback((newZoom: string) => {
+    const clamped = DisplayPreferencesService.parseZoomPercent(newZoom);
     setPreferences((prev) => {
-      const updated: DisplayPreferences = { ...prev, theme };
+      const updated: DisplayPreferences = { ...prev, zoom: `${clamped}%`, scale: `${clamped}%` };
       DisplayPreferencesService.savePreferences(updated, activeUsername);
       return updated;
     });
   }, [activeUsername]);
 
-  const setZoom = useCallback((zoom: ZoomLevel) => {
-    setPreferences((prev) => {
-      const updated: DisplayPreferences = { ...prev, zoom, scale: zoom };
-      DisplayPreferencesService.savePreferences(updated, activeUsername);
-      return updated;
-    });
-  }, [activeUsername]);
+  const zoomIn = useCallback(() => {
+    const next = Math.min(ZOOM_MAX, zoomPercent + ZOOM_STEP);
+    setZoom(`${next}%`);
+  }, [zoomPercent, setZoom]);
+
+  const zoomOut = useCallback(() => {
+    const next = Math.max(ZOOM_MIN, zoomPercent - ZOOM_STEP);
+    setZoom(`${next}%`);
+  }, [zoomPercent, setZoom]);
+
+  const resetZoom = useCallback(() => {
+    setZoom(`${ZOOM_DEFAULT}%`);
+  }, [setZoom]);
 
   const setFontSize = useCallback((fontSize: FontSize) => {
     setPreferences((prev) => {
       const updated: DisplayPreferences = { ...prev, fontSize };
-      DisplayPreferencesService.savePreferences(updated, activeUsername);
-      return updated;
-    });
-  }, [activeUsername]);
-
-  const setDensity = useCallback((density: Density) => {
-    setPreferences((prev) => {
-      const updated: DisplayPreferences = { ...prev, density, layoutDensity: density };
-      DisplayPreferencesService.savePreferences(updated, activeUsername);
-      return updated;
-    });
-  }, [activeUsername]);
-
-  const setSidebarMode = useCallback((sidebarMode: SidebarMode) => {
-    setPreferences((prev) => {
-      const updated: DisplayPreferences = { ...prev, sidebarMode };
-      DisplayPreferencesService.savePreferences(updated, activeUsername);
-      return updated;
-    });
-  }, [activeUsername]);
-
-  const updateDashboardPreferences = useCallback((updates: Partial<DashboardPreferences>) => {
-    setPreferences((prev) => {
-      const updated: DisplayPreferences = {
-        ...prev,
-        dashboard: { ...prev.dashboard, ...updates },
-      };
-      DisplayPreferencesService.savePreferences(updated, activeUsername);
-      return updated;
-    });
-  }, [activeUsername]);
-
-  const updatePreferences = useCallback((updates: Partial<DisplayPreferences>) => {
-    setPreferences((prev) => {
-      const updated: DisplayPreferences = { ...prev, ...updates };
       DisplayPreferencesService.savePreferences(updated, activeUsername);
       return updated;
     });
@@ -161,61 +127,61 @@ export const DisplayPreferencesProvider: React.FC<{
     setPreferences(defaults);
   }, [activeUsername]);
 
+  const updatePreferences = useCallback((updates: Partial<DisplayPreferences>) => {
+    setPreferences((prev) => {
+      const updated: DisplayPreferences = { ...prev, ...updates };
+      DisplayPreferencesService.savePreferences(updated, activeUsername);
+      return updated;
+    });
+  }, [activeUsername]);
+
   const applyPreferencesForUser = useCallback((username: string | null) => {
     const loaded = DisplayPreferencesService.loadPreferences(username);
     setPreferences(loaded);
     DisplayPreferencesService.applyToDOM(loaded);
   }, []);
 
-  const resolvedTheme: 'light' | 'dark' =
-    preferences.theme === 'system'
-      ? (systemIsDark ? 'dark' : 'light')
-      : preferences.theme;
-
-  const isDark = resolvedTheme === 'dark';
-  const zoomFactor = DisplayPreferencesService.getZoomFactor(preferences.zoom);
-  const fontSizeFactor = DisplayPreferencesService.getFontSizeFactor(preferences.fontSize);
-
-  // Legacy setters
-  const setDisplayScale = setZoom;
-  const setLayoutDensity = setDensity;
-  const setContrastMode = useCallback((mode: 'STANDARD' | 'HIGH_CONTRAST') => {
-    updatePreferences({ contrastMode: mode });
-  }, [updatePreferences]);
-
   return (
     <DisplayPreferencesContext.Provider
       value={{
         preferences,
-        theme: preferences.theme,
-        resolvedTheme,
-        isDark,
         zoom: preferences.zoom,
-        zoomFactor,
+        zoomPercent,
         fontSize: preferences.fontSize,
+        zoomFactor,
         fontSizeFactor,
-        density: preferences.density,
-        sidebarMode: preferences.sidebarMode,
-        dashboard: preferences.dashboard,
 
-        setTheme,
+        zoomIn,
+        zoomOut,
+        resetZoom,
         setZoom,
         setFontSize,
-        setDensity,
-        setSidebarMode,
-        updateDashboardPreferences,
-        updatePreferences,
         resetDisplayPreferences,
-        applyPreferencesForUser,
 
-        // Legacy compatibility
+        theme: 'light',
+        resolvedTheme: 'light',
+        isDark: false,
+        setTheme: () => {},
+
+        density: 'comfortable',
+        sidebarMode: 'expanded',
+        dashboard: {
+          showSummaryCards: true,
+          showSecondaryInfo: true,
+          layout: 'standard',
+        },
         displayScale: preferences.zoom,
         displayScaleFactor: zoomFactor,
-        layoutDensity: preferences.density,
-        contrastMode: preferences.contrastMode || 'STANDARD',
-        setDisplayScale,
-        setLayoutDensity,
-        setContrastMode,
+        layoutDensity: 'comfortable',
+        contrastMode: 'STANDARD',
+        setDensity: () => {},
+        setSidebarMode: () => {},
+        updateDashboardPreferences: () => {},
+        updatePreferences,
+        applyPreferencesForUser,
+        setDisplayScale: setZoom,
+        setLayoutDensity: () => {},
+        setContrastMode: () => {},
       }}
     >
       {children}

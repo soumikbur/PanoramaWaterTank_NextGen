@@ -44,7 +44,7 @@ export const Sidebar: React.FC = () => {
   const isConnected = connectionStatus === 'CONNECTED';
   const isAdmin = currentUser?.role === 'ADMIN';
 
-  // 1. Employee Navigation Items (Covering operations, consists, GPS tracking, and display settings)
+  // 1. Employee Navigation Items
   const employeeNavItems: { id: ScreenName; label: string; icon: LucideIcon }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'trains', label: 'Train Management', icon: Train },
@@ -57,7 +57,7 @@ export const Sidebar: React.FC = () => {
     { id: 'settings', label: 'Display Settings', icon: Sliders },
   ];
 
-  // 2. Admin Fleet Navigation Items (Preserving full admin access)
+  // 2. Admin Primary Fleet Navigation Items
   const adminPrimaryNavItems: { id: ScreenName; label: string; icon: LucideIcon }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'trains', label: 'Train Management', icon: Train },
@@ -80,7 +80,6 @@ export const Sidebar: React.FC = () => {
 
   const currentNavItems = isAdmin ? adminPrimaryNavItems : employeeNavItems;
 
-  // Train summary metrics
   const onlineDevicesCount = devices.filter((d) => d.isOnline ?? d.is_online).length;
   const offlineDevicesCount = devices.length - onlineDevicesCount;
   const totalTanksCount = devices.length * 2;
@@ -105,8 +104,8 @@ export const Sidebar: React.FC = () => {
         minWidth: sidebarWidth,
         maxWidth: sidebarWidth,
         height: '100%',
-        backgroundColor: '#0F172A', // Dark Navy SCADA Theme
-        borderRight: '1px solid #1E293B',
+        backgroundColor: 'var(--color-surface, #FFFFFF)',
+        borderRight: '1px solid var(--color-border, #E2E8F0)',
         display: 'flex',
         flexDirection: 'column',
         boxSizing: 'border-box',
@@ -120,7 +119,7 @@ export const Sidebar: React.FC = () => {
       <div
         style={{
           padding: isCollapsed ? '16px 8px' : '16px 14px',
-          borderBottom: '1px solid #1E293B',
+          borderBottom: '1px solid var(--color-border, #E2E8F0)',
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
@@ -131,13 +130,13 @@ export const Sidebar: React.FC = () => {
             width: '32px',
             height: '32px',
             borderRadius: '6px',
-            backgroundColor: '#1E293B',
+            backgroundColor: 'var(--color-primary-surface, #EFF6FF)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#38BDF8',
+            color: 'var(--color-primary, #2563EB)',
             flexShrink: 0,
-            border: '1px solid #334155',
+            border: '1px solid var(--color-primary-border, #BFDBFE)',
           }}
         >
           <Droplet size={18} strokeWidth={2.2} />
@@ -149,7 +148,7 @@ export const Sidebar: React.FC = () => {
                 fontFamily: typography.fontFamily,
                 fontSize: '13px',
                 fontWeight: 800,
-                color: '#F8FAFC',
+                color: 'var(--color-text-primary, #0F172A)',
                 letterSpacing: '0.6px',
               }}
             >
@@ -159,7 +158,7 @@ export const Sidebar: React.FC = () => {
               style={{
                 fontFamily: typography.fontFamily,
                 fontSize: '10px',
-                color: '#94A3B8',
+                color: 'var(--color-text-muted, #64748B)',
                 fontWeight: 500,
               }}
             >
@@ -176,8 +175,8 @@ export const Sidebar: React.FC = () => {
             margin: '10px 12px',
             padding: '10px 12px',
             borderRadius: '8px',
-            backgroundColor: '#1E293B',
-            border: '1px solid #334155',
+            backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
+            border: '1px solid var(--color-border, #CBD5E1)',
             boxSizing: 'border-box',
           }}
         >
@@ -186,7 +185,7 @@ export const Sidebar: React.FC = () => {
               style={{
                 fontSize: '11px',
                 fontWeight: 700,
-                color: '#F8FAFC',
+                color: 'var(--color-text-primary, #0F172A)',
               }}
             >
               {selectedTrainNumber} &bull; Active Consist
@@ -194,10 +193,10 @@ export const Sidebar: React.FC = () => {
             <span
               style={{
                 fontSize: '9px',
-                fontWeight: 600,
-                color: '#38BDF8',
-                backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                border: '1px solid rgba(56, 189, 248, 0.25)',
+                fontWeight: 700,
+                color: 'var(--color-primary, #2563EB)',
+                backgroundColor: 'var(--color-primary-surface, #EFF6FF)',
+                border: '1px solid var(--color-primary-border, #BFDBFE)',
                 padding: '1px 5px',
                 borderRadius: '4px',
               }}
@@ -208,7 +207,7 @@ export const Sidebar: React.FC = () => {
           <div
             style={{
               fontSize: '10px',
-              color: '#94A3B8',
+              color: 'var(--color-text-muted, #64748B)',
               marginTop: '2px',
               marginBottom: '8px',
             }}
@@ -225,21 +224,21 @@ export const Sidebar: React.FC = () => {
               fontSize: '10px',
             }}
           >
-            <div style={{ backgroundColor: '#0F172A', padding: '4px 6px', borderRadius: '4px', border: '1px solid #334155' }}>
-              <span style={{ color: '#94A3B8' }}>Coaches: </span>
-              <strong style={{ color: '#F8FAFC' }}>{devices.length || 1}</strong>
+            <div style={{ backgroundColor: 'var(--color-surface, #FFFFFF)', padding: '4px 6px', borderRadius: '4px', border: '1px solid var(--color-border, #E2E8F0)' }}>
+              <span style={{ color: 'var(--color-text-muted, #64748B)' }}>Coaches: </span>
+              <strong style={{ color: 'var(--color-text-primary, #0F172A)' }}>{devices.length || 1}</strong>
             </div>
-            <div style={{ backgroundColor: '#0F172A', padding: '4px 6px', borderRadius: '4px', border: '1px solid #334155' }}>
-              <span style={{ color: '#94A3B8' }}>Tanks: </span>
-              <strong style={{ color: '#F8FAFC' }}>{totalTanksCount || 2}</strong>
+            <div style={{ backgroundColor: 'var(--color-surface, #FFFFFF)', padding: '4px 6px', borderRadius: '4px', border: '1px solid var(--color-border, #E2E8F0)' }}>
+              <span style={{ color: 'var(--color-text-muted, #64748B)' }}>Tanks: </span>
+              <strong style={{ color: 'var(--color-text-primary, #0F172A)' }}>{totalTanksCount || 2}</strong>
             </div>
-            <div style={{ backgroundColor: '#0F172A', padding: '4px 6px', borderRadius: '4px', border: '1px solid #334155' }}>
-              <span style={{ color: '#94A3B8' }}>Online: </span>
-              <strong style={{ color: onlineDevicesCount > 0 ? '#4ADE80' : '#94A3B8' }}>{onlineDevicesCount}</strong>
+            <div style={{ backgroundColor: 'var(--color-surface, #FFFFFF)', padding: '4px 6px', borderRadius: '4px', border: '1px solid var(--color-border, #E2E8F0)' }}>
+              <span style={{ color: 'var(--color-text-muted, #64748B)' }}>Online: </span>
+              <strong style={{ color: onlineDevicesCount > 0 ? 'var(--color-success, #16A34A)' : 'var(--color-text-muted, #64748B)' }}>{onlineDevicesCount}</strong>
             </div>
-            <div style={{ backgroundColor: '#0F172A', padding: '4px 6px', borderRadius: '4px', border: '1px solid #334155' }}>
-              <span style={{ color: '#94A3B8' }}>Offline: </span>
-              <strong style={{ color: '#94A3B8' }}>{offlineDevicesCount}</strong>
+            <div style={{ backgroundColor: 'var(--color-surface, #FFFFFF)', padding: '4px 6px', borderRadius: '4px', border: '1px solid var(--color-border, #E2E8F0)' }}>
+              <span style={{ color: 'var(--color-text-muted, #64748B)' }}>Offline: </span>
+              <strong style={{ color: 'var(--color-text-muted, #64748B)' }}>{offlineDevicesCount}</strong>
             </div>
           </div>
 
@@ -249,9 +248,9 @@ export const Sidebar: React.FC = () => {
               marginTop: '6px',
               padding: '3px 6px',
               borderRadius: '4px',
-              backgroundColor: totalAlertsCount > 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)',
-              color: totalAlertsCount > 0 ? '#F87171' : '#4ADE80',
-              border: `1px solid ${totalAlertsCount > 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`,
+              backgroundColor: totalAlertsCount > 0 ? 'var(--color-critical-surface, #FEE2E2)' : 'var(--color-success-surface, #ECFDF5)',
+              color: totalAlertsCount > 0 ? 'var(--color-critical, #DC2626)' : 'var(--color-success, #16A34A)',
+              border: `1px solid ${totalAlertsCount > 0 ? 'var(--color-critical-border, #FCA5A5)' : 'var(--color-success-border, #DCFCE7)'}`,
               fontSize: '10px',
               fontWeight: 600,
               display: 'flex',
@@ -281,7 +280,7 @@ export const Sidebar: React.FC = () => {
               padding: '6px 14px 2px 14px',
               fontSize: '10px',
               fontWeight: 700,
-              color: '#64748B',
+              color: 'var(--color-text-muted, #64748B)',
               letterSpacing: '0.6px',
               textTransform: 'uppercase',
             }}
@@ -308,20 +307,20 @@ export const Sidebar: React.FC = () => {
                 gap: '12px',
                 padding: sidebarCollapsed ? '10px 0' : '9px 14px',
                 justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-                backgroundColor: isActive ? '#1E293B' : 'transparent',
+                backgroundColor: isActive ? 'var(--color-primary-surface, #EFF6FF)' : 'transparent',
                 border: 'none',
-                borderLeft: isActive ? '3px solid #38BDF8' : '3px solid transparent',
+                borderLeft: isActive ? '3px solid var(--color-primary, #2563EB)' : '3px solid transparent',
                 cursor: 'pointer',
                 fontFamily: typography.fontFamily,
                 fontSize: '12px',
-                fontWeight: isActive ? 600 : 500,
-                color: isActive ? '#38BDF8' : '#94A3B8',
+                fontWeight: isActive ? 700 : 500,
+                color: isActive ? 'var(--color-primary, #2563EB)' : 'var(--color-text-secondary, #475569)',
                 boxSizing: 'border-box',
                 textAlign: 'left',
                 transition: 'all 0.12s ease',
               }}
             >
-              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive ? '#38BDF8' : '#64748B' }}>
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive ? 'var(--color-primary, #2563EB)' : 'var(--color-text-muted, #64748B)' }}>
                 <IconComp size={16} strokeWidth={isActive ? 2.2 : 1.8} />
               </span>
               {!sidebarCollapsed && (
@@ -340,7 +339,7 @@ export const Sidebar: React.FC = () => {
               padding: '12px 14px 2px 14px',
               fontSize: '10px',
               fontWeight: 700,
-              color: '#64748B',
+              color: 'var(--color-text-muted, #64748B)',
               letterSpacing: '0.6px',
               textTransform: 'uppercase',
             }}
@@ -368,20 +367,20 @@ export const Sidebar: React.FC = () => {
                   gap: '12px',
                   padding: sidebarCollapsed ? '10px 0' : '9px 14px',
                   justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-                  backgroundColor: isActive ? '#1E293B' : 'transparent',
+                  backgroundColor: isActive ? 'var(--color-primary-surface, #EFF6FF)' : 'transparent',
                   border: 'none',
-                  borderLeft: isActive ? '3px solid #38BDF8' : '3px solid transparent',
+                  borderLeft: isActive ? '3px solid var(--color-primary, #2563EB)' : '3px solid transparent',
                   cursor: 'pointer',
                   fontFamily: typography.fontFamily,
                   fontSize: '12px',
-                  fontWeight: isActive ? 600 : 500,
-                  color: isActive ? '#38BDF8' : '#94A3B8',
+                  fontWeight: isActive ? 700 : 500,
+                  color: isActive ? 'var(--color-primary, #2563EB)' : 'var(--color-text-secondary, #475569)',
                   boxSizing: 'border-box',
                   textAlign: 'left',
                   transition: 'all 0.12s ease',
                 }}
               >
-                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive ? '#38BDF8' : '#64748B' }}>
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive ? 'var(--color-primary, #2563EB)' : 'var(--color-text-muted, #64748B)' }}>
                   <IconComp size={16} strokeWidth={isActive ? 2.2 : 1.8} />
                 </span>
                 {!sidebarCollapsed && (
@@ -393,8 +392,8 @@ export const Sidebar: React.FC = () => {
             );
           })}
 
-        {/* Item 8: Logout Button for Employee and Admin */}
-        <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #1E293B' }}>
+        {/* Logout Button */}
+        <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--color-border, #E2E8F0)' }}>
           <button
             id="sidebar-logout-btn"
             onClick={logout}
@@ -413,13 +412,13 @@ export const Sidebar: React.FC = () => {
               fontFamily: typography.fontFamily,
               fontSize: '12px',
               fontWeight: 500,
-              color: '#F87171',
+              color: 'var(--color-critical, #DC2626)',
               boxSizing: 'border-box',
               textAlign: 'left',
               transition: 'all 0.12s ease',
             }}
           >
-            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F87171' }}>
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-critical, #DC2626)' }}>
               <LogOut size={16} strokeWidth={1.8} />
             </span>
             {!sidebarCollapsed && (
@@ -435,11 +434,11 @@ export const Sidebar: React.FC = () => {
       <div
         style={{
           padding: '10px 14px',
-          borderTop: '1px solid #1E293B',
+          borderTop: '1px solid var(--color-border, #E2E8F0)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: sidebarCollapsed ? 'center' : 'space-between',
-          backgroundColor: '#0F172A',
+          backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
         }}
       >
         {!sidebarCollapsed && (
@@ -449,10 +448,10 @@ export const Sidebar: React.FC = () => {
                 width: '6px',
                 height: '6px',
                 borderRadius: '50%',
-                backgroundColor: isConnected ? '#4ADE80' : '#EF4444',
+                backgroundColor: isConnected ? 'var(--color-success, #16A34A)' : 'var(--color-critical, #DC2626)',
               }}
             />
-            <span style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 500 }}>
+            <span style={{ fontSize: '10px', color: 'var(--color-text-muted, #64748B)', fontWeight: 500 }}>
               {isConnected
                 ? (mqttBrokerStatus === 'CONNECTED' ? 'SCADA & MQTT Online' : 'SCADA Online')
                 : 'SCADA Offline'}
@@ -463,12 +462,12 @@ export const Sidebar: React.FC = () => {
           onClick={handleToggle}
           title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           style={{
-            background: '#1E293B',
-            border: '1px solid #334155',
+            background: 'var(--color-surface, #FFFFFF)',
+            border: '1px solid var(--color-border-strong, #CBD5E1)',
             borderRadius: '4px',
             cursor: 'pointer',
             padding: '4px 6px',
-            color: '#94A3B8',
+            color: 'var(--color-text-secondary, #475569)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',

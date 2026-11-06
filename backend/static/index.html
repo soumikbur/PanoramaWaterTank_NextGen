@@ -10,20 +10,7 @@
     <script>
       (function() {
         try {
-          var user = localStorage.getItem('panorama_auth_token_username');
-          var userClean = user ? user.trim().toLowerCase().replace(/^@/, '') : '';
-          var key = userClean ? 'panorama_display_preferences_v2_' + userClean : 'panorama_display_preferences_v2';
-          var raw = localStorage.getItem(key) || localStorage.getItem('panorama_display_preferences');
-          var theme = 'system';
-          if (raw) {
-            var parsed = JSON.parse(raw);
-            if (parsed && parsed.theme) theme = parsed.theme;
-          }
-          var resolved = theme;
-          if (theme === 'system') {
-            resolved = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
-          }
-          document.documentElement.setAttribute('data-theme', resolved);
+          document.documentElement.setAttribute('data-theme', 'light');
         } catch (e) {}
       })();
     </script>

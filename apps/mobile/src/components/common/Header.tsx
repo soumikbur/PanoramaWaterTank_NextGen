@@ -1102,77 +1102,6 @@ export const Header: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Quick Theme Switcher */}
-                <div>
-                  <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-muted, #64748B)', marginBottom: '6px' }}>
-                    THEME MODE
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
-                    <button
-                      onClick={() => setTheme('light')}
-                      style={{
-                        padding: '5px',
-                        borderRadius: '4px',
-                        border: `1px solid ${theme === 'light' ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                        backgroundColor: theme === 'light' ? 'var(--color-primary-surface)' : 'var(--color-surface-alt)',
-                        color: theme === 'light' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                        fontSize: '10px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px',
-                      }}
-                    >
-                      <Sun size={12} />
-                      <span>Light</span>
-                    </button>
-
-                    <button
-                      onClick={() => setTheme('dark')}
-                      style={{
-                        padding: '5px',
-                        borderRadius: '4px',
-                        border: `1px solid ${theme === 'dark' ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                        backgroundColor: theme === 'dark' ? 'var(--color-primary-surface)' : 'var(--color-surface-alt)',
-                        color: theme === 'dark' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                        fontSize: '10px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px',
-                      }}
-                    >
-                      <Moon size={12} />
-                      <span>Dark</span>
-                    </button>
-
-                    <button
-                      onClick={() => setTheme('system')}
-                      style={{
-                        padding: '5px',
-                        borderRadius: '4px',
-                        border: `1px solid ${theme === 'system' ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                        backgroundColor: theme === 'system' ? 'var(--color-primary-surface)' : 'var(--color-surface-alt)',
-                        color: theme === 'system' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                        fontSize: '10px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px',
-                      }}
-                    >
-                      <Monitor size={12} />
-                      <span>Auto</span>
-                    </button>
-                  </div>
-                </div>
-
                 {/* Open Display Settings Button */}
                 <button
                   onClick={() => {
@@ -1259,30 +1188,6 @@ export const Header: React.FC = () => {
             {isConnected ? 'ONLINE' : isReconnecting ? 'RECONNECT' : 'OFFLINE'}
           </span>
         </div>
-
-        {/* Quick Theme Toggle Icon Button */}
-        <button
-          onClick={() => {
-            const nextTheme: ThemeMode = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light';
-            setTheme(nextTheme);
-          }}
-          title={`Theme: ${theme.toUpperCase()} (Click to toggle Light / Dark / Auto)`}
-          style={{
-            backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
-            border: '1px solid var(--color-border, #E2E8F0)',
-            borderRadius: '6px',
-            width: '32px',
-            height: '32px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: isDark ? '#38BDF8' : '#D97706',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          {theme === 'system' ? <Monitor size={15} /> : isDark ? <Moon size={15} /> : <Sun size={15} />}
-        </button>
 
         {/* Settings Shortcut Button (Accessible to ALL authenticated roles) */}
         <button

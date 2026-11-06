@@ -64,7 +64,7 @@ export const EmployeeDashboard: React.FC = () => {
     devices,
   } = useApp();
 
-  const { dashboard, isDark } = useDisplayPreferences();
+  const { dashboard } = useDisplayPreferences();
 
   const [selectedRegion, setSelectedRegion] = useState<string>('South East');
   const [searchQuery, setSearchQuery] = useState<string>('12841');
@@ -987,16 +987,16 @@ export const EmployeeDashboard: React.FC = () => {
               let glowStyle = 'none';
 
               if (isSelected) {
-                coachBg = isDark ? '#1E293B' : '#EFF6FF';
+                coachBg = '#EFF6FF';
                 coachBorder = '2px solid var(--color-primary, #2563EB)';
                 textColor = 'var(--color-primary, #2563EB)';
                 glowStyle = '0 0 10px rgba(37,99,235,0.35)';
               } else if (isGreen) {
-                coachBg = isDark ? 'rgba(34,197,94,0.18)' : '#DCFCE7';
+                coachBg = '#DCFCE7';
                 coachBorder = '1px solid rgba(34,197,94,0.45)';
-                textColor = isDark ? '#4ADE80' : '#15803D';
+                textColor = '#15803D';
               } else {
-                coachBg = isDark ? '#1E293B' : '#F1F5F9';
+                coachBg = '#F8FAFC';
                 coachBorder = '1px solid var(--color-border, #CBD5E1)';
                 textColor = 'var(--color-text-secondary, #475569)';
               }
@@ -1039,7 +1039,7 @@ export const EmployeeDashboard: React.FC = () => {
                           width: '10px',
                           height: '5px',
                           borderRadius: '1px',
-                          backgroundColor: isDark ? '#0F172A' : '#334155',
+                          backgroundColor: '#334155',
                           opacity: 0.6,
                         }}
                       />

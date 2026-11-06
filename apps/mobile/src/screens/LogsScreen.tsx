@@ -143,15 +143,15 @@ export const LogsScreen: React.FC = () => {
 
       <div
         style={{
-          backgroundColor: '#0F172A',
-          color: '#E2E8F0',
+          backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
+          border: '1px solid var(--color-border, #CBD5E1)',
+          color: 'var(--color-text-primary, #0F172A)',
           borderRadius: '8px',
           padding: '16px',
           fontFamily: 'monospace',
           fontSize: '12px',
           lineHeight: '1.6',
           minHeight: '360px',
-          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.4)',
         }}
       >
         {filtered.map((log, idx) => (
@@ -159,14 +159,14 @@ export const LogsScreen: React.FC = () => {
             <span style={{ color: '#64748B' }}>[{log.time}]</span>
             <span
               style={{
-                color: log.level === 'INFO' ? '#38BDF8' : log.level === 'WARN' ? '#FBBF24' : '#F87171',
+                color: log.level === 'INFO' ? '#0284C7' : log.level === 'WARN' ? '#D97706' : '#DC2626',
                 fontWeight: 700,
               }}
             >
               [{log.level}]
             </span>
-            <span style={{ color: '#94A3B8' }}>{log.module}:</span>
-            <span style={{ color: '#F1F5F9' }}>{log.msg}</span>
+            <span style={{ color: '#475569', fontWeight: 600 }}>{log.module}:</span>
+            <span style={{ color: '#0F172A' }}>{log.msg}</span>
           </div>
         ))}
       </div>

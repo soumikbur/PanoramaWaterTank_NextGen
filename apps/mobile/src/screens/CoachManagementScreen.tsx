@@ -555,34 +555,35 @@ export const CoachManagementScreen: React.FC = () => {
                 width: '160px',
                 minWidth: '160px',
                 borderRadius: '8px',
-                backgroundColor: '#1E293B',
-                border: '2px solid #334155',
-                color: '#FFFFFF',
+                backgroundColor: 'var(--color-surface, #FFFFFF)',
+                border: '1px solid var(--color-border-strong, #CBD5E1)',
+                color: 'var(--color-text-primary, #0F172A)',
                 padding: '12px',
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
                 flexShrink: 0,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
               }}
             >
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '10px', fontWeight: 700, color: '#38BDF8', letterSpacing: '0.5px' }}>
+                  <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-primary, #2563EB)', letterSpacing: '0.5px' }}>
                     LOCOMOTIVE
                   </span>
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#4ADE80' }} />
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#16A34A' }} />
                 </div>
-                <div style={{ fontSize: '18px', fontWeight: 800, color: '#FFFFFF' }}>
+                <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-text-primary, #0F172A)' }}>
                   WAP-7
                 </div>
-                <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>
+                <div style={{ fontSize: '11px', color: 'var(--color-text-muted, #64748B)', marginTop: '2px' }}>
                   Electric Loco #30245
                 </div>
               </div>
 
-              <div style={{ marginTop: '14px', paddingTop: '10px', borderTop: '1px solid #334155', fontSize: '10px', color: '#94A3B8' }}>
+              <div style={{ marginTop: '14px', paddingTop: '10px', borderTop: '1px solid var(--color-border, #E2E8F0)', fontSize: '10px', color: 'var(--color-text-secondary, #475569)' }}>
                 <div>Speed: <strong>78.5 km/h</strong></div>
-                <div>Traction: <strong style={{ color: '#4ADE80' }}>Active</strong></div>
+                <div>Traction: <strong style={{ color: 'var(--color-success, #16A34A)' }}>Active</strong></div>
               </div>
             </div>
 
