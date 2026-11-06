@@ -53,6 +53,8 @@ interface AppContextType {
   toggleSidebar: () => void;
   selectedTrainNumber: string;
   setSelectedTrainNumber: (trainNum: string) => void;
+  selectedCoachNumber: string;
+  setSelectedCoachNumber: (coachNum: string) => void;
   selectedTankId: string | null;
   setSelectedTankId: (id: string | null) => void;
   selectedDeviceId: string | null;
@@ -96,7 +98,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentDate, setCurrentDate] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
-  const [selectedTrainNumber, setSelectedTrainNumber] = useState<string>('12002');
+  const [selectedTrainNumber, setSelectedTrainNumber] = useState<string>('12841');
+  const [selectedCoachNumber, setSelectedCoachNumber] = useState<string>('C4');
   const [selectedTankId, setSelectedTankId] = useState<string | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [selectedStationCode, setSelectedStationCode] = useState<string | null>(null);
@@ -391,6 +394,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         toggleSidebar,
         selectedTrainNumber,
         setSelectedTrainNumber,
+        selectedCoachNumber,
+        setSelectedCoachNumber,
         selectedTankId,
         setSelectedTankId,
         selectedDeviceId,

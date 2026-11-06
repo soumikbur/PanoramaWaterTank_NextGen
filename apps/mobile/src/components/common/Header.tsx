@@ -502,7 +502,7 @@ export const Header: React.FC = () => {
       }}
     >
       {/* Left: Brand Emblem + Home + Screen Title */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
         {/* Brand Emblem */}
         <div
           onClick={() => setActiveScreen('dashboard')}
@@ -614,10 +614,10 @@ export const Header: React.FC = () => {
           display: 'flex',
           alignItems: 'center',
           flex: 1,
-          maxWidth: '460px',
-          minWidth: '280px',
-          marginLeft: '20px',
-          marginRight: '20px',
+          maxWidth: '420px',
+          minWidth: '120px',
+          marginLeft: '12px',
+          marginRight: '12px',
           position: 'relative',
         }}
       >
@@ -1033,7 +1033,7 @@ export const Header: React.FC = () => {
       </div>
 
       {/* Right Controls: Role Badge, Status Pill, Settings, Logout, Live Clock */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
         {/* Interactive User Profile Badge & Dropdown */}
         {currentUser && (
           <div ref={profileContainerRef} style={{ position: 'relative' }}>
