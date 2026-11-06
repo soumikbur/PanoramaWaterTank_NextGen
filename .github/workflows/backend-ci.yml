@@ -69,6 +69,8 @@ jobs:
       - name: Setup GitHub Pages
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/configure-pages@v4
+        with:
+          enablement: true
 
       - name: Upload GitHub Pages Artifact
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
