@@ -1,21 +1,34 @@
 """Async Database Engine and Session Management via SQLAlchemy 2.0."""
 from typing import AsyncGenerator
 import logging
-from sqlalchemy import select
+from sqlalchemy import select, event
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 from app.core.config import settings
 
 logger = logging.getLogger("panorama.database")
 
+# SQLite concurrency & compatibility settings
+is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+connect_args = {"check_same_thread": False, "timeout": 30.0} if is_sqlite else {}
+
 # Create async engine with pool configuration
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
     future=True,
-    # SQLite compatibility for tests / local dev
-    connect_args={"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
+    connect_args=connect_args
 )
+
+if is_sqlite:
+    @event.listens_for(engine.sync_engine, "connect")
+    def _set_sqlite_pragmas(dbapi_connection, connection_record):
+        """Configure SQLite WAL mode and busy timeout for high-concurrency throughput."""
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=10000")
+        cursor.close()
 
 # Async session factory
 AsyncSessionLocal = async_sessionmaker(
@@ -30,16 +43,13 @@ Base = declarative_base()
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency yielding an async database session."""
+    """FastAPI dependency yielding an async database session with clean coroutine lifecycle."""
     async with AsyncSessionLocal() as session:
         try:
             yield session
-            await session.commit()
         except Exception:
             await session.rollback()
             raise
-        finally:
-            await session.close()
 
 
 def _sync_schema_migration(sync_conn) -> None:
@@ -158,13 +168,24 @@ async def seed_initial_accounts(session: AsyncSession) -> None:
     await session.commit()
 
 
+async def seed_initial_settings(session: AsyncSession) -> None:
+    """Seed baseline 5-section unified configuration idempotently."""
+    from app.repositories.settings_repo import SettingsRepository
+    from app.api.v1.settings import DEFAULT_CONFIG
+    repo = SettingsRepository(session)
+    for key, item in DEFAULT_CONFIG.items():
+        await repo.upsert(key, item["value"], category=item["category"], description=item["desc"])
+    await session.commit()
+
+
 async def init_db() -> None:
-    """Initialize database tables and seed baseline credentials."""
+    """Initialize database tables and seed baseline credentials and configurations."""
     async with engine.begin() as conn:
         await conn.run_sync(_sync_schema_migration)
 
     async with AsyncSessionLocal() as session:
         try:
             await seed_initial_accounts(session)
+            await seed_initial_settings(session)
         except Exception as e:
-            logger.error(f"Error seeding baseline accounts: {e}")
+            logger.error(f"Error seeding baseline data: {e}")

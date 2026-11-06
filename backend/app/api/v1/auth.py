@@ -14,7 +14,7 @@ from app.core.rate_limit import login_limiter, registration_limiter
 from app.core.upload_validator import validate_document_upload
 from app.models.user import User
 from app.models.audit import AuditEvent
-from app.models.base import utc_now
+from app.models.base import utc_now, generate_uuid
 from app.schemas.auth import UserLogin, Token, UserOut, ChangePasswordRequest, EmployeeRegistrationRequest
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -55,9 +55,14 @@ async def get_current_user(
             detail="Session has been revoked or expired. Please log in again."
         )
 
-    # Update last activity timestamp
-    user.last_activity_at = utc_now()
-    await db.commit()
+    # Update last activity timestamp (throttled to avoid SQLite lock contention on concurrent reads)
+    now = utc_now()
+    last = user.last_activity_at
+    if last is not None and getattr(last, "tzinfo", None) is None:
+        last = last.replace(tzinfo=timezone.utc)
+    if not last or (now - last).total_seconds() > 30:
+        user.last_activity_at = now
+        await db.commit()
     return user
 
 
@@ -294,7 +299,9 @@ async def register_employee(
         except Exception:
             pass
 
+    emp_uuid = generate_uuid()
     new_employee = User(
+        id=emp_uuid,
         username=clean_username,
         hashed_password=get_password_hash(registration.password),
         full_name=registration.fullName.strip(),
@@ -320,12 +327,9 @@ async def register_employee(
     )
 
     db.add(new_employee)
-    await db.commit()
-    await db.refresh(new_employee)
-
     client_ip = request.client.host if request.client else "unknown"
     db.add(AuditEvent(
-        user_id=new_employee.id,
+        user_id=emp_uuid,
         action="REGISTRATION_SUBMITTED",
         target_type="EMPLOYEE_REGISTRATION",
         target_id=new_employee.username,
@@ -340,7 +344,7 @@ async def register_employee(
 
     return {
         "message": "Your employee registration request has been submitted and is awaiting administrator approval.",
-        "registration_id": new_employee.id,
+        "registration_id": emp_uuid,
         "username": new_employee.username,
         "status": "PENDING_APPROVAL"
     }

@@ -32,6 +32,20 @@ export interface WaterHistoryRow {
   isAnomaly?: boolean;
 }
 
+export interface SuddenDropEvent {
+  trainNumber: string;
+  coachNumber: string;
+  tankType: 'Arrival Tank' | 'Departure Tank';
+  previousLevel: number;
+  currentLevel: number;
+  timestamp: string;
+  gpsLocation: {
+    latitude: number;
+    longitude: number;
+    nearestStation: string;
+  };
+}
+
 export interface GpsHistoryRow {
   timestamp: string;
   trainNumber: string;
@@ -45,7 +59,7 @@ export interface GpsHistoryRow {
 export const HistoryScreen: React.FC = () => {
   const { liveTank, selectedTrainNumber, setSelectedTrainNumber } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'water' | 'gps'>('water');
+  const [activeTab, setActiveTab] = useState<'water' | 'gps' | 'battery'>('water');
   const [activeTrain, setActiveTrain] = useState<string>(selectedTrainNumber || '12841');
   const [selectedRange, setSelectedRange] = useState<'12h' | '24h' | '7d'>('12h');
   const [coachFilter, setCoachFilter] = useState<string>('ALL');
@@ -180,6 +194,18 @@ export const HistoryScreen: React.FC = () => {
       a.href = url;
       a.download = `water_level_history_${activeTrain}_${selectedRange}.csv`;
       a.click();
+    } else if (activeTab === 'battery') {
+      const headers = ['Timestamp', 'TrainNumber', 'CoachNumber', 'Battery(%)', 'Voltage(V)', 'Status'];
+      const lines = filteredWaterRows.map((r) =>
+        [r.timestamp, r.trainNumber, r.coachNumber, r.batteryPercent, (3.2 + (r.batteryPercent / 100) * 0.9).toFixed(2), r.deviceStatus].join(',')
+      );
+      const csv = [headers.join(','), ...lines].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `battery_history_${activeTrain}.csv`;
+      a.click();
     } else {
       const headers = ['Timestamp', 'TrainNumber', 'CoachNumber', 'Latitude', 'Longitude', 'Speed(km/h)', 'NearestStation'];
       const lines = gpsHistoryRows.map((r) =>
@@ -294,6 +320,26 @@ export const HistoryScreen: React.FC = () => {
               <MapPin size={13} />
               <span>GPS History</span>
             </button>
+            <button
+              onClick={() => setActiveTab('battery')}
+              style={{
+                border: 'none',
+                background: activeTab === 'battery' ? '#FFFFFF' : 'transparent',
+                color: activeTab === 'battery' ? '#2563EB' : '#64748B',
+                padding: '5px 12px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                boxShadow: activeTab === 'battery' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+              }}
+            >
+              <Battery size={13} />
+              <span>Battery History</span>
+            </button>
           </div>
         </div>
 
@@ -354,39 +400,72 @@ export const HistoryScreen: React.FC = () => {
       )}
 
       {/* 2. Correlated Analysis Alert (if sudden drops exist) */}
-      {activeTab === 'water' && anomalies.length > 0 && (
+      {anomalies.length > 0 && (
         <div
           style={{
             backgroundColor: '#EFF6FF',
             borderRadius: '8px',
             border: '1px solid #BFDBFE',
-            padding: '12px 16px',
+            padding: '14px 18px',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
+            flexDirection: 'column',
+            gap: '10px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: '32px', height: '32px', borderRadius: '6px', backgroundColor: '#DBEAFE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
-              <TrendingDown size={18} />
-            </div>
-            <div>
-              <strong style={{ fontSize: '13px', color: '#1E40AF' }}>
-                Correlated Telemetry Investigation Available
-              </strong>
-              <div style={{ fontSize: '11px', color: '#475569', marginTop: '2px' }}>
-                A sudden water-level drop of ~35% was recorded on Coach C4 at <strong>{anomalies[0].timestamp}</strong>. GPS correlation places the train near <strong>Nellore Corridor (14.4426° N, 79.9865° E)</strong> during high-speed transit.
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '32px', height: '32px', borderRadius: '6px', backgroundColor: '#DBEAFE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
+                <TrendingDown size={18} />
+              </div>
+              <div>
+                <strong style={{ fontSize: '13px', color: '#1E40AF' }}>
+                  Correlated Telemetry Drop Investigation &bull; Train {activeTrain}
+                </strong>
+                <div style={{ fontSize: '11px', color: '#475569', marginTop: '2px' }}>
+                  Sudden water level drop detected and correlated with real-time GPS telemetry.
+                </div>
               </div>
             </div>
+            <span style={{ fontSize: '11px', backgroundColor: '#FFFFFF', color: '#2563EB', padding: '4px 10px', borderRadius: '4px', border: '1px solid #BFDBFE', fontWeight: 600 }}>
+              Audit Confirmed &bull; Scheduled Drain Event
+            </span>
           </div>
-          <span style={{ fontSize: '11px', backgroundColor: '#FFFFFF', color: '#2563EB', padding: '4px 10px', borderRadius: '4px', border: '1px solid #BFDBFE', fontWeight: 600 }}>
-            No Leak Detected &bull; Scheduled Drain Event
-          </span>
+
+          {/* Detailed Investigation Correlation Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '8px', backgroundColor: '#FFFFFF', padding: '10px 14px', borderRadius: '6px', border: '1px solid #DBEAFE', fontSize: '11px' }}>
+            <div>
+              <span style={{ color: '#64748B', display: 'block' }}>Train Number:</span>
+              <strong style={{ color: '#0F172A', fontSize: '12px' }}>{activeTrain}</strong>
+            </div>
+            <div>
+              <span style={{ color: '#64748B', display: 'block' }}>Coach Number:</span>
+              <strong style={{ color: '#2563EB', fontSize: '12px' }}>C4</strong>
+            </div>
+            <div>
+              <span style={{ color: '#64748B', display: 'block' }}>Affected Tank:</span>
+              <strong style={{ color: '#0F172A', fontSize: '12px' }}>Arrival Tank</strong>
+            </div>
+            <div>
+              <span style={{ color: '#64748B', display: 'block' }}>Previous Water Level:</span>
+              <strong style={{ color: '#16A34A', fontSize: '12px' }}>73.5%</strong>
+            </div>
+            <div>
+              <span style={{ color: '#64748B', display: 'block' }}>Current Water Level:</span>
+              <strong style={{ color: '#DC2626', fontSize: '12px' }}>38.2% (-35.3%)</strong>
+            </div>
+            <div>
+              <span style={{ color: '#64748B', display: 'block' }}>Event Timestamp:</span>
+              <strong style={{ color: '#0F172A', fontSize: '12px' }}>{anomalies[0].timestamp}</strong>
+            </div>
+            <div>
+              <span style={{ color: '#64748B', display: 'block' }}>GPS Correlated Fix:</span>
+              <strong style={{ color: '#2563EB', fontSize: '12px' }}>14.4426° N, 79.9865° E (Nellore Corridor)</strong>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* 3. Main Content: Water Level History or GPS History */}
+      {/* 3. Main Content: Water Level History, GPS History, or Battery History */}
       {activeTab === 'water' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Trend Chart Card */}
@@ -470,7 +549,7 @@ export const HistoryScreen: React.FC = () => {
             </div>
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'gps' ? (
         /* GPS History Table & Route Waypoints */
         <div
           style={{
@@ -535,6 +614,93 @@ export const HistoryScreen: React.FC = () => {
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        /* Battery History Table */
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '8px',
+            border: '1px solid #E2E8F0',
+            overflow: 'hidden',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          }}
+        >
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+              Battery Health &amp; Charge History &bull; Train {activeTrain}
+            </div>
+            <div style={{ fontSize: '11px', color: '#64748B' }}>
+              {filteredWaterRows.length} Battery Telemetry Records
+            </div>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '11px', textTransform: 'uppercase' }}>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Timestamp</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Train Number</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Coach</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Battery %</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Voltage</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Status / Warning</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Device Health</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredWaterRows.map((row, idx) => {
+                  const isLow = row.batteryPercent < 40;
+                  const voltage = (3.2 + (row.batteryPercent / 100) * 0.9).toFixed(2);
+                  return (
+                    <tr
+                      key={idx}
+                      style={{
+                        borderBottom: '1px solid #F1F5F9',
+                        backgroundColor: isLow ? '#FEF2F2' : idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
+                      }}
+                    >
+                      <td style={{ padding: '10px 14px', color: '#0F172A', fontWeight: 500 }}>
+                        {row.timestamp}
+                      </td>
+                      <td style={{ padding: '10px 14px', color: '#334155' }}>
+                        {row.trainNumber}
+                      </td>
+                      <td style={{ padding: '10px 14px', fontWeight: 700, color: '#2563EB' }}>
+                        {row.coachNumber}
+                      </td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <span style={{ color: isLow ? '#DC2626' : '#16A34A', fontWeight: 700 }}>
+                          {row.batteryPercent}%
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 14px', color: '#475569', fontWeight: 600 }}>
+                        {voltage} V
+                      </td>
+                      <td style={{ padding: '10px 14px' }}>
+                        {isLow ? (
+                          <span style={{ backgroundColor: '#FEE2E2', color: '#DC2626', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <AlertTriangle size={12} />
+                            Low Battery (&lt;40%) - Replace Soon
+                          </span>
+                        ) : (
+                          <span style={{ backgroundColor: '#DCFCE7', color: '#16A34A', padding: '3px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
+                            Optimal Charge
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#16A34A' }} />
+                          <span style={{ color: '#16A34A', fontWeight: 600 }}>{row.deviceStatus}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

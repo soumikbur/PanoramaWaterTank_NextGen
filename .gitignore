@@ -14,6 +14,8 @@ backend/.pytest_cache/
 .pytest_cache/
 backend/*.db
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
 
@@ -41,6 +43,12 @@ audit_out*.log
 audit_err*.log
 multi_res_*.log
 *.tmp
+screenshots_employee/
+scripts/debug_page.cjs
+scripts/measure_tank.cjs
+scripts/test_dev_server.cjs
+scripts/verify_employee_dashboard.cjs
+apps/mobile/scripts/measure_tank.cjs
 
 # Vercel project configuration and cache
 .vercel

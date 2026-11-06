@@ -350,3 +350,22 @@ tbody tr:hover {
     transform: translateY(0);
   }
 }
+
+/* ========================================================================= */
+/* 11. Battery Low Blinking Indicator (< 40%)                                */
+/* ========================================================================= */
+
+.battery-low-blink {
+  animation: batteryBlinkPulse 1.2s infinite ease-in-out !important;
+}
+
+@keyframes batteryBlinkPulse {
+  0%, 100% {
+    border-color: #EF4444 !important;
+    box-shadow: 0 0 14px rgba(239, 68, 68, 0.5) !important;
+  }
+  50% {
+    border-color: #FCA5A5 !important;
+    box-shadow: 0 0 3px rgba(239, 68, 68, 0.15) !important;
+  }
+}

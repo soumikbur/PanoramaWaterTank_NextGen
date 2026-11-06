@@ -86,21 +86,23 @@ class UnifiedSettingsPayload(BaseModel):
 
 
 async def _ensure_seeded(repo: SettingsRepository):
-    """Ensure all default settings exist in the repository."""
+    """Ensure all default settings exist in the repository idempotently."""
     for key, item in DEFAULT_CONFIG.items():
         existing = await repo.get(key)
         if existing is None:
-            await repo.set(key, item["value"], category=item["category"], description=item["desc"])
+            await repo.upsert(key, item["value"], category=item["category"], description=item["desc"])
 
 
 @router.get("", response_model=List[SettingItem])
 async def list_settings(db: AsyncSession = Depends(get_db)):
     """List all persisted system configurations, seeding defaults if empty."""
     repo = SettingsRepository(db)
-    await _ensure_seeded(repo)
-    await db.commit()
-
     records = await repo.list_all()
+    if not records:
+        await _ensure_seeded(repo)
+        await db.commit()
+        records = await repo.list_all()
+
     results = []
     for r in records:
         try:
@@ -123,8 +125,6 @@ async def list_settings(db: AsyncSession = Depends(get_db)):
 async def get_unified_config(db: AsyncSession = Depends(get_db)):
     """Retrieve structured 5-section unified configuration."""
     repo = SettingsRepository(db)
-    await _ensure_seeded(repo)
-    await db.commit()
 
     async def _g(k: str, default: Any) -> Any:
         v = await repo.get(k)
@@ -216,6 +216,10 @@ async def apply_unified_config(
         desc = DEFAULT_CONFIG.get(k, {}).get("desc", None)
         await repo.set(k, v, category=cat, description=desc)
 
+    # Increment configuration version and record update
+    cfg_version = (await repo.get("config.version") or 1) + 1
+    await repo.set("config.version", cfg_version, category="SYSTEM", description="Global SCADA Config Version")
+
     # Sync to primary tank in DB
     primary_tank = await tank_repo.get_first_primary()
     if primary_tank:
@@ -227,9 +231,29 @@ async def apply_unified_config(
         primary_tank.overflow_threshold_percent = payload.alarm_overflow_percent
 
     await db.commit()
+
+    # Publish updated parameters to concrete MQTT topic for edge devices
+    # Retained flag ensures offline devices synchronize automatically on reconnection
+    config_broadcast = {
+        "version": cfg_version,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "updated_by": admin.username,
+        "parameters": {
+            "refresh_interval": payload.device_refresh_interval,
+            "tank_height_cm": payload.tank_height_cm,
+            "tank_capacity_liters": payload.tank_capacity_liters,
+            "alarm_warning_percent": payload.alarm_warning_percent,
+            "alarm_critical_percent": payload.alarm_critical_percent,
+            "alarm_overflow_percent": payload.alarm_overflow_percent,
+        }
+    }
+    mqtt_service.publish("wli/config/global/update", config_broadcast, qos=1, retain=True)
+
     return {
         "status": "SUCCESS",
         "message": "Configuration successfully applied to database and active tank entities.",
+        "version": cfg_version,
+        "mqtt_published": True,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 

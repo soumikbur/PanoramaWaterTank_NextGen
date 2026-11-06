@@ -940,7 +940,7 @@ export const LocationScreen: React.FC = () => {
             </span>
             {hasGps && activeTrainLoc?.current_latitude != null && (
               <span style={{ fontSize: '10px', color: colors.textMuted, borderLeft: '1px solid #CBD5E1', paddingLeft: '8px' }}>
-                {activeTrainLoc.current_latitude.toFixed(4)}° N, {activeTrainLoc.current_longitude?.toFixed(4)}° E
+                {activeTrainLoc.current_latitude.toFixed(4)}° N, {activeTrainLoc.current_longitude?.toFixed(4)}° E &bull; Source: Coach {activeTrainLoc?.coach_number || 'C1'}
               </span>
             )}
           </div>

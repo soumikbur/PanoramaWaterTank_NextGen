@@ -654,9 +654,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/package.json": {
-    "mtime": 1793625778.4521341,
-    "seen": 1793625899.1308565,
-    "ast_hash": "160a0ada04d51af49d99c38ae39fc38c",
+    "mtime": 1793961073.8968837,
+    "seen": 1793962813.365038,
+    "ast_hash": "a49ea7caf971a415d234ed50d57da0f2",
     "semantic_hash": ""
   },
   "apps/mobile/src/App.tsx": {
@@ -666,9 +666,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/api/client.ts": {
-    "mtime": 1793882760.0446181,
-    "seen": 1793883462.4101186,
-    "ast_hash": "3ee30d684cec483690f8304c0a20c2f7",
+    "mtime": 1793957990.0871844,
+    "seen": 1793962813.3659372,
+    "ast_hash": "24e8c945cde6f0d469bffb47ce6d8c73",
     "semantic_hash": ""
   },
   "apps/mobile/src/components/charts/LevelTrendCard.tsx": {
@@ -3228,9 +3228,9 @@
     "semantic_hash": ""
   },
   "package.json": {
-    "mtime": 1793625370.8176897,
-    "seen": 1793625899.1407201,
-    "ast_hash": "2061b9993733ac08c2db0e1ca2320956",
+    "mtime": 1793961067.384566,
+    "seen": 1793962813.376439,
+    "ast_hash": "55480c6f43eb509baa6d65173549fe66",
     "semantic_hash": ""
   },
   "WLI_DOCS/audit_screenshots/search_clear_and_dashboard.png": {
@@ -3258,9 +3258,9 @@
     "semantic_hash": ""
   },
   "scripts/sync_dist.js": {
-    "mtime": 1793708018.073656,
-    "seen": 1793708374.24433,
-    "ast_hash": "dfb0a66e2ef6c135cfc650f56acb5453",
+    "mtime": 1793958418.0673387,
+    "seen": 1793962813.3771102,
+    "ast_hash": "e4a77a6e1a72b5ba6d9513448d8f8aed",
     "semantic_hash": ""
   },
   "scripts/test_map_fullscreen_expand.cjs": {
@@ -3276,15 +3276,15 @@
     "semantic_hash": ""
   },
   "apps/mobile/scripts/build.cjs": {
-    "mtime": 1793951836.396096,
-    "seen": 1793952052.464097,
-    "ast_hash": "5036754b4a3247805dfba6aea7d95d67",
+    "mtime": 1793961015.8616564,
+    "seen": 1793962813.365124,
+    "ast_hash": "5776692a5225d24eeaee41701db51090",
     "semantic_hash": ""
   },
   "apps/mobile/scripts/dev.cjs": {
-    "mtime": 1793951852.0662568,
-    "seen": 1793952052.4641814,
-    "ast_hash": "1d16ce3ce88aaea47ceb19fdd3f43115",
+    "mtime": 1793957633.7405334,
+    "seen": 1793962813.3652213,
+    "ast_hash": "e1b36e9ac3b69c0a31e3f98b976ed782",
     "semantic_hash": ""
   },
   "apps/mobile/scripts/preview.cjs": {
@@ -3312,9 +3312,9 @@
     "semantic_hash": ""
   },
   "backend/static/assets/index.js": {
-    "mtime": 1793956564.214885,
-    "seen": 1793956928.6346452,
-    "ast_hash": "7047be3d7e63b7c73c4554f5d147a966",
+    "mtime": 1793961120.8914914,
+    "seen": 1793962813.374916,
+    "ast_hash": "143a3f4b445a4c86dc6e00b612c15c22",
     "semantic_hash": ""
   },
   "scripts/verify_react_production_app.cjs": {
@@ -3324,8 +3324,8 @@
     "semantic_hash": ""
   },
   "backend/static/index.html": {
-    "mtime": 1793956564.215385,
-    "seen": 1793956928.6522498,
+    "mtime": 1793961120.892491,
+    "seen": 1793962813.3935354,
     "ast_hash": "b04769e82ff898f848bfac981d1eabac",
     "semantic_hash": ""
   },
@@ -3648,15 +3648,15 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/screens/DeviceMappingScreen.tsx": {
-    "mtime": 1793956150.0682993,
-    "seen": 1793956928.627912,
-    "ast_hash": "7aa155d6d54424639b20c00ebce3c43d",
+    "mtime": 1793956968.7712872,
+    "seen": 1793962813.3678198,
+    "ast_hash": "ebb503a191772ca2108a0dd37b53ec47",
     "semantic_hash": ""
   },
   "apps/mobile/src/screens/EmployeeDashboard.tsx": {
-    "mtime": 1793955992.5101855,
-    "seen": 1793956928.6279936,
-    "ast_hash": "839f21818b2c41bae264fb5255a9ce6c",
+    "mtime": 1793956969.0236092,
+    "seen": 1793962813.367899,
+    "ast_hash": "2e29eeddbae198719ad6a1a3c8d0e6ff",
     "semantic_hash": ""
   },
   "apps/mobile/src/screens/MonitoringScreen.tsx": {
@@ -3719,6 +3719,18 @@
     "ast_hash": "09d028c015c871b4173160944a8a854f",
     "semantic_hash": ""
   },
+  "scripts/debug_page.cjs": {
+    "mtime": 1793958085.4927707,
+    "seen": 1793962813.3767712,
+    "ast_hash": "60254bfa6684021cbe867515c70cd769",
+    "semantic_hash": ""
+  },
+  "scripts/test_dev_server.cjs": {
+    "mtime": 1793958227.5631852,
+    "seen": 1793962813.3771887,
+    "ast_hash": "07348932ed56f7a1ffd1f1c0cc83e01a",
+    "semantic_hash": ""
+  },
   "apps/mobile/package-lock.json": {
     "mtime": 1793626132.2336266,
     "seen": 1793626165.5461104,
@@ -3726,9 +3738,9 @@
     "semantic_hash": ""
   },
   "package-lock.json": {
-    "mtime": 1793626136.862707,
-    "seen": 1793626165.5461133,
-    "ast_hash": "3317fee35caf6afefcd37eeb93eb1369",
+    "mtime": 1793961145.3270884,
+    "seen": 1793962813.406147,
+    "ast_hash": "5d9770b2b1bd5707a194f8bce704d5b8",
     "semantic_hash": ""
   }
 }

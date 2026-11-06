@@ -108,9 +108,6 @@ async def create_user(
         must_change_password=data.mustChangePassword,
     )
     db.add(new_user)
-    await db.commit()
-    await db.refresh(new_user)
-
     client_ip = request.client.host if request.client else "unknown"
     db.add(AuditEvent(
         user_id=current_admin.id,
@@ -121,6 +118,7 @@ async def create_user(
         ip_address=client_ip
     ))
     await db.commit()
+    await db.refresh(new_user)
 
     return new_user
 

@@ -1325,7 +1325,7 @@ export const EmployeeDashboard: React.FC = () => {
                   </span>
                   <strong style={{ fontSize: '14px', color: '#0F172A' }}>Arrival Tank</strong>
                 </div>
-                <TankVisualization tank={DEMO_ARRIVAL_TANK} />
+                <TankVisualization tank={DEMO_ARRIVAL_TANK} batteryPercent={88} connectionStatus="Online" />
               </div>
 
               <div>
@@ -1335,7 +1335,7 @@ export const EmployeeDashboard: React.FC = () => {
                   </span>
                   <strong style={{ fontSize: '14px', color: '#0F172A' }}>Departure Tank</strong>
                 </div>
-                <TankVisualization tank={DEMO_DEPARTURE_TANK} />
+                <TankVisualization tank={DEMO_DEPARTURE_TANK} batteryPercent={88} connectionStatus="Online" />
               </div>
             </div>
 

@@ -107,7 +107,7 @@ const MainContent: React.FC = () => {
       >
         {activeScreen === 'trains' && <TrainManagementScreen />}
         {activeScreen === 'coaches' && <CoachManagementScreen />}
-        {activeScreen === 'dashboard' && (isAdmin ? <DashboardScreen /> : <EmployeeDashboard />)}
+        {activeScreen === 'dashboard' && <EmployeeDashboard />}
         {activeScreen === 'watertank' && <WaterTankScreen />}
         {activeScreen === 'devices' && <DeviceMappingScreen />}
         {activeScreen === 'location' && <LocationScreen />}

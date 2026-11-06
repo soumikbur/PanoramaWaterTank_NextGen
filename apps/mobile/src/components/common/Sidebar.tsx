@@ -40,12 +40,13 @@ export const Sidebar: React.FC = () => {
   const isConnected = connectionStatus === 'CONNECTED';
   const isAdmin = currentUser?.role === 'ADMIN';
 
-  // 1. Employee Navigation Items (Strictly 8 items: 7 primary + Logout)
+  // 1. Employee Navigation Items (Covering operations, consists, and GPS tracking)
   const employeeNavItems: { id: ScreenName; label: string; icon: LucideIcon }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'trains', label: 'Train Management', icon: Train },
     { id: 'coaches', label: 'Coach Management', icon: Layers },
     { id: 'devices', label: 'Device Mapping', icon: Cpu },
+    { id: 'location', label: 'GPS Tracking', icon: MapPin },
     { id: 'monitoring', label: 'Monitoring', icon: Gauge },
     { id: 'history', label: 'History', icon: LineChart },
     { id: 'reports', label: 'Reports', icon: FileText },

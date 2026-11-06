@@ -80,11 +80,13 @@ class DeviceRepository:
             self.session.add_all([tank1, tank2])
             await self.session.flush()
         else:
-            device.train_number = train_number
-            device.coach_number = coach_number
-            device.is_online = True
-            device.last_seen_at = datetime.now(timezone.utc)
-            await self.session.flush()
+            now = datetime.now(timezone.utc)
+            if not device.is_online or not device.last_seen_at or (now - device.last_seen_at).total_seconds() > 5:
+                device.train_number = train_number
+                device.coach_number = coach_number
+                device.is_online = True
+                device.last_seen_at = now
+                await self.session.flush()
 
         return device
 

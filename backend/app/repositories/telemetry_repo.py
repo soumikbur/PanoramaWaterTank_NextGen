@@ -14,7 +14,6 @@ class TelemetryRepository:
 
     async def insert(self, reading: TelemetryReading) -> TelemetryReading:
         self.session.add(reading)
-        await self.session.flush()
         return reading
 
     async def get_latest_for_device(self, device_id: str) -> Optional[TelemetryReading]:

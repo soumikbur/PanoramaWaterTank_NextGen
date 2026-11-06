@@ -995,7 +995,11 @@ export const CoachManagementScreen: React.FC = () => {
                 </div>
                 <span style={{ fontSize: '11px', color: '#64748B' }}>50 cm / 20 L Capacity</span>
               </div>
-              <TankVisualization tank={arrivalTankData} />
+              <TankVisualization
+                tank={arrivalTankData}
+                batteryPercent={selectedCoach.batteryPercent}
+                connectionStatus={selectedCoach.isOnline ? 'Online' : 'Offline'}
+              />
             </div>
 
             {/* Departure Tank (Sensor 2) */}
@@ -1020,7 +1024,11 @@ export const CoachManagementScreen: React.FC = () => {
                 </div>
                 <span style={{ fontSize: '11px', color: '#64748B' }}>50 cm / 20 L Capacity</span>
               </div>
-              <TankVisualization tank={departureTankData} />
+              <TankVisualization
+                tank={departureTankData}
+                batteryPercent={selectedCoach.batteryPercent}
+                connectionStatus={selectedCoach.isOnline ? 'Online' : 'Offline'}
+              />
             </div>
           </div>
         </div>

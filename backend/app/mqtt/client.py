@@ -84,6 +84,19 @@ class MqttService:
             self.is_connected = False
             logger.info("MQTT Client stopped.")
 
+    def publish(self, topic: str, payload: Any, qos: int = 1, retain: bool = False) -> bool:
+        """Publish payload (dict or str) to concrete MQTT topic."""
+        if not self.client:
+            logger.warning("MQTT client not available for publish.")
+            return False
+        try:
+            body = json.dumps(payload) if not isinstance(payload, (str, bytes)) else payload
+            res = self.client.publish(topic, body, qos=qos, retain=retain)
+            return res.rc == mqtt.MQTT_ERR_SUCCESS
+        except Exception as e:
+            logger.error(f"Error publishing to {topic}: {e}")
+            return False
+
     def _on_connect(self, client: mqtt.Client, userdata: Any, flags: Any, rc: Any, properties: Any = None) -> None:
         rc_code = getattr(rc, "value", rc)
         if rc_code == 0:

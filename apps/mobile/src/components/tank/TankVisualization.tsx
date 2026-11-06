@@ -6,12 +6,19 @@ import { StatusBadge } from '../common/StatusBadge';
 
 interface TankVisualizationProps {
   tank: TankLiveStatus | null;
+  batteryPercent?: number | null;
+  connectionStatus?: string | null;
   style?: React.CSSProperties;
 }
 
 export type TankVisualizationState = 'NO_TELEMETRY' | 'VALID_ZERO' | 'STALE' | 'VALID_READING';
 
-export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, style }) => {
+export const TankVisualization: React.FC<TankVisualizationProps> = ({
+  tank,
+  batteryPercent,
+  connectionStatus,
+  style,
+}) => {
   // 1. Rigorous 4-State Detection
   const isTelemetryAvailable = Boolean(tank && tank.hasTelemetry !== false && tank.levelPercent != null);
   const isStale = Boolean(tank && (tank.isStale || tank.alarmStatus === 'STALE_DATA'));
@@ -24,6 +31,13 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
     : isZero
     ? 'VALID_ZERO'
     : 'VALID_READING';
+
+  // Battery & Connection Status (Independent from water level alarms)
+  const effectiveBattery = batteryPercent != null
+    ? batteryPercent
+    : (tank?.batteryVoltage ? Math.round(Math.min(100, Math.max(0, ((tank.batteryVoltage - 3.2) / 1.0) * 100))) : null);
+  const isBatteryLow = effectiveBattery != null && effectiveBattery < 40;
+  const effectiveConnection = connectionStatus || (tank?.isOnline ? 'Online' : (state === 'NO_TELEMETRY' ? 'Standby' : 'Offline'));
 
   // 2. Calibrated Physical Tank Geometry
   const tankHeightCm = tank?.maxHeightCm && tank.maxHeightCm > 0 ? tank.maxHeightCm : 50.0;
@@ -364,11 +378,13 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
 
   return (
     <BaseCard
+      className={isBatteryLow ? 'battery-low-blink' : undefined}
       padding={metrics.cardPadding}
       style={{
         minHeight: '460px',
         maxHeight: '540px',
         height: '100%',
+        transition: 'all 0.3s ease',
         ...style,
       }}
     >
@@ -751,6 +767,38 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
               >
                 Last Update: {lastUpdated}
               </span>
+            </div>
+
+            {/* Battery & Device Health Block (Independent warning logic) */}
+            <div
+              style={{
+                backgroundColor: isBatteryLow ? '#FEF2F2' : '#F8FAFC',
+                border: `1px solid ${isBatteryLow ? '#FCA5A5' : colors.divider}`,
+                borderRadius: '8px',
+                padding: '6px 9px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+                boxSizing: 'border-box',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '11px', color: colors.textSecondary, fontWeight: 500 }}>
+                  Device Link
+                </span>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: effectiveConnection === 'Online' ? '#16A34A' : '#64748B' }}>
+                  {effectiveConnection}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2px' }}>
+                <span style={{ fontSize: '11px', color: isBatteryLow ? '#DC2626' : colors.textSecondary, fontWeight: 500 }}>
+                  Battery Level
+                </span>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: isBatteryLow ? '#DC2626' : '#0F172A' }}>
+                  {effectiveBattery != null ? `${effectiveBattery}%` : 'Nominal'}
+                  {isBatteryLow && ' ⚠️'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
