@@ -98,6 +98,7 @@ async def list_all_tanks(db: AsyncSession = Depends(get_db)):
             name="Shatabdi Coach B4 Water System"
         )
         tank1 = await tank_repo.get_by_device_and_index(device.id, 1)
+        await db.commit()
         tanks = [tank1] if tank1 else []
 
     results = []
@@ -127,6 +128,7 @@ async def get_live_tank_status(db: AsyncSession = Depends(get_db)):
             name="Shatabdi Coach B4 Water System"
         )
         tank = await tank_repo.get_by_device_and_index(device.id, 1)
+        await db.commit()
 
     device = await device_repo.get_by_id(tank.device_id) if tank else None
     latest = await telemetry_repo.get_latest_for_tank(tank.id) if tank else None

@@ -180,6 +180,23 @@ async def seed_initial_settings(session: AsyncSession) -> None:
     await session.commit()
 
 
+async def seed_initial_fleet(session: AsyncSession) -> None:
+    """Seed baseline default device and tanks idempotently if none exist."""
+    from app.repositories.tank_repo import TankRepository
+    from app.repositories.device_repo import DeviceRepository
+    tank_repo = TankRepository(session)
+    primary = await tank_repo.get_first_primary()
+    if not primary:
+        device_repo = DeviceRepository(session)
+        await device_repo.create_or_update(
+            uid=settings.DEFAULT_DEVICE_UID,
+            train_number=settings.DEFAULT_TRAIN_NUMBER,
+            coach_number=settings.DEFAULT_COACH_NUMBER,
+            name="Shatabdi Coach B4 Water System"
+        )
+        await session.commit()
+
+
 async def init_db() -> None:
     """Initialize database tables and seed baseline credentials and configurations."""
     async with engine.begin() as conn:
@@ -189,5 +206,6 @@ async def init_db() -> None:
         try:
             await seed_initial_accounts(session)
             await seed_initial_settings(session)
+            await seed_initial_fleet(session)
         except Exception as e:
             logger.error(f"Error seeding baseline data: {e}")

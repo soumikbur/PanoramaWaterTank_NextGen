@@ -32,6 +32,18 @@ async def get_telemetry_history(
     if not tank_id:
         tank = await tank_repo.get_first_primary()
         if not tank:
+            from app.core.config import settings
+            from app.repositories.device_repo import DeviceRepository
+            device_repo = DeviceRepository(db)
+            device = await device_repo.create_or_update(
+                uid=settings.DEFAULT_DEVICE_UID,
+                train_number=settings.DEFAULT_TRAIN_NUMBER,
+                coach_number=settings.DEFAULT_COACH_NUMBER,
+                name="Shatabdi Coach B4 Water System"
+            )
+            tank = await tank_repo.get_by_device_and_index(device.id, 1)
+            await db.commit()
+        if not tank:
             raise HTTPException(status_code=404, detail="No active tanks found")
         tank_id = tank.id
     else:
