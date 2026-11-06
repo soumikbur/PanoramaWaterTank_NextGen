@@ -118,12 +118,35 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
   const shouldAnimateWave = state === 'VALID_READING' && fillPercentage > 0;
   const [wavePhase, setWavePhase] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [containerSize, setContainerSize] = useState<{ width: number; height: number }>({ width: 180, height: 320 });
   const targetFillRef = useRef(fillPercentage);
   const animatedFillRef = useRef(fillPercentage);
 
   useEffect(() => {
     targetFillRef.current = fillPercentage;
   }, [fillPercentage]);
+
+  // Responsive container observer ensuring canvas exactly fills the measurement area
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateSize = () => {
+      const rect = container.getBoundingClientRect();
+      if (rect.width > 20 && rect.height > 20) {
+        setContainerSize({
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        });
+      }
+    };
+
+    updateSize();
+    const ro = new ResizeObserver(() => updateSize());
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     let animId: number;
@@ -157,18 +180,24 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
     return () => cancelAnimationFrame(animId);
   }, [shouldAnimateWave]);
 
-  // 6. Canvas Rendering Logic
+  // 6. Dynamic Responsive Canvas Rendering Logic
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const w = canvas.width;
-    const h = canvas.height;
-    const tr = metrics.topRadius;
-    const br = metrics.bottomRadius;
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+    const w = containerSize.width;
+    const h = containerSize.height;
 
+    if (w <= 0 || h <= 0) return;
+
+    const tr = Math.min(metrics.topRadius, w * 0.1, h * 0.05);
+    const br = Math.min(metrics.bottomRadius, w * 0.15, h * 0.08);
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, w, h);
 
     // 1. Vessel Body Outline Path (for clipping interior)
@@ -216,11 +245,11 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
         grad.addColorStop(1, colorBottom);
         ctx.fillStyle = grad;
 
-        // Dual smooth sine waves
+        // Dual smooth sine waves scaled proportionally with tank size
         const phase1 = wavePhase;
         const phase2 = wavePhase * 1.6 + 1.2;
-        const amp1 = 2.8;
-        const amp2 = 1.6;
+        const amp1 = Math.min(3.0, h * 0.012);
+        const amp2 = Math.min(1.8, h * 0.007);
 
         ctx.beginPath();
         ctx.moveTo(0, h);
@@ -249,7 +278,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
           else ctx.lineTo(x2, waveY2);
         }
         ctx.lineWidth = 2.0;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
         ctx.stroke();
       }
     } else if (state === 'STALE') {
@@ -297,8 +326,6 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
       ctx.fillText('Tank Empty (0.00%)', w / 2, h - 14);
     } else {
       // STATE A: NO TELEMETRY
-      // Completely empty vessel. NO blue water, NO scan beam, NO floating bands.
-      // Subtle centered industrial status text
       ctx.fillStyle = '#94A3B8';
       ctx.font = '600 12px Inter, sans-serif';
       ctx.textAlign = 'center';
@@ -327,11 +354,25 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
     ctx.lineWidth = 2.0;
     ctx.strokeStyle = colors.tankOutline;
     ctx.stroke();
-  }, [state, fillPercentage, wavePhase, isOverflow]);
+
+    ctx.restore(); // End dpr scale
+  }, [state, fillPercentage, wavePhase, isOverflow, containerSize]);
+
+  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+  const canvasWidth = Math.max(10, Math.round(containerSize.width * dpr));
+  const canvasHeight = Math.max(10, Math.round(containerSize.height * dpr));
 
   return (
-    <BaseCard padding={metrics.cardPadding} style={{ minHeight: `${metrics.tankCardMinHeight}px`, ...style }}>
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', gap: '10px' }}>
+    <BaseCard
+      padding={metrics.cardPadding}
+      style={{
+        minHeight: '460px',
+        maxHeight: '540px',
+        height: '100%',
+        ...style,
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, gap: '8px' }}>
         {/* Card Title */}
         <span
           style={{
@@ -339,159 +380,243 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
             fontSize: typography.dashCardTitle.fontSize,
             fontWeight: typography.dashCardTitle.fontWeight,
             color: colors.textPrimary,
+            flexShrink: 0,
           }}
         >
           Water Level
         </span>
 
         {/* Row: Left (Tank + Scale) | Right (Level %, Height, Volume, Status) */}
-        <div style={{ display: 'flex', flex: 1, gap: '12px', flexWrap: 'wrap', alignItems: 'stretch' }}>
+        <div
+          id="tank-visualization-container"
+          style={{
+            display: 'flex',
+            flex: 1,
+            minHeight: 0,
+            gap: '12px',
+            alignItems: 'stretch',
+          }}
+        >
           {/* Left: Tank Vessel + Vertical Scale */}
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'stretch', flex: '1 1 200px', minWidth: '180px', maxWidth: '300px' }}>
-            {/* Vessel Container */}
+          <div
+            id="tank-scale-group"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              flex: '1.2 1 180px',
+              minWidth: '170px',
+              height: '100%',
+              minHeight: 0,
+            }}
+          >
+            {/* Top Pipe / Nozzle Lid Header (Height: 12px) */}
             <div
               style={{
-                flex: 1,
-                minWidth: '130px',
                 display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                position: 'relative',
+                alignItems: 'flex-end',
+                height: '12px',
+                marginBottom: '2px',
+                flexShrink: 0,
               }}
             >
-              {/* Top Pipe / Nozzle Lid (36x12 px) */}
-              <div
-                style={{
-                  width: '36px',
-                  height: '12px',
-                  position: 'relative',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  zIndex: 5,
-                  marginBottom: '-2px',
-                }}
-              >
-                {/* Cap */}
+              {/* Centered over tank body */}
+              <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
                 <div
                   style={{
                     width: '36px',
-                    height: '4px',
-                    borderRadius: '2px',
-                    backgroundColor: colors.surface,
-                    border: `1.5px solid ${colors.tankOutline}`,
-                    boxSizing: 'border-box',
+                    height: '12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    position: 'relative',
                   }}
-                />
-                {/* Collar */}
-                <div
-                  style={{
-                    width: '24px',
-                    height: '9px',
-                    borderRadius: '2px',
-                    backgroundColor: colors.surface,
-                    border: `1.5px solid ${colors.tankOutline}`,
-                    boxSizing: 'border-box',
-                    marginTop: '-1px',
-                  }}
-                />
+                >
+                  {/* Cap */}
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '3.5px',
+                      borderRadius: '2px',
+                      backgroundColor: colors.surface,
+                      border: `1.5px solid ${colors.tankOutline}`,
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  {/* Collar */}
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '8.5px',
+                      borderRadius: '2px',
+                      backgroundColor: colors.surface,
+                      border: `1.5px solid ${colors.tankOutline}`,
+                      boxSizing: 'border-box',
+                      marginTop: '-1px',
+                    }}
+                  />
+                </div>
               </div>
-
-              {/* Canvas Tank Body */}
-              <div style={{ width: '100%', height: '220px', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <canvas
-                  ref={canvasRef}
-                  width={metrics.vesselPreferredWidth}
-                  height={220}
-                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }}
-                />
-              </div>
+              {/* Spacer matching ruler width + gap */}
+              <div style={{ width: '56px', flexShrink: 0 }} />
             </div>
 
-            {/* Vertical Scale Ruler (42px width) */}
+            {/* Shared Vertical Measurement Region (Tank Body + Scale Ruler) */}
             <div
+              id="tank-measurement-region"
               style={{
-                width: `${metrics.rulerPreferredWidth}px`,
+                flex: 1,
+                minHeight: 0,
                 display: 'flex',
+                alignItems: 'stretch',
+                gap: '8px',
                 position: 'relative',
-                paddingTop: '16px',
-                paddingBottom: '8px',
-                boxSizing: 'border-box',
               }}
             >
-              {/* Vertical line */}
+              {/* Tank Body Canvas Container */}
               <div
-                style={{
-                  width: '1px',
-                  height: '100%',
-                  backgroundColor: colors.dividerStrong,
-                }}
-              />
-              {/* 21 Tick marks (every 5%) */}
-              <div
+                ref={containerRef}
+                id="tank-canvas-container"
                 style={{
                   flex: 1,
+                  minWidth: '110px',
+                  height: '100%',
+                  minHeight: 0,
+                  position: 'relative',
                   display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  paddingLeft: '3px',
                 }}
               >
-                {Array.from({ length: 21 }).map((_, i) => {
-                  const percent = 100 - i * 5;
-                  const isMajor = percent % 25 === 0;
-                  return (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '3px', height: '1px' }}>
+                <canvas
+                  ref={canvasRef}
+                  id="tank-body-canvas"
+                  width={canvasWidth}
+                  height={canvasHeight}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    display: 'block',
+                  }}
+                />
+              </div>
+
+              {/* Percentage Scale Ruler */}
+              <div
+                id="tank-percentage-scale"
+                style={{
+                  width: '48px',
+                  flexShrink: 0,
+                  height: '100%',
+                  display: 'flex',
+                  position: 'relative',
+                  boxSizing: 'border-box',
+                }}
+              >
+                {/* Vertical baseline */}
+                <div
+                  style={{
+                    width: '1.5px',
+                    height: '100%',
+                    backgroundColor: colors.dividerStrong,
+                  }}
+                />
+                {/* 21 Tick marks (every 5%) */}
+                <div
+                  style={{
+                    flex: 1,
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    paddingLeft: '3px',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  {Array.from({ length: 21 }).map((_, i) => {
+                    const percent = 100 - i * 5;
+                    const isMajor = percent % 25 === 0;
+                    return (
                       <div
+                        key={i}
                         style={{
-                          width: isMajor ? '7px' : '3px',
-                          height: '1px',
-                          backgroundColor: colors.dividerStrong,
+                          display: 'flex',
+                          alignItems: 'center',
+                          height: '0px',
+                          position: 'relative',
                         }}
-                      />
-                      {isMajor && (
-                        <span
+                      >
+                        <div
                           style={{
-                            fontFamily: typography.fontFamily,
-                            fontSize: '10px',
-                            color: colors.textSecondary,
-                            lineHeight: 1,
+                            width: isMajor ? '8px' : '4px',
+                            height: '1px',
+                            backgroundColor: isMajor ? colors.textSecondary : colors.dividerStrong,
                           }}
-                        >
-                          {percent}%
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
+                        />
+                        {isMajor && (
+                          <span
+                            style={{
+                              fontFamily: typography.fontFamily,
+                              fontSize: '10px',
+                              fontWeight: percent === 100 || percent === 0 ? 600 : 500,
+                              color: colors.textSecondary,
+                              lineHeight: 1,
+                              userSelect: 'none',
+                              position: 'absolute',
+                              left: '12px',
+                              top: '0px',
+                              transform: 'translateY(-50%)',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {percent}%
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Right Column: Values, Sub-Cards, & Status */}
-          <div style={{ flex: '1 1 140px', minWidth: '130px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span
-              style={{
-                fontFamily: typography.fontFamily,
-                fontSize: '14px',
-                fontWeight: 500,
-                color: colors.textSecondary,
-              }}
-            >
-              Current Level
-            </span>
+          <div
+            style={{
+              flex: '1 1 130px',
+              minWidth: '120px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              gap: '6px',
+              height: '100%',
+            }}
+          >
+            <div>
+              <span
+                style={{
+                  fontFamily: typography.fontFamily,
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  color: colors.textSecondary,
+                  display: 'block',
+                }}
+              >
+                Current Level
+              </span>
 
-            <span
-              style={{
-                fontFamily: typography.fontFamily,
-                fontSize: state === 'NO_TELEMETRY' ? '18px' : typography.dashPercentage.fontSize,
-                fontWeight: typography.dashPercentage.fontWeight,
-                color: isOverflow || state === 'VALID_ZERO' ? colors.critical : state === 'STALE' ? colors.warning : colors.primary,
-                lineHeight: 1.1,
-              }}
-            >
-              {levelDisplay}
-            </span>
+              <span
+                style={{
+                  fontFamily: typography.fontFamily,
+                  fontSize: state === 'NO_TELEMETRY' ? '18px' : typography.dashPercentage.fontSize,
+                  fontWeight: typography.dashPercentage.fontWeight,
+                  color: isOverflow || state === 'VALID_ZERO' ? colors.critical : state === 'STALE' ? colors.warning : colors.primary,
+                  lineHeight: 1.1,
+                }}
+              >
+                {levelDisplay}
+              </span>
+            </div>
 
             {/* 1. Water Height Card Block */}
             <div
@@ -499,7 +624,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
                 backgroundColor: '#F8FAFC',
                 border: `1px solid ${colors.divider}`,
                 borderRadius: '8px',
-                padding: '8px',
+                padding: '7px 9px',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '1px',
@@ -530,7 +655,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
               <span
                 style={{
                   fontFamily: typography.fontFamily,
-                  fontSize: '18px',
+                  fontSize: '16px',
                   fontWeight: 700,
                   color: colors.textPrimary,
                 }}
@@ -554,7 +679,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
                 backgroundColor: '#F8FAFC',
                 border: `1px solid ${colors.divider}`,
                 borderRadius: '8px',
-                padding: '8px',
+                padding: '7px 9px',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '1px',
@@ -585,7 +710,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
               <span
                 style={{
                   fontFamily: typography.fontFamily,
-                  fontSize: '18px',
+                  fontSize: '16px',
                   fontWeight: 700,
                   color: colors.textPrimary,
                 }}
@@ -603,29 +728,30 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
               </span>
             </div>
 
-            <span
-              style={{
-                fontFamily: typography.fontFamily,
-                fontSize: '11px',
-                color: colors.textSecondary,
-                marginTop: '2px',
-              }}
-            >
-              Status
-            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              <span
+                style={{
+                  fontFamily: typography.fontFamily,
+                  fontSize: '11px',
+                  color: colors.textSecondary,
+                }}
+              >
+                Status
+              </span>
 
-            <StatusBadge severity={severity} label={badgeLabel} />
+              <StatusBadge severity={severity} label={badgeLabel} />
 
-            <span
-              style={{
-                fontFamily: typography.fontFamily,
-                fontSize: '11px',
-                color: colors.textSecondary,
-                marginTop: '1px',
-              }}
-            >
-              Last Update: {lastUpdated}
-            </span>
+              <span
+                style={{
+                  fontFamily: typography.fontFamily,
+                  fontSize: '11px',
+                  color: colors.textSecondary,
+                  marginTop: '1px',
+                }}
+              >
+                Last Update: {lastUpdated}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -643,6 +769,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
             boxSizing: 'border-box',
             flexWrap: 'wrap',
             gap: '8px',
+            flexShrink: 0,
           }}
         >
           <span

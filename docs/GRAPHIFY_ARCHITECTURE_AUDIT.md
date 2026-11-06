@@ -89,3 +89,4 @@ Graphify relationship path analysis confirms that the changes made to `TankVisua
 - `graphify-out/graph.json`: Machine-readable topological graph data.
 - `graphify-out/graph.html`: Interactive aggregated community visualization.
 - `graphify-out/GRAPH_REPORT.md`: Comprehensive module clustering summary.
+

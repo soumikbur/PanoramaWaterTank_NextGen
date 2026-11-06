@@ -11,6 +11,9 @@ export interface TrainOverviewItem {
   is_online: boolean;
   status: string;
   active_alarms: number;
+  region?: string;
+  devices_count?: number;
+  has_active_alarms?: boolean;
 }
 
 export interface RegionSummary {

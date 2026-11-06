@@ -47,3 +47,4 @@ In `LocationScreen.tsx`, Leaflet GIS map controls and toolbar buttons are calibr
 - **120% Display Scale:** Button wraps cleanly using CSS flex-wrap without vertical clipping or horizontal scrollbars.
 - **150% Display Scale:** Icon labels remain legible; zoom controls retain touch target minimums of 36x36px.
 - **Resize Invalidation:** Changing display presets automatically dispatches a debounced `window.dispatchEvent(new Event('resize'))` that calls Leaflet's `map.invalidateSize()`.
+

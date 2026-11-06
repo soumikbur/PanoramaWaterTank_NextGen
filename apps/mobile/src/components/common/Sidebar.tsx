@@ -1,5 +1,5 @@
 import React from 'react';
-import { colors, typography } from '../../theme';
+import { typography } from '../../theme';
 import { useApp, ScreenName } from '../../state/AppContext';
 import {
   Train,
@@ -16,8 +16,9 @@ import {
   Droplet,
   ChevronLeft,
   ChevronRight,
-  Shield,
+  Layers,
   Activity,
+  LogOut,
   LucideIcon,
 } from 'lucide-react';
 
@@ -33,29 +34,45 @@ export const Sidebar: React.FC = () => {
     activeAlarms,
     selectedTrainNumber,
     currentUser,
+    logout,
   } = useApp();
 
   const isConnected = connectionStatus === 'CONNECTED';
   const isAdmin = currentUser?.role === 'ADMIN';
 
-  // 8 Main Operational Navigation Items
-  const primaryNavItems: { id: ScreenName; label: string; icon: LucideIcon }[] = [
-    { id: 'trains', label: 'Train Management', icon: Train },
+  // 1. Employee Navigation Items (Strictly 8 items: 7 primary + Logout)
+  const employeeNavItems: { id: ScreenName; label: string; icon: LucideIcon }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'trains', label: 'Train Management', icon: Train },
+    { id: 'coaches', label: 'Coach Management', icon: Layers },
+    { id: 'devices', label: 'Device Mapping', icon: Cpu },
+    { id: 'monitoring', label: 'Monitoring', icon: Gauge },
+    { id: 'history', label: 'History', icon: LineChart },
+    { id: 'reports', label: 'Reports', icon: FileText },
+  ];
+
+  // 2. Admin Fleet Navigation Items (Preserving full admin access)
+  const adminPrimaryNavItems: { id: ScreenName; label: string; icon: LucideIcon }[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'trains', label: 'Train Management', icon: Train },
+    { id: 'coaches', label: 'Coach Management', icon: Layers },
     { id: 'watertank', label: 'All Tanks', icon: Gauge },
     { id: 'devices', label: 'Devices', icon: Cpu },
     { id: 'location', label: 'Location & GPS', icon: MapPin },
+    { id: 'monitoring', label: 'Live Monitoring', icon: Activity },
     { id: 'alerts', label: 'Alerts', icon: AlertTriangle },
     { id: 'history', label: 'History', icon: LineChart },
     { id: 'reports', label: 'Reports', icon: FileText },
   ];
 
-  // System & Management Navigation Items (Admin Only)
-  const systemNavItems: { id: ScreenName; label: string; icon: LucideIcon }[] = [
+  // 3. System & Administration Items (Admin Only)
+  const adminSystemNavItems: { id: ScreenName; label: string; icon: LucideIcon }[] = [
     { id: 'settings', label: 'Settings', icon: SettingsIcon },
     { id: 'users', label: 'User Management', icon: UsersIcon },
     { id: 'logs', label: 'System Logs', icon: ScrollText },
   ];
+
+  const currentNavItems = isAdmin ? adminPrimaryNavItems : employeeNavItems;
 
   // Train summary metrics
   const onlineDevicesCount = devices.filter((d) => d.isOnline ?? d.is_online).length;
@@ -73,8 +90,8 @@ export const Sidebar: React.FC = () => {
         minWidth: sidebarWidth,
         maxWidth: sidebarWidth,
         height: '100%',
-        backgroundColor: '#FFFFFF',
-        borderRight: '1px solid #E2E8F0',
+        backgroundColor: '#0F172A', // Dark Navy SCADA Theme
+        borderRight: '1px solid #1E293B',
         display: 'flex',
         flexDirection: 'column',
         boxSizing: 'border-box',
@@ -88,7 +105,7 @@ export const Sidebar: React.FC = () => {
       <div
         style={{
           padding: sidebarCollapsed ? '16px 8px' : '16px 14px',
-          borderBottom: '1px solid #F1F5F9',
+          borderBottom: '1px solid #1E293B',
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
@@ -99,12 +116,13 @@ export const Sidebar: React.FC = () => {
             width: '32px',
             height: '32px',
             borderRadius: '6px',
-            backgroundColor: '#EFF6FF',
+            backgroundColor: '#1E293B',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#2563EB',
+            color: '#38BDF8',
             flexShrink: 0,
+            border: '1px solid #334155',
           }}
         >
           <Droplet size={18} strokeWidth={2.2} />
@@ -114,23 +132,23 @@ export const Sidebar: React.FC = () => {
             <span
               style={{
                 fontFamily: typography.fontFamily,
-                fontSize: '14px',
+                fontSize: '13px',
                 fontWeight: 800,
-                color: '#0F172A',
+                color: '#F8FAFC',
                 letterSpacing: '0.6px',
               }}
             >
-              PANORAMA
+              WLI RAILWAY
             </span>
             <span
               style={{
                 fontFamily: typography.fontFamily,
                 fontSize: '10px',
-                color: '#64748B',
+                color: '#94A3B8',
                 fontWeight: 500,
               }}
             >
-              Water Tank NextGen
+              {isAdmin ? 'Admin SCADA Console' : 'Employee Portal'}
             </span>
           </div>
         )}
@@ -143,8 +161,8 @@ export const Sidebar: React.FC = () => {
             margin: '10px 12px',
             padding: '10px 12px',
             borderRadius: '8px',
-            backgroundColor: '#F8FAFC',
-            border: '1px solid #E2E8F0',
+            backgroundColor: '#1E293B',
+            border: '1px solid #334155',
             boxSizing: 'border-box',
           }}
         >
@@ -153,33 +171,34 @@ export const Sidebar: React.FC = () => {
               style={{
                 fontSize: '11px',
                 fontWeight: 700,
-                color: '#1E293B',
+                color: '#F8FAFC',
               }}
             >
-              {selectedTrainNumber} &bull; Shatabdi
+              {selectedTrainNumber} &bull; Active Consist
             </span>
             <span
               style={{
                 fontSize: '9px',
                 fontWeight: 600,
-                color: '#2563EB',
-                backgroundColor: '#EFF6FF',
+                color: '#38BDF8',
+                backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                border: '1px solid rgba(56, 189, 248, 0.25)',
                 padding: '1px 5px',
                 borderRadius: '4px',
               }}
             >
-              NR
+              LIVE
             </span>
           </div>
           <div
             style={{
               fontSize: '10px',
-              color: '#64748B',
+              color: '#94A3B8',
               marginTop: '2px',
               marginBottom: '8px',
             }}
           >
-            Northern Railway Corridor
+            Railway Telemetry Corridor
           </div>
 
           {/* 2x2 Grid */}
@@ -191,21 +210,21 @@ export const Sidebar: React.FC = () => {
               fontSize: '10px',
             }}
           >
-            <div style={{ backgroundColor: '#FFFFFF', padding: '4px 6px', borderRadius: '4px', border: '1px solid #E2E8F0' }}>
-              <span style={{ color: '#64748B' }}>Coaches: </span>
-              <strong style={{ color: '#0F172A' }}>{devices.length}</strong>
+            <div style={{ backgroundColor: '#0F172A', padding: '4px 6px', borderRadius: '4px', border: '1px solid #334155' }}>
+              <span style={{ color: '#94A3B8' }}>Coaches: </span>
+              <strong style={{ color: '#F8FAFC' }}>{devices.length || 1}</strong>
             </div>
-            <div style={{ backgroundColor: '#FFFFFF', padding: '4px 6px', borderRadius: '4px', border: '1px solid #E2E8F0' }}>
-              <span style={{ color: '#64748B' }}>Tanks: </span>
-              <strong style={{ color: '#0F172A' }}>{totalTanksCount}</strong>
+            <div style={{ backgroundColor: '#0F172A', padding: '4px 6px', borderRadius: '4px', border: '1px solid #334155' }}>
+              <span style={{ color: '#94A3B8' }}>Tanks: </span>
+              <strong style={{ color: '#F8FAFC' }}>{totalTanksCount || 2}</strong>
             </div>
-            <div style={{ backgroundColor: '#FFFFFF', padding: '4px 6px', borderRadius: '4px', border: '1px solid #E2E8F0' }}>
-              <span style={{ color: '#64748B' }}>Online: </span>
-              <strong style={{ color: onlineDevicesCount > 0 ? '#16A34A' : '#64748B' }}>{onlineDevicesCount}</strong>
+            <div style={{ backgroundColor: '#0F172A', padding: '4px 6px', borderRadius: '4px', border: '1px solid #334155' }}>
+              <span style={{ color: '#94A3B8' }}>Online: </span>
+              <strong style={{ color: onlineDevicesCount > 0 ? '#4ADE80' : '#94A3B8' }}>{onlineDevicesCount}</strong>
             </div>
-            <div style={{ backgroundColor: '#FFFFFF', padding: '4px 6px', borderRadius: '4px', border: '1px solid #E2E8F0' }}>
-              <span style={{ color: '#64748B' }}>Offline: </span>
-              <strong style={{ color: '#64748B' }}>{offlineDevicesCount}</strong>
+            <div style={{ backgroundColor: '#0F172A', padding: '4px 6px', borderRadius: '4px', border: '1px solid #334155' }}>
+              <span style={{ color: '#94A3B8' }}>Offline: </span>
+              <strong style={{ color: '#94A3B8' }}>{offlineDevicesCount}</strong>
             </div>
           </div>
 
@@ -215,8 +234,9 @@ export const Sidebar: React.FC = () => {
               marginTop: '6px',
               padding: '3px 6px',
               borderRadius: '4px',
-              backgroundColor: totalAlertsCount > 0 ? '#FEE2E2' : '#ECFDF5',
-              color: totalAlertsCount > 0 ? '#DC2626' : '#16A34A',
+              backgroundColor: totalAlertsCount > 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)',
+              color: totalAlertsCount > 0 ? '#F87171' : '#4ADE80',
+              border: `1px solid ${totalAlertsCount > 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`,
               fontSize: '10px',
               fontWeight: 600,
               display: 'flex',
@@ -239,24 +259,24 @@ export const Sidebar: React.FC = () => {
           paddingBottom: '6px',
         }}
       >
-        {/* Operations Section Header */}
+        {/* Navigation Section Header */}
         {!sidebarCollapsed && (
           <div
             style={{
               padding: '6px 14px 2px 14px',
               fontSize: '10px',
               fontWeight: 700,
-              color: '#94A3B8',
-              letterSpacing: '0.5px',
+              color: '#64748B',
+              letterSpacing: '0.6px',
               textTransform: 'uppercase',
             }}
           >
-            Operations
+            {isAdmin ? 'Fleet Operations' : 'Employee Operations'}
           </div>
         )}
 
         {/* Primary Items */}
-        {primaryNavItems.map((item) => {
+        {currentNavItems.map((item) => {
           const isActive = activeScreen === item.id;
           const IconComp = item.icon;
           return (
@@ -273,20 +293,20 @@ export const Sidebar: React.FC = () => {
                 gap: '12px',
                 padding: sidebarCollapsed ? '10px 0' : '9px 14px',
                 justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-                backgroundColor: isActive ? '#EFF6FF' : 'transparent',
+                backgroundColor: isActive ? '#1E293B' : 'transparent',
                 border: 'none',
-                borderLeft: isActive ? '3px solid #2563EB' : '3px solid transparent',
+                borderLeft: isActive ? '3px solid #38BDF8' : '3px solid transparent',
                 cursor: 'pointer',
                 fontFamily: typography.fontFamily,
                 fontSize: '12px',
                 fontWeight: isActive ? 600 : 500,
-                color: isActive ? '#2563EB' : '#475569',
+                color: isActive ? '#38BDF8' : '#94A3B8',
                 boxSizing: 'border-box',
                 textAlign: 'left',
-                transition: 'background-color 0.1s ease',
+                transition: 'all 0.12s ease',
               }}
             >
-              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive ? '#38BDF8' : '#64748B' }}>
                 <IconComp size={16} strokeWidth={isActive ? 2.2 : 1.8} />
               </span>
               {!sidebarCollapsed && (
@@ -305,8 +325,8 @@ export const Sidebar: React.FC = () => {
               padding: '12px 14px 2px 14px',
               fontSize: '10px',
               fontWeight: 700,
-              color: '#94A3B8',
-              letterSpacing: '0.5px',
+              color: '#64748B',
+              letterSpacing: '0.6px',
               textTransform: 'uppercase',
             }}
           >
@@ -316,7 +336,7 @@ export const Sidebar: React.FC = () => {
 
         {/* System Items (Admin Only) */}
         {isAdmin &&
-          systemNavItems.map((item) => {
+          adminSystemNavItems.map((item) => {
             const isActive = activeScreen === item.id;
             const IconComp = item.icon;
             return (
@@ -333,20 +353,20 @@ export const Sidebar: React.FC = () => {
                   gap: '12px',
                   padding: sidebarCollapsed ? '10px 0' : '9px 14px',
                   justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-                  backgroundColor: isActive ? '#EFF6FF' : 'transparent',
+                  backgroundColor: isActive ? '#1E293B' : 'transparent',
                   border: 'none',
-                  borderLeft: isActive ? '3px solid #2563EB' : '3px solid transparent',
+                  borderLeft: isActive ? '3px solid #38BDF8' : '3px solid transparent',
                   cursor: 'pointer',
                   fontFamily: typography.fontFamily,
                   fontSize: '12px',
                   fontWeight: isActive ? 600 : 500,
-                  color: isActive ? '#2563EB' : '#475569',
+                  color: isActive ? '#38BDF8' : '#94A3B8',
                   boxSizing: 'border-box',
                   textAlign: 'left',
-                  transition: 'background-color 0.1s ease',
+                  transition: 'all 0.12s ease',
                 }}
               >
-                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive ? '#38BDF8' : '#64748B' }}>
                   <IconComp size={16} strokeWidth={isActive ? 2.2 : 1.8} />
                 </span>
                 {!sidebarCollapsed && (
@@ -357,16 +377,54 @@ export const Sidebar: React.FC = () => {
               </button>
             );
           })}
+
+        {/* Item 8: Logout Button for Employee and Admin */}
+        <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #1E293B' }}>
+          <button
+            id="sidebar-logout-btn"
+            onClick={logout}
+            title={sidebarCollapsed ? 'Logout' : undefined}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: sidebarCollapsed ? '10px 0' : '9px 14px',
+              justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+              backgroundColor: 'transparent',
+              border: 'none',
+              borderLeft: '3px solid transparent',
+              cursor: 'pointer',
+              fontFamily: typography.fontFamily,
+              fontSize: '12px',
+              fontWeight: 500,
+              color: '#F87171',
+              boxSizing: 'border-box',
+              textAlign: 'left',
+              transition: 'all 0.12s ease',
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F87171' }}>
+              <LogOut size={16} strokeWidth={1.8} />
+            </span>
+            {!sidebarCollapsed && (
+              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                Logout
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Footer / Toggle Sidebar Area */}
       <div
         style={{
           padding: '10px 14px',
-          borderTop: '1px solid #F1F5F9',
+          borderTop: '1px solid #1E293B',
           display: 'flex',
           alignItems: 'center',
           justifyContent: sidebarCollapsed ? 'center' : 'space-between',
+          backgroundColor: '#0F172A',
         }}
       >
         {!sidebarCollapsed && (
@@ -376,10 +434,10 @@ export const Sidebar: React.FC = () => {
                 width: '6px',
                 height: '6px',
                 borderRadius: '50%',
-                backgroundColor: isConnected ? '#16A34A' : '#DC2626',
+                backgroundColor: isConnected ? '#4ADE80' : '#EF4444',
               }}
             />
-            <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 500 }}>
+            <span style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 500 }}>
               {isConnected
                 ? (mqttBrokerStatus === 'CONNECTED' ? 'SCADA & MQTT Online' : 'SCADA Online')
                 : 'SCADA Offline'}
@@ -390,12 +448,12 @@ export const Sidebar: React.FC = () => {
           onClick={toggleSidebar}
           title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           style={{
-            background: '#F8FAFC',
-            border: '1px solid #E2E8F0',
+            background: '#1E293B',
+            border: '1px solid #334155',
             borderRadius: '4px',
             cursor: 'pointer',
             padding: '4px 6px',
-            color: '#64748B',
+            color: '#94A3B8',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',

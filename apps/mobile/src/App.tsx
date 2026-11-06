@@ -6,14 +6,18 @@ import { Sidebar } from './components/common/Sidebar';
 import { Footer } from './components/common/Footer';
 import { DisplayPreferencesProvider } from './context/DisplayPreferencesContext';
 import { AppLayout } from './components/layout/AppLayout';
+import { ShieldAlert } from 'lucide-react';
 
 // Screens
 import { LoginScreen } from './screens/LoginScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
+import { EmployeeDashboard } from './screens/EmployeeDashboard';
 import { TrainManagementScreen } from './screens/TrainManagementScreen';
+import { CoachManagementScreen } from './screens/CoachManagementScreen';
 import { WaterTankScreen } from './screens/WaterTankScreen';
-import { DevicesScreen } from './screens/DevicesScreen';
+import { DeviceMappingScreen } from './screens/DeviceMappingScreen';
 import { LocationScreen } from './screens/LocationScreen';
+import { MonitoringScreen } from './screens/MonitoringScreen';
 import { AlertsScreen } from './screens/AlertsScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { ReportsScreen } from './screens/ReportsScreen';
@@ -21,8 +25,64 @@ import { SettingsScreen } from './screens/SettingsScreen';
 import { UsersScreen } from './screens/UsersScreen';
 import { LogsScreen } from './screens/LogsScreen';
 
+const AccessDeniedScreen: React.FC = () => {
+  const { setActiveScreen } = useApp();
+  return (
+    <div
+      style={{
+        backgroundColor: '#FFFFFF',
+        borderRadius: '8px',
+        border: '1px solid #FECACA',
+        padding: '40px 20px',
+        textAlign: 'center',
+        maxWidth: '500px',
+        margin: '60px auto',
+        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+      }}
+    >
+      <div
+        style={{
+          width: '48px',
+          height: '48px',
+          borderRadius: '50%',
+          backgroundColor: '#FEE2E2',
+          color: '#DC2626',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          margin: '0 auto 16px auto',
+        }}
+      >
+        <ShieldAlert size={26} />
+      </div>
+      <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: '0 0 8px 0' }}>
+        Access Restricted
+      </h2>
+      <p style={{ fontSize: '13px', color: '#64748B', margin: '0 0 20px 0', lineHeight: 1.5 }}>
+        Administrator privileges are required to access this system configuration module. Your Employee session is logged and restricted to operational fleet commands.
+      </p>
+      <button
+        onClick={() => setActiveScreen('dashboard')}
+        style={{
+          padding: '8px 18px',
+          backgroundColor: '#2563EB',
+          color: '#FFFFFF',
+          border: 'none',
+          borderRadius: '6px',
+          fontSize: '12px',
+          fontWeight: 600,
+          cursor: 'pointer',
+        }}
+      >
+        Return to Dashboard
+      </button>
+    </div>
+  );
+};
+
 const MainContent: React.FC = () => {
-  const { activeScreen } = useApp();
+  const { activeScreen, currentUser } = useApp();
+  const isAdmin = currentUser?.role === 'ADMIN';
 
   return (
     <div
@@ -46,16 +106,18 @@ const MainContent: React.FC = () => {
         }}
       >
         {activeScreen === 'trains' && <TrainManagementScreen />}
-        {activeScreen === 'dashboard' && <DashboardScreen />}
+        {activeScreen === 'coaches' && <CoachManagementScreen />}
+        {activeScreen === 'dashboard' && (isAdmin ? <DashboardScreen /> : <EmployeeDashboard />)}
         {activeScreen === 'watertank' && <WaterTankScreen />}
-        {activeScreen === 'devices' && <DevicesScreen />}
+        {activeScreen === 'devices' && <DeviceMappingScreen />}
         {activeScreen === 'location' && <LocationScreen />}
+        {activeScreen === 'monitoring' && <MonitoringScreen />}
         {activeScreen === 'alerts' && <AlertsScreen />}
         {activeScreen === 'history' && <HistoryScreen />}
         {activeScreen === 'reports' && <ReportsScreen />}
-        {activeScreen === 'settings' && <SettingsScreen />}
-        {activeScreen === 'users' && <UsersScreen />}
-        {activeScreen === 'logs' && <LogsScreen />}
+        {activeScreen === 'settings' && (isAdmin ? <SettingsScreen /> : <AccessDeniedScreen />)}
+        {activeScreen === 'users' && (isAdmin ? <UsersScreen /> : <AccessDeniedScreen />)}
+        {activeScreen === 'logs' && (isAdmin ? <LogsScreen /> : <AccessDeniedScreen />)}
       </main>
       <Footer />
     </div>

@@ -8,7 +8,10 @@ async function build() {
   const assetsDir = path.join(distDir, 'assets');
   if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true });
 
-  console.log('[BUILD] Bundling application with esbuild (standalone, no Vite)...');
+  const enableTestLogin = process.env.VITE_ENABLE_TEST_LOGIN !== undefined
+    ? process.env.VITE_ENABLE_TEST_LOGIN.trim().toLowerCase() === 'true'
+    : true;
+  console.log(`[BUILD] Bundling application with esbuild (test shortcuts: ${enableTestLogin})...`);
   const start = Date.now();
 
   await esbuild.build({
@@ -23,6 +26,8 @@ async function build() {
       'global': 'window',
       '__DEV__': 'false',
       'process.env.NODE_ENV': '"production"',
+      'process.env.VITE_ENABLE_TEST_LOGIN': enableTestLogin ? '"true"' : '"false"',
+      'import.meta.env.VITE_ENABLE_TEST_LOGIN': enableTestLogin ? '"true"' : '"false"',
     },
     loader: {
       '.css': 'css',

@@ -44,3 +44,4 @@ The following visual artifacts were generated and verified during automated test
 - `test_artifacts/map_1_normal.png`
 - `test_artifacts/map_2_expanded.png`
 - `test_artifacts/map_3_fullscreen.png`
+

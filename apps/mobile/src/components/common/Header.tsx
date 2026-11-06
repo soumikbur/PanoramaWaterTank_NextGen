@@ -89,17 +89,25 @@ export const Header: React.FC = () => {
       title: 'Train Management',
       subtitle: 'Railway fleet operations & regional consist management',
     },
+    coaches: {
+      title: 'Coach Management',
+      subtitle: 'Consist coach status, 24-coach graphical layout & dual water tanks',
+    },
     watertank: {
       title: 'All Tanks',
       subtitle: 'Fleet-wide water reservoir level & volume monitoring',
     },
     devices: {
-      title: 'Devices',
-      subtitle: 'Manage and monitor connected water-level monitoring devices',
+      title: 'Device Mapping',
+      subtitle: 'Operational device assignments, engaged vs free status & telemetry link',
     },
     location: {
-      title: 'Location',
-      subtitle: 'Route intelligence & water refill monitoring',
+      title: 'Location & GPS Tracking',
+      subtitle: 'Live train coordinates, speed, route map & corridor intelligence',
+    },
+    monitoring: {
+      title: 'Operational Monitoring',
+      subtitle: 'Real-time multi-train coach telemetry, dual tank levels & battery alerts',
     },
     alerts: {
       title: 'Alerts & Alarm Management',
@@ -489,12 +497,12 @@ export const Header: React.FC = () => {
             gap: '10px',
             cursor: 'pointer',
           }}
-          title="Panorama NextGen SCADA"
+          title="WLI – Water Level Indicator (Railway)"
         >
           <div
             style={{
-              width: '38px',
-              height: '38px',
+              width: '36px',
+              height: '36px',
               borderRadius: '8px',
               backgroundColor: '#EFF6FF',
               border: '1px solid #BFDBFE',
@@ -505,6 +513,14 @@ export const Header: React.FC = () => {
             }}
           >
             <Droplet size={20} strokeWidth={2.2} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: '12px', fontWeight: 800, color: '#0F172A', letterSpacing: '0.4px', lineHeight: 1.15 }}>
+              WLI – RAILWAY
+            </span>
+            <span style={{ fontSize: '9px', fontWeight: 600, color: '#2563EB' }}>
+              Water Level Indicator
+            </span>
           </div>
         </div>
 

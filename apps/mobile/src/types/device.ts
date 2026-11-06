@@ -14,6 +14,10 @@ export interface Device {
   firmware_version?: string;
   lastSeenAt: string | null;
   last_seen_at?: string | null;
+  lastHeartbeat?: string | null;
+  batteryPercent?: number;
+  batteryVoltage?: number;
+  temperature?: number;
   primaryLevel?: number;
   secondaryLevel?: number;
   hasActiveAlarm: boolean;

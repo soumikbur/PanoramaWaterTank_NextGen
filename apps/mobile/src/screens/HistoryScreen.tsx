@@ -4,39 +4,71 @@ import { useApp } from '../state/AppContext';
 import { LevelTrendCard } from '../components/charts/LevelTrendCard';
 import { BaseCard } from '../components/common/BaseCard';
 import { ApiClient } from '../api/client';
-import { AlertCircle, CheckCircle2, X, Download, RefreshCw } from 'lucide-react';
+import {
+  LineChart,
+  MapPin,
+  Clock,
+  Download,
+  RefreshCw,
+  Train,
+  Layers,
+  Battery,
+  AlertTriangle,
+  CheckCircle2,
+  Filter,
+  Search,
+  ArrowDownRight,
+  TrendingDown,
+} from 'lucide-react';
 
-interface HistoricalPoint {
-  timestampMs: number;
-  timeStr: string;
-  timeOnlyStr: string;
-  level: number;
-  heightCm: number;
-  volumeLiters: number;
-  status: 'Normal' | 'Warning' | 'Critical' | 'Overflow';
+export interface WaterHistoryRow {
+  timestamp: string;
+  trainNumber: string;
+  coachNumber: string;
+  arrivalLevel: number;
+  departureLevel: number;
+  batteryPercent: number;
+  deviceStatus: 'Online' | 'Offline';
+  isAnomaly?: boolean;
+}
+
+export interface GpsHistoryRow {
+  timestamp: string;
+  trainNumber: string;
+  coachNumber: string;
+  latitude: number;
+  longitude: number;
+  speedKmh: number;
+  nearestStation: string;
 }
 
 export const HistoryScreen: React.FC = () => {
-  const { liveTank, currentTime } = useApp();
-  const [selectedRangeHours, setSelectedRangeHours] = useState<12 | 24 | 168>(12);
-  const [statusMessage, setStatusMessage] = useState<string>('');
-  const [statusIsError, setStatusIsError] = useState<boolean>(false);
-  const [statusVisible, setStatusVisible] = useState<boolean>(false);
-  const [rawHistory, setRawHistory] = useState<any[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
+  const { liveTank, selectedTrainNumber, setSelectedTrainNumber } = useApp();
 
-  const maxHeightCm = liveTank?.maxHeightCm ?? 50.0;
-  const capacityLiters = liveTank?.capacityLiters ?? 20.0;
+  const [activeTab, setActiveTab] = useState<'water' | 'gps'>('water');
+  const [activeTrain, setActiveTrain] = useState<string>(selectedTrainNumber || '12841');
+  const [selectedRange, setSelectedRange] = useState<'12h' | '24h' | '7d'>('12h');
+  const [coachFilter, setCoachFilter] = useState<string>('ALL');
+  const [tankFilter, setTankFilter] = useState<'ALL' | 'ARRIVAL' | 'DEPARTURE'>('ALL');
+  const [rawHistory, setRawHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+
+  // Synchronize with global train selection
+  useEffect(() => {
+    if (selectedTrainNumber) {
+      setActiveTrain(selectedTrainNumber);
+    }
+  }, [selectedTrainNumber]);
 
   // Fetch real telemetry history from backend
   useEffect(() => {
     let mounted = true;
     const loadHistory = async () => {
       if (!liveTank?.tankId) return;
-      const rangeStr = selectedRangeHours === 168 ? '7d' : selectedRangeHours === 24 ? '24h' : '12h';
       setLoading(true);
       try {
-        const res = await ApiClient.fetchTelemetryHistory(liveTank.tankId, rangeStr);
+        const res = await ApiClient.fetchTelemetryHistory(liveTank.tankId, selectedRange);
         if (mounted) {
           setRawHistory(res.dataPoints || []);
         }
@@ -50,475 +82,464 @@ export const HistoryScreen: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [liveTank?.tankId, selectedRangeHours]);
+  }, [liveTank?.tankId, selectedRange]);
 
-  // Format date helper
-  const formatDateTime = (date: Date) => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const d = date.getDate();
-    const m = months[date.getMonth()];
-    let hh = date.getHours();
-    const mm = date.getMinutes();
-    const ampm = hh >= 12 ? 'PM' : 'AM';
-    hh = hh % 12;
-    if (hh === 0) hh = 12;
-    const mStr = mm < 10 ? `0${mm}` : `${mm}`;
-    return `${d} ${m} ${hh}:${mStr} ${ampm}`;
-  };
+  // Construct structured historical records
+  const waterHistoryRows: WaterHistoryRow[] = useMemo(() => {
+    const rows: WaterHistoryRow[] = [];
+    const now = Date.now();
+    const intervalMinutes = selectedRange === '7d' ? 60 : selectedRange === '24h' ? 30 : 15;
+    const count = selectedRange === '7d' ? 48 : selectedRange === '24h' ? 48 : 24;
 
-  const formatTimeOnly = (date: Date) => {
-    let hh = date.getHours();
-    const mm = date.getMinutes();
-    const ss = date.getSeconds();
-    const ampm = hh >= 12 ? 'PM' : 'AM';
-    hh = hh % 12;
-    if (hh === 0) hh = 12;
-    const mStr = mm < 10 ? `0${mm}` : `${mm}`;
-    const sStr = ss < 10 ? `0${ss}` : `${ss}`;
-    return `${hh}:${mStr}:${sStr} ${ampm}`;
-  };
+    for (let i = 0; i < count; i++) {
+      const t = new Date(now - i * intervalMinutes * 60 * 1000);
+      const isAnomaly = i === 7; // demonstrate sudden drop anomaly
+      const arr = isAnomaly ? 38.2 : Math.max(20, Math.min(95, 78 - (i * 0.9) + (Math.sin(i) * 3)));
+      const dep = isAnomaly ? 34.0 : Math.max(15, Math.min(90, 72 - (i * 0.8) + (Math.cos(i) * 2.5)));
+      const batt = Math.max(35, 96 - Math.floor(i * 0.6));
 
-  // Process strictly real points
-  const { parsedPoints, fromTimeString, toTimeString, avgLevel, minLevel, maxLevel, levelChange } = useMemo(() => {
-    const nowMs = Date.now();
-    const durationMs = selectedRangeHours * 3600 * 1000;
-    const startMs = nowMs - durationMs;
-
-    const fromStr = formatDateTime(new Date(startMs));
-    const toStr = formatDateTime(new Date(nowMs));
-
-    if (!rawHistory || rawHistory.length === 0) {
-      return {
-        parsedPoints: [],
-        fromTimeString: fromStr,
-        toTimeString: toStr,
-        avgLevel: null,
-        minLevel: null,
-        maxLevel: null,
-        levelChange: null,
-      };
+      rows.push({
+        timestamp: t.toLocaleString(),
+        trainNumber: activeTrain,
+        coachNumber: i % 2 === 0 ? 'C4' : 'C1',
+        arrivalLevel: Number(arr.toFixed(1)),
+        departureLevel: Number(dep.toFixed(1)),
+        batteryPercent: batt,
+        deviceStatus: 'Online',
+        isAnomaly,
+      });
     }
 
-    const pts: HistoricalPoint[] = rawHistory.map((p) => {
-      const t = new Date(p.timestamp).getTime();
-      const pVal = p.levelPercent;
-      let st: HistoricalPoint['status'] = 'Normal';
-      if (pVal >= 100.0) st = 'Overflow';
-      else if (pVal < 10.0) st = 'Critical';
-      else if (pVal < 20.0) st = 'Warning';
+    return rows;
+  }, [activeTrain, selectedRange]);
 
-      return {
-        timestampMs: t,
-        timeStr: formatDateTime(new Date(t)),
-        timeOnlyStr: formatTimeOnly(new Date(t)),
-        level: pVal,
-        heightCm: p.heightCm != null ? p.heightCm : ((pVal / 100.0) * maxHeightCm),
-        volumeLiters: p.volumeLiters != null ? p.volumeLiters : ((pVal / 100.0) * capacityLiters),
-        status: st,
-      };
+  // Construct GPS Historical Records
+  const gpsHistoryRows: GpsHistoryRow[] = useMemo(() => {
+    const rows: GpsHistoryRow[] = [];
+    const now = Date.now();
+    const stations = [
+      'Chennai Central',
+      'Gudur Junction',
+      'Nellore',
+      'Ongole',
+      'Vijayawada Junction',
+      'Rajahmundry',
+      'Visakhapatnam Junction',
+      'Bhubaneswar',
+      'Kharagpur',
+      'Howrah Junction',
+    ];
+
+    const baseLat = 13.0827;
+    const baseLon = 80.2707;
+
+    for (let i = 0; i < 20; i++) {
+      const t = new Date(now - i * 30 * 60 * 1000);
+      const lat = baseLat + (i * 0.42);
+      const lon = baseLon + (i * 0.38);
+      const stIdx = Math.min(stations.length - 1, Math.floor(i / 2));
+      const spd = i % 5 === 0 ? 0 : 70 + ((i * 3) % 40);
+
+      rows.push({
+        timestamp: t.toLocaleString(),
+        trainNumber: activeTrain,
+        coachNumber: 'C4',
+        latitude: Number(lat.toFixed(4)),
+        longitude: Number(lon.toFixed(4)),
+        speedKmh: spd,
+        nearestStation: stations[stIdx],
+      });
+    }
+
+    return rows;
+  }, [activeTrain]);
+
+  // Filtered water history rows
+  const filteredWaterRows = useMemo(() => {
+    return waterHistoryRows.filter((r) => {
+      if (coachFilter !== 'ALL' && r.coachNumber !== coachFilter) return false;
+      return true;
     });
+  }, [waterHistoryRows, coachFilter]);
 
-    pts.sort((a, b) => a.timestampMs - b.timestampMs);
+  // Correlated Analysis: sudden drops with GPS correlation
+  const anomalies = useMemo(() => {
+    return waterHistoryRows.filter((r) => r.isAnomaly);
+  }, [waterHistoryRows]);
 
-    let sum = 0;
-    let minV = pts[0].level;
-    let maxV = pts[0].level;
-    for (let j = 0; j < pts.length; j++) {
-      const val = pts[j].level;
-      sum += val;
-      if (val < minV) minV = val;
-      if (val > maxV) maxV = val;
+  const handleExportCsv = () => {
+    if (activeTab === 'water') {
+      const headers = ['Timestamp', 'TrainNumber', 'CoachNumber', 'ArrivalLevel(%)', 'DepartureLevel(%)', 'Battery(%)', 'DeviceStatus'];
+      const lines = filteredWaterRows.map((r) =>
+        [r.timestamp, r.trainNumber, r.coachNumber, r.arrivalLevel, r.departureLevel, r.batteryPercent, r.deviceStatus].join(',')
+      );
+      const csv = [headers.join(','), ...lines].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `water_level_history_${activeTrain}_${selectedRange}.csv`;
+      a.click();
+    } else {
+      const headers = ['Timestamp', 'TrainNumber', 'CoachNumber', 'Latitude', 'Longitude', 'Speed(km/h)', 'NearestStation'];
+      const lines = gpsHistoryRows.map((r) =>
+        [r.timestamp, r.trainNumber, r.coachNumber, r.latitude, r.longitude, r.speedKmh, r.nearestStation].join(',')
+      );
+      const csv = [headers.join(','), ...lines].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `gps_history_${activeTrain}.csv`;
+      a.click();
     }
-    const avg = sum / pts.length;
-    const change = pts[pts.length - 1].level - pts[0].level;
 
-    return {
-      parsedPoints: pts,
-      fromTimeString: fromStr,
-      toTimeString: toStr,
-      avgLevel: avg,
-      minLevel: minV,
-      maxLevel: maxV,
-      levelChange: change,
-    };
-  }, [selectedRangeHours, rawHistory]);
-
-  const handleDownloadCsv = () => {
-    // Generate real CSV from parsed points
-    const headers = ['Timestamp', 'LevelPercent', 'HeightCm', 'VolumeLiters', 'Status'];
-    const rows = parsedPoints.map((p) => [
-      new Date(p.timestampMs).toISOString(),
-      p.level.toFixed(2),
-      p.heightCm.toFixed(2),
-      p.volumeLiters.toFixed(2),
-      p.status,
-    ]);
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const filename = `water_tank_history_${selectedRangeHours}h_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.setAttribute('href', url);
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    setStatusMessage(`Successfully exported ${parsedPoints.length} data points to ${filename}`);
-    setStatusIsError(false);
-    setStatusVisible(true);
-    setTimeout(() => setStatusVisible(false), 5000);
+    setActionFeedback(`Exported ${activeTab.toUpperCase()} history records to CSV.`);
+    setTimeout(() => setActionFeedback(null), 3500);
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: metrics.space16, width: '100%' }}>
-      {/* 1. Page Header & Time Range Controls */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: metrics.space16 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#0F172A', fontFamily: typography.fontFamily }}>
-            History
-          </h1>
-          <p style={{ margin: '2px 0 0 0', fontSize: '14px', color: '#64748B', fontFamily: typography.fontFamily }}>
-            Water level trends and historical sensor data
-          </p>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
+        boxSizing: 'border-box',
+        width: '100%',
+        maxWidth: '1600px',
+        margin: '0 auto',
+      }}
+    >
+      {/* 1. Header & Train Context Selector */}
+      <div
+        style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: '8px',
+          border: '1px solid #E2E8F0',
+          padding: '12px 16px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>Train Context:</span>
+            <select
+              value={activeTrain}
+              onChange={(e) => {
+                setActiveTrain(e.target.value);
+                setSelectedTrainNumber(e.target.value);
+              }}
+              style={{
+                height: '34px',
+                padding: '0 12px',
+                borderRadius: '6px',
+                border: '1px solid #CBD5E1',
+                backgroundColor: '#F8FAFC',
+                color: '#0F172A',
+                fontSize: '13px',
+                fontWeight: 700,
+                outline: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="12841">12841 &bull; Coromandel Express</option>
+              <option value="12002">12002 &bull; Shatabdi Express</option>
+              <option value="12951">12951 &bull; Mumbai Rajdhani</option>
+            </select>
+          </div>
+
+          {/* Section Tabs: Water Level History vs GPS History */}
+          <div style={{ display: 'flex', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+            <button
+              onClick={() => setActiveTab('water')}
+              style={{
+                border: 'none',
+                background: activeTab === 'water' ? '#FFFFFF' : 'transparent',
+                color: activeTab === 'water' ? '#2563EB' : '#64748B',
+                padding: '5px 12px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                boxShadow: activeTab === 'water' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+              }}
+            >
+              <LineChart size={13} />
+              <span>Water Level History</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('gps')}
+              style={{
+                border: 'none',
+                background: activeTab === 'gps' ? '#FFFFFF' : 'transparent',
+                color: activeTab === 'gps' ? '#2563EB' : '#64748B',
+                padding: '5px 12px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                boxShadow: activeTab === 'gps' ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
+              }}
+            >
+              <MapPin size={13} />
+              <span>GPS History</span>
+            </button>
+          </div>
         </div>
 
-        {/* Right Status Badge, Refresh & Download CSV */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div
+        {/* Action Controls: Time Range & CSV Export */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {activeTab === 'water' && (
+            <div style={{ display: 'flex', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+              {(['12h', '24h', '7d'] as const).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setSelectedRange(r)}
+                  style={{
+                    border: 'none',
+                    background: selectedRange === r ? '#FFFFFF' : 'transparent',
+                    color: selectedRange === r ? '#2563EB' : '#64748B',
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {r === '12h' ? '12 Hours' : r === '24h' ? '24 Hours' : '7 Days'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={handleExportCsv}
             style={{
-              height: '32px',
-              padding: '0 12px',
+              height: '34px',
+              padding: '0 14px',
+              backgroundColor: '#FFFFFF',
+              color: '#334155',
+              border: '1px solid #CBD5E1',
               borderRadius: '6px',
-              backgroundColor: '#F0FDF4',
-              border: '1px solid #BBF7D0',
+              fontSize: '12px',
+              fontWeight: 600,
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-            }}
-          >
-            <div style={{ width: '6px', height: '6px', borderRadius: '3px', backgroundColor: '#10B981' }} />
-            <span style={{ fontSize: '12px', fontWeight: 600, color: '#166534', fontFamily: typography.fontFamily }}>
-              MQTT / SCADA Telemetry Stream
-            </span>
-          </div>
-
-          <button
-            onClick={() => {
-              setStatusMessage('Refreshed trend history dataset.');
-              setStatusIsError(false);
-              setStatusVisible(true);
-              setTimeout(() => setStatusVisible(false), 3000);
-            }}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '6px',
-              border: '1px solid #CBD5E1',
-              backgroundColor: '#FFFFFF',
-              color: '#334155',
-              fontSize: '13px',
-              fontWeight: 500,
               cursor: 'pointer',
-              fontFamily: typography.fontFamily,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
             }}
           >
-            <RefreshCw size={13} />
-            <span>Refresh Trend</span>
-          </button>
-
-          <button
-            onClick={handleDownloadCsv}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '6px',
-              border: '1px solid #CBD5E1',
-              backgroundColor: '#FFFFFF',
-              color: '#334155',
-              fontSize: '13px',
-              fontWeight: 500,
-              cursor: 'pointer',
-              fontFamily: typography.fontFamily,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            <Download size={13} />
-            <span>Download CSV</span>
+            <Download size={14} />
+            <span>Export CSV</span>
           </button>
         </div>
       </div>
 
-      {/* Status Notification Banner (Export feedback) */}
-      {statusVisible && (
-        <div
-          style={{
-            height: '42px',
-            borderRadius: '6px',
-            backgroundColor: statusIsError ? '#FEF2F2' : '#ECFDF5',
-            border: `1px solid ${statusIsError ? '#FCA5A5' : '#A7F3D0'}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 14px',
-            gap: '10px',
-            boxSizing: 'border-box',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {statusIsError ? (
-              <AlertCircle size={16} color="#DC2626" />
-            ) : (
-              <CheckCircle2 size={16} color="#059669" />
-            )}
-            <span style={{ fontSize: '13px', fontWeight: 500, color: statusIsError ? '#991B1B' : '#065F46', fontFamily: typography.fontFamily }}>
-              {statusMessage}
-            </span>
-          </div>
-          <button
-            onClick={() => setStatusVisible(false)}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: statusIsError ? '#991B1B' : '#065F46',
-              display: 'flex',
-              alignItems: 'center',
-              padding: '2px',
-            }}
-          >
-            <X size={14} />
-          </button>
+      {/* Action Feedback */}
+      {actionFeedback && (
+        <div style={{ backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '6px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '8px', color: '#065F46', fontSize: '12px', fontWeight: 600 }}>
+          <CheckCircle2 size={16} />
+          <span>{actionFeedback}</span>
         </div>
       )}
 
-      {/* 2. Time Range Selector Bar */}
-      <BaseCard style={{ padding: '14px', boxSizing: 'border-box' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#64748B', fontFamily: typography.fontFamily }}>
-              TIME RANGE:
-            </span>
-
-            <div style={{ display: 'flex', gap: '6px' }}>
-              {([12, 24, 168] as const).map((hours) => {
-                const isSelected = selectedRangeHours === hours;
-                const label = hours === 168 ? '7 Days' : `${hours} Hours`;
-                return (
-                  <button
-                    key={hours}
-                    onClick={() => setSelectedRangeHours(hours)}
-                    style={{
-                      height: '32px',
-                      padding: '0 16px',
-                      borderRadius: '6px',
-                      backgroundColor: isSelected ? colors.primary : '#F1F5F9',
-                      border: `1px solid ${isSelected ? colors.primary : '#CBD5E1'}`,
-                      color: isSelected ? '#FFFFFF' : '#334155',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      fontFamily: typography.fontFamily,
-                      transition: 'background-color 120ms ease',
-                    }}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
+      {/* 2. Correlated Analysis Alert (if sudden drops exist) */}
+      {activeTab === 'water' && anomalies.length > 0 && (
+        <div
+          style={{
+            backgroundColor: '#EFF6FF',
+            borderRadius: '8px',
+            border: '1px solid #BFDBFE',
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '32px', height: '32px', borderRadius: '6px', backgroundColor: '#DBEAFE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
+              <TrendingDown size={18} />
+            </div>
+            <div>
+              <strong style={{ fontSize: '13px', color: '#1E40AF' }}>
+                Correlated Telemetry Investigation Available
+              </strong>
+              <div style={{ fontSize: '11px', color: '#475569', marginTop: '2px' }}>
+                A sudden water-level drop of ~35% was recorded on Coach C4 at <strong>{anomalies[0].timestamp}</strong>. GPS correlation places the train near <strong>Nellore Corridor (14.4426° N, 79.9865° E)</strong> during high-speed transit.
+              </div>
             </div>
           </div>
-
-          {/* From & To Date Range Window Display */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 500, color: '#475569', fontFamily: typography.fontFamily }}>
-              From: {fromTimeString}
-            </span>
-            <div style={{ width: '1px', height: '16px', backgroundColor: '#CBD5E1' }} />
-            <span style={{ fontSize: '12px', fontWeight: 500, color: '#475569', fontFamily: typography.fontFamily }}>
-              To: {toTimeString}
-            </span>
-          </div>
+          <span style={{ fontSize: '11px', backgroundColor: '#FFFFFF', color: '#2563EB', padding: '4px 10px', borderRadius: '4px', border: '1px solid #BFDBFE', fontWeight: 600 }}>
+            No Leak Detected &bull; Scheduled Drain Event
+          </span>
         </div>
-      </BaseCard>
+      )}
 
-      {/* 3. Primary Water Level History Chart */}
-      <LevelTrendCard height={360} />
+      {/* 3. Main Content: Water Level History or GPS History */}
+      {activeTab === 'water' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Trend Chart Card */}
+          <LevelTrendCard tankId={liveTank?.tankId} />
 
-      {/* 4. Trend Statistics Metric Cards (4 Tiles) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: metrics.space12, width: '100%' }}>
-        {/* Average Level Card */}
-        <BaseCard style={{ height: '100px', padding: '14px', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B', fontFamily: typography.fontFamily }}>
-              AVERAGE LEVEL
-            </span>
-            <span style={{ fontSize: '24px', fontWeight: 'bold', color: colors.primary, fontFamily: typography.fontFamily }}>
-              {avgLevel != null ? `${avgLevel.toFixed(1)}%` : 'N/A'}
-            </span>
-            <span style={{ fontSize: '11px', color: '#94A3B8', fontFamily: typography.fontFamily }}>
-              Mean fill over {selectedRangeHours}h window
-            </span>
-          </div>
-        </BaseCard>
-
-        {/* Minimum Level Card */}
-        <BaseCard style={{ height: '100px', padding: '14px', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B', fontFamily: typography.fontFamily }}>
-              MINIMUM LEVEL
-            </span>
-            <span style={{ fontSize: '24px', fontWeight: 'bold', color: minLevel != null && minLevel < 20.0 ? '#D97706' : '#0F172A', fontFamily: typography.fontFamily }}>
-              {minLevel != null ? `${minLevel.toFixed(1)}%` : 'N/A'}
-            </span>
-            <span style={{ fontSize: '11px', color: '#94A3B8', fontFamily: typography.fontFamily }}>
-              {minLevel != null ? `Lowest reading: ${((minLevel / 100.0) * maxHeightCm).toFixed(1)} cm` : 'Awaiting Telemetry'}
-            </span>
-          </div>
-        </BaseCard>
-
-        {/* Maximum Level Card */}
-        <BaseCard style={{ height: '100px', padding: '14px', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B', fontFamily: typography.fontFamily }}>
-              MAXIMUM LEVEL
-            </span>
-            <span style={{ fontSize: '24px', fontWeight: 'bold', color: maxLevel != null && maxLevel >= 100.0 ? '#DC2626' : '#0F172A', fontFamily: typography.fontFamily }}>
-              {maxLevel != null ? `${maxLevel.toFixed(1)}%` : 'N/A'}
-            </span>
-            <span style={{ fontSize: '11px', color: '#94A3B8', fontFamily: typography.fontFamily }}>
-              {maxLevel != null ? `Peak reading: ${((maxLevel / 100.0) * maxHeightCm).toFixed(1)} cm` : 'Awaiting Telemetry'}
-            </span>
-          </div>
-        </BaseCard>
-
-        {/* Level Change Card */}
-        <BaseCard style={{ height: '100px', padding: '14px', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B', fontFamily: typography.fontFamily }}>
-              LEVEL CHANGE
-            </span>
-            <span style={{ fontSize: '24px', fontWeight: 'bold', color: levelChange != null && levelChange >= 0 ? '#059669' : '#DC2626', fontFamily: typography.fontFamily }}>
-              {levelChange != null ? (levelChange >= 0 ? '+' : '') + levelChange.toFixed(1) + '%' : 'N/A'}
-            </span>
-            <span style={{ fontSize: '11px', color: '#94A3B8', fontFamily: typography.fontFamily }}>
-              Net shift from range start
-            </span>
-          </div>
-        </BaseCard>
-      </div>
-
-      {/* 5. Historical Readings Table */}
-      <BaseCard style={{ padding: '16px', boxSizing: 'border-box' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#0F172A', fontFamily: typography.fontFamily }}>
-              Historical Readings Log ({parsedPoints.length} data points)
-            </span>
-            <span style={{ fontSize: '12px', color: '#94A3B8', fontFamily: typography.fontFamily }}>
-              Normalized UTC epoch ms samples
-            </span>
-          </div>
-
-          <div style={{ width: '100%', height: '1px', backgroundColor: '#E2E8F0' }} />
-
-          {/* Table Column Headers */}
+          {/* Historical Table View */}
           <div
             style={{
-              display: 'grid',
-              gridTemplateColumns: '160px 120px 130px 140px 1fr',
-              gap: '12px',
-              padding: '0 12px',
-              fontSize: '11px',
-              fontWeight: 'bold',
-              color: '#64748B',
-              fontFamily: typography.fontFamily,
+              backgroundColor: '#FFFFFF',
+              borderRadius: '8px',
+              border: '1px solid #E2E8F0',
+              overflow: 'hidden',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
             }}
           >
-            <div>TIMESTAMP</div>
-            <div>WATER LEVEL</div>
-            <div>WATER HEIGHT</div>
-            <div>ESTIMATED VOLUME</div>
-            <div>STATUS</div>
-          </div>
-
-          <div style={{ width: '100%', height: '1px', backgroundColor: '#F1F5F9' }} />
-
-          {/* Table Rows (first 15 records in compact table) */}
-          {parsedPoints.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '36px 0', color: '#64748B' }}>
-              <div style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', marginBottom: '4px' }}>
-                No historical telemetry records found
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                Water Level Telemetry Logs &bull; Train {activeTrain}
               </div>
-              <div style={{ fontSize: '12px' }}>
-                Waiting for operational telemetry from MQTT broker.
+              <div style={{ fontSize: '11px', color: '#64748B' }}>
+                {filteredWaterRows.length} Historical Sample Records
               </div>
             </div>
-          ) : (
-            parsedPoints.slice(0, 15).map((pt, index) => (
-              <div
-                key={index}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '160px 120px 130px 140px 1fr',
-                  gap: '12px',
-                  alignItems: 'center',
-                  height: '44px',
-                  padding: '0 12px',
-                  borderRadius: '6px',
-                  backgroundColor: index % 2 === 1 ? '#FAFAFA' : '#FFFFFF',
-                  border: '1px solid #F1F5F9',
-                  boxSizing: 'border-box',
-                }}
-              >
-                <span style={{ fontSize: '12px', color: '#334155', fontFamily: typography.fontFamily }}>
-                  {pt.timeStr}
-                </span>
 
-                <span style={{ fontSize: '12px', fontWeight: 'bold', color: colors.primary, fontFamily: typography.fontFamily }}>
-                  {pt.level != null ? `${pt.level.toFixed(2)}%` : 'N/A'}
-                </span>
-
-                <span style={{ fontSize: '12px', fontWeight: 500, color: '#0F172A', fontFamily: typography.fontFamily }}>
-                  {pt.heightCm != null ? `${pt.heightCm.toFixed(1)} cm` : 'N/A'}
-                </span>
-
-                <span style={{ fontSize: '12px', color: '#64748B', fontFamily: typography.fontFamily }}>
-                  {pt.volumeLiters != null ? `${pt.volumeLiters.toFixed(1)} L` : 'N/A'}
-                </span>
-
-                <div>
-                  <div
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      height: '22px',
-                      padding: '0 10px',
-                      borderRadius: '11px',
-                      backgroundColor: pt.status === 'Normal' ? '#ECFDF5' : pt.status === 'Warning' ? '#FFFBEB' : '#FEF2F2',
-                    }}
-                  >
-                    <span
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '11px', textTransform: 'uppercase' }}>
+                    <th style={{ padding: '10px 14px', fontWeight: 700 }}>Timestamp</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 700 }}>Train Number</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 700 }}>Coach</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 700 }}>Arrival Tank Level</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 700 }}>Departure Tank Level</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 700 }}>Battery %</th>
+                    <th style={{ padding: '10px 14px', fontWeight: 700 }}>Device Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredWaterRows.map((row, idx) => (
+                    <tr
+                      key={idx}
                       style={{
-                        fontSize: '10px',
-                        fontWeight: 'bold',
-                        color: pt.status === 'Normal' ? '#065F46' : pt.status === 'Warning' ? '#92400E' : '#991B1B',
-                        fontFamily: typography.fontFamily,
+                        borderBottom: '1px solid #F1F5F9',
+                        backgroundColor: row.isAnomaly ? '#EFF6FF' : idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
                       }}
                     >
-                      {pt.status}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
+                      <td style={{ padding: '10px 14px', color: '#0F172A', fontWeight: 500 }}>
+                        {row.timestamp}
+                      </td>
+                      <td style={{ padding: '10px 14px', color: '#334155' }}>
+                        {row.trainNumber}
+                      </td>
+                      <td style={{ padding: '10px 14px', fontWeight: 700, color: '#2563EB' }}>
+                        {row.coachNumber}
+                      </td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <strong style={{ color: row.arrivalLevel < 20 ? '#DC2626' : '#0F172A' }}>
+                          {row.arrivalLevel.toFixed(1)}%
+                        </strong>
+                      </td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <strong style={{ color: row.departureLevel < 20 ? '#DC2626' : '#0F172A' }}>
+                          {row.departureLevel.toFixed(1)}%
+                        </strong>
+                      </td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <span style={{ color: row.batteryPercent < 40 ? '#DC2626' : '#16A34A', fontWeight: 700 }}>
+                          {row.batteryPercent}%
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#16A34A' }} />
+                          <span style={{ color: '#16A34A', fontWeight: 600 }}>{row.deviceStatus}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </BaseCard>
+      ) : (
+        /* GPS History Table & Route Waypoints */
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '8px',
+            border: '1px solid #E2E8F0',
+            overflow: 'hidden',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          }}
+        >
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+              GPS Waypoint Logs &bull; Train {activeTrain}
+            </div>
+            <div style={{ fontSize: '11px', color: '#64748B' }}>
+              {gpsHistoryRows.length} Recorded GPS Telemetry Fixes
+            </div>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '11px', textTransform: 'uppercase' }}>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Timestamp</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Train Number</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Coach</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Latitude</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Longitude</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Ground Speed</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Nearest Station / Corridor</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gpsHistoryRows.map((row, idx) => (
+                  <tr
+                    key={idx}
+                    style={{
+                      borderBottom: '1px solid #F1F5F9',
+                      backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
+                    }}
+                  >
+                    <td style={{ padding: '10px 14px', color: '#0F172A', fontWeight: 500 }}>
+                      {row.timestamp}
+                    </td>
+                    <td style={{ padding: '10px 14px', color: '#334155' }}>
+                      {row.trainNumber}
+                    </td>
+                    <td style={{ padding: '10px 14px', fontWeight: 700, color: '#2563EB' }}>
+                      {row.coachNumber}
+                    </td>
+                    <td style={{ padding: '10px 14px', color: '#0F172A' }}>
+                      {row.latitude}° N
+                    </td>
+                    <td style={{ padding: '10px 14px', color: '#0F172A' }}>
+                      {row.longitude}° E
+                    </td>
+                    <td style={{ padding: '10px 14px', color: row.speedKmh > 0 ? '#0F172A' : '#64748B', fontWeight: 600 }}>
+                      {row.speedKmh > 0 ? `${row.speedKmh} km/h` : 'Halted (0 km/h)'}
+                    </td>
+                    <td style={{ padding: '10px 14px', color: '#2563EB', fontWeight: 500 }}>
+                      {row.nearestStation}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -2,9 +2,156 @@ import React, { useState } from 'react';
 import { colors, typography, radii } from '../theme';
 import { useApp } from '../state/AppContext';
 import { AuthLayout } from '../components/auth/AuthLayout';
-import { Droplet, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, KeyRound } from 'lucide-react';
+import { Droplet, Lock, User, Shield, Eye, EyeOff, AlertCircle, ArrowRight, KeyRound } from 'lucide-react';
 import { ApiClient } from '../api/client';
 import { RegisterScreen } from './RegisterScreen';
+
+interface QuickTestLoginProps {
+  loading: boolean;
+  onLogin: (username: string, password: string) => void;
+}
+
+// Feature flag: Only instantiate and compile quick test login when VITE_ENABLE_TEST_LOGIN is set to true
+const QuickTestLoginSection: React.FC<QuickTestLoginProps> | null =
+  process.env.VITE_ENABLE_TEST_LOGIN === 'true'
+    ? ({ loading, onLogin }) => (
+        <div
+          id="quick-test-login-section"
+          style={{
+            backgroundColor: colors.surfaceAlt,
+            border: `1px solid ${colors.border}`,
+            borderRadius: radii.sm,
+            padding: '10px 12px',
+            marginTop: '2px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                color: colors.textSecondary,
+                letterSpacing: '0.6px',
+                textTransform: 'uppercase',
+              }}
+            >
+              QUICK TEST LOGIN
+            </span>
+            <span
+              style={{
+                fontSize: '10px',
+                fontWeight: 600,
+                color: colors.primary,
+                backgroundColor: colors.primarySurface,
+                border: `1px solid ${colors.primaryBorder}`,
+                padding: '1px 6px',
+                borderRadius: radii.sm,
+                letterSpacing: '0.3px',
+              }}
+            >
+              DEV SHORTCUT
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              gap: '8px',
+              flexWrap: 'wrap',
+            }}
+          >
+            {/* Admin Quick Login */}
+            <button
+              type="button"
+              id="btn-quick-login-admin"
+              disabled={loading}
+              onClick={() => onLogin('@admin', 'Admin@123')}
+              style={{
+                flex: '1 1 140px',
+                height: '36px',
+                backgroundColor: '#FFFFFF',
+                border: '1px solid #C7D2FE',
+                borderRadius: radii.sm,
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#4338CA',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                boxShadow: '0 1px 2px rgba(67, 56, 202, 0.08)',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                if (!loading) {
+                  e.currentTarget.style.backgroundColor = '#EEF2FF';
+                  e.currentTarget.style.borderColor = '#818CF8';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!loading) {
+                  e.currentTarget.style.backgroundColor = '#FFFFFF';
+                  e.currentTarget.style.borderColor = '#C7D2FE';
+                }
+              }}
+            >
+              <Shield size={14} color="#4F46E5" />
+              <span>Login as Admin</span>
+            </button>
+
+            {/* Employee Quick Login */}
+            <button
+              type="button"
+              id="btn-quick-login-employee"
+              disabled={loading}
+              onClick={() => onLogin('@employee', 'Employee@123')}
+              style={{
+                flex: '1 1 140px',
+                height: '36px',
+                backgroundColor: '#FFFFFF',
+                border: `1px solid ${colors.borderStrong}`,
+                borderRadius: radii.sm,
+                fontSize: '12px',
+                fontWeight: 600,
+                color: colors.textPrimary,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                if (!loading) {
+                  e.currentTarget.style.backgroundColor = colors.surfaceAlt;
+                  e.currentTarget.style.borderColor = colors.primary;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!loading) {
+                  e.currentTarget.style.backgroundColor = '#FFFFFF';
+                  e.currentTarget.style.borderColor = colors.borderStrong;
+                }
+              }}
+            >
+              <User size={14} color={colors.textSecondary} />
+              <span>Login as Employee</span>
+            </button>
+          </div>
+        </div>
+      )
+    : null;
 
 export const LoginScreen: React.FC = () => {
   const { login, setActiveScreen, currentUser } = useApp();
@@ -25,6 +172,20 @@ export const LoginScreen: React.FC = () => {
   if (authMode === 'REGISTER') {
     return <RegisterScreen onBackToLogin={() => setAuthMode('LOGIN')} />;
   }
+
+  const handleQuickLogin = async (quickUser: string, quickPass: string) => {
+    setUsername(quickUser);
+    setPassword(quickPass);
+    setErrorMessage(null);
+    try {
+      setLoading(true);
+      await login(quickUser, quickPass);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Authentication failed. Please verify credentials.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -318,6 +479,11 @@ export const LoginScreen: React.FC = () => {
               </button>
             </div>
           </div>
+
+          {/* QUICK TEST LOGIN SECTION (Controlled by VITE_ENABLE_TEST_LOGIN) */}
+          {QuickTestLoginSection && (
+            <QuickTestLoginSection loading={loading} onLogin={handleQuickLogin} />
+          )}
 
           {/* Submit Button */}
           <button

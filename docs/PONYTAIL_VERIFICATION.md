@@ -63,3 +63,4 @@ Zero temporary hacks or uncalibrated shortcuts remain in the production codebase
 ## 6. What Was Skipped / Not Checked & Known Risks
 - **Skipped:** Did not modify the native Android / iOS capacitor wrapper files as the request specifically targets the React web and desktop application layers.
 - **Known Risk:** If backend MQTT telemetry delivers unexpected negative height numbers ($h < 0$), they are clamped to 0.00% by `Math.max(0, ...)`, avoiding canvas clipping errors.
+
