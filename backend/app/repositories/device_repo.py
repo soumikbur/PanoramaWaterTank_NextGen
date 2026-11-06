@@ -81,7 +81,10 @@ class DeviceRepository:
             await self.session.flush()
         else:
             now = datetime.now(timezone.utc)
-            if not device.is_online or not device.last_seen_at or (now - device.last_seen_at).total_seconds() > 5:
+            last = device.last_seen_at
+            if last and last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            if not device.is_online or not last or (now - last).total_seconds() > 5:
                 device.train_number = train_number
                 device.coach_number = coach_number
                 device.is_online = True
