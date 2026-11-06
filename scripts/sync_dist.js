@@ -6,6 +6,9 @@ const dest = path.resolve(__dirname, '../dist');
 const backendStatic = path.resolve(__dirname, '../backend/static');
 
 if (fs.existsSync(src)) {
+  if (fs.existsSync(dest)) {
+    fs.rmSync(dest, { recursive: true, force: true });
+  }
   fs.mkdirSync(dest, { recursive: true });
   fs.cpSync(src, dest, { recursive: true, force: true });
   console.log('Successfully synced apps/mobile/dist to root dist');
