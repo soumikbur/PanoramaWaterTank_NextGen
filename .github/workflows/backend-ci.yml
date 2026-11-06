@@ -40,7 +40,16 @@ jobs:
       - name: Run Pytest Test Suite
         working-directory: backend
         run: |
-          pytest tests/ -v
+          python -m pytest tests/ -v --tb=short > pytest_log.txt 2>&1 || test_failed=1
+          cat pytest_log.txt
+          echo "### Pytest Test Execution Log" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat pytest_log.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          if [ "$test_failed" = "1" ]; then
+            echo "Pytest test suite failed!"
+            exit 1
+          fi
 
       - name: Validate OpenAPI Schema Generation
         working-directory: backend
