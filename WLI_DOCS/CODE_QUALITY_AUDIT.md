@@ -19,7 +19,7 @@ A comprehensive engineering quality audit and refactoring was conducted across t
   - Resolved `AttributeError: 'str' object has no attribute 'value'` in `/api/v1/settings/test-device`.
   - Resolved `TypeError: unsupported format string passed to NoneType` in CSV telemetry export when database records contain null values.
   - Resolved `TypeError: Cannot read properties of undefined` in frontend alert title formatting and trend card rendering.
-- **W3C CORS Security Hardening:** Replaced invalid wildcard `*` with explicit origins and regex matching for Vercel deployment domains while preserving `allow_credentials=True`.
+- **W3C CORS Security Hardening:** Replaced invalid wildcard `*` with explicit origins and regex matching for GitHub Pages domains while preserving `allow_credentials=True`.
 - **Standalone Build Integrity:** Maintained the single FastAPI ASGI production architecture with esbuild bundling (no Vite runtime in production).
 - **Unslop Verification:** Verified all markdown documentation and code comments against AI-slop scanners and banned phrase dictionaries (0 violations).
 
@@ -46,7 +46,7 @@ Following Ponytail lazy senior developer principles, each finding is grounded in
 3. **CORS Credentials Security Misconfiguration** (`backend/app/main.py:L68-76`)
    - **What this is:** FastAPI CORS middleware setup.
    - **Problem:** Starlette/FastAPI CORS disallows combining `allow_origins=["*"]` with `allow_credentials=True` according to the W3C CORS specification.
-   - **Fix:** Removed `*` from explicit origins and added `allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$"` to allow both local development and Vercel preview/production deployments securely.
+   - **Fix:** Removed `*` from explicit origins and added `allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.github\.io$"` to allow both local development and GitHub Pages deployments securely.
    - **Status:** **RESOLVED** & covered by `test_cors_preflight`.
 
 ### Group B: Should Fix (Type Safety & Maintainability)
@@ -105,7 +105,7 @@ The frontend (`apps/mobile`) is an industrial SCADA/HMI React 18 web application
 
 The backend is built with FastAPI, utilizing asynchronous SQLAlchemy 2.0 with async SQLite for development/testing and PostgreSQL support for cloud deployments:
 
-- **Single ASGI Production Architecture:** Vercel deploys `backend/app/main.py` directly as a Python ASGI function. Static frontend assets are served from `/static` and `/assets` with an SPA HTML fallback.
+- **Single ASGI Production Architecture:** FastAPI deploys `backend/app/main.py` directly as a Python ASGI service. Static frontend assets are served from `/static` and `/assets` with an SPA HTML fallback.
 - **REST API Modules:**
   - `/api/v1/tanks`: Live tank status, volume calculations, physical geometry updates.
   - `/api/v1/telemetry`: Historical downsampled time-series data via LTTB algorithm.

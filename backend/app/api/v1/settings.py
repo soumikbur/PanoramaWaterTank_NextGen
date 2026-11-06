@@ -86,11 +86,9 @@ class UnifiedSettingsPayload(BaseModel):
 
 
 async def _ensure_seeded(repo: SettingsRepository):
-    """Ensure all default settings exist in the repository idempotently."""
+    """Ensure all default settings exist in the repository idempotently via atomic upsert."""
     for key, item in DEFAULT_CONFIG.items():
-        existing = await repo.get(key)
-        if existing is None:
-            await repo.upsert(key, item["value"], category=item["category"], description=item["desc"])
+        await repo.upsert(key, item["value"], category=item["category"], description=item["desc"])
 
 
 @router.get("", response_model=List[SettingItem])

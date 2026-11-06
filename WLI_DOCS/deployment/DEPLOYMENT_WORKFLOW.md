@@ -15,8 +15,8 @@ This document establishes the official production deployment architecture and co
 |                                                                      |            |
 |                                                                      v            |
 |   [5] LIVE VERIFICATION          [4] PRODUCTION HOSTING    <--- PUSH TRIGGER      |
-|   Browser / Mobile / Desktop      Vercel Global CDN                               |
-|   https://<project>.vercel.app    Edge Network SPA                                |
+|   Browser / Mobile / Desktop      GitHub Pages CDN                                |
+|   https://<user>.github.io/<repo> Edge Network SPA                                |
 +-----------------------------------------------------------------------------------+
 ```
 
@@ -29,9 +29,9 @@ This document establishes the official production deployment architecture and co
 | **Local Project Path** | `C:\Users\User\Documents\Antigravity_soumik\PanoramaWaterTank_NextGen` |
 | **GitHub Repository** | `https://github.com/soumikbur/PanoramaWaterTank_NextGen` |
 | **Default Production Branch** | `main` |
-| **Target Hosting Platform** | Local Industrial HMI / Standalone Electron & Embedded Server (Vercel Disabled) |
+| **Target Hosting Platform** | GitHub Pages (Frontend SPA) + Linux/Docker Host (FastAPI Backend) |
 | **Project Name** | `panoramawatertank-nextgen` |
-| **Deployment Mode** | Local Desktop HMI, SCADA Edge, and Local Web Services |
+| **Deployment Mode** | GitHub Actions Automated CI/CD & GitHub Pages Static Hosting |
 | **Frontend Framework** | React 18 + TypeScript + esbuild standalone |
 | **Build Command** | `npm run build` |
 | **Output Directory** | `dist` |
@@ -91,7 +91,7 @@ The repository is maintained exclusively as a GitHub-hosted development and desk
 ## 5. Live Production Verification Procedure
 
 After deployment succeeds:
-1. Open the production URL in the browser (e.g. `https://panoramawatertank-nextgen.vercel.app`).
+1. Open the production URL in the browser (e.g. `https://soumikbur.github.io/PanoramaWaterTank_NextGen/` or local HMI).
 2. Verify responsive desktop resolutions:
    - **1920 × 1080 (Full HD Desktop)**
    - **1600 × 900 (Standard Desktop)**

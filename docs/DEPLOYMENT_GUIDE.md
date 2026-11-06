@@ -3,47 +3,26 @@
 ## 1. System Topology Overview
 
 The Panorama Water Tank Monitor NextGen employs a decoupled micro-architecture:
-1. **Frontend**: Static React Single Page Application (SPA) deployed to Vercel global CDN edge network.
+1. **Frontend**: Static React Single Page Application (SPA) built and deployed via GitHub Actions to GitHub Pages.
 2. **Backend**: Async Python FastAPI application serving REST endpoints, WebSocket push streams, and MQTT telemetry listeners.
-3. **Database**: PostgreSQL 16 (or high-performance SQLite in development/embedded scenarios).
+3. **Database**: PostgreSQL 16 (or high-performance SQLite WAL mode in development/embedded scenarios).
 4. **IoT Message Broker**: Mosquitto / HiveMQ MQTTS broker on TLS port 8883.
 
 ---
 
-## 2. Frontend Deployment (Vercel)
+## 2. Frontend Deployment (GitHub Pages)
 
-### 2.1 Repository Setup & Vercel Configuration
-The repository root contains a configured `vercel.json`:
-
-```json
-{
-  "version": 2,
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
-  ]
-}
-```
+### 2.1 Repository Setup & CI Workflow
+Frontend deployment is automated exclusively via GitHub Actions:
+- **Hosting Platform**: GitHub Pages (`https://<username>.github.io/<repo>/`)
+- **Workflow**: `.github/workflows/ci.yml` builds and deploys artifacts to the `gh-pages` branch.
+- **Build Output**: `dist/` (contains `index.html` and assets).
 
 ### 2.2 Build Pipeline
 - **Build Command**: `npm run build`
   *(Executes `npm run build --workspace=apps/mobile && node scripts/sync_dist.js`, compiling TypeScript/JSX with esbuild and populating `dist/` and `backend/static/`)*.
 - **Output Directory**: `dist`
-- **Node.js Version**: 18.x or 20.x
+- **Node.js Version**: 20.x
 
 ### 2.3 Frontend Environment Variables
 

@@ -67,7 +67,7 @@ async function build() {
     <meta name="theme-color" content="#1976D2" />
     <meta name="description" content="Panorama Water Tank Monitor — NextGen Railway Coach SCADA & HMI System" />
     <title>Panorama Water Tank Monitor — Railway SCADA/HMI</title>
-    <link rel="stylesheet" href="/assets/index.css" />
+    <link rel="stylesheet" href="./assets/index.css" />
     <style>
       * { box-sizing: border-box; }
       body {
@@ -89,10 +89,11 @@ async function build() {
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <script type="module" src="/assets/index.js"></script>
+    <script type="module" src="./assets/index.js"></script>
   </body>
 </html>`;
   fs.writeFileSync(path.join(distDir, 'index.html'), htmlContent, 'utf8');
+  fs.writeFileSync(path.join(distDir, '404.html'), htmlContent, 'utf8');
 
   // Sync to root dist if different
   const rootDist = path.resolve(__dirname, '../../../dist');
