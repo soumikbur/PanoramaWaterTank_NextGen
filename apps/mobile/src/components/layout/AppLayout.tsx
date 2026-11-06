@@ -18,7 +18,17 @@ interface AppLayoutProps {
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
-  const { displayScale, displayScaleFactor, layoutDensity, contrastMode } = useDisplayPreferences();
+  const {
+    zoom,
+    zoomFactor,
+    density,
+    fontSize,
+    resolvedTheme,
+    displayScale,
+    displayScaleFactor,
+    layoutDensity,
+    contrastMode
+  } = useDisplayPreferences();
 
   useEffect(() => {
     // Notify resize listeners (Leaflet maps, charts, virtualized lists) of scaling adjustments
@@ -26,7 +36,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       window.dispatchEvent(new Event('resize'));
     }, 60);
     return () => clearTimeout(timer);
-  }, [displayScaleFactor, layoutDensity]);
+  }, [zoomFactor, density, resolvedTheme]);
 
   // Guarantee that document.documentElement and document.body zoom remain clean
   useEffect(() => {
@@ -35,16 +45,21 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       if (document.body) {
         document.body.style.zoom = '';
       }
+      document.documentElement.setAttribute('data-theme', resolvedTheme);
     }
-  }, []);
+  }, [resolvedTheme]);
 
-  const scale = displayScaleFactor || 1.0;
-  const scaleClass = `scale-${(displayScale || '100%').replace('%', '')}`;
+  const scale = zoomFactor || displayScaleFactor || 1.0;
+  const zoomClass = `scale-${(zoom || displayScale || '100%').replace('%', '')}`;
+  const densityClass = `density-${(density || layoutDensity || 'comfortable').toLowerCase()}`;
+  const fontClass = `font-${(fontSize || 'default').toLowerCase()}`;
 
   return (
     <div
       id="app-root"
-      className={`app-layout ${scaleClass} density-${layoutDensity.toLowerCase()} contrast-${contrastMode.toLowerCase()}`}
+      data-theme={resolvedTheme}
+      data-density={density}
+      className={`app-layout ${zoomClass} ${densityClass} ${fontClass} contrast-${(contrastMode || 'standard').toLowerCase()}`}
       style={
         {
           '--app-scale': scale,
@@ -56,9 +71,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           maxHeight: '100vh',
           overflow: 'hidden',
           position: 'relative',
-          backgroundColor: colors.background,
+          backgroundColor: 'var(--color-background, #F1F5F9)',
           fontFamily: typography.fontFamily,
-          color: colors.textPrimary,
+          color: 'var(--color-text-primary, #0F172A)',
           boxSizing: 'border-box',
         } as React.CSSProperties
       }

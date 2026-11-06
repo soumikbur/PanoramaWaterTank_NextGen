@@ -21,7 +21,17 @@
 /* SCALE PRESETS (Design-Token Adaptive Architecture)                        */
 /* ========================================================================= */
 
-/* 1. Compact — 90% */
+/* 1. Compact — 80% */
+.app-layout.scale-80 {
+  --app-scale: 0.8;
+  --font-scale: 0.8;
+  --space-scale: 0.8;
+  --card-padding: 0.625rem;
+  --header-height: 3.5rem;
+  --sidebar-width: 11.5rem;
+}
+
+/* 2. Small — 90% */
 .app-layout.scale-90 {
   --app-scale: 0.9;
   --font-scale: 0.9;
@@ -31,7 +41,7 @@
   --sidebar-width: 12.5rem;
 }
 
-/* 2. Small (DEFAULT) — 100% */
+/* 3. Default — 100% */
 .app-layout.scale-100 {
   --app-scale: 1.0;
   --font-scale: 1.0;
@@ -41,7 +51,7 @@
   --sidebar-width: 14rem;
 }
 
-/* 3. Normal — 110% */
+/* 4. Large — 110% */
 .app-layout.scale-110 {
   --app-scale: 1.1;
   --font-scale: 1.1;
@@ -51,21 +61,13 @@
   --sidebar-width: 14.5rem;
 }
 
-/* 4. Large — 120% */
-.app-layout.scale-120 {
-  --app-scale: 1.2;
-  --font-scale: 1.2;
-  --space-scale: 1.1;
-  --card-padding: 1.1rem;
-  --header-height: 4.875rem;
-  --sidebar-width: 15rem;
-}
-
-/* 5. Extra Large — 130% */
+/* 5. Extra Large — 125% */
+.app-layout.scale-125,
+.app-layout.scale-120,
 .app-layout.scale-130 {
-  --app-scale: 1.3;
-  --font-scale: 1.3;
-  --space-scale: 1.15;
+  --app-scale: 1.25;
+  --font-scale: 1.25;
+  --space-scale: 1.12;
   --card-padding: 1.15rem;
   --header-height: 5rem;
   --sidebar-width: 15.5rem;
@@ -76,9 +78,41 @@
   --app-scale: 1.5;
   --font-scale: 1.5;
   --space-scale: 1.2;
-  --card-padding: 1.2rem;
+  --card-padding: 1.25rem;
   --header-height: 5.25rem;
   --sidebar-width: 16rem;
+}
+
+/* FONT SIZE PRESETS */
+.app-layout.font-small {
+  --base-font-size: 13px;
+}
+.app-layout.font-default {
+  --base-font-size: 14px;
+}
+.app-layout.font-large {
+  --base-font-size: 16px;
+}
+.app-layout.font-extralarge {
+  --base-font-size: 18px;
+}
+
+/* DENSITY PRESETS */
+.app-layout.density-compact {
+  --card-padding: 0.625rem !important;
+  --header-height: 3.75rem !important;
+  --space-scale: 0.82 !important;
+}
+
+.app-layout.density-comfortable {
+  --card-padding: 1rem;
+  --space-scale: 1.0;
+}
+
+.app-layout.density-spacious {
+  --card-padding: 1.375rem !important;
+  --header-height: 4.75rem !important;
+  --space-scale: 1.2 !important;
 }
 
 /* High Contrast & Layout Density Modes */
@@ -93,13 +127,134 @@
   border-color: #64748B !important;
 }
 
-.app-layout.density-compact {
-  --card-padding: 0.625rem !important;
-  --header-height: 3.75rem !important;
+/* ========================================================================= */
+/* COMPREHENSIVE DARK THEME GLOBAL RULES                                      */
+/* ========================================================================= */
+[data-theme="dark"] body {
+  background-color: var(--color-background) !important;
+  color: var(--color-text-primary) !important;
 }
 
-.app-layout.density-comfortable {
-  --card-padding: 1rem;
+[data-theme="dark"] .app-layout {
+  background-color: var(--color-background) !important;
+  color: var(--color-text-primary) !important;
+}
+
+[data-theme="dark"] header,
+[data-theme="dark"] .header-container {
+  background-color: var(--color-surface) !important;
+  border-bottom-color: var(--color-border) !important;
+  color: var(--color-text-primary) !important;
+}
+
+[data-theme="dark"] aside,
+[data-theme="dark"] .sidebar-container {
+  background-color: #0B1120 !important;
+  border-right-color: var(--color-border) !important;
+}
+
+[data-theme="dark"] footer,
+[data-theme="dark"] .footer-container {
+  background-color: var(--color-surface) !important;
+  border-top-color: var(--color-border) !important;
+  color: var(--color-text-muted) !important;
+}
+
+[data-theme="dark"] .interactive-card,
+[data-theme="dark"] .base-card,
+[data-theme="dark"] .scada-card,
+[data-theme="dark"] .summary-card,
+[data-theme="dark"] .card-container {
+  background-color: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-primary) !important;
+}
+
+/* Dark mode table readability */
+[data-theme="dark"] table {
+  background-color: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-primary) !important;
+}
+
+[data-theme="dark"] table th {
+  background-color: var(--color-surface-alt) !important;
+  color: var(--color-text-muted) !important;
+  border-color: var(--color-border) !important;
+}
+
+[data-theme="dark"] table td {
+  border-color: var(--color-border) !important;
+  color: var(--color-text-primary) !important;
+}
+
+[data-theme="dark"] table tr:hover td {
+  background-color: var(--color-surface-highlight) !important;
+}
+
+/* Dark mode inputs, selects, textareas */
+[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background-color: var(--color-input-bg) !important;
+  border-color: var(--color-input-border) !important;
+  color: var(--color-input-text) !important;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: var(--color-text-placeholder) !important;
+}
+
+/* Dark mode modals & dialogs */
+[data-theme="dark"] .modal-overlay,
+[data-theme="dark"] .dialog-overlay {
+  background-color: rgba(0, 0, 0, 0.75) !important;
+}
+
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] .dialog-content {
+  background-color: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-primary) !important;
+  box-shadow: var(--shadow-modal) !important;
+}
+
+/* Dark mode Leaflet navigation map tiles */
+[data-theme="dark"] .leaflet-tile-pane {
+  filter: brightness(0.65) invert(1) contrast(2.6) hue-rotate(180deg) saturate(0.4) brightness(0.85);
+}
+
+[data-theme="dark"] .leaflet-container {
+  background-color: #0B1120 !important;
+}
+
+[data-theme="dark"] .leaflet-bar a {
+  background-color: var(--color-surface) !important;
+  color: var(--color-text-primary) !important;
+  border-color: var(--color-border) !important;
+}
+
+[data-theme="dark"] .leaflet-popup-content-wrapper {
+  background-color: var(--color-surface) !important;
+  color: var(--color-text-primary) !important;
+  box-shadow: var(--shadow-modal) !important;
+}
+
+[data-theme="dark"] .leaflet-popup-tip {
+  background-color: var(--color-surface) !important;
+}
+
+/* Dark mode scrollbars */
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: #0B1120;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
 }
 
 /* ========================================================================= */

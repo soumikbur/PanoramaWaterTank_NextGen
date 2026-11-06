@@ -20,7 +20,9 @@ import {
   Activity,
   LogOut,
   LucideIcon,
+  Sliders,
 } from 'lucide-react';
+import { useDisplayPreferences } from '../../context/DisplayPreferencesContext';
 
 export const Sidebar: React.FC = () => {
   const {
@@ -37,10 +39,12 @@ export const Sidebar: React.FC = () => {
     logout,
   } = useApp();
 
+  const { sidebarMode, setSidebarMode } = useDisplayPreferences();
+
   const isConnected = connectionStatus === 'CONNECTED';
   const isAdmin = currentUser?.role === 'ADMIN';
 
-  // 1. Employee Navigation Items (Covering operations, consists, and GPS tracking)
+  // 1. Employee Navigation Items (Covering operations, consists, GPS tracking, and display settings)
   const employeeNavItems: { id: ScreenName; label: string; icon: LucideIcon }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'trains', label: 'Train Management', icon: Train },
@@ -50,6 +54,7 @@ export const Sidebar: React.FC = () => {
     { id: 'monitoring', label: 'Monitoring', icon: Gauge },
     { id: 'history', label: 'History', icon: LineChart },
     { id: 'reports', label: 'Reports', icon: FileText },
+    { id: 'settings', label: 'Display Settings', icon: Sliders },
   ];
 
   // 2. Admin Fleet Navigation Items (Preserving full admin access)
@@ -81,7 +86,16 @@ export const Sidebar: React.FC = () => {
   const totalTanksCount = devices.length * 2;
   const totalAlertsCount = activeAlarms.length;
 
-  const sidebarWidth = sidebarCollapsed ? '64px' : '224px';
+  const isCollapsed = sidebarMode === 'collapsed' || sidebarMode === 'iconOnly' || sidebarCollapsed;
+  const sidebarWidth = isCollapsed ? '64px' : '224px';
+
+  const handleToggle = () => {
+    const next = isCollapsed ? 'expanded' : 'collapsed';
+    setSidebarMode(next);
+    if ((isCollapsed && sidebarCollapsed) || (!isCollapsed && !sidebarCollapsed)) {
+      toggleSidebar();
+    }
+  };
 
   return (
     <aside
@@ -105,7 +119,7 @@ export const Sidebar: React.FC = () => {
       {/* Brand Header */}
       <div
         style={{
-          padding: sidebarCollapsed ? '16px 8px' : '16px 14px',
+          padding: isCollapsed ? '16px 8px' : '16px 14px',
           borderBottom: '1px solid #1E293B',
           display: 'flex',
           alignItems: 'center',
@@ -446,8 +460,8 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
         <button
-          onClick={toggleSidebar}
-          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          onClick={handleToggle}
+          title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           style={{
             background: '#1E293B',
             border: '1px solid #334155',
@@ -460,7 +474,7 @@ export const Sidebar: React.FC = () => {
             justifyContent: 'center',
           }}
         >
-          {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
       </div>
     </aside>

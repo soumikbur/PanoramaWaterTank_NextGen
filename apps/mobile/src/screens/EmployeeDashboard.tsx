@@ -5,6 +5,7 @@ import { ApiClient } from '../api/client';
 import { TrainOverviewItem } from '../types';
 import { DEMO_TRAIN, DEMO_ARRIVAL_TANK, DEMO_DEPARTURE_TANK, DemoTrain } from '../data/demonstrationData';
 import { TankVisualization } from '../components/tank/TankVisualization';
+import { useDisplayPreferences } from '../context/DisplayPreferencesContext';
 import {
   Train,
   Plus,
@@ -35,6 +36,8 @@ export const EmployeeDashboard: React.FC = () => {
     tanks,
     devices,
   } = useApp();
+
+  const { dashboard } = useDisplayPreferences();
 
   const [selectedRegion, setSelectedRegion] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -211,159 +214,165 @@ export const EmployeeDashboard: React.FC = () => {
       }}
     >
       {/* Top SCADA Metrics Header */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
-          gap: '12px',
-        }}
-      >
+      {dashboard.showSummaryCards && (
         <div
           style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '8px',
-            border: '1px solid #E2E8F0',
-            padding: '14px 16px',
-            display: 'flex',
-            alignItems: 'center',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
             gap: '12px',
           }}
         >
           <div
+            className="interactive-card"
             style={{
-              width: '40px',
-              height: '40px',
+              backgroundColor: 'var(--color-surface, #FFFFFF)',
               borderRadius: '8px',
-              backgroundColor: '#EFF6FF',
-              border: '1px solid #BFDBFE',
+              border: '1px solid var(--color-border, #E2E8F0)',
+              padding: '14px 16px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              color: '#2563EB',
+              gap: '12px',
             }}
           >
-            <Train size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600, textTransform: 'uppercase' }}>
-              Active Trains
+            <div
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                border: '1px solid rgba(37, 99, 235, 0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--color-primary, #2563EB)',
+              }}
+            >
+              <Train size={22} />
             </div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>
-              {(backendTrains.length || 0) + (showDemoTrain ? 1 : 0)}
+            <div>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary, #64748B)', fontWeight: 600, textTransform: 'uppercase' }}>
+                Active Trains
+              </div>
+              <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary, #0F172A)', marginTop: '2px' }}>
+                {(backendTrains.length || 0) + (showDemoTrain ? 1 : 0)}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '8px',
-            border: '1px solid #E2E8F0',
-            padding: '14px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-          }}
-        >
           <div
+            className="interactive-card"
             style={{
-              width: '40px',
-              height: '40px',
+              backgroundColor: 'var(--color-surface, #FFFFFF)',
               borderRadius: '8px',
-              backgroundColor: '#F0FDF4',
-              border: '1px solid #BBF7D0',
+              border: '1px solid var(--color-border, #E2E8F0)',
+              padding: '14px 16px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              color: '#16A34A',
+              gap: '12px',
             }}
           >
-            <Layers size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600, textTransform: 'uppercase' }}>
-              Coaches Monitored
+            <div
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(22, 163, 74, 0.1)',
+                border: '1px solid rgba(22, 163, 74, 0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--color-status-success, #16A34A)',
+              }}
+            >
+              <Layers size={22} />
             </div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>
-              {devices.length > 0 ? devices.length : 1}
+            <div>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary, #64748B)', fontWeight: 600, textTransform: 'uppercase' }}>
+                Coaches Monitored
+              </div>
+              <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary, #0F172A)', marginTop: '2px' }}>
+                {devices.length > 0 ? devices.length : 1}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '8px',
-            border: '1px solid #E2E8F0',
-            padding: '14px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-          }}
-        >
           <div
+            className="interactive-card"
             style={{
-              width: '40px',
-              height: '40px',
+              backgroundColor: 'var(--color-surface, #FFFFFF)',
               borderRadius: '8px',
-              backgroundColor: '#EFF6FF',
-              border: '1px solid #BFDBFE',
+              border: '1px solid var(--color-border, #E2E8F0)',
+              padding: '14px 16px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              color: '#0284C7',
+              gap: '12px',
             }}
           >
-            <Gauge size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600, textTransform: 'uppercase' }}>
-              Reservoir Tanks
+            <div
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(2, 132, 199, 0.1)',
+                border: '1px solid rgba(2, 132, 199, 0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#0284C7',
+              }}
+            >
+              <Gauge size={22} />
             </div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>
-              {tanks.length > 0 ? tanks.length : 2}
+            <div>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary, #64748B)', fontWeight: 600, textTransform: 'uppercase' }}>
+                Reservoir Tanks
+              </div>
+              <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary, #0F172A)', marginTop: '2px' }}>
+                {tanks.length > 0 ? tanks.length : 2}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            borderRadius: '8px',
-            border: '1px solid #E2E8F0',
-            padding: '14px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-          }}
-        >
           <div
+            className="interactive-card"
             style={{
-              width: '40px',
-              height: '40px',
+              backgroundColor: 'var(--color-surface, #FFFFFF)',
               borderRadius: '8px',
-              backgroundColor: '#ECFDF5',
-              border: '1px solid #A7F3D0',
+              border: '1px solid var(--color-border, #E2E8F0)',
+              padding: '14px 16px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              color: '#059669',
+              gap: '12px',
             }}
           >
-            <Radio size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600, textTransform: 'uppercase' }}>
-              Devices Engaged
+            <div
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(5, 150, 105, 0.1)',
+                border: '1px solid rgba(5, 150, 105, 0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#059669',
+              }}
+            >
+              <Radio size={22} />
             </div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>
-              {devices.filter((d) => d.isOnline).length > 0
-                ? `${devices.filter((d) => d.isOnline).length} Active`
-                : '1 Engaged'}
+            <div>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-secondary, #64748B)', fontWeight: 600, textTransform: 'uppercase' }}>
+                Devices Engaged
+              </div>
+              <div style={{ fontSize: '20px', fontWeight: 700, color: 'var(--color-text-primary, #0F172A)', marginTop: '2px' }}>
+                {devices.filter((d) => d.isOnline).length > 0
+                  ? `${devices.filter((d) => d.isOnline).length} Active`
+                  : '1 Engaged'}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Action Feedback Banner */}
       {actionFeedback && (

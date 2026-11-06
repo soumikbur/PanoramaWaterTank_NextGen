@@ -28,6 +28,8 @@ import {
   Globe,
 } from 'lucide-react';
 
+import { DisplaySettingsPanel } from '../components/settings/DisplaySettingsPanel';
+
 export const SettingsScreen: React.FC = () => {
   const {
     liveTank,
@@ -49,29 +51,65 @@ export const SettingsScreen: React.FC = () => {
   } = useDisplayPreferences();
 
   const isAdmin = currentUser?.role === 'ADMIN';
+  const [adminTab, setAdminTab] = useState<'system' | 'display'>('system');
 
+  // Employee role gets personal display settings directly
   if (!isAdmin) {
+    return <DisplaySettingsPanel />;
+  }
+
+  // Admin display preferences view
+  if (adminTab === 'display') {
     return (
-      <div
-        style={{
-          padding: '48px',
-          textAlign: 'center',
-          backgroundColor: '#FFFFFF',
-          borderRadius: '8px',
-          border: '1px solid #E2E8F0',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '12px',
-        }}
-      >
-        <ShieldAlert size={40} color={colors.critical} />
-        <h2 style={{ color: '#0F172A', fontSize: '18px', fontWeight: 700, margin: 0 }}>
-          Access Restricted
-        </h2>
-        <p style={{ color: '#64748B', fontSize: '13px', margin: 0, maxWidth: '400px' }}>
-          Administrative settings and system configuration require administrator authorization. Please sign in as an Administrator to modify configuration parameters.
-        </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: '8px',
+            borderBottom: `1px solid ${colors.border}`,
+            paddingBottom: '12px',
+          }}
+        >
+          <button
+            onClick={() => setAdminTab('system')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '6px',
+              border: `1px solid ${colors.borderStrong}`,
+              backgroundColor: colors.surfaceAlt,
+              color: colors.textSecondary,
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <SettingsIcon size={14} />
+            <span>System & Hardware Configuration</span>
+          </button>
+          <button
+            onClick={() => setAdminTab('display')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '6px',
+              border: `1px solid ${colors.primaryBorder}`,
+              backgroundColor: colors.primarySurface,
+              color: colors.primary,
+              fontSize: '13px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <Sliders size={14} />
+            <span>Display & Interface Preferences</span>
+          </button>
+        </div>
+        <DisplaySettingsPanel isAdminView={true} />
       </div>
     );
   }
@@ -344,6 +382,54 @@ export const SettingsScreen: React.FC = () => {
         minHeight: '100%',
       }}
     >
+      {/* Admin Module Tabs: System Configuration vs Display Preferences */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '8px',
+          borderBottom: `1px solid ${colors.border}`,
+          paddingBottom: '12px',
+        }}
+      >
+        <button
+          onClick={() => setAdminTab('system')}
+          style={{
+            padding: '8px 16px',
+            borderRadius: '6px',
+            border: `1px solid ${colors.primaryBorder}`,
+            backgroundColor: colors.primarySurface,
+            color: colors.primary,
+            fontSize: '13px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          <SettingsIcon size={14} />
+          <span>System & Hardware Configuration</span>
+        </button>
+        <button
+          onClick={() => setAdminTab('display')}
+          style={{
+            padding: '8px 16px',
+            borderRadius: '6px',
+            border: `1px solid ${colors.borderStrong}`,
+            backgroundColor: colors.surfaceAlt,
+            color: colors.textSecondary,
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          <Sliders size={14} />
+          <span>Display & Interface Preferences</span>
+        </button>
+      </div>
       {/* 1. Top Action & Status Bar */}
       <div
         style={{

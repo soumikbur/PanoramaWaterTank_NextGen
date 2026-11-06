@@ -115,7 +115,7 @@ const MainContent: React.FC = () => {
         {activeScreen === 'alerts' && <AlertsScreen />}
         {activeScreen === 'history' && <HistoryScreen />}
         {activeScreen === 'reports' && <ReportsScreen />}
-        {activeScreen === 'settings' && (isAdmin ? <SettingsScreen /> : <AccessDeniedScreen />)}
+        {activeScreen === 'settings' && <SettingsScreen />}
         {activeScreen === 'users' && (isAdmin ? <UsersScreen /> : <AccessDeniedScreen />)}
         {activeScreen === 'logs' && (isAdmin ? <LogsScreen /> : <AccessDeniedScreen />)}
       </main>

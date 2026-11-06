@@ -954,9 +954,9 @@
     "semantic_hash": ""
   },
   "backend/app/api/v1/export.py": {
-    "mtime": 1793713433.6872737,
-    "seen": 1793865617.212277,
-    "ast_hash": "7ac364028ebdbf0908c38648469d49e1",
+    "mtime": 1793967601.1576273,
+    "seen": 1793967841.1675613,
+    "ast_hash": "9ac219486dbf62729a7ed80d528426bc",
     "semantic_hash": ""
   },
   "backend/app/api/v1/health.py": {
@@ -972,21 +972,21 @@
     "semantic_hash": ""
   },
   "backend/app/api/v1/settings.py": {
-    "mtime": 1793964858.8409085,
-    "seen": 1793965342.623314,
-    "ast_hash": "a41017d1ec369a451619d8f024e552f6",
+    "mtime": 1793966192.439845,
+    "seen": 1793967841.1677175,
+    "ast_hash": "726549f1a7fa2134c36625dac1f8cb95",
     "semantic_hash": ""
   },
   "backend/app/api/v1/tanks.py": {
-    "mtime": 1793876009.412585,
-    "seen": 1793883462.414075,
-    "ast_hash": "8807b792fa66b5a9edfaffb3e8ac59e0",
+    "mtime": 1793967601.2064016,
+    "seen": 1793967841.167719,
+    "ast_hash": "c98ad7225dc834c6a48fe246fdb9bd79",
     "semantic_hash": ""
   },
   "backend/app/api/v1/telemetry.py": {
-    "mtime": 1793190887.3218017,
-    "seen": 1793442655.9619303,
-    "ast_hash": "e7d3ce04b98a875ce5dbb50f86582108",
+    "mtime": 1793967601.2336957,
+    "seen": 1793967841.16772,
+    "ast_hash": "40d6fc78c14abeccc01ff1d51c509ec6",
     "semantic_hash": ""
   },
   "backend/app/api/v1/trains.py": {
@@ -1008,15 +1008,15 @@
     "semantic_hash": ""
   },
   "backend/app/core/config.py": {
-    "mtime": 1793876191.669918,
-    "seen": 1793883462.4142916,
-    "ast_hash": "de1536c47d3ca5675127349974da8e22",
+    "mtime": 1793966192.4403453,
+    "seen": 1793967841.16795,
+    "ast_hash": "79d38bd558684cc1c73deac7f1459d62",
     "semantic_hash": ""
   },
   "backend/app/core/database.py": {
-    "mtime": 1793964859.8457615,
-    "seen": 1793965342.623722,
-    "ast_hash": "e6ccf761a6ff596d568b94b84d527622",
+    "mtime": 1793967149.3037446,
+    "seen": 1793967841.167951,
+    "ast_hash": "eba594515bd6c3956fe875b491d36f6f",
     "semantic_hash": ""
   },
   "backend/app/core/security.py": {
@@ -1026,9 +1026,9 @@
     "semantic_hash": ""
   },
   "backend/app/main.py": {
-    "mtime": 1793876203.3744667,
-    "seen": 1793883462.4143972,
-    "ast_hash": "805690f7354ea4ae4df62becc995ac9a",
+    "mtime": 1793966192.4408462,
+    "seen": 1793967841.168218,
+    "ast_hash": "58550764c475cf184fb752e7470b0893",
     "semantic_hash": ""
   },
   "backend/app/models/__init__.py": {
@@ -1230,9 +1230,9 @@
     "semantic_hash": ""
   },
   "backend/tests/test_api.py": {
-    "mtime": 1793876348.3404,
-    "seen": 1793883462.417183,
-    "ast_hash": "6ad9c12107bb41b0d657b12397e0f5d3",
+    "mtime": 1793966192.4588466,
+    "seen": 1793967841.1711116,
+    "ast_hash": "046214b1095987ca4934d6632028dd3a",
     "semantic_hash": ""
   },
   "backend/tests/test_calculator.py": {
@@ -3138,9 +3138,9 @@
     "semantic_hash": ""
   },
   "WLI_DOCS/deployment/DEPLOYMENT_WORKFLOW.md": {
-    "mtime": 1793690585.665398,
-    "seen": 1793690621.6210463,
-    "ast_hash": "ce9396427b576b41ab75dd5b4ac5dee0",
+    "mtime": 1793966192.4383454,
+    "seen": 1793967841.1789923,
+    "ast_hash": "8adf59e7e0f1b2aad716ab6ed717445d",
     "semantic_hash": ""
   },
   "WLI_DOCS/reports/UI_OPTIMIZATION_AUDIT.md": {
@@ -3276,9 +3276,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/scripts/build.cjs": {
-    "mtime": 1793964857.8123558,
-    "seen": 1793965342.6182184,
-    "ast_hash": "a3edc42c545a9bf7e3dc154a2927eeaf",
+    "mtime": 1793966192.4388452,
+    "seen": 1793967841.1615636,
+    "ast_hash": "7ea8302e35b72fb892ce53e34dc0a0ed",
     "semantic_hash": ""
   },
   "apps/mobile/scripts/dev.cjs": {
@@ -3294,9 +3294,9 @@
     "semantic_hash": ""
   },
   ".github/workflows/backend-ci.yml": {
-    "mtime": 1793694378.0797937,
-    "seen": 1793706576.3446624,
-    "ast_hash": "4eb581fe10eda9ed466205be3f60c552",
+    "mtime": 1793967323.3007674,
+    "seen": 1793967841.151114,
+    "ast_hash": "4f19904b53ea923225632737741d5c2d",
     "semantic_hash": ""
   },
   "railway.json": {
@@ -3312,9 +3312,9 @@
     "semantic_hash": ""
   },
   "backend/static/assets/index.js": {
-    "mtime": 1793964561.0937526,
-    "seen": 1793965342.6263206,
-    "ast_hash": "eeee913520a862b1798e79685e5990d9",
+    "mtime": 1793966082.8559067,
+    "seen": 1793967841.1710248,
+    "ast_hash": "b9473152db53ddd38811f58a8d0be3cf",
     "semantic_hash": ""
   },
   "scripts/verify_react_production_app.cjs": {
@@ -3324,9 +3324,9 @@
     "semantic_hash": ""
   },
   "backend/static/index.html": {
-    "mtime": 1793964496.6965935,
-    "seen": 1793965342.6442618,
-    "ast_hash": "b04769e82ff898f848bfac981d1eabac",
+    "mtime": 1793966192.457347,
+    "seen": 1793967841.1874733,
+    "ast_hash": "f22e66a2e9dea84f51194bc739783829",
     "semantic_hash": ""
   },
   "apps/mobile/scripts/comprehensive_e2e_audit.cjs": {
@@ -3426,9 +3426,9 @@
     "semantic_hash": ""
   },
   "WLI_DOCS/CODE_QUALITY_AUDIT.md": {
-    "mtime": 1793713955.3824835,
-    "seen": 1793865617.2370808,
-    "ast_hash": "ab3177b2cda08ac27fa77bcc144c82d0",
+    "mtime": 1793966192.437845,
+    "seen": 1793967841.1776495,
+    "ast_hash": "80705cddf8c8edfa50d7a088eaab2421",
     "semantic_hash": ""
   },
   "WLI_DOCS/UI_SCALING_ARCHITECTURE_REPORT.md": {
@@ -3450,9 +3450,9 @@
     "semantic_hash": ""
   },
   "docs/DEPLOYMENT_GUIDE.md": {
-    "mtime": 1793866085.927781,
-    "seen": 1793871663.7426193,
-    "ast_hash": "add4f9e1deedae6df1776dd55fc99526",
+    "mtime": 1793966192.459346,
+    "seen": 1793967841.187836,
+    "ast_hash": "2e08efe01d3bc3c9d32889d437989cd0",
     "semantic_hash": ""
   },
   "docs/GRAPHIFY_ANALYSIS.md": {
@@ -3498,9 +3498,9 @@
     "semantic_hash": ""
   },
   "backend/tests/conftest.py": {
-    "mtime": 1793876866.4751613,
-    "seen": 1793883462.4170904,
-    "ast_hash": "da295d2a5593c2d4861d7427b4667c4e",
+    "mtime": 1793966192.4583468,
+    "seen": 1793967841.1710272,
+    "ast_hash": "8216ab8812d4d8d661007e47d2931718",
     "semantic_hash": ""
   },
   "backend/tests/test_extreme_water_level_calculations.py": {
@@ -3653,16 +3653,16 @@
     "ast_hash": "98ab7e3412be53df532acc0d8a898395",
     "semantic_hash": ""
   },
-  "vercel.json": {
-    "mtime": 1793964858.673898,
-    "seen": 1793965342.6325169,
-    "ast_hash": "c98ac39a65b448990fb58bc3ca664037",
+  "docs/GRAPHIFY_NEXTGEN_RECOVERY_ANALYSIS.md": {
+    "mtime": 1793966192.4598453,
+    "seen": 1793967841.188127,
+    "ast_hash": "041862419f78355588ac08a5b57279f8",
     "semantic_hash": ""
   },
-  "docs/GRAPHIFY_NEXTGEN_RECOVERY_ANALYSIS.md": {
-    "mtime": 1793964858.5353975,
-    "seen": 1793965342.644993,
-    "ast_hash": "275da91f22e6ee64bf3d3714a22a53f7",
+  "backend/static/404.html": {
+    "mtime": 1793966192.4413452,
+    "seen": 1793967841.1874714,
+    "ast_hash": "f22e66a2e9dea84f51194bc739783829",
     "semantic_hash": ""
   },
   "apps/mobile/package-lock.json": {

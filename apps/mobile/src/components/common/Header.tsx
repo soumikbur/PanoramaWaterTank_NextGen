@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { colors, typography } from '../../theme';
 import { useApp, ScreenName } from '../../state/AppContext';
+import { useDisplayPreferences } from '../../context/DisplayPreferencesContext';
 import { DEFAULT_CORRIDOR_STATIONS, TrainOverviewItem, TankLiveStatus, Device } from '../../types';
 import {
   Droplet,
@@ -18,6 +19,11 @@ import {
   ArrowRight,
   AlertCircle,
   Loader2,
+  Sun,
+  Moon,
+  Monitor,
+  Sliders,
+  ChevronDown,
 } from 'lucide-react';
 
 interface SearchResultItem {
@@ -53,6 +59,8 @@ export const Header: React.FC = () => {
     setSelectedStationCode,
   } = useApp();
 
+  const { theme, setTheme, resolvedTheme, isDark } = useDisplayPreferences();
+
   // Search local states
   const [isOpen, setIsOpen] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -61,14 +69,21 @@ export const Header: React.FC = () => {
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [isSearching, setIsSearching] = useState(false);
 
+  // Profile menu state
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
   const searchContainerRef = useRef<HTMLDivElement>(null);
+  const profileContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Outside click listener to dismiss search panel
+  // Outside click listener to dismiss search panel and profile menu
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
+      }
+      if (profileContainerRef.current && !profileContainerRef.current.contains(e.target as Node)) {
+        setIsProfileOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -1018,34 +1033,197 @@ export const Header: React.FC = () => {
       </div>
 
       {/* Right Controls: Role Badge, Status Pill, Settings, Logout, Live Clock */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        {/* Role Badge */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Interactive User Profile Badge & Dropdown */}
         {currentUser && (
-          <div
-            style={{
-              backgroundColor: isAdmin ? '#EFF6FF' : '#F1F5F9',
-              border: `1px solid ${isAdmin ? '#BFDBFE' : '#CBD5E1'}`,
-              borderRadius: '6px',
-              padding: '4px 9px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            <UserIcon size={12} color={isAdmin ? '#2563EB' : '#64748B'} />
-            <span
+          <div ref={profileContainerRef} style={{ position: 'relative' }}>
+            <div
+              onClick={() => setIsProfileOpen((prev) => !prev)}
               style={{
-                fontSize: '10px',
-                fontWeight: 700,
-                color: isAdmin ? '#2563EB' : '#475569',
-                letterSpacing: '0.4px',
+                backgroundColor: isAdmin ? 'var(--color-primary-surface, #EFF6FF)' : 'var(--color-surface-alt, #F1F5F9)',
+                border: `1px solid ${isAdmin ? 'var(--color-primary-border, #BFDBFE)' : 'var(--color-border-strong, #CBD5E1)'}`,
+                borderRadius: '6px',
+                padding: '4px 9px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
               }}
+              title="Click to view profile & display preferences"
             >
-              [{currentUser.role}]
-            </span>
-            <span style={{ fontSize: '11px', color: '#1E293B', fontWeight: 500 }}>
-              {currentUser.username}
-            </span>
+              <UserIcon size={12} color={isAdmin ? 'var(--color-primary, #2563EB)' : 'var(--color-text-muted, #64748B)'} />
+              <span
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  color: isAdmin ? 'var(--color-primary, #2563EB)' : 'var(--color-text-secondary, #475569)',
+                  letterSpacing: '0.4px',
+                }}
+              >
+                [{currentUser.role}]
+              </span>
+              <span style={{ fontSize: '11px', color: 'var(--color-text-primary, #1E293B)', fontWeight: 500 }}>
+                {currentUser.username}
+              </span>
+              <ChevronDown size={11} color="var(--color-text-muted, #64748B)" />
+            </div>
+
+            {/* Profile & Display Settings Dropdown Menu */}
+            {isProfileOpen && (
+              <div
+                className="dialog-content"
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  right: 0,
+                  width: '260px',
+                  backgroundColor: 'var(--color-surface, #FFFFFF)',
+                  border: '1px solid var(--color-border, #E2E8F0)',
+                  borderRadius: '8px',
+                  boxShadow: 'var(--shadow-modal, 0 10px 25px rgba(0,0,0,0.15))',
+                  padding: '12px',
+                  zIndex: 1000,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                }}
+              >
+                {/* User Identity Info */}
+                <div style={{ borderBottom: '1px solid var(--color-divider, #E2E8F0)', paddingBottom: '10px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary, #0F172A)' }}>
+                    {currentUser.full_name || currentUser.username}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--color-text-muted, #64748B)' }}>
+                    {currentUser.designation || (isAdmin ? 'System Administrator' : 'Station Operator')}
+                  </div>
+                  <div style={{ fontSize: '10px', color: 'var(--color-primary, #2563EB)', marginTop: '2px', fontWeight: 600 }}>
+                    {currentUser.department || 'Eastern Railway (Howrah Division)'}
+                  </div>
+                </div>
+
+                {/* Quick Theme Switcher */}
+                <div>
+                  <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-muted, #64748B)', marginBottom: '6px' }}>
+                    THEME MODE
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
+                    <button
+                      onClick={() => setTheme('light')}
+                      style={{
+                        padding: '5px',
+                        borderRadius: '4px',
+                        border: `1px solid ${theme === 'light' ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                        backgroundColor: theme === 'light' ? 'var(--color-primary-surface)' : 'var(--color-surface-alt)',
+                        color: theme === 'light' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <Sun size={12} />
+                      <span>Light</span>
+                    </button>
+
+                    <button
+                      onClick={() => setTheme('dark')}
+                      style={{
+                        padding: '5px',
+                        borderRadius: '4px',
+                        border: `1px solid ${theme === 'dark' ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                        backgroundColor: theme === 'dark' ? 'var(--color-primary-surface)' : 'var(--color-surface-alt)',
+                        color: theme === 'dark' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <Moon size={12} />
+                      <span>Dark</span>
+                    </button>
+
+                    <button
+                      onClick={() => setTheme('system')}
+                      style={{
+                        padding: '5px',
+                        borderRadius: '4px',
+                        border: `1px solid ${theme === 'system' ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                        backgroundColor: theme === 'system' ? 'var(--color-primary-surface)' : 'var(--color-surface-alt)',
+                        color: theme === 'system' ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <Monitor size={12} />
+                      <span>Auto</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Open Display Settings Button */}
+                <button
+                  onClick={() => {
+                    setActiveScreen('settings');
+                    setIsProfileOpen(false);
+                  }}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
+                    border: '1px solid var(--color-border, #CBD5E1)',
+                    color: 'var(--color-text-primary, #0F172A)',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    textAlign: 'left',
+                  }}
+                >
+                  <Sliders size={13} color="var(--color-primary, #2563EB)" />
+                  <span>{isAdmin ? 'System & Display Settings' : 'Display Preferences'}</span>
+                </button>
+
+                {/* Sign Out Button in Dropdown */}
+                <button
+                  onClick={() => {
+                    setIsProfileOpen(false);
+                    logout();
+                  }}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                    border: '1px solid rgba(239, 68, 68, 0.25)',
+                    color: '#EF4444',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    textAlign: 'left',
+                  }}
+                >
+                  <LogOut size={13} />
+                  <span>Sign Out Session</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1055,8 +1233,8 @@ export const Header: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            backgroundColor: isConnected ? '#ECFDF5' : isReconnecting ? '#FEF3C7' : '#FEE2E2',
-            border: `1px solid ${isConnected ? '#DCFCE7' : isReconnecting ? '#FDE68A' : '#FCA5A5'}`,
+            backgroundColor: isConnected ? 'var(--color-success-surface, #ECFDF5)' : isReconnecting ? 'var(--color-warning-surface, #FEF3C7)' : 'var(--color-critical-surface, #FEE2E2)',
+            border: `1px solid ${isConnected ? 'var(--color-success-border, #DCFCE7)' : isReconnecting ? 'var(--color-warning-border, #FDE68A)' : 'var(--color-critical-border, #FCA5A5)'}`,
             borderRadius: '16px',
             padding: '3px 10px',
           }}
@@ -1067,14 +1245,14 @@ export const Header: React.FC = () => {
               width: '7px',
               height: '7px',
               borderRadius: '50%',
-              backgroundColor: isConnected ? '#16A34A' : isReconnecting ? '#D97706' : '#DC2626',
+              backgroundColor: isConnected ? 'var(--color-success, #16A34A)' : isReconnecting ? 'var(--color-warning, #D97706)' : 'var(--color-critical, #DC2626)',
             }}
           />
           <span
             style={{
               fontSize: '10px',
               fontWeight: 700,
-              color: isConnected ? '#16A34A' : isReconnecting ? '#D97706' : '#DC2626',
+              color: isConnected ? 'var(--color-success, #16A34A)' : isReconnecting ? 'var(--color-warning, #D97706)' : 'var(--color-critical, #DC2626)',
               letterSpacing: '0.4px',
             }}
           >
@@ -1082,27 +1260,50 @@ export const Header: React.FC = () => {
           </span>
         </div>
 
-        {/* Settings Shortcut Button (Admin Only) */}
-        {isAdmin && (
-          <button
-            onClick={() => setActiveScreen('settings')}
-            title="Open System Settings"
-            style={{
-              backgroundColor: activeScreen === 'settings' ? '#EFF6FF' : '#F8FAFC',
-              border: '1px solid #E2E8F0',
-              borderRadius: '6px',
-              width: '32px',
-              height: '32px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: activeScreen === 'settings' ? '#2563EB' : '#64748B',
-            }}
-          >
-            <SettingsIcon size={16} />
-          </button>
-        )}
+        {/* Quick Theme Toggle Icon Button */}
+        <button
+          onClick={() => {
+            const nextTheme: ThemeMode = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light';
+            setTheme(nextTheme);
+          }}
+          title={`Theme: ${theme.toUpperCase()} (Click to toggle Light / Dark / Auto)`}
+          style={{
+            backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
+            border: '1px solid var(--color-border, #E2E8F0)',
+            borderRadius: '6px',
+            width: '32px',
+            height: '32px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: isDark ? '#38BDF8' : '#D97706',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          {theme === 'system' ? <Monitor size={15} /> : isDark ? <Moon size={15} /> : <Sun size={15} />}
+        </button>
+
+        {/* Settings Shortcut Button (Accessible to ALL authenticated roles) */}
+        <button
+          onClick={() => setActiveScreen('settings')}
+          title={isAdmin ? 'Open System & Display Settings' : 'Open Display Settings'}
+          style={{
+            backgroundColor: activeScreen === 'settings' ? 'var(--color-primary-surface, #EFF6FF)' : 'var(--color-surface-alt, #F8FAFC)',
+            border: `1px solid ${activeScreen === 'settings' ? 'var(--color-primary-border, #BFDBFE)' : 'var(--color-border, #E2E8F0)'}`,
+            borderRadius: '6px',
+            width: '32px',
+            height: '32px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: activeScreen === 'settings' ? 'var(--color-primary, #2563EB)' : 'var(--color-text-muted, #64748B)',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <SettingsIcon size={16} />
+        </button>
 
         {/* Logout Button */}
         <button

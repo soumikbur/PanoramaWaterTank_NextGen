@@ -338,9 +338,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setActiveScreen('login');
       return;
     }
-    const adminOnlyScreens: ScreenName[] = ['settings', 'users', 'logs'];
+    const adminOnlyScreens: ScreenName[] = ['users', 'logs'];
     if (adminOnlyScreens.includes(screen) && currentUser?.role !== 'ADMIN') {
-      alert('Access Restricted: Administrator privileges are required to access this system module.');
+      setActiveScreen(screen); // App.tsx will gracefully render AccessDeniedScreen
       return;
     }
     setActiveScreen(screen);

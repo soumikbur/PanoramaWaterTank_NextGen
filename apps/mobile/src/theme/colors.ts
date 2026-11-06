@@ -1,62 +1,69 @@
 /**
  * Unified SCADA/HMI Design Tokens: Colors
- * Standardized across all NextGen pages for a crisp, high-contrast industrial light theme.
+ * Centralized design token mapping using CSS custom properties with industrial fallbacks.
+ * Seamlessly adapts between Light and Dark themes across all screens and components.
  */
 
 export const colors = {
   // Primary Accents
-  primary: '#2563EB',         // Industrial Royal Blue
-  primaryHover: '#1D4ED8',
-  primaryPressed: '#1E40AF',
-  primarySurface: '#EFF6FF',   // Subtle Ice Blue fill
-  primaryBorder: '#BFDBFE',
+  primary: 'var(--color-primary, #2563EB)',
+  primaryHover: 'var(--color-primary-hover, #1D4ED8)',
+  primaryPressed: 'var(--color-primary-pressed, #1E40AF)',
+  primarySurface: 'var(--color-primary-surface, #EFF6FF)',
+  primaryBorder: 'var(--color-primary-border, #BFDBFE)',
+  primarySubtle: 'var(--color-primary-subtle, #E3F2FD)',
 
   // Surfaces & Backgrounds
-  background: '#F8FAFC',       // Cool Slate Canvas
-  surface: '#FFFFFF',          // Clean White Cards & Headers
-  surfaceAlt: '#F1F5F9',       // Muted Sections / Table Headers
-  surfaceHighlight: '#F8FAFC',
+  background: 'var(--color-background, #F1F5F9)',
+  surface: 'var(--color-surface, #FFFFFF)',
+  surfaceAlt: 'var(--color-surface-alt, #F8FAFC)',
+  surfaceHighlight: 'var(--color-surface-highlight, #EDF2F7)',
 
   // Dividers & Borders
-  border: '#E2E8F0',           // 1px Slate Border
-  borderSubtle: '#F1F5F9',
-  borderStrong: '#CBD5E1',     // Input & control borders
-  divider: '#E2E8F0',
-  dividerStrong: '#CBD5E1',
+  border: 'var(--color-border, #E2E8F0)',
+  borderSubtle: 'var(--color-border-subtle, #F1F5F9)',
+  borderStrong: 'var(--color-border-strong, #CBD5E1)',
+  divider: 'var(--color-divider, #E2E8F0)',
+  dividerStrong: 'var(--color-divider-strong, #CBD5E1)',
 
   // Operational Status Badges & Indicators
-  success: '#16A34A',          // Emerald Green (Online / All Normal)
-  successText: '#059669',
-  successSurface: '#ECFDF5',
-  successBorder: '#DCFCE7',
+  success: 'var(--color-success, #16A34A)',
+  successText: 'var(--color-success-text, #059669)',
+  successSurface: 'var(--color-success-surface, #ECFDF5)',
+  successBorder: 'var(--color-success-border, #DCFCE7)',
 
-  warning: '#D97706',          // Amber Orange (Low Warning)
-  warningSurface: '#FEF3C7',
-  warningBorder: '#FDE68A',
+  warning: 'var(--color-warning, #D97706)',
+  warningSurface: 'var(--color-warning-surface, #FEF3C7)',
+  warningBorder: 'var(--color-warning-border, #FDE68A)',
 
-  critical: '#DC2626',         // Crimson Red (Critical Low / Fault)
-  criticalSurface: '#FEE2E2',
-  criticalBorder: '#FCA5A5',
+  critical: 'var(--color-critical, #DC2626)',
+  criticalSurface: 'var(--color-critical-surface, #FEE2E2)',
+  criticalBorder: 'var(--color-critical-border, #FCA5A5)',
 
-  offline: '#64748B',          // Slate Grey (Gateway / Broker Offline)
-  offlineSurface: '#F1F5F9',
-  offlineBorder: '#E2E8F0',
+  offline: 'var(--color-offline, #64748B)',
+  offlineSurface: 'var(--color-offline-surface, #F1F5F9)',
+  offlineBorder: 'var(--color-offline-border, #E2E8F0)',
 
   // Typography
-  textPrimary: '#0F172A',      // High-contrast Navy/Charcoal
-  textSecondary: '#475569',    // Body & secondary labels
-  textMuted: '#64748B',        // Subtitles, table headers, units
-  textPlaceholder: '#94A3B8',  // Empty state & placeholders
-  textOnPrimary: '#FFFFFF',
+  textPrimary: 'var(--color-text-primary, #0F172A)',
+  textSecondary: 'var(--color-text-secondary, #334155)',
+  textMuted: 'var(--color-text-muted, #64748B)',
+  textPlaceholder: 'var(--color-text-placeholder, #94A3B8)',
+  textOnPrimary: 'var(--color-text-on-primary, #FFFFFF)',
+
+  // Form Controls
+  inputBg: 'var(--color-input-bg, #FFFFFF)',
+  inputBorder: 'var(--color-input-border, #CBD5E1)',
+  inputText: 'var(--color-input-text, #0F172A)',
 
   // Water & Telemetry Visuals
-  water: '#2563EB',
-  waterTop: '#0284C7',
-  waterBottom: '#1D4ED8',
-  waterWaveFront: '#3B82F6',
-  waterWaveBack: '#60A5FA',
-  waterGlow: 'rgba(37, 99, 235, 0.25)',
-  tankOutline: '#94A3B8',
+  water: 'var(--color-water, #2563EB)',
+  waterTop: 'var(--color-water-top, #0284C7)',
+  waterBottom: 'var(--color-water-bottom, #1D4ED8)',
+  waterWaveFront: 'var(--color-water, #3B82F6)',
+  waterWaveBack: 'var(--color-water-top, #60A5FA)',
+  waterGlow: 'var(--color-water-glow, rgba(37, 99, 235, 0.25))',
+  tankOutline: 'var(--color-tank-outline, #94A3B8)',
 
   // 4-Tier Rank Bar Indicators
   rankEmpty: '#DC2626',
@@ -65,7 +72,7 @@ export const colors = {
   rankHigh: '#16A34A',
 
   // Shadows
-  shadowSubtle: '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
-  shadowCard: '0 1px 4px rgba(15, 23, 42, 0.06)',
-  shadowModal: '0 20px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.1)',
+  shadowSubtle: 'var(--shadow-subtle, 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02))',
+  shadowCard: 'var(--shadow-card, 0 1px 4px rgba(15, 23, 42, 0.06))',
+  shadowModal: 'var(--shadow-modal, 0 20px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.1))',
 };

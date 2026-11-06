@@ -68,6 +68,26 @@ async function build() {
     <meta name="description" content="Panorama Water Tank Monitor — NextGen Railway Coach SCADA & HMI System" />
     <title>Panorama Water Tank Monitor — Railway SCADA/HMI</title>
     <link rel="stylesheet" href="./assets/index.css" />
+    <script>
+      (function() {
+        try {
+          var user = localStorage.getItem('panorama_auth_token_username');
+          var userClean = user ? user.trim().toLowerCase().replace(/^@/, '') : '';
+          var key = userClean ? 'panorama_display_preferences_v2_' + userClean : 'panorama_display_preferences_v2';
+          var raw = localStorage.getItem(key) || localStorage.getItem('panorama_display_preferences');
+          var theme = 'system';
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            if (parsed && parsed.theme) theme = parsed.theme;
+          }
+          var resolved = theme;
+          if (theme === 'system') {
+            resolved = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+          }
+          document.documentElement.setAttribute('data-theme', resolved);
+        } catch (e) {}
+      })();
+    </script>
     <style>
       * { box-sizing: border-box; }
       body {
