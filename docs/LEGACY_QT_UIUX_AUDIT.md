@@ -1,4 +1,4 @@
-# Legacy Qt Application UI/UX Comprehensive Audit
+# Legacy Qt Application UI/UX Technical Audit
 
 **Reference Codebase**: `C:\Users\User\Documents\Antigravity_soumik\PanoramaWaterTank-Milestone2\PanoramaWaterTank`  
 **Framework**: Qt 6.9 / 6.11 (QML / QtQuick / Quick.Controls / Quick.Shapes) with C++ backend models  
@@ -242,7 +242,7 @@ The dashboard is assembled from three distinct stacked sections:
   - Level column includes a mini dual-tone progress bar.
   - Action button: `"View Details"`.
   - Zero-state when filter matches nothing with a "Reset All Filters" button.
-- **Slide-in Detail Drawer**: 440 px slide-in drawer on the right showing comprehensive hardware telemetry for the selected device.
+- **Slide-in Detail Drawer**: 440 px slide-in drawer on the right showing detailed hardware telemetry for the selected device.
 
 ---
 

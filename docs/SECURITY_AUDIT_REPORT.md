@@ -9,7 +9,7 @@
 
 ## 1. Executive Summary
 
-A comprehensive, zero-trust security audit and vulnerability assessment of the entire Panorama Water Tank Monitor codebase was conducted across frontend, backend, database layers, telemetry ingestion pipelines, and administrative interfaces.
+A thorough, zero-trust security audit and vulnerability assessment of the entire Panorama Water Tank Monitor codebase was conducted across frontend, backend, database layers, telemetry ingestion pipelines, and administrative interfaces.
 
 Prior to remediation, multiple critical and high-severity security vulnerabilities were identified:
 1. **Critical RBAC & Authorization Bypasses:** Sensitive state-mutating endpoints (`/api/v1/tanks/{id}`, `/api/v1/devices`, `/api/v1/trains`, `/api/v1/alarms/{id}/acknowledge`, and `/api/v1/settings/{key}`) lacked authentication and role enforcement, permitting unauthenticated callers to modify physical SCADA parameters, delete rolling stock devices, alter alarm thresholds, and silence critical alarms.

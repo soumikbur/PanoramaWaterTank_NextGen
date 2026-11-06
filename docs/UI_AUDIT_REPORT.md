@@ -15,7 +15,7 @@ An in-depth analysis of the baseline dashboard revealed six critical frontend de
 ### Defect 1: Water Tank Empty Rendering & N/A Presentation
 - **Symptom:** Water vessel appeared completely empty with raw "N/A" readouts across Current Level, Water Height, and Volume, confusing operators into believing the interface was broken or dead.
 - **Root Cause:** When no telemetry is cached or the device is initializing, `liveTank?.levelPercent` is `null`. The canvas did not implement a dedicated standby state.
-- **Resolution:** Implemented an industrial telemetry standby visualization in `TankVisualization.tsx`. When telemetry is awaiting, the vessel renders subtle level guidelines, an ambient scanning beam, and a centered "Awaiting Telemetry" marker. Values explicitly indicate "Awaiting Telemetry" and "Awaiting Data" rather than raw "N/A", while preserving the physical tank geometry ($H=50.0\text{ cm}$, Capacity $=20.0\text{ L}$). When live telemetry arrives, values smoothly animate to their target levels.
+- **Resolution:** Re-architected `TankVisualization.tsx` into a strict 4-state engine (`NO_TELEMETRY`, `VALID_ZERO`, `VALID_READING`, `STALE`). Completely removed the ambient scanning beam that created an optical illusion of a 75% water level. In State A (No Telemetry), the vessel renders an empty chamber with vertical tick marks and centered text ("Awaiting Telemetry" / "No Sensor Stream"). Zero blue water, zero scan beam, and zero wave animation are permitted without confirmed telemetry. In State B (Valid Zero), the tank is empty with a red baseline at 0 cm and explicit `0.00%` readouts. In State C, real water is rendered according to physical geometry ($H=50.0\text{ cm}$, Capacity $=20.0\text{ L}$). In State D, stale/offline telemetry renders a frozen desaturated water fill with a diagonal hatch pattern and `(Stale)` markers.
 
 ### Defect 2: Inconsistent MQTT & Multi-Layer Status Conflation
 - **Symptom:** Sidebar displayed "MQTT Online" and header displayed "MQTT Broker TLS Connected" whenever the browser-to-backend WebSocket was open, even when the edge device had not transmitted any telemetry or the MQTT broker had disconnected.
@@ -79,3 +79,4 @@ An in-depth analysis of the baseline dashboard revealed six critical frontend de
 - **Total Tests Passed:** 224 (100%).
 - **Failures:** 0.
 - **Console Errors:** 0.
+

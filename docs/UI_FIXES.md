@@ -103,3 +103,4 @@ This document provides a technical log of all frontend bug fixes, component refa
 
 ### Changes Implemented:
 1. Replaced legacy cloud badge text `"Ubidots Cloud (90s sample interval)"` with `"MQTT / SCADA Telemetry Stream"`.
+

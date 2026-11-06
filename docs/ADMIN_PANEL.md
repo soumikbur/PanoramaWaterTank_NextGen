@@ -80,7 +80,7 @@ Administrators can securely reset employee passwords without exposing plain text
 | :--- | :--- | :--- |
 | `/api/v1/users` | `GET` | List employees with optional query filters (`search`, `department`, `role`, `status`). |
 | `/api/v1/users` | `POST` | Create a new employee record and hash initial credentials. |
-| `/api/v1/users/{id}` | `GET` | Fetch comprehensive employee profile. |
+| `/api/v1/users/{id}` | `GET` | Fetch complete employee profile. |
 | `/api/v1/users/{id}` | `PUT` | Update profile information (name, department, designation, phone, email). |
 | `/api/v1/users/{id}/reset-password` | `POST` | Reset employee password and optionally flag for mandatory change. |
 | `/api/v1/users/{id}/status` | `PATCH` | Update status to `ACTIVE`, `INACTIVE`, or `LOCKED`. Clears failed attempts if unlocked. |

@@ -9,18 +9,113 @@ interface TankVisualizationProps {
   style?: React.CSSProperties;
 }
 
+export type TankVisualizationState = 'NO_TELEMETRY' | 'VALID_ZERO' | 'STALE' | 'VALID_READING';
+
 export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, style }) => {
-  const hasData = tank?.levelPercent != null && tank?.hasTelemetry !== false;
-  const fillPercentage = hasData ? Math.max(0, Math.min(100, tank!.levelPercent!)) : 0.0;
-  const waterHeightCm = tank?.heightCm ?? null;
-  const tankHeightCm = tank?.maxHeightCm ?? 50.0;
-  const waterVolumeLiters = tank?.volumeLiters ?? null;
-  const capacityLiters = tank?.capacityLiters ?? 20.0;
-  const isOverflow = hasData && (fillPercentage >= 100.0 || (tankHeightCm > 0 && (waterHeightCm ?? 0) >= tankHeightCm));
+  // 1. Rigorous 4-State Detection
+  const isTelemetryAvailable = Boolean(tank && tank.hasTelemetry !== false && tank.levelPercent != null);
+  const isStale = Boolean(tank && (tank.isStale || tank.alarmStatus === 'STALE_DATA'));
+  const isZero = isTelemetryAvailable && (tank!.levelPercent === 0 || (tank!.heightCm !== null && tank!.heightCm === 0));
+
+  const state: TankVisualizationState = !isTelemetryAvailable
+    ? 'NO_TELEMETRY'
+    : isStale
+    ? 'STALE'
+    : isZero
+    ? 'VALID_ZERO'
+    : 'VALID_READING';
+
+  // 2. Calibrated Physical Tank Geometry
+  const tankHeightCm = tank?.maxHeightCm && tank.maxHeightCm > 0 ? tank.maxHeightCm : 50.0;
+  const capacityLiters = tank?.capacityLiters && tank.capacityLiters > 0 ? tank.capacityLiters : 20.0;
+
+  // 3. Mathematical Height, Fill Percentage & Volume Calculations
+  let fillPercentage = 0.0;
+  let waterHeightCm: number | null = null;
+  let waterVolumeLiters: number | null = null;
+  let isOverflow = false;
+
+  if (state === 'VALID_READING' || state === 'STALE') {
+    if (tank?.heightCm != null) {
+      waterHeightCm = tank.heightCm;
+      fillPercentage = Math.max(0, Math.min(100, (waterHeightCm / tankHeightCm) * 100));
+    } else {
+      fillPercentage = Math.max(0, Math.min(100, tank!.levelPercent!));
+      waterHeightCm = (fillPercentage / 100.0) * tankHeightCm;
+    }
+    waterVolumeLiters = tank?.volumeLiters != null ? tank.volumeLiters : (fillPercentage / 100.0) * capacityLiters;
+    isOverflow = fillPercentage >= 100.0 || (tankHeightCm > 0 && waterHeightCm >= tankHeightCm);
+  } else if (state === 'VALID_ZERO') {
+    fillPercentage = 0.0;
+    waterHeightCm = 0.0;
+    waterVolumeLiters = 0.0;
+    isOverflow = false;
+  } else {
+    // NO_TELEMETRY (State A)
+    fillPercentage = 0.0;
+    waterHeightCm = null;
+    waterVolumeLiters = null;
+    isOverflow = false;
+  }
+
+  // 4. Formatted Display Values
+  const levelDisplay =
+    state === 'NO_TELEMETRY'
+      ? 'Awaiting Telemetry'
+      : state === 'STALE'
+      ? `${fillPercentage.toFixed(2)}% (Stale)`
+      : `${fillPercentage.toFixed(2)}%`;
+
+  const heightDisplay =
+    state === 'NO_TELEMETRY'
+      ? 'Awaiting Data'
+      : state === 'STALE'
+      ? `${waterHeightCm!.toFixed(2)} cm (Stale)`
+      : `${waterHeightCm!.toFixed(2)} cm`;
+
+  const volumeDisplay =
+    state === 'NO_TELEMETRY'
+      ? 'Awaiting Data'
+      : state === 'STALE'
+      ? `${waterVolumeLiters!.toFixed(2)} L (Stale)`
+      : `${waterVolumeLiters!.toFixed(2)} L`;
+
+  const severity: 'Critical' | 'Warning' | 'Normal' | 'Neutral' =
+    state === 'NO_TELEMETRY'
+      ? 'Neutral'
+      : state === 'STALE'
+      ? 'Warning'
+      : state === 'VALID_ZERO'
+      ? 'Critical'
+      : isOverflow
+      ? 'Critical'
+      : fillPercentage < 10.0
+      ? 'Critical'
+      : fillPercentage < 20.0
+      ? 'Warning'
+      : 'Normal';
+
+  const badgeLabel =
+    state === 'NO_TELEMETRY'
+      ? 'Awaiting Telemetry'
+      : state === 'STALE'
+      ? 'Stale Data (Offline)'
+      : state === 'VALID_ZERO'
+      ? 'Critical Low (Empty)'
+      : isOverflow
+      ? 'OVERFLOW ALERT'
+      : fillPercentage < 10.0
+      ? 'Low Critical Alert'
+      : fillPercentage < 20.0
+      ? 'Low Warning Alert'
+      : 'Receiving Data';
+
   const lastUpdated = tank?.lastUpdate
     ? new Date(tank.lastUpdate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : 'Awaiting Telemetry';
 
+  // 5. Animation Control (Only animate wave if valid live telemetry reading exists)
+  const shouldAnimateWave = state === 'VALID_READING' && fillPercentage > 0;
   const [wavePhase, setWavePhase] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const targetFillRef = useRef(fillPercentage);
@@ -30,16 +125,23 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
     targetFillRef.current = fillPercentage;
   }, [fillPercentage]);
 
-  // Wave phase animation loop (0 to 2*PI over 4000ms) with smooth fluid level interpolation
   useEffect(() => {
-    let start: number | null = null;
     let animId: number;
+    let start: number | null = null;
+
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const animate = (timestamp: number) => {
-      if (!start) start = timestamp;
-      const progress = (timestamp - start) % 4000;
-      setWavePhase((progress / 4000) * Math.PI * 2);
+      if (shouldAnimateWave && !prefersReducedMotion) {
+        if (!start) start = timestamp;
+        const progress = (timestamp - start) % 4000;
+        setWavePhase((progress / 4000) * Math.PI * 2);
+      }
 
+      // Smooth fluid level transition
       const target = targetFillRef.current;
       const current = animatedFillRef.current;
       if (Math.abs(target - current) < 0.05) {
@@ -53,9 +155,9 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
 
     animId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animId);
-  }, []);
+  }, [shouldAnimateWave]);
 
-  // Canvas drawing for the vessel and fluid wave
+  // 6. Canvas Rendering Logic
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -69,7 +171,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
 
     ctx.clearRect(0, 0, w, h);
 
-    // 1. Vessel Body Outline Path (for clipping water fill)
+    // 1. Vessel Body Outline Path (for clipping interior)
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(tr, 0);
@@ -89,80 +191,122 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
     // 2. CLIP water fill to inner tank body
     ctx.clip();
 
-    const waterH = h * (animatedFillRef.current / 100.0);
-    if (hasData && waterH > 0) {
-      const waterTopY = h - waterH;
+    if (state === 'VALID_READING') {
+      const waterH = h * (animatedFillRef.current / 100.0);
+      if (waterH > 0) {
+        const waterTopY = h - waterH;
 
-      // Linear Gradient Fill
-      const grad = ctx.createLinearGradient(0, waterTopY, 0, h);
-      const colorTop = isOverflow ? '#EF4444' : colors.waterTop;
-      const colorBottom = isOverflow ? '#B91C1C' : colors.waterBottom;
-      grad.addColorStop(0, colorTop);
-      grad.addColorStop(1, colorBottom);
-      ctx.fillStyle = grad;
+        // Linear Gradient Fill
+        const grad = ctx.createLinearGradient(0, waterTopY, 0, h);
+        const colorTop = isOverflow
+          ? '#EF4444'
+          : fillPercentage < 10
+          ? '#EF4444'
+          : fillPercentage < 20
+          ? '#F59E0B'
+          : colors.waterTop;
+        const colorBottom = isOverflow
+          ? '#B91C1C'
+          : fillPercentage < 10
+          ? '#DC2626'
+          : fillPercentage < 20
+          ? '#D97706'
+          : colors.waterBottom;
+        grad.addColorStop(0, colorTop);
+        grad.addColorStop(1, colorBottom);
+        ctx.fillStyle = grad;
 
-      // Dual smooth sine waves
-      const phase1 = wavePhase;
-      const phase2 = wavePhase * 1.6 + 1.2;
-      const amp1 = 2.8;
-      const amp2 = 1.6;
+        // Dual smooth sine waves
+        const phase1 = wavePhase;
+        const phase2 = wavePhase * 1.6 + 1.2;
+        const amp1 = 2.8;
+        const amp2 = 1.6;
 
-      ctx.beginPath();
-      ctx.moveTo(0, h);
-      ctx.lineTo(0, waterTopY);
-
-      for (let x = 0; x <= w; x += 3) {
-        const waveY =
-          waterTopY +
-          Math.sin((x / w) * Math.PI * 2.0 + phase1) * amp1 +
-          Math.sin((x / w) * Math.PI * 4.0 + phase2) * amp2;
-        ctx.lineTo(x, waveY);
-      }
-
-      ctx.lineTo(w, h);
-      ctx.closePath();
-      ctx.fill();
-
-      // Semi-transparent shimmering wave crest highlight
-      ctx.beginPath();
-      for (let x2 = 0; x2 <= w; x2 += 3) {
-        const waveY2 =
-          waterTopY +
-          Math.sin((x2 / w) * Math.PI * 2.0 + phase1) * amp1 +
-          Math.sin((x2 / w) * Math.PI * 4.0 + phase2) * amp2;
-        if (x2 === 0) ctx.moveTo(x2, waveY2);
-        else ctx.lineTo(x2, waveY2);
-      }
-      ctx.lineWidth = 2.0;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.40)';
-      ctx.stroke();
-    } else if (!hasData) {
-      // Elegant telemetry standby visualization: subtle level guides & ambient scan beam
-      ctx.save();
-      ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = 'rgba(203, 213, 225, 0.55)';
-      ctx.lineWidth = 1;
-      for (let y = h * 0.25; y < h; y += h * 0.25) {
         ctx.beginPath();
-        ctx.moveTo(12, y);
-        ctx.lineTo(w - 12, y);
+        ctx.moveTo(0, h);
+        ctx.lineTo(0, waterTopY);
+
+        for (let x = 0; x <= w; x += 3) {
+          const waveY =
+            waterTopY +
+            Math.sin((x / w) * Math.PI * 2.0 + phase1) * amp1 +
+            Math.sin((x / w) * Math.PI * 4.0 + phase2) * amp2;
+          ctx.lineTo(x, waveY);
+        }
+
+        ctx.lineTo(w, h);
+        ctx.closePath();
+        ctx.fill();
+
+        // Wave crest highlight
+        ctx.beginPath();
+        for (let x2 = 0; x2 <= w; x2 += 3) {
+          const waveY2 =
+            waterTopY +
+            Math.sin((x2 / w) * Math.PI * 2.0 + phase1) * amp1 +
+            Math.sin((x2 / w) * Math.PI * 4.0 + phase2) * amp2;
+          if (x2 === 0) ctx.moveTo(x2, waveY2);
+          else ctx.lineTo(x2, waveY2);
+        }
+        ctx.lineWidth = 2.0;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
         ctx.stroke();
       }
-      ctx.setLineDash([]);
+    } else if (state === 'STALE') {
+      const waterH = h * (animatedFillRef.current / 100.0);
+      if (waterH > 0) {
+        const waterTopY = h - waterH;
 
-      const scanY = (Math.sin(wavePhase * 0.5) * 0.5 + 0.5) * (h - 40) + 20;
-      const scanGrad = ctx.createLinearGradient(0, scanY - 14, 0, scanY + 14);
-      scanGrad.addColorStop(0, 'rgba(14, 165, 233, 0.0)');
-      scanGrad.addColorStop(0.5, 'rgba(14, 165, 233, 0.12)');
-      scanGrad.addColorStop(1, 'rgba(14, 165, 233, 0.0)');
-      ctx.fillStyle = scanGrad;
-      ctx.fillRect(0, scanY - 14, w, 28);
+        // Frozen / desaturated flat water fill
+        const grad = ctx.createLinearGradient(0, waterTopY, 0, h);
+        grad.addColorStop(0, 'rgba(148, 163, 184, 0.7)');
+        grad.addColorStop(1, 'rgba(100, 116, 139, 0.85)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, waterTopY, w, waterH);
 
-      ctx.fillStyle = '#64748B';
+        // Diagonal hatch pattern indicating inactive telemetry
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.lineWidth = 1.5;
+        for (let x = -h; x < w + h; x += 14) {
+          ctx.beginPath();
+          ctx.moveTo(x, h);
+          ctx.lineTo(x + waterH, waterTopY);
+          ctx.stroke();
+        }
+
+        // Stale watermark line
+        ctx.strokeStyle = '#D97706';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, waterTopY);
+        ctx.lineTo(w, waterTopY);
+        ctx.stroke();
+      }
+    } else if (state === 'VALID_ZERO') {
+      // Empty tank with subtle red 0% baseline marker
+      ctx.strokeStyle = '#EF4444';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(6, h - 2);
+      ctx.lineTo(w - 6, h - 2);
+      ctx.stroke();
+
+      ctx.fillStyle = '#EF4444';
       ctx.font = '600 11px Inter, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('Awaiting Telemetry', w / 2, h / 2);
-      ctx.restore();
+      ctx.fillText('Tank Empty (0.00%)', w / 2, h - 14);
+    } else {
+      // STATE A: NO TELEMETRY
+      // Completely empty vessel. NO blue water, NO scan beam, NO floating bands.
+      // Subtle centered industrial status text
+      ctx.fillStyle = '#94A3B8';
+      ctx.font = '600 12px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Awaiting Telemetry', w / 2, h / 2 - 2);
+
+      ctx.fillStyle = '#CBD5E1';
+      ctx.font = '500 10px Inter, sans-serif';
+      ctx.fillText('No Sensor Stream', w / 2, h / 2 + 14);
     }
 
     ctx.restore(); // End clipping
@@ -183,31 +327,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
     ctx.lineWidth = 2.0;
     ctx.strokeStyle = colors.tankOutline;
     ctx.stroke();
-  }, [fillPercentage, wavePhase, isOverflow, hasData]);
-
-  const severity = !hasData
-    ? 'Neutral'
-    : tank?.isStale
-    ? 'Warning'
-    : isOverflow
-    ? 'Critical'
-    : fillPercentage < 10.0
-    ? 'Critical'
-    : fillPercentage < 20.0
-    ? 'Warning'
-    : 'Normal';
-
-  const badgeLabel = !hasData
-    ? 'Awaiting Telemetry'
-    : tank?.isStale
-    ? 'Stale Data'
-    : isOverflow
-    ? 'OVERFLOW ALERT'
-    : fillPercentage < 10.0
-    ? 'Low Critical Alert'
-    : fillPercentage < 20.0
-    ? 'Low Warning Alert'
-    : 'Receiving Data';
+  }, [state, fillPercentage, wavePhase, isOverflow]);
 
   return (
     <BaseCard padding={metrics.cardPadding} style={{ minHeight: `${metrics.tankCardMinHeight}px`, ...style }}>
@@ -364,13 +484,13 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
             <span
               style={{
                 fontFamily: typography.fontFamily,
-                fontSize: hasData ? typography.dashPercentage.fontSize : '18px',
+                fontSize: state === 'NO_TELEMETRY' ? '18px' : typography.dashPercentage.fontSize,
                 fontWeight: typography.dashPercentage.fontWeight,
-                color: isOverflow ? colors.critical : colors.primary,
+                color: isOverflow || state === 'VALID_ZERO' ? colors.critical : state === 'STALE' ? colors.warning : colors.primary,
                 lineHeight: 1.1,
               }}
             >
-              {hasData ? `${fillPercentage.toFixed(2)}%` : 'Awaiting Telemetry'}
+              {levelDisplay}
             </span>
 
             {/* 1. Water Height Card Block */}
@@ -415,7 +535,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
                   color: colors.textPrimary,
                 }}
               >
-                {hasData && waterHeightCm != null ? `${waterHeightCm.toFixed(2)} cm` : 'Awaiting Data'}
+                {heightDisplay}
               </span>
               <span
                 style={{
@@ -470,7 +590,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({ tank, styl
                   color: colors.textPrimary,
                 }}
               >
-                {hasData && waterVolumeLiters != null ? `${waterVolumeLiters.toFixed(2)} L` : 'Awaiting Data'}
+                {volumeDisplay}
               </span>
               <span
                 style={{

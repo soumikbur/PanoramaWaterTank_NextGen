@@ -4,10 +4,11 @@ import { BaseCard } from '../common/BaseCard';
 
 interface RankIndicatorProps {
   fillPercentage?: number | null;
+  isStale?: boolean;
   style?: React.CSSProperties;
 }
 
-export const RankIndicator: React.FC<RankIndicatorProps> = ({ fillPercentage, style }) => {
+export const RankIndicator: React.FC<RankIndicatorProps> = ({ fillPercentage, isStale = false, style }) => {
   const hasData = fillPercentage != null;
   const clampedPercentage = hasData ? Math.max(0, Math.min(100, fillPercentage)) : 0;
 
@@ -17,6 +18,16 @@ export const RankIndicator: React.FC<RankIndicatorProps> = ({ fillPercentage, st
     { label: 'GOOD', color: '#EAB308' },
     { label: 'HIGH', color: '#22C55E' },
   ];
+
+  const pointerColor = isStale
+    ? '#D97706'
+    : hasData && clampedPercentage === 0
+    ? '#EF4444'
+    : colors.primary;
+
+  const readoutText = isStale
+    ? `${clampedPercentage.toFixed(2)}% (Stale)`
+    : `${clampedPercentage.toFixed(2)}%`;
 
   return (
     <BaseCard
@@ -111,19 +122,19 @@ export const RankIndicator: React.FC<RankIndicatorProps> = ({ fillPercentage, st
             >
               {/* Upward Triangle */}
               <svg width="14" height="8" viewBox="0 0 14 8" fill="none">
-                <path d="M7 0L14 8L0 8Z" fill={colors.primary} />
+                <path d="M7 0L14 8L0 8Z" fill={pointerColor} />
               </svg>
               <span
                 style={{
                   fontFamily: typography.fontFamily,
                   fontSize: '13px',
                   fontWeight: 700,
-                  color: colors.primary,
+                  color: pointerColor,
                   lineHeight: 1.1,
                   whiteSpace: 'nowrap',
                 }}
               >
-                {clampedPercentage.toFixed(2)}%
+                {readoutText}
               </span>
             </div>
           ) : (

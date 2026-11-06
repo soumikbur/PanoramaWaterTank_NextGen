@@ -31,7 +31,10 @@ export const DashboardScreen: React.FC = () => {
       </div>
 
       {/* SECTION 2: Water Level Indicator (Rank) Bar */}
-      <RankIndicator fillPercentage={liveTank?.hasTelemetry !== false ? liveTank?.levelPercent : null} />
+      <RankIndicator
+        fillPercentage={liveTank?.hasTelemetry !== false ? liveTank?.levelPercent : null}
+        isStale={Boolean(liveTank?.isStale || liveTank?.alarmStatus === 'STALE_DATA')}
+      />
 
       {/* SECTION 3: Bottom 5-Card Summary Grid */}
       <SummaryGrid tank={liveTank} />

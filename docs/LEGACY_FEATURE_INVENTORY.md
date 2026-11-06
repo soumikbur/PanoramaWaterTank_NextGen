@@ -1,6 +1,6 @@
 # Panorama Water Tank Monitor — Legacy Feature Inventory
 
-This document provides a comprehensive technical inventory of all features, workflows, business logic, calculations, data models, communication protocols, and hardware interactions present in the legacy Qt/QML implementation (`PanoramaWaterTank-Milestone2`). This serves as the authoritative baseline for the NextGen migration.
+This document provides a complete technical inventory of all features, workflows, business logic, calculations, data models, communication protocols, and hardware interactions present in the legacy Qt/QML implementation (`PanoramaWaterTank-Milestone2`). This serves as the authoritative baseline for the NextGen migration.
 
 ---
 

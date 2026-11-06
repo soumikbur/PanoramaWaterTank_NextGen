@@ -1,6 +1,6 @@
 # Panorama Water Tank Monitor — Verification & Test Plan
 
-This document defines the comprehensive test strategy, verification matrices, and automated test cases for the NextGen Panorama Water Tank Monitor system.
+This document defines the complete test strategy, verification matrices, and automated test cases for the NextGen Panorama Water Tank Monitor system.
 
 ---
 

@@ -42,3 +42,4 @@ The application utilizes a CSS Custom Property token architecture (`--app-scale`
 1. **Authentication Screen Isolation**: Login and registration screens remain strictly locked at 1.0 scale (440px max width, centered) regardless of authenticated user display scaling preferences.
 2. **Settings Page Reset**: Clicking the "Reset to Default" button immediately returns `--app-scale` to 1.0, resets density to "COMFORTABLE", and restores contrast to "STANDARD".
 3. **Map & Chart Resize Dispatch**: Changes to display scaling trigger a debounced `window.dispatchEvent(new Event('resize'))` to invalidate and re-render Leaflet map tiles and SVG chart curves smoothly.
+

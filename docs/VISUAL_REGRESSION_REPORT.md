@@ -12,7 +12,7 @@ Testing and verification were conducted through programmatic inspection of DOM n
 
 | Component / Area | Before Fix | After Fix | Visual Impact |
 | :--- | :--- | :--- | :--- |
-| **Water Tank Vessel** | Completely blank white rectangle; raw "N/A" text across all metrics. | Elegant standby visualization with subtle level guidelines, ambient scan pulse, and clean "Awaiting Telemetry" labels. Smooth wave animation on data arrival. | Transforms uninformative blank area into reassuring, live SCADA standby state. |
+| **Water Tank Vessel** | Ambiguous oscillating blue scanning beam at ~75% while readouts reported "Awaiting Telemetry". | Strict 4-state deterministic visualization engine. State A: completely empty tank with subtle centered notice ("Awaiting Telemetry" / "No Sensor Stream"); State B: empty tank with red baseline at 0 cm and explicit `0.00%` readouts; State C: real dynamic fluid wave calibrated to physical geometry ($H=50.0\text{ cm}$, Capacity $=20.0\text{ L}$); State D: frozen desaturated fluid with diagonal hatch pattern for stale data. Zero decorative fake water permitted. | Eliminates optical illusions and guarantees 100% telemetry data truthfulness. |
 | **Rank Indicator** | False triangle marker pointing to 0.00% LOW when data was absent. | Centered "Awaiting Telemetry" status banner when data is absent. Indicator triangle only renders when real percentage exists. | Eliminates false low-water alarms and operator confusion. |
 | **Level Trend Chart** | Raw unstyled text "No water level history available" over plot grid. | Centered frosted card with pulse icon, descriptive status, and active time-range selectors. Dynamic real-time point ingestion. | Delivers modern, professional industrial HMI aesthetic. |
 | **Tank Info Card** | Status strings shrinking to 10px illegible text; conflated "Connected" state. | Standardized 12px line heights, concise status badges ("Active Stream", "Awaiting Telemetry"), distinct sensor health indicators. | Clean tabular scanability and crisp typography. |
@@ -31,3 +31,4 @@ Testing and verification were conducted through programmatic inspection of DOM n
    - Warning Amber: `#D97706` / `#F59E0B` (High visibility).
    - Critical Red: `#DC2626` / `#EF4444` (Instant hazard recognition).
    - Normal Green: `#16A34A` / `#22C55E` (Clear operational confirmation).
+
