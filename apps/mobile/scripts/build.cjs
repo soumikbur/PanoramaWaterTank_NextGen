@@ -1,7 +1,21 @@
 // apps/mobile/scripts/build.cjs
-const esbuild = require('esbuild');
 const fs = require('fs');
 const path = require('path');
+
+let esbuild;
+try {
+  esbuild = require('esbuild');
+} catch (errPrimary) {
+  try {
+    const esbuildPath = require.resolve('esbuild', {
+      paths: [__dirname, path.resolve(__dirname, '..'), path.resolve(__dirname, '../..')]
+    });
+    esbuild = require(esbuildPath);
+  } catch (errFallback) {
+    console.error('[BUILD ERROR] Unable to locate module "esbuild" across workspace or root search paths.');
+    throw errPrimary;
+  }
+}
 
 async function build() {
   const distDir = path.resolve(__dirname, '../dist');

@@ -3,6 +3,9 @@
   "version": "2.0.0",
   "private": true,
   "description": "Panorama Water Tank Monitor — Railway SCADA/HMI Web Application",
+  "engines": {
+    "node": ">=20.0.0 <=24.x"
+  },
   "workspaces": [
     "apps/mobile"
   ],
@@ -11,5 +14,8 @@
     "dev": "npm run dev --workspace=apps/mobile",
     "start": "npm run start --workspace=apps/mobile",
     "preview": "npm run preview --workspace=apps/mobile"
+  },
+  "dependencies": {
+    "esbuild": "^0.21.5"
   }
 }

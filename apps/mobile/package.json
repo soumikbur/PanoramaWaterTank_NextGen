@@ -3,6 +3,9 @@
   "version": "2.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0 <=24.x"
+  },
   "main": "electron/main.cjs",
   "description": "Panorama Water Tank Monitor — NextGen React Native Industrial SCADA/HMI Application",
   "scripts": {
