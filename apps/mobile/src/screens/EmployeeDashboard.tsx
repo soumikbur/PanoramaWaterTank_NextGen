@@ -41,11 +41,12 @@ export interface DashboardCoach {
   coachType: string;
   deviceId: string;
   deviceStatus: 'Online' | 'Offline';
-  batteryPercent: number;
-  arrivalLevel: number;
-  arrivalHeightCm: number;
-  departureLevel: number;
-  departureHeightCm: number;
+  batteryPercent: number | null;
+  arrivalLevel: number | null;
+  arrivalHeightCm: number | null;
+  departureLevel: number | null;
+  departureHeightCm: number | null;
+  hasTelemetry?: boolean;
 }
 
 export const EmployeeDashboard: React.FC = () => {
@@ -74,8 +75,8 @@ export const EmployeeDashboard: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
-  // Selected coach (defaults to C4 as per reference image)
-  const [activeCoachNum, setActiveCoachNum] = useState<string>(selectedCoachNumber || 'C4');
+  // Selected coach (defaults to live telemetry coach CR123456)
+  const [activeCoachNum, setActiveCoachNum] = useState<string>(selectedCoachNumber || 'CR123456');
 
   // Track scroll container ref for horizontal scrolling
   const trackScrollRef = useRef<HTMLDivElement>(null);
@@ -188,8 +189,8 @@ export const EmployeeDashboard: React.FC = () => {
         destination: (first as any).destination || 'Station B',
         region: first.region || 'Eastern',
         status: first.is_online ? 'Active' : 'Standby',
-        latitude: (first as any).latitude || 22.557279,
-        longitude: (first as any).longitude || 88.352432,
+        latitude: (first as any).latitude || null,
+        longitude: (first as any).longitude || null,
         speedKmh: 0,
         nearestStation: 'Station A',
         lastUpdate: first.last_telemetry || 'Awaiting telemetry',
@@ -197,19 +198,19 @@ export const EmployeeDashboard: React.FC = () => {
       };
     }
 
-    // 3. Clean reference fallback (12841 Coromandel Express matching reference layout)
+    // 3. Awaiting operational telemetry state (No fabricated fallback)
     return {
-      trainNumber: selectedTrainNumber || '12841',
-      name: selectedTrainNumber === '12841' || !selectedTrainNumber ? 'Coromandel Express' : `Train ${selectedTrainNumber}`,
-      source: 'Chennai (MAS)',
-      destination: 'Howrah (HWH)',
-      region: selectedRegion === 'ALL' ? 'South East' : selectedRegion,
-      status: 'Active',
-      latitude: 22.5726,
-      longitude: 88.3639,
-      speedKmh: 0,
-      nearestStation: 'Kharagpur (KGP)',
-      lastUpdate: '23 Jan 2025, 11:26:20',
+      trainNumber: selectedTrainNumber || '225256',
+      name: selectedTrainNumber ? `Train ${selectedTrainNumber}` : 'Awaiting Telemetry',
+      source: '—',
+      destination: '—',
+      region: selectedRegion === 'ALL' ? 'Eastern' : selectedRegion,
+      status: 'Standby',
+      latitude: null,
+      longitude: null,
+      speedKmh: null,
+      nearestStation: 'No GPS Fix',
+      lastUpdate: 'Awaiting MQTT stream',
       totalCoaches: 24,
     };
   }, [liveTelemetry, selectedTrainNumber, backendTrains, selectedRegion]);
@@ -219,50 +220,46 @@ export const EmployeeDashboard: React.FC = () => {
     const list: DashboardCoach[] = [];
     const coachTypes = ['Passenger', 'AC Chair Car', 'AC 3-Tier', 'AC 2-Tier', 'Sleeper Class', 'Executive'];
 
+    // Calculate real tank level percentages using formula: (Current Height / Max Height 150cm) * 100
+    const liveArrivalPct = liveTelemetry && typeof liveTelemetry.cm1 === 'number'
+      ? Number(((liveTelemetry.cm1 / 150.0) * 100).toFixed(1))
+      : null;
+    const liveDeparturePct = liveTelemetry && typeof liveTelemetry.cm2 === 'number'
+      ? Number(((liveTelemetry.cm2 / 150.0) * 100).toFixed(1))
+      : null;
+
     for (let i = 1; i <= 24; i++) {
-      const cNum = `C${i}`;
+      const cNum = i === 1 && liveTelemetry ? liveTelemetry.chno : `C${i}`;
       const typeIndex = (i - 1) % coachTypes.length;
 
-      // If this coach matches active selection or live telemetry coach
-      const isTargetCoach = (liveTelemetry && liveTelemetry.chno === cNum) || cNum === activeCoachNum || (cNum === 'C4' && !activeCoachNum);
+      const isLiveHardwareCoach = liveTelemetry && (cNum === liveTelemetry.chno || (i === 1 && activeCoachNum === liveTelemetry.chno));
 
-      if (isTargetCoach && liveTelemetry) {
+      if (isLiveHardwareCoach && liveTelemetry) {
         list.push({
-          coachNumber: cNum,
-          coachType: coachTypes[typeIndex],
+          coachNumber: liveTelemetry.chno,
+          coachType: 'AC 2-Tier',
           deviceId: liveTelemetry.uid,
           deviceStatus: !liveTelemetry.isStale ? 'Online' : 'Offline',
           batteryPercent: liveTelemetry.bat,
-          arrivalLevel: liveTelemetry.wlp1,
+          arrivalLevel: liveArrivalPct,
           arrivalHeightCm: liveTelemetry.cm1,
-          departureLevel: liveTelemetry.wlp2,
+          departureLevel: liveDeparturePct,
           departureHeightCm: liveTelemetry.cm2,
-        });
-      } else if (liveTelemetry) {
-        list.push({
-          coachNumber: cNum,
-          coachType: coachTypes[typeIndex],
-          deviceId: `DEV-${cNum}`,
-          deviceStatus: !liveTelemetry.isStale ? 'Online' : 'Offline',
-          batteryPercent: liveTelemetry.bat,
-          arrivalLevel: liveTelemetry.wlp1,
-          arrivalHeightCm: liveTelemetry.cm1,
-          departureLevel: liveTelemetry.wlp2,
-          departureHeightCm: liveTelemetry.cm2,
+          hasTelemetry: true,
         });
       } else {
-        // High-fidelity baseline matching Indian Railways reference layout
-        const isC4 = cNum === 'C4';
+        // Coach without active hardware telemetry: explicit unconfigured state
         list.push({
           coachNumber: cNum,
           coachType: coachTypes[typeIndex],
-          deviceId: isC4 ? 'Device-1' : `DEV-${cNum}`,
-          deviceStatus: i <= 8 ? 'Online' : 'Offline',
-          batteryPercent: isC4 ? 62 : 82,
-          arrivalLevel: isC4 ? 70.0 : 65.0,
-          arrivalHeightCm: isC4 ? 120.8 : 110.0,
-          departureLevel: isC4 ? 40.0 : 50.0,
-          departureHeightCm: isC4 ? 45.2 : 55.0,
+          deviceId: 'Not Mapped',
+          deviceStatus: 'Offline',
+          batteryPercent: null,
+          arrivalLevel: null,
+          arrivalHeightCm: null,
+          departureLevel: null,
+          departureHeightCm: null,
+          hasTelemetry: false,
         });
       }
     }
@@ -273,8 +270,19 @@ export const EmployeeDashboard: React.FC = () => {
   const selectedCoach = useMemo(() => {
     const found = coaches24.find((c) => c.coachNumber === activeCoachNum);
     if (found) return found;
-    return coaches24[3] || coaches24[0];
-  }, [coaches24, activeCoachNum]);
+    return coaches24[0] || {
+      coachNumber: activeCoachNum || 'CR123456',
+      coachType: 'AC 2-Tier',
+      deviceId: liveTelemetry?.uid || 'Not Mapped',
+      deviceStatus: 'Offline',
+      batteryPercent: null,
+      arrivalLevel: null,
+      arrivalHeightCm: null,
+      departureLevel: null,
+      departureHeightCm: null,
+      hasTelemetry: false,
+    };
+  }, [coaches24, activeCoachNum, liveTelemetry]);
 
   // Leaflet map setup for Train Location
   useEffect(() => {
@@ -282,6 +290,14 @@ export const EmployeeDashboard: React.FC = () => {
 
     const lat = currentTrain.latitude;
     const lon = currentTrain.longitude;
+
+    if (lat == null || lon == null) {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+      return;
+    }
 
     if (!mapInstanceRef.current && typeof L !== 'undefined') {
       try {
@@ -341,7 +357,7 @@ export const EmployeeDashboard: React.FC = () => {
   }, [currentTrain.latitude, currentTrain.longitude]);
 
   const handleCenterTrain = () => {
-    if (mapInstanceRef.current) {
+    if (mapInstanceRef.current && currentTrain.latitude != null && currentTrain.longitude != null) {
       mapInstanceRef.current.setView([currentTrain.latitude, currentTrain.longitude], 13);
     }
   };
@@ -509,20 +525,20 @@ export const EmployeeDashboard: React.FC = () => {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontWeight: 600, color: 'var(--color-text-secondary, #64748B)' }}>Tank 1 (Arr):</span>
-            <strong style={{ color: selectedCoach.arrivalLevel < 20 ? '#DC2626' : '#2563EB', fontVariantNumeric: 'tabular-nums' }}>
-              {selectedCoach.arrivalLevel.toFixed(1)}% ({selectedCoach.arrivalHeightCm.toFixed(1)} cm)
+            <strong style={{ color: selectedCoach.arrivalLevel != null && selectedCoach.arrivalLevel < 20 ? '#DC2626' : '#2563EB', fontVariantNumeric: 'tabular-nums' }}>
+              {selectedCoach.arrivalLevel != null ? `${selectedCoach.arrivalLevel.toFixed(1)}% (${selectedCoach.arrivalHeightCm?.toFixed(1)} cm)` : '—'}
             </strong>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontWeight: 600, color: 'var(--color-text-secondary, #64748B)' }}>Tank 2 (Dep):</span>
-            <strong style={{ color: selectedCoach.departureLevel < 20 ? '#DC2626' : '#2563EB', fontVariantNumeric: 'tabular-nums' }}>
-              {selectedCoach.departureLevel.toFixed(1)}% ({selectedCoach.departureHeightCm.toFixed(1)} cm)
+            <strong style={{ color: selectedCoach.departureLevel != null && selectedCoach.departureLevel < 20 ? '#DC2626' : '#2563EB', fontVariantNumeric: 'tabular-nums' }}>
+              {selectedCoach.departureLevel != null ? `${selectedCoach.departureLevel.toFixed(1)}% (${selectedCoach.departureHeightCm?.toFixed(1)} cm)` : '—'}
             </strong>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontWeight: 600, color: 'var(--color-text-secondary, #64748B)' }}>Battery:</span>
-            <strong style={{ color: selectedCoach.batteryPercent < 30 ? '#DC2626' : '#16A34A', fontVariantNumeric: 'tabular-nums' }}>
-              {selectedCoach.batteryPercent.toFixed(1)}%
+            <strong style={{ color: selectedCoach.batteryPercent != null && selectedCoach.batteryPercent < 30 ? '#DC2626' : '#16A34A', fontVariantNumeric: 'tabular-nums' }}>
+              {selectedCoach.batteryPercent != null ? `${selectedCoach.batteryPercent.toFixed(1)}%` : '—'}
             </strong>
           </div>
         </div>
@@ -635,7 +651,7 @@ export const EmployeeDashboard: React.FC = () => {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="12841"
+                  placeholder="225256"
                   style={{
                     width: '100%',
                     height: '32px',
@@ -815,69 +831,25 @@ export const EmployeeDashboard: React.FC = () => {
                 </tr>
               )}
 
-              {/* Reference Train 12841 - Coromandel Express (Matching reference image) */}
-              {(!backendTrains.some((t) => t.train_number === '12841')) && (
-                <tr
-                  onClick={() => handleSelectTrain('12841')}
-                  style={{
-                    backgroundColor:
-                      currentTrain.trainNumber === '12841'
-                        ? 'var(--color-primary-surface, #EFF6FF)'
-                        : 'var(--color-surface, #FFFFFF)',
-                    borderLeft:
-                      currentTrain.trainNumber === '12841'
-                        ? '3px solid var(--color-primary, #2563EB)'
-                        : '3px solid transparent',
-                    borderBottom: '1px solid var(--color-border, #E2E8F0)',
-                    cursor: 'pointer',
-                    transition: 'background-color 0.12s ease',
-                  }}
-                >
-                  <td style={{ padding: '10px 14px', fontWeight: 800, color: 'var(--color-primary, #2563EB)' }}>
-                    12841
-                  </td>
-                  <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--color-text-primary, #0F172A)' }}>
-                    Coromandel Express
-                  </td>
-                  <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
-                    Chennai (MAS)
-                  </td>
-                  <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
-                    Howrah (HWH)
-                  </td>
-                  <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
-                    South East
-                  </td>
-                  <td style={{ padding: '10px 14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <div
-                        style={{
-                          width: '7px',
-                          height: '7px',
-                          borderRadius: '50%',
-                          backgroundColor: 'var(--color-status-success, #16A34A)',
-                        }}
-                      />
-                      <span style={{ fontWeight: 600, color: 'var(--color-status-success, #16A34A)' }}>
-                        Active
-                      </span>
-                    </div>
-                  </td>
-                  <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                      <MapPin size={13} color="var(--color-primary, #2563EB)" />
-                      22.5726&deg; N, 88.3639&deg; E
-                    </span>
-                  </td>
+              {/* Awaiting telemetry operational state when no live or backend trains exist */}
+              {!liveTelemetry && backendTrains.length === 0 && (
+                <tr>
                   <td
+                    colSpan={8}
                     style={{
-                      padding: '10px 14px',
-                      textAlign: 'right',
-                      color: 'var(--color-text-muted, #64748B)',
-                      fontSize: '11px',
+                      padding: '24px',
+                      textAlign: 'center',
+                      color: 'var(--color-text-secondary, #64748B)',
+                      fontSize: '13px',
                     }}
                   >
-                    23 Jan 2025, 11:26:20
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                      <Activity size={24} color="#94A3B8" />
+                      <strong>Awaiting Telemetry • No active hardware transmissions detected</strong>
+                      <span style={{ fontSize: '11px', color: '#94A3B8' }}>
+                        Listening on broker topic: <code>0023004D4B42501120353332</code>
+                      </span>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -1225,9 +1197,9 @@ export const EmployeeDashboard: React.FC = () => {
             />
 
             {/* ==================== 24 COACHES (C1 TO C24) ==================== */}
-            {coaches24.map((coach, index) => {
+            {coaches24.map((coach) => {
               const isSelected = coach.coachNumber === activeCoachNum;
-              const isGreen = index < 3; // C1, C2, C3
+              const hasData = coach.hasTelemetry;
 
               let coachBg = '#FFFFFF';
               let coachBorder = '1px solid #CBD5E1';
@@ -1237,7 +1209,7 @@ export const EmployeeDashboard: React.FC = () => {
                 coachBg = '#EFF6FF';
                 coachBorder = '2px solid #2563EB';
                 textColor = '#1D4ED8';
-              } else if (isGreen) {
+              } else if (hasData) {
                 coachBg = '#F0FDF4';
                 coachBorder = '1px solid #86EFAC';
                 textColor = '#15803D';
@@ -1277,7 +1249,11 @@ export const EmployeeDashboard: React.FC = () => {
                     transition: 'all 0.12s ease',
                     position: 'relative',
                   }}
-                  title={`Coach ${coach.coachNumber} (${coach.coachType}) - Level: ${coach.arrivalLevel.toFixed(0)}% / ${coach.departureLevel.toFixed(0)}%`}
+                  title={
+                    coach.hasTelemetry && coach.arrivalLevel != null && coach.departureLevel != null
+                      ? `Coach ${coach.coachNumber} (${coach.coachType}) - Level: ${coach.arrivalLevel.toFixed(0)}% / ${coach.departureLevel.toFixed(0)}%`
+                      : `Coach ${coach.coachNumber} (${coach.coachType}) - Awaiting Telemetry`
+                  }
                 >
                   {/* Top indicator: Coach Type & Active Badge */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1304,7 +1280,7 @@ export const EmployeeDashboard: React.FC = () => {
                   <div
                     style={{
                       textAlign: 'center',
-                      fontSize: '13px',
+                      fontSize: coach.coachNumber.length > 5 ? '10px' : '13px',
                       fontWeight: 800,
                       color: textColor,
                       lineHeight: '14px',
@@ -1320,11 +1296,13 @@ export const EmployeeDashboard: React.FC = () => {
                       height: '2px',
                       borderRadius: '1px',
                       backgroundColor:
-                        coach.arrivalLevel < 10 || coach.departureLevel < 10
-                          ? '#DC2626'
-                          : coach.arrivalLevel < 20 || coach.departureLevel < 20
-                          ? '#D97706'
-                          : '#16A34A',
+                        coach.hasTelemetry && coach.arrivalLevel != null
+                          ? coach.arrivalLevel < 10 || (coach.departureLevel != null && coach.departureLevel < 10)
+                            ? '#DC2626'
+                            : coach.arrivalLevel < 20 || (coach.departureLevel != null && coach.departureLevel < 20)
+                            ? '#D97706'
+                            : '#16A34A'
+                          : '#CBD5E1',
                       width: '100%',
                     }}
                   />
@@ -1467,7 +1445,7 @@ export const EmployeeDashboard: React.FC = () => {
             {/* Battery */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-secondary, #475569)', fontSize: '13px' }}>
-                <Battery size={16} color={selectedCoach.batteryPercent < 40 ? '#EF4444' : '#16A34A'} />
+                <Battery size={16} color={selectedCoach.batteryPercent != null && selectedCoach.batteryPercent < 40 ? '#EF4444' : '#16A34A'} />
                 <span>Battery</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1483,9 +1461,9 @@ export const EmployeeDashboard: React.FC = () => {
                 >
                   <div
                     style={{
-                      width: `${selectedCoach.batteryPercent}%`,
+                      width: selectedCoach.batteryPercent != null ? `${selectedCoach.batteryPercent}%` : '0%',
                       height: '100%',
-                      backgroundColor: selectedCoach.batteryPercent < 40 ? '#EF4444' : '#16A34A',
+                      backgroundColor: selectedCoach.batteryPercent != null && selectedCoach.batteryPercent < 40 ? '#EF4444' : '#16A34A',
                       transition: 'width 0.3s ease',
                     }}
                   />
@@ -1494,10 +1472,10 @@ export const EmployeeDashboard: React.FC = () => {
                   style={{
                     fontSize: '13px',
                     fontWeight: 700,
-                    color: selectedCoach.batteryPercent < 40 ? '#EF4444' : 'var(--color-status-success, #16A34A)',
+                    color: selectedCoach.batteryPercent != null && selectedCoach.batteryPercent < 40 ? '#EF4444' : 'var(--color-status-success, #16A34A)',
                   }}
                 >
-                  {selectedCoach.batteryPercent}%
+                  {selectedCoach.batteryPercent != null ? `${selectedCoach.batteryPercent}%` : '—'}
                 </span>
               </div>
             </div>
@@ -1610,19 +1588,22 @@ export const EmployeeDashboard: React.FC = () => {
                   {/* Liquid Column Fill */}
                   {(() => {
                     const maxH = 88;
-                    const fillH = (Math.max(0, Math.min(100, selectedCoach.arrivalLevel)) / 100) * maxH;
+                    const level = selectedCoach.arrivalLevel ?? 0;
+                    const fillH = selectedCoach.arrivalLevel != null ? (Math.max(0, Math.min(100, level)) / 100) * maxH : 0;
                     const fillY = 15 + (maxH - fillH);
                     const color =
-                      selectedCoach.arrivalLevel < 10
+                      level < 10
                         ? '#DC2626'
-                        : selectedCoach.arrivalLevel < 20
+                        : level < 20
                         ? '#D97706'
                         : '#2563EB';
                     return (
                       <g>
-                        <rect x="37" y={fillY} width="40" height={fillH} fill={color} />
-                        {fillH > 2 && (
-                          <line x1="37" y1={fillY} x2="77" y2={fillY} stroke="#93C5FD" strokeWidth="1.5" />
+                        {selectedCoach.arrivalLevel != null && fillH > 0 && (
+                          <>
+                            <rect x="37" y={fillY} width="40" height={fillH} fill={color} />
+                            <line x1="37" y1={fillY} x2="77" y2={fillY} stroke="#93C5FD" strokeWidth="1.5" />
+                          </>
                         )}
                       </g>
                     );
@@ -1640,13 +1621,13 @@ export const EmployeeDashboard: React.FC = () => {
                 {/* Direct High-Contrast Tabular Readout */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                   <div style={{ fontSize: '20px', fontWeight: 900, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
-                    {selectedCoach.arrivalLevel.toFixed(0)}%
+                    {selectedCoach.arrivalLevel != null ? `${selectedCoach.arrivalLevel.toFixed(0)}%` : '—'}
                   </div>
                   <div style={{ fontSize: '11px', fontWeight: 700, color: '#475569', fontVariantNumeric: 'tabular-nums' }}>
-                    {selectedCoach.arrivalHeightCm.toFixed(1)} cm
+                    {selectedCoach.arrivalHeightCm != null ? `${selectedCoach.arrivalHeightCm.toFixed(1)} cm` : '— cm'}
                   </div>
                   <div style={{ fontSize: '10px', fontWeight: 600, color: '#64748B' }}>
-                    {((selectedCoach.arrivalLevel / 100) * 500).toFixed(0)} L / 500 L
+                    {selectedCoach.arrivalLevel != null ? `${((selectedCoach.arrivalLevel / 100) * 500).toFixed(0)} L / 500 L` : '— / 500 L'}
                   </div>
                   <div
                     style={{
@@ -1656,29 +1637,67 @@ export const EmployeeDashboard: React.FC = () => {
                       padding: '2px 5px',
                       borderRadius: '3px',
                       display: 'inline-block',
-                      backgroundColor: selectedCoach.arrivalLevel < 10 ? '#FEE2E2' : selectedCoach.arrivalLevel < 20 ? '#FEF3C7' : '#EFF6FF',
-                      color: selectedCoach.arrivalLevel < 10 ? '#DC2626' : selectedCoach.arrivalLevel < 20 ? '#B45309' : '#1D4ED8',
+                      backgroundColor:
+                        selectedCoach.arrivalLevel == null
+                          ? '#F1F5F9'
+                          : selectedCoach.arrivalLevel < 10
+                          ? '#FEE2E2'
+                          : selectedCoach.arrivalLevel < 20
+                          ? '#FEF3C7'
+                          : '#EFF6FF',
+                      color:
+                        selectedCoach.arrivalLevel == null
+                          ? '#64748B'
+                          : selectedCoach.arrivalLevel < 10
+                          ? '#DC2626'
+                          : selectedCoach.arrivalLevel < 20
+                          ? '#B45309'
+                          : '#1D4ED8',
                     }}
                   >
-                    {selectedCoach.arrivalLevel < 10 ? 'CRITICAL LOW' : selectedCoach.arrivalLevel < 20 ? 'LOW WARNING' : 'NOMINAL'}
+                    {selectedCoach.arrivalLevel == null
+                      ? 'AWAITING TELEMETRY'
+                      : selectedCoach.arrivalLevel < 10
+                      ? 'CRITICAL LOW'
+                      : selectedCoach.arrivalLevel < 20
+                      ? 'LOW WARNING'
+                      : 'NOMINAL'}
                   </div>
                 </div>
               </div>
 
-              {/* Valve Status Indicator */}
+              {/* Valve / Sensor Status Indicator */}
               <div
                 style={{
                   fontSize: '10px',
                   fontWeight: 700,
-                  color: liveTelemetry ? (liveTelemetry.wlv1 ? '#15803D' : '#DC2626') : '#15803D',
-                  backgroundColor: liveTelemetry ? (liveTelemetry.wlv1 ? '#DCFCE7' : '#FEE2E2') : '#DCFCE7',
-                  border: `1px solid ${liveTelemetry ? (liveTelemetry.wlv1 ? '#86EFAC' : '#FCA5A5') : '#86EFAC'}`,
+                  color: selectedCoach.hasTelemetry && liveTelemetry
+                    ? liveTelemetry.wlv1
+                      ? '#15803D'
+                      : '#DC2626'
+                    : '#64748B',
+                  backgroundColor: selectedCoach.hasTelemetry && liveTelemetry
+                    ? liveTelemetry.wlv1
+                      ? '#DCFCE7'
+                      : '#FEE2E2'
+                    : '#F1F5F9',
+                  border: `1px solid ${
+                    selectedCoach.hasTelemetry && liveTelemetry
+                      ? liveTelemetry.wlv1
+                        ? '#86EFAC'
+                        : '#FCA5A5'
+                      : '#CBD5E1'
+                  }`,
                   padding: '2px 8px',
                   borderRadius: '4px',
                   marginTop: '8px',
                 }}
               >
-                {liveTelemetry ? (liveTelemetry.wlv1 ? '✓ VALVE NORMAL' : '⚠ VALVE ALERT') : '✓ VALVE NORMAL'}
+                {selectedCoach.hasTelemetry && liveTelemetry
+                  ? liveTelemetry.wlv1
+                    ? '✓ SENSOR 1 VALID'
+                    : '⚠ SENSOR 1 FAULT'
+                  : 'AWAITING LINK'}
               </div>
             </div>
 
@@ -1724,19 +1743,22 @@ export const EmployeeDashboard: React.FC = () => {
                   {/* Liquid Column Fill */}
                   {(() => {
                     const maxH = 88;
-                    const fillH = (Math.max(0, Math.min(100, selectedCoach.departureLevel)) / 100) * maxH;
+                    const level = selectedCoach.departureLevel ?? 0;
+                    const fillH = selectedCoach.departureLevel != null ? (Math.max(0, Math.min(100, level)) / 100) * maxH : 0;
                     const fillY = 15 + (maxH - fillH);
                     const color =
-                      selectedCoach.departureLevel < 10
+                      level < 10
                         ? '#DC2626'
-                        : selectedCoach.departureLevel < 20
+                        : level < 20
                         ? '#D97706'
                         : '#2563EB';
                     return (
                       <g>
-                        <rect x="37" y={fillY} width="40" height={fillH} fill={color} />
-                        {fillH > 2 && (
-                          <line x1="37" y1={fillY} x2="77" y2={fillY} stroke="#93C5FD" strokeWidth="1.5" />
+                        {selectedCoach.departureLevel != null && fillH > 0 && (
+                          <>
+                            <rect x="37" y={fillY} width="40" height={fillH} fill={color} />
+                            <line x1="37" y1={fillY} x2="77" y2={fillY} stroke="#93C5FD" strokeWidth="1.5" />
+                          </>
                         )}
                       </g>
                     );
@@ -1754,13 +1776,13 @@ export const EmployeeDashboard: React.FC = () => {
                 {/* Direct High-Contrast Tabular Readout */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                   <div style={{ fontSize: '20px', fontWeight: 900, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
-                    {selectedCoach.departureLevel.toFixed(0)}%
+                    {selectedCoach.departureLevel != null ? `${selectedCoach.departureLevel.toFixed(0)}%` : '—'}
                   </div>
                   <div style={{ fontSize: '11px', fontWeight: 700, color: '#475569', fontVariantNumeric: 'tabular-nums' }}>
-                    {selectedCoach.departureHeightCm.toFixed(1)} cm
+                    {selectedCoach.departureHeightCm != null ? `${selectedCoach.departureHeightCm.toFixed(1)} cm` : '— cm'}
                   </div>
                   <div style={{ fontSize: '10px', fontWeight: 600, color: '#64748B' }}>
-                    {((selectedCoach.departureLevel / 100) * 500).toFixed(0)} L / 500 L
+                    {selectedCoach.departureLevel != null ? `${((selectedCoach.departureLevel / 100) * 500).toFixed(0)} L / 500 L` : '— / 500 L'}
                   </div>
                   <div
                     style={{
@@ -1770,29 +1792,67 @@ export const EmployeeDashboard: React.FC = () => {
                       padding: '2px 5px',
                       borderRadius: '3px',
                       display: 'inline-block',
-                      backgroundColor: selectedCoach.departureLevel < 10 ? '#FEE2E2' : selectedCoach.departureLevel < 20 ? '#FEF3C7' : '#EFF6FF',
-                      color: selectedCoach.departureLevel < 10 ? '#DC2626' : selectedCoach.departureLevel < 20 ? '#B45309' : '#1D4ED8',
+                      backgroundColor:
+                        selectedCoach.departureLevel == null
+                          ? '#F1F5F9'
+                          : selectedCoach.departureLevel < 10
+                          ? '#FEE2E2'
+                          : selectedCoach.departureLevel < 20
+                          ? '#FEF3C7'
+                          : '#EFF6FF',
+                      color:
+                        selectedCoach.departureLevel == null
+                          ? '#64748B'
+                          : selectedCoach.departureLevel < 10
+                          ? '#DC2626'
+                          : selectedCoach.departureLevel < 20
+                          ? '#B45309'
+                          : '#1D4ED8',
                     }}
                   >
-                    {selectedCoach.departureLevel < 10 ? 'CRITICAL LOW' : selectedCoach.departureLevel < 20 ? 'LOW WARNING' : 'NOMINAL'}
+                    {selectedCoach.departureLevel == null
+                      ? 'AWAITING TELEMETRY'
+                      : selectedCoach.departureLevel < 10
+                      ? 'CRITICAL LOW'
+                      : selectedCoach.departureLevel < 20
+                      ? 'LOW WARNING'
+                      : 'NOMINAL'}
                   </div>
                 </div>
               </div>
 
-              {/* Valve Status Indicator */}
+              {/* Valve / Sensor Status Indicator */}
               <div
                 style={{
                   fontSize: '10px',
                   fontWeight: 700,
-                  color: liveTelemetry ? (liveTelemetry.wlv2 ? '#15803D' : '#DC2626') : '#15803D',
-                  backgroundColor: liveTelemetry ? (liveTelemetry.wlv2 ? '#DCFCE7' : '#FEE2E2') : '#DCFCE7',
-                  border: `1px solid ${liveTelemetry ? (liveTelemetry.wlv2 ? '#86EFAC' : '#FCA5A5') : '#86EFAC'}`,
+                  color: selectedCoach.hasTelemetry && liveTelemetry
+                    ? liveTelemetry.wlv2
+                      ? '#15803D'
+                      : '#DC2626'
+                    : '#64748B',
+                  backgroundColor: selectedCoach.hasTelemetry && liveTelemetry
+                    ? liveTelemetry.wlv2
+                      ? '#DCFCE7'
+                      : '#FEE2E2'
+                    : '#F1F5F9',
+                  border: `1px solid ${
+                    selectedCoach.hasTelemetry && liveTelemetry
+                      ? liveTelemetry.wlv2
+                        ? '#86EFAC'
+                        : '#FCA5A5'
+                      : '#CBD5E1'
+                  }`,
                   padding: '2px 8px',
                   borderRadius: '4px',
                   marginTop: '8px',
                 }}
               >
-                {liveTelemetry ? (liveTelemetry.wlv2 ? '✓ VALVE NORMAL' : '⚠ VALVE ALERT') : '✓ VALVE NORMAL'}
+                {selectedCoach.hasTelemetry && liveTelemetry
+                  ? liveTelemetry.wlv2
+                    ? '✓ SENSOR 2 VALID'
+                    : '⚠ SENSOR 2 FAULT / VALVE CLOSED'
+                  : 'AWAITING LINK'}
               </div>
             </div>
           </div>
@@ -1853,7 +1913,7 @@ export const EmployeeDashboard: React.FC = () => {
                   <span>Latitude</span>
                 </span>
                 <strong style={{ color: 'var(--color-text-primary, #0F172A)' }}>
-                  {currentTrain.latitude.toFixed(4)}&deg; N
+                  {currentTrain.latitude != null ? `${currentTrain.latitude.toFixed(4)}° N` : '—'}
                 </strong>
               </div>
 
@@ -1863,7 +1923,7 @@ export const EmployeeDashboard: React.FC = () => {
                   <span>Longitude</span>
                 </span>
                 <strong style={{ color: 'var(--color-text-primary, #0F172A)' }}>
-                  {currentTrain.longitude.toFixed(4)}&deg; E
+                  {currentTrain.longitude != null ? `${currentTrain.longitude.toFixed(4)}° E` : '—'}
                 </strong>
               </div>
 
@@ -1873,7 +1933,7 @@ export const EmployeeDashboard: React.FC = () => {
                   <span>Speed</span>
                 </span>
                 <strong style={{ color: 'var(--color-text-primary, #0F172A)' }}>
-                  {currentTrain.speedKmh.toFixed(1)} km/h {currentTrain.speedKmh > 0 ? '(In Transit)' : '(Stopped)'}
+                  {currentTrain.speedKmh != null ? `${currentTrain.speedKmh.toFixed(1)} km/h ${currentTrain.speedKmh > 0 ? '(In Transit)' : '(Stopped)'}` : '—'}
                 </strong>
               </div>
 
@@ -2002,11 +2062,13 @@ export const EmployeeDashboard: React.FC = () => {
           <div style={{ padding: '10px 12px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
             <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Arrival Sensor 1</div>
             <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: '2px 0' }}>
-              {selectedCoach.arrivalHeightCm.toFixed(1)} cm
+              {selectedCoach.arrivalHeightCm != null ? `${selectedCoach.arrivalHeightCm.toFixed(1)} cm` : '— cm'}
             </div>
             <div style={{ fontSize: '10px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Volume: {((selectedCoach.arrivalLevel / 100) * 500).toFixed(0)} L</span>
-              <span style={{ color: '#15803D', fontWeight: 700 }}>{selectedCoach.arrivalLevel.toFixed(0)}%</span>
+              <span>Volume: {selectedCoach.arrivalLevel != null ? `${((selectedCoach.arrivalLevel / 100) * 500).toFixed(0)} L` : '— L'}</span>
+              <span style={{ color: '#15803D', fontWeight: 700 }}>
+                {selectedCoach.arrivalLevel != null ? `${selectedCoach.arrivalLevel.toFixed(0)}%` : '—'}
+              </span>
             </div>
           </div>
 
@@ -2014,11 +2076,13 @@ export const EmployeeDashboard: React.FC = () => {
           <div style={{ padding: '10px 12px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
             <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Departure Sensor 2</div>
             <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: '2px 0' }}>
-              {selectedCoach.departureHeightCm.toFixed(1)} cm
+              {selectedCoach.departureHeightCm != null ? `${selectedCoach.departureHeightCm.toFixed(1)} cm` : '— cm'}
             </div>
             <div style={{ fontSize: '10px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Volume: {((selectedCoach.departureLevel / 100) * 500).toFixed(0)} L</span>
-              <span style={{ color: '#15803D', fontWeight: 700 }}>{selectedCoach.departureLevel.toFixed(0)}%</span>
+              <span>Volume: {selectedCoach.departureLevel != null ? `${((selectedCoach.departureLevel / 100) * 500).toFixed(0)} L` : '— L'}</span>
+              <span style={{ color: selectedCoach.departureLevel != null && selectedCoach.departureLevel < 10 ? '#DC2626' : '#15803D', fontWeight: 700 }}>
+                {selectedCoach.departureLevel != null ? `${selectedCoach.departureLevel.toFixed(0)}%` : '—'}
+              </span>
             </div>
           </div>
 
@@ -2026,12 +2090,12 @@ export const EmployeeDashboard: React.FC = () => {
           <div style={{ padding: '10px 12px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
             <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Subsystem Battery</div>
             <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: '2px 0' }}>
-              {selectedCoach.batteryPercent}%
+              {selectedCoach.batteryPercent != null ? `${selectedCoach.batteryPercent}%` : '—'}
             </div>
             <div style={{ fontSize: '10px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
               <span>Voltage: ~12.4V</span>
-              <span style={{ color: selectedCoach.batteryPercent > 20 ? '#15803D' : '#DC2626', fontWeight: 700 }}>
-                {selectedCoach.batteryPercent > 20 ? 'Optimal' : 'Low Charge'}
+              <span style={{ color: selectedCoach.batteryPercent != null ? (selectedCoach.batteryPercent > 20 ? '#15803D' : '#DC2626') : '#64748B', fontWeight: 700 }}>
+                {selectedCoach.batteryPercent != null ? (selectedCoach.batteryPercent > 20 ? 'Optimal' : 'Low Charge') : 'Standby'}
               </span>
             </div>
           </div>
@@ -2040,11 +2104,13 @@ export const EmployeeDashboard: React.FC = () => {
           <div style={{ padding: '10px 12px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
             <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>GNSS Navigation</div>
             <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: '2px 0' }}>
-              {currentTrain.speedKmh.toFixed(1)} km/h
+              {currentTrain.speedKmh != null ? `${currentTrain.speedKmh.toFixed(1)} km/h` : '—'}
             </div>
             <div style={{ fontSize: '10px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
               <span>Fix: 3D DGPS</span>
-              <span style={{ color: '#2563EB', fontWeight: 700 }}>Lat: {currentTrain.latitude.toFixed(2)}&deg;</span>
+              <span style={{ color: '#2563EB', fontWeight: 700 }}>
+                {currentTrain.latitude != null ? `Lat: ${currentTrain.latitude.toFixed(2)}°` : 'Fix: None'}
+              </span>
             </div>
           </div>
 
@@ -2052,7 +2118,7 @@ export const EmployeeDashboard: React.FC = () => {
           <div style={{ padding: '10px 12px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
             <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Fleet Nodes</div>
             <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: '2px 0' }}>
-              {devices.length > 0 ? `${devices.filter(d => d.is_online).length} / ${devices.length}` : '24 Online'}
+              {devices.length > 0 ? `${devices.filter(d => d.isOnline).length} / ${devices.length}` : '1 / 1 Online'}
             </div>
             <div style={{ fontSize: '10px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
               <span>Link: RS-485 / LTE</span>
@@ -2067,8 +2133,10 @@ export const EmployeeDashboard: React.FC = () => {
               {activeAlarms.length > 0 ? `${activeAlarms.length} Active` : '0 Alarms'}
             </div>
             <div style={{ fontSize: '10px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Valves: Dual OK</span>
-              <span style={{ color: '#15803D', fontWeight: 700 }}>Clean Run</span>
+              <span>Valves: Dual Monitored</span>
+              <span style={{ color: activeAlarms.length > 0 ? '#DC2626' : '#15803D', fontWeight: 700 }}>
+                {activeAlarms.length > 0 ? 'Interlock Active' : 'Clean Run'}
+              </span>
             </div>
           </div>
         </div>

@@ -91,7 +91,7 @@ function calculateRouteCorridorBounds(
 }
 
 export const LocationScreen: React.FC = () => {
-  const { selectedTrainNumber, setSelectedTrainNumber, sidebarCollapsed, selectedStationCode: contextStationCode, setSelectedStationCode: setContextStationCode } = useApp();
+  const { selectedTrainNumber, setSelectedTrainNumber, sidebarCollapsed, selectedStationCode: contextStationCode, setSelectedStationCode: setContextStationCode, liveTelemetry } = useApp();
   const googleMapsApiKey = (typeof process !== 'undefined' && (process.env?.GOOGLE_MAPS_API_KEY || process.env?.VITE_GOOGLE_MAPS_API_KEY)) || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_MAPS_API_KEY) || '';
   const [locations, setLocations] = useState<TrainLocation[]>([]);
   const [stations, setStations] = useState<CorridorStation[]>(DEFAULT_CORRIDOR_STATIONS);
@@ -165,7 +165,19 @@ export const LocationScreen: React.FC = () => {
   }, []);
 
   const safeLocations = Array.isArray(locations) ? locations : [];
-  const activeTrainLoc = safeLocations.find((l) => l.train_number === selectedTrainNumber) || safeLocations[0] || null;
+  const activeTrainLoc: TrainLocation | null = useMemo(() => {
+    if (liveTelemetry && liveTelemetry.lat != null && liveTelemetry.long != null) {
+      return {
+        train_number: liveTelemetry.trno,
+        current_latitude: liveTelemetry.lat,
+        current_longitude: liveTelemetry.long,
+        current_speed_kmh: liveTelemetry.speed ?? 0,
+        has_gps: true,
+        last_update: new Date(liveTelemetry.receivedAt).toISOString(),
+      };
+    }
+    return safeLocations.find((l) => l.train_number === selectedTrainNumber) || safeLocations[0] || null;
+  }, [liveTelemetry, safeLocations, selectedTrainNumber]);
 
   const hasGps = Boolean(
     activeTrainLoc?.has_gps &&

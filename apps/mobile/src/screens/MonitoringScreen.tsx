@@ -57,20 +57,23 @@ export const MonitoringScreen: React.FC = () => {
 
     // 1. Live MQTT Telemetry Train & Coach
     if (liveTelemetry) {
+      const liveArrPct = typeof liveTelemetry.cm1 === 'number' ? Number(((liveTelemetry.cm1 / 150.0) * 100).toFixed(1)) : liveTelemetry.wlp1;
+      const liveDepPct = typeof liveTelemetry.cm2 === 'number' ? Number(((liveTelemetry.cm2 / 150.0) * 100).toFixed(1)) : liveTelemetry.wlp2;
+
       list.push({
         trainNumber: liveTelemetry.trno,
-        trainName: `Train ${liveTelemetry.trno}`,
+        trainName: `Special Express (${liveTelemetry.trno})`,
         coachNumber: liveTelemetry.chno,
-        coachType: 'Passenger',
+        coachType: 'AC 2-Tier',
         deviceCode: liveTelemetry.uid,
         isOnline: !liveTelemetry.isStale,
         batteryPercent: liveTelemetry.bat,
-        arrivalLevel: liveTelemetry.wlp1,
+        arrivalLevel: liveArrPct,
         arrivalHeightCm: liveTelemetry.cm1,
-        arrivalStatus: !liveTelemetry.wlv1 ? 'WARNING' : liveTelemetry.wlp1 < 20 ? 'CRITICAL' : 'NORMAL',
-        departureLevel: liveTelemetry.wlp2,
+        arrivalStatus: !liveTelemetry.wlv1 ? 'WARNING' : (liveArrPct != null && liveArrPct < 20 ? 'CRITICAL' : 'NORMAL'),
+        departureLevel: liveDepPct,
         departureHeightCm: liveTelemetry.cm2,
-        departureStatus: !liveTelemetry.wlv2 ? 'WARNING' : liveTelemetry.wlp2 < 20 ? 'CRITICAL' : 'NORMAL',
+        departureStatus: !liveTelemetry.wlv2 ? 'WARNING' : (liveDepPct != null && liveDepPct < 20 ? 'CRITICAL' : 'NORMAL'),
         gpsCoordinates: liveTelemetry.lat != null ? `${liveTelemetry.lat.toFixed(4)}° N, ${liveTelemetry.long?.toFixed(4)}° E` : 'Awaiting Fix',
         hasGps: liveTelemetry.lat != null,
         lastCommunication: liveTelemetry.time,
@@ -107,7 +110,7 @@ export const MonitoringScreen: React.FC = () => {
     });
 
     return list;
-  }, [liveTank, tanks, devices]);
+  }, [liveTank, tanks, devices, liveTelemetry]);
 
   // Filtered rows
   const filteredRows = useMemo(() => {

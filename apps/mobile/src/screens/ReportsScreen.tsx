@@ -23,7 +23,7 @@ export type EmployeeReportType =
   | 'gps_history';
 
 export const ReportsScreen: React.FC = () => {
-  const { liveTank, selectedTrainNumber, devices, tanks } = useApp();
+  const { liveTank, selectedTrainNumber, devices, tanks, liveTelemetry } = useApp();
 
   const [reportType, setReportType] = useState<EmployeeReportType>('train_water');
   const [selectedTrain, setSelectedTrain] = useState<string>(selectedTrainNumber || '225256');
@@ -64,47 +64,159 @@ export const ReportsScreen: React.FC = () => {
     },
   ];
 
-  // Generate Report Data preview based on selected report type
+  // Generate Report Data preview based on selected report type and actual telemetry
   const reportData = useMemo(() => {
     if (reportType === 'train_water') {
+      if (liveTelemetry) {
+        const arrPct = typeof liveTelemetry.cm1 === 'number' ? Number(((liveTelemetry.cm1 / 150.0) * 100).toFixed(1)) : liveTelemetry.wlp1;
+        const depPct = typeof liveTelemetry.cm2 === 'number' ? Number(((liveTelemetry.cm2 / 150.0) * 100).toFixed(1)) : liveTelemetry.wlp2;
+        const volArr = ((arrPct / 100) * 500);
+        const volDep = ((depPct / 100) * 500);
+        const totalVol = volArr + volDep;
+        const avgPct = ((arrPct + depPct) / 2).toFixed(1);
+        return [
+          {
+            train: liveTelemetry.trno,
+            name: `Special Express (${liveTelemetry.trno})`,
+            region: 'Eastern',
+            totalCapacity: '1000 L',
+            currentVolume: `${totalVol.toFixed(1)} L`,
+            avgLevel: `${avgPct}%`,
+            status: !liveTelemetry.isStale ? 'Active' : 'Stale',
+          },
+        ];
+      }
       return [
-        { train: selectedTrain, name: `Express Fleet ${selectedTrain}`, region: 'South East', totalCapacity: '480 L', currentVolume: '360 L', avgLevel: '75.0%', status: 'Nominal' },
-        { train: '12002', name: 'Shatabdi Express', region: 'Northern', totalCapacity: '240 L', currentVolume: '168 L', avgLevel: '70.0%', status: 'Nominal' },
-        { train: '12951', name: 'Mumbai Rajdhani', region: 'Western', totalCapacity: '360 L', currentVolume: '234 L', avgLevel: '65.0%', status: 'Nominal' },
+        {
+          train: selectedTrain,
+          name: `Train ${selectedTrain}`,
+          region: 'Eastern',
+          totalCapacity: '—',
+          currentVolume: '—',
+          avgLevel: '—',
+          status: 'Awaiting Telemetry',
+        },
       ];
     } else if (reportType === 'coach_water') {
+      if (liveTelemetry) {
+        const arrPct = typeof liveTelemetry.cm1 === 'number' ? Number(((liveTelemetry.cm1 / 150.0) * 100).toFixed(1)) : liveTelemetry.wlp1;
+        const depPct = typeof liveTelemetry.cm2 === 'number' ? Number(((liveTelemetry.cm2 / 150.0) * 100).toFixed(1)) : liveTelemetry.wlp2;
+        return [
+          {
+            coach: liveTelemetry.chno,
+            type: 'AC 2-Tier',
+            arrivalLvl: `${arrPct}%`,
+            departureLvl: `${depPct}%`,
+            arrivalCm: `${liveTelemetry.cm1.toFixed(1)} cm`,
+            departureCm: `${liveTelemetry.cm2.toFixed(1)} cm`,
+            alert: !liveTelemetry.wlv2 ? 'Departure Sensor 2 Fault / Valve Closed' : !liveTelemetry.wlv1 ? 'Arrival Sensor 1 Fault' : 'Nominal',
+          },
+        ];
+      }
       return [
-        { coach: 'C1', type: 'Executive AC', arrivalLvl: '82.0%', departureLvl: '79.0%', arrivalCm: '41.0 cm', departureCm: '39.5 cm', alert: 'Normal' },
-        { coach: 'C2', type: 'AC 3-Tier', arrivalLvl: '64.0%', departureLvl: '58.0%', arrivalCm: '32.0 cm', departureCm: '29.0 cm', alert: 'Normal' },
-        { coach: 'C3', type: 'AC 3-Tier', arrivalLvl: '18.0%', departureLvl: '22.0%', arrivalCm: '9.0 cm', departureCm: '11.0 cm', alert: 'Low Water (<20%)' },
-        { coach: 'C4', type: 'AC Chair Car', arrivalLvl: '75.0%', departureLvl: '68.0%', arrivalCm: '37.5 cm', departureCm: '34.0 cm', alert: 'Normal' },
-        { coach: 'C5', type: 'Sleeper Class', arrivalLvl: '52.0%', departureLvl: '48.0%', arrivalCm: '26.0 cm', departureCm: '24.0 cm', alert: 'Normal' },
+        {
+          coach: 'CR123456',
+          type: 'Standard Coach',
+          arrivalLvl: '—',
+          departureLvl: '—',
+          arrivalCm: '—',
+          departureCm: '—',
+          alert: 'Awaiting Telemetry',
+        },
       ];
     } else if (reportType === 'battery_status') {
-      return [
-        { device: 'DEV-WLI-01', coach: 'C1', battery: '94%', voltage: '4.12 V', status: 'Nominal', alert: 'None' },
-        { device: 'DEV-WLI-02', coach: 'C2', battery: '34%', voltage: '3.62 V', status: 'Critical', alert: 'LOW BATTERY (<40%)' },
-        { device: 'DEV-WLI-03', coach: 'C3', battery: '76%', voltage: '3.88 V', status: 'Nominal', alert: 'None' },
-        { device: 'Device-1', coach: 'C4', battery: '88%', voltage: '3.92 V', status: 'Nominal', alert: 'None' },
-        { device: 'DEV-WLI-05', coach: 'C5', battery: '38%', voltage: '3.66 V', status: 'Warning', alert: 'LOW BATTERY (<40%)' },
-      ];
+      if (liveTelemetry) {
+        return [
+          {
+            device: liveTelemetry.uid,
+            coach: liveTelemetry.chno,
+            battery: `${liveTelemetry.bat.toFixed(1)}%`,
+            voltage: `${(3.2 + (liveTelemetry.bat / 100) * 1.0).toFixed(2)} V`,
+            status: liveTelemetry.bat < 40 ? 'Warning' : 'Nominal',
+            alert: liveTelemetry.bat < 40 ? 'LOW BATTERY (<40%)' : 'None',
+          },
+        ];
+      }
+      return devices.length > 0
+        ? devices.map((d) => ({
+            device: d.uid,
+            coach: d.coachNumber || '—',
+            battery: d.batteryPercent != null ? `${d.batteryPercent}%` : '—',
+            voltage: d.batteryVoltage != null ? `${d.batteryVoltage} V` : '—',
+            status: d.isOnline ? 'Nominal' : 'Offline',
+            alert: d.batteryPercent != null && d.batteryPercent < 40 ? 'LOW BATTERY (<40%)' : 'None',
+          }))
+        : [
+            {
+              device: '0023004D4B42501120353332',
+              coach: 'CR123456',
+              battery: '—',
+              voltage: '—',
+              status: 'Standby',
+              alert: 'Awaiting Telemetry',
+            },
+          ];
     } else if (reportType === 'device_status') {
-      return [
-        { device: 'Device-1', train: selectedTrain, coach: 'C4', assignment: 'ENGAGED', online: 'Online', uptime: '99.8%', lastComms: 'Just now' },
-        { device: 'DEV-WLI-01', train: selectedTrain, coach: 'C1', assignment: 'ENGAGED', online: 'Online', uptime: '99.5%', lastComms: '1 min ago' },
-        { device: 'DEV-WLI-02', train: selectedTrain, coach: 'C2', assignment: 'ENGAGED', online: 'Online', uptime: '98.9%', lastComms: '2 mins ago' },
-        { device: 'DEV-WLI-POOL', train: '—', coach: '—', assignment: 'FREE POOL', online: 'Standby', uptime: '100%', lastComms: 'Depot' },
-      ];
+      if (liveTelemetry) {
+        return [
+          {
+            device: liveTelemetry.uid,
+            train: liveTelemetry.trno,
+            coach: liveTelemetry.chno,
+            assignment: 'ENGAGED',
+            online: !liveTelemetry.isStale ? 'Online' : 'Offline',
+            uptime: '100%',
+            lastComms: liveTelemetry.time,
+          },
+        ];
+      }
+      return devices.length > 0
+        ? devices.map((d) => ({
+            device: d.uid,
+            train: d.trainNumber || selectedTrain,
+            coach: d.coachNumber || '—',
+            assignment: d.coachNumber ? 'ENGAGED' : 'FREE POOL',
+            online: d.isOnline ? 'Online' : 'Offline',
+            uptime: '99.9%',
+            lastComms: d.lastHeartbeat ? new Date(d.lastHeartbeat).toLocaleTimeString() : 'Depot',
+          }))
+        : [
+            {
+              device: '0023004D4B42501120353332',
+              train: selectedTrain,
+              coach: 'CR123456',
+              assignment: 'ENGAGED',
+              online: 'Standby',
+              uptime: '—',
+              lastComms: 'Awaiting Stream',
+            },
+          ];
     } else {
       // GPS History Report
+      if (liveTelemetry && liveTelemetry.lat != null && liveTelemetry.long != null) {
+        return [
+          {
+            timestamp: liveTelemetry.time,
+            train: liveTelemetry.trno,
+            lat: `${liveTelemetry.lat.toFixed(4)}° N`,
+            lon: `${liveTelemetry.long.toFixed(4)}° E`,
+            speed: `${(liveTelemetry.speed ?? 0).toFixed(1)} km/h`,
+            station: 'Active Corridor (Live GPS)',
+          },
+        ];
+      }
       return [
-        { timestamp: '14:30:00', train: selectedTrain, lat: '13.0827° N', lon: '80.2707° E', speed: '78.5 km/h', station: 'Chennai Central Corridor' },
-        { timestamp: '14:00:00', train: selectedTrain, lat: '13.4500° N', lon: '80.1200° E', speed: '82.0 km/h', station: 'Gudur Junction Outskirts' },
-        { timestamp: '13:30:00', train: selectedTrain, lat: '13.8200° N', lon: '80.0500° E', speed: '76.0 km/h', station: 'Nellore Approach' },
-        { timestamp: '13:00:00', train: selectedTrain, lat: '14.1200° N', lon: '79.9800° E', speed: '0.0 km/h (Halt)', station: 'Ongole Junction' },
+        {
+          timestamp: '—',
+          train: selectedTrain,
+          lat: '—',
+          lon: '—',
+          speed: '—',
+          station: 'Awaiting GPS Fix',
+        },
       ];
     }
-  }, [reportType, selectedTrain]);
+  }, [reportType, selectedTrain, liveTelemetry, devices]);
 
   const handleExportCsv = () => {
     if (!reportData || reportData.length === 0) return;

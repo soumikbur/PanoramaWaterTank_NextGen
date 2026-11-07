@@ -38,11 +38,11 @@ export const CoachDetailsScreen: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const trainNum = liveTelemetry?.trno || selectedTrainNumber || '225256';
-  const coachNum = (selectedCoachNumber || liveTelemetry?.chno || 'C4').toUpperCase();
+  const coachNum = (selectedCoachNumber || liveTelemetry?.chno || 'CR123456').toUpperCase();
 
   // Known train names mapping
   const trainNames: Record<string, { name: string; from: string; to: string; region: string }> = {
-    '225256': { name: 'Express Fleet 225256', from: 'Kharagpur (KGP)', to: 'Howrah (HWH)', region: 'South East' },
+    '225256': { name: 'Special Express (225256)', from: 'Live Corridor', to: 'In Service', region: 'Eastern' },
     '12002': { name: 'Shatabdi Express', from: 'New Delhi (NDLS)', to: 'Bhopal (BPL)', region: 'Northern' },
     '12951': { name: 'Mumbai Rajdhani', from: 'Mumbai Central (MMCT)', to: 'New Delhi (NDLS)', region: 'Western' },
     '12301': { name: 'Howrah Rajdhani', from: 'Howrah (HWH)', to: 'New Delhi (NDLS)', region: 'Eastern' },
@@ -57,7 +57,7 @@ export const CoachDetailsScreen: React.FC = () => {
 
   // Extract coach index (1..24)
   const coachIndexMatch = coachNum.match(/\d+/);
-  const coachIndex = coachIndexMatch ? parseInt(coachIndexMatch[0], 10) : 4;
+  const coachIndex = coachIndexMatch ? parseInt(coachIndexMatch[0], 10) : 1;
   const isValidCoach = coachIndex >= 1 && coachIndex <= 24;
 
   const coachTypes = ['Passenger', 'AC Chair Car', 'AC 3-Tier', 'AC 2-Tier', 'Sleeper Class', 'Executive AC'];
@@ -72,17 +72,22 @@ export const CoachDetailsScreen: React.FC = () => {
     );
   }, [devices, coachNum, trainNum]);
 
-  const deviceId = liveTelemetry?.uid || matchingDevice?.uid || `DEV-${coachNum}`;
-  const isOnline = liveTelemetry ? !liveTelemetry.isStale : (matchingDevice?.isOnline ?? false);
-  const batteryPercent = liveTelemetry ? liveTelemetry.bat : (matchingDevice?.batteryPercent ?? 0);
-  const isBatteryLow = batteryPercent < 40;
+  const hasLiveTelemetry = Boolean(liveTelemetry && (liveTelemetry.chno.toUpperCase() === coachNum || coachNum === 'CR123456'));
+  const deviceId = (hasLiveTelemetry && liveTelemetry?.uid) || matchingDevice?.uid || (hasLiveTelemetry ? '0023004D4B42501120353332' : `DEV-${coachNum}`);
+  const isOnline = hasLiveTelemetry && liveTelemetry ? !liveTelemetry.isStale : (matchingDevice?.isOnline ?? false);
+  const batteryPercent = hasLiveTelemetry && liveTelemetry ? liveTelemetry.bat : (matchingDevice?.batteryPercent ?? null);
+  const isBatteryLow = batteryPercent != null && batteryPercent < 40;
 
-  // Dual Tank Telemetry values
-  const arrivalPercent = liveTelemetry ? liveTelemetry.wlp1 : (matchingDevice?.primaryLevel ?? null);
-  const arrivalHeight = liveTelemetry ? liveTelemetry.cm1 : (arrivalPercent != null ? (arrivalPercent / 100) * 50.0 : null);
+  // Dual Tank Telemetry values: formula (heightCm / 150.0) * 100
+  const arrivalPercent = hasLiveTelemetry && liveTelemetry && typeof liveTelemetry.cm1 === 'number'
+    ? Number(((liveTelemetry.cm1 / 150.0) * 100).toFixed(1))
+    : (matchingDevice?.primaryLevel ?? null);
+  const arrivalHeight = hasLiveTelemetry && liveTelemetry ? liveTelemetry.cm1 : (arrivalPercent != null ? (arrivalPercent / 100) * 150.0 : null);
 
-  const departurePercent = liveTelemetry ? liveTelemetry.wlp2 : (matchingDevice?.secondaryLevel ?? null);
-  const departureHeight = liveTelemetry ? liveTelemetry.cm2 : (departurePercent != null ? (departurePercent / 100) * 50.0 : null);
+  const departurePercent = hasLiveTelemetry && liveTelemetry && typeof liveTelemetry.cm2 === 'number'
+    ? Number(((liveTelemetry.cm2 / 150.0) * 100).toFixed(1))
+    : (matchingDevice?.secondaryLevel ?? null);
+  const departureHeight = hasLiveTelemetry && liveTelemetry ? liveTelemetry.cm2 : (departurePercent != null ? (departurePercent / 100) * 150.0 : null);
 
   // Build TankLiveStatus objects for TankVisualization
   const arrivalTank: TankLiveStatus = useMemo(() => {
@@ -781,7 +786,7 @@ export const CoachDetailsScreen: React.FC = () => {
               Train Location &bull; Eastern Railway Mainline Corridor
             </h4>
             <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
-              Coordinates: <strong>22.5726&deg; N, 88.3639&deg; E</strong> &bull; Speed: <strong>0 km/h (Station Stopped)</strong> &bull; Nearest Depot: <strong>Kharagpur (KGP)</strong>
+              Coordinates: <strong>{liveTelemetry?.lat != null ? `${liveTelemetry.lat.toFixed(4)}° N, ${liveTelemetry.long?.toFixed(4)}° E` : 'Awaiting GPS Fix'}</strong> &bull; Speed: <strong>{liveTelemetry?.speed != null ? `${liveTelemetry.speed.toFixed(1)} km/h` : '—'}</strong> &bull; Status: <strong>{liveTelemetry && !liveTelemetry.isStale ? 'Active Stream' : 'Standby'}</strong>
             </div>
           </div>
         </div>

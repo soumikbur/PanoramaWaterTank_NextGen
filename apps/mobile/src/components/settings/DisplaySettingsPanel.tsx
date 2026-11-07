@@ -415,7 +415,7 @@ export const DisplaySettingsPanel: React.FC<DisplaySettingsPanelProps> = ({ isAd
             Live Preview
           </div>
           <div style={{ fontSize: 'var(--font-base, 14px)', color: 'var(--color-text-primary, #0F172A)', fontWeight: 600 }}>
-            WLI SCADA System &mdash; Train 12841 Coromandel Express &bull; Coach C4 Arrival Tank: 70% (35.0 cm)
+            WLI SCADA System &mdash; Train 225256 Special Express &bull; Coach CR123456 Arrival Tank: 80.5% (120.8 cm)
           </div>
         </div>
       </div>

@@ -129,7 +129,7 @@ export const DeviceMappingScreen: React.FC = () => {
 
   const handleOpenAssignModal = (dev: DeviceMappingItem) => {
     setSelectedDeviceForAssign(dev);
-    setTargetTrain(dev.trainNumber || '12841');
+    setTargetTrain(dev.trainNumber || '225256');
     setTargetCoach(dev.coachNumber || 'C1');
     setIsAssignOpen(true);
   };
@@ -175,7 +175,7 @@ export const DeviceMappingScreen: React.FC = () => {
       await ApiClient.createDevice({
         uid: newDeviceCode.trim(),
         name: newDeviceName.trim() || `Node (${newDeviceCode.trim()})`,
-        train_number: newAssignTrain.trim() || '12841',
+        train_number: newAssignTrain.trim() || '225256',
         coach_number: newAssignCoach.trim() || 'C1',
         hardware_version: newHwModel,
       });
@@ -552,7 +552,7 @@ export const DeviceMappingScreen: React.FC = () => {
                     boxSizing: 'border-box',
                   }}
                 >
-                  <option value="12841">12841 - Coromandel Express</option>
+                  <option value="225256">225256 - Special Express</option>
                   <option value="12002">12002 - Shatabdi Express</option>
                   <option value="12951">12951 - Mumbai Rajdhani</option>
                   <option value="">-- Unassign to Free Pool --</option>
@@ -672,7 +672,7 @@ export const DeviceMappingScreen: React.FC = () => {
                     type="text"
                     value={newAssignTrain}
                     onChange={(e) => setNewAssignTrain(e.target.value)}
-                    placeholder="e.g. 12841"
+                    placeholder="e.g. 225256"
                     style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', boxSizing: 'border-box' }}
                   />
                 </div>

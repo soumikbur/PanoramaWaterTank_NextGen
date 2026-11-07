@@ -331,7 +331,7 @@ app.whenReady().then(async () => {
       (() => {
         const txt = document.body.innerText;
         return {
-          hasPct: txt.includes('12%') || txt.includes('12.1%'),
+          hasPct: txt.includes('80.5%') || txt.includes('81%') || txt.includes('12.1%'),
           hasCm: txt.includes('120.8 cm'),
           hasValve: txt.includes('Valve Normal') || txt.includes('Valve Open'),
         };

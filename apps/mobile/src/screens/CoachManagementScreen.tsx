@@ -31,7 +31,7 @@ export interface CoachRecord {
   trainNumber: string;
   deviceId: string;
   isOnline: boolean;
-  batteryPercent: number;
+  batteryPercent: number | null;
   arrivalLevel: number | null;
   arrivalHeightCm: number | null;
   departureLevel: number | null;
@@ -91,30 +91,37 @@ export const CoachManagementScreen: React.FC = () => {
   const coachesList: CoachRecord[] = useMemo(() => {
     if (activeTrain === '225256' || (liveTelemetry && activeTrain === liveTelemetry.trno)) {
       const trainNo = liveTelemetry?.trno || '225256';
-      const liveCoachNum = liveTelemetry?.chno || 'C4';
+      const liveCoachNum = liveTelemetry?.chno || 'CR123456';
       const baseCoaches: CoachRecord[] = [];
       const coachTypes = ['Executive AC', 'AC 2-Tier', 'AC 3-Tier', 'AC Chair Car', 'Sleeper Class', 'Passenger'];
 
+      const liveArrivalPct = liveTelemetry && typeof liveTelemetry.cm1 === 'number'
+        ? Number(((liveTelemetry.cm1 / 150.0) * 100).toFixed(1))
+        : null;
+      const liveDeparturePct = liveTelemetry && typeof liveTelemetry.cm2 === 'number'
+        ? Number(((liveTelemetry.cm2 / 150.0) * 100).toFixed(1))
+        : null;
+
       for (let i = 1; i <= 24; i++) {
-        const cNum = `C${i}`;
+        const cNum = i === 1 ? liveCoachNum : `C${i}`;
         const typeIndex = (i - 1) % coachTypes.length;
-        const isLiveCoach = cNum === liveCoachNum || (cNum === 'C4' && liveCoachNum === 'CR123456');
+        const isLiveCoach = Boolean(liveTelemetry && (cNum === liveTelemetry.chno || i === 1));
 
         if (isLiveCoach && liveTelemetry) {
           baseCoaches.push({
             id: `coach-${trainNo}-${cNum}`,
             coachNumber: cNum,
-            coachType: coachTypes[typeIndex],
+            coachType: 'AC 2-Tier',
             trainNumber: trainNo,
             deviceId: liveTelemetry.uid,
             isOnline: !liveTelemetry.isStale,
             batteryPercent: liveTelemetry.bat,
-            arrivalLevel: liveTelemetry.wlp1,
+            arrivalLevel: liveArrivalPct,
             arrivalHeightCm: liveTelemetry.cm1,
-            departureLevel: liveTelemetry.wlp2,
+            departureLevel: liveDeparturePct,
             departureHeightCm: liveTelemetry.cm2,
-            arrivalAlarmStatus: !liveTelemetry.wlv1 ? 'VALVE_ALERT' : liveTelemetry.wlp1 < 20 ? 'WARNING' : 'NORMAL',
-            departureAlarmStatus: !liveTelemetry.wlv2 ? 'VALVE_ALERT' : liveTelemetry.wlp2 < 20 ? 'WARNING' : 'NORMAL',
+            arrivalAlarmStatus: !liveTelemetry.wlv1 ? 'VALVE_ALERT' : (liveArrivalPct != null && liveArrivalPct < 20 ? 'WARNING' : 'NORMAL'),
+            departureAlarmStatus: !liveTelemetry.wlv2 ? 'VALVE_ALERT' : (liveDeparturePct != null && liveDeparturePct < 20 ? 'WARNING' : 'NORMAL'),
           });
         } else {
           baseCoaches.push({
@@ -122,13 +129,13 @@ export const CoachManagementScreen: React.FC = () => {
             coachNumber: cNum,
             coachType: coachTypes[typeIndex],
             trainNumber: trainNo,
-            deviceId: `DEV-${cNum}`,
-            isOnline: liveTelemetry ? !liveTelemetry.isStale : false,
-            batteryPercent: liveTelemetry ? liveTelemetry.bat : 0,
-            arrivalLevel: liveTelemetry ? liveTelemetry.wlp1 : 0,
-            arrivalHeightCm: liveTelemetry ? liveTelemetry.cm1 : 0,
-            departureLevel: liveTelemetry ? liveTelemetry.wlp2 : 0,
-            departureHeightCm: liveTelemetry ? liveTelemetry.cm2 : 0,
+            deviceId: 'Not Mapped',
+            isOnline: false,
+            batteryPercent: null,
+            arrivalLevel: null,
+            arrivalHeightCm: null,
+            departureLevel: null,
+            departureHeightCm: null,
             arrivalAlarmStatus: 'NORMAL',
             departureAlarmStatus: 'NORMAL',
           });
@@ -148,7 +155,7 @@ export const CoachManagementScreen: React.FC = () => {
         trainNumber: activeTrain,
         deviceId: d.uid,
         isOnline: d.isOnline,
-        batteryPercent: d.batteryPercent ?? 85,
+        batteryPercent: d.batteryPercent ?? null,
         arrivalLevel: idx === 0 ? liveTank?.levelPercent ?? d.primaryLevel ?? null : d.primaryLevel ?? null,
         arrivalHeightCm: idx === 0 ? liveTank?.heightCm ?? null : null,
         departureLevel: d.secondaryLevel ?? null,
@@ -158,25 +165,25 @@ export const CoachManagementScreen: React.FC = () => {
       }));
     }
 
-    // Fallback single coach
+    // Fallback single coach awaiting telemetry
     return [
       {
-        id: 'fallback-c1',
+        id: 'awaiting-c1',
         coachNumber: 'C1',
-        coachType: 'AC Chair Car',
+        coachType: 'Standard Coach',
         trainNumber: activeTrain,
-        deviceId: 'DEV-01',
-        isOnline: true,
-        batteryPercent: 90,
-        arrivalLevel: liveTank?.levelPercent ?? 70,
-        arrivalHeightCm: liveTank?.heightCm ?? 35,
-        departureLevel: 65,
-        departureHeightCm: 32.5,
+        deviceId: 'Not Mapped',
+        isOnline: false,
+        batteryPercent: null,
+        arrivalLevel: null,
+        arrivalHeightCm: null,
+        departureLevel: null,
+        departureHeightCm: null,
         arrivalAlarmStatus: 'NORMAL',
         departureAlarmStatus: 'NORMAL',
       },
     ];
-  }, [activeTrain, devices, liveTank]);
+  }, [activeTrain, devices, liveTank, liveTelemetry]);
 
   const allCoaches = [...coachesList, ...customCoaches];
 
@@ -218,13 +225,13 @@ export const CoachManagementScreen: React.FC = () => {
       coachNumber: newCoachNum.trim(),
       coachType: newCoachType,
       trainNumber: activeTrain,
-      deviceId: newCoachDev.trim() || 'DEV-WLI-NEW',
-      isOnline: true,
-      batteryPercent: 95,
-      arrivalLevel: 80,
-      arrivalHeightCm: 40,
-      departureLevel: 75,
-      departureHeightCm: 37.5,
+      deviceId: newCoachDev.trim() || 'Not Mapped',
+      isOnline: false,
+      batteryPercent: null,
+      arrivalLevel: null,
+      arrivalHeightCm: null,
+      departureLevel: null,
+      departureHeightCm: null,
       arrivalAlarmStatus: 'NORMAL',
       departureAlarmStatus: 'NORMAL',
     };

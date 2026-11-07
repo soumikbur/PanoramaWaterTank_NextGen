@@ -10,7 +10,8 @@ import { LiveTelemetryPayload, MqttConnectionStatus } from '../types';
 
 export const DEFAULT_MQTT_TOPIC = '0023004D4B42501120353332';
 export const DEFAULT_DEVICE_UID = '0023004D4B42501120353332';
-export const STALE_TIMEOUT_MS = 30000; // 30 seconds watchdog
+export const DEFAULT_STALE_TIMEOUT_MS = 180000; // 180 seconds (nominal 90s upload task + jitter headroom)
+export const STALE_TIMEOUT_MS = 30000; // Fast watchdog timeout for local/test runner
 
 export type TelemetryCallback = (payload: LiveTelemetryPayload) => void;
 export type MqttStatusCallback = (status: MqttConnectionStatus) => void;
@@ -19,12 +20,16 @@ export class MqttService {
   private static instance: MqttService;
   private client: any = null;
   private status: MqttConnectionStatus = 'DISCONNECTED';
+  private topicSubscribed = false;
   private telemetryListeners: Set<TelemetryCallback> = new Set();
   private statusListeners: Set<MqttStatusCallback> = new Set();
   private reconnectTimer: any = null;
   private staleTimer: any = null;
   private reconnectAttempts = 0;
   private lastTelemetry: LiveTelemetryPayload | null = null;
+  private lastPayloadSignature = '';
+  private lastMessageReceivedTime = 0;
+  private historyBuffer: LiveTelemetryPayload[] = [];
   private isDestroyed = false;
 
   private brokerHost: string = 'broker.hivemq.com';
@@ -32,6 +37,7 @@ export class MqttService {
   private brokerPath: string = '/mqtt';
   private useSSL: boolean = true;
   private topic: string = DEFAULT_MQTT_TOPIC;
+  private watchdogTimeoutMs: number = STALE_TIMEOUT_MS;
 
   private constructor() {
     this.initConfiguration();
@@ -87,6 +93,7 @@ export class MqttService {
       this.client.onConnectionLost = (responseObject: any) => {
         const errorMsg = responseObject?.errorMessage || 'Connection lost';
         console.warn('[MQTT] Connection lost:', errorMsg);
+        this.topicSubscribed = false;
         this.clearStaleTimer();
         this.setStatus('DISCONNECTED');
         this.scheduleReconnect();
@@ -112,11 +119,14 @@ export class MqttService {
           console.info(`[MQTT] Connected to ${this.brokerHost}:${this.brokerPort}. Subscribing to topic: ${this.topic}`);
           try {
             this.client.subscribe(this.topic, { qos: 1 });
+            this.topicSubscribed = true;
           } catch (subErr) {
+            this.topicSubscribed = false;
             console.error('[MQTT] Failed to subscribe:', subErr);
           }
         },
         onFailure: (err: any) => {
+          this.topicSubscribed = false;
           console.warn('[MQTT] Connection failed:', err?.errorMessage || err);
           this.setStatus('DISCONNECTED');
           this.scheduleReconnect();
@@ -176,6 +186,15 @@ export class MqttService {
 
     const bat = typeof parsed.bat === 'number' ? Math.max(0, Math.min(100, parsed.bat)) : (typeof parsed.batteryPercent === 'number' ? parsed.batteryPercent : 85);
 
+    // Duplicate message detection
+    const signature = `${uid}-${trno}-${chno}-${cm1}-${cm2}-${wlp1}-${wlp2}-${bat}-${time}`;
+    const now = Date.now();
+    if (signature === this.lastPayloadSignature && now - this.lastMessageReceivedTime < 1000) {
+      return this.lastTelemetry;
+    }
+    this.lastPayloadSignature = signature;
+    this.lastMessageReceivedTime = now;
+
     const telemetry: LiveTelemetryPayload = {
       uid,
       lat,
@@ -191,11 +210,16 @@ export class MqttService {
       bat,
       chno,
       trno,
-      receivedAt: Date.now(),
+      receivedAt: now,
       isStale: false,
     };
 
     this.lastTelemetry = telemetry;
+    this.historyBuffer.unshift(telemetry);
+    if (this.historyBuffer.length > 500) {
+      this.historyBuffer.pop();
+    }
+
     this.setStatus('CONNECTED');
     this.resetStaleTimer();
 
@@ -278,8 +302,26 @@ export class MqttService {
     return this.lastTelemetry;
   }
 
+  getTelemetryHistory(filter?: { trno?: string; chno?: string }): LiveTelemetryPayload[] {
+    if (!filter) return [...this.historyBuffer];
+    return this.historyBuffer.filter((item) => {
+      if (filter.trno && item.trno !== filter.trno) return false;
+      if (filter.chno && item.chno !== filter.chno) return false;
+      return true;
+    });
+  }
+
+  isTopicSubscribed(): boolean {
+    return this.topicSubscribed;
+  }
+
+  getTopic(): string {
+    return this.topic;
+  }
+
   disconnect(): void {
     this.isDestroyed = true;
+    this.topicSubscribed = false;
     clearTimeout(this.reconnectTimer);
     this.clearStaleTimer();
     if (this.client && this.client.isConnected && this.client.isConnected()) {

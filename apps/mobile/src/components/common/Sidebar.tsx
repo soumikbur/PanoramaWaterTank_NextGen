@@ -93,7 +93,7 @@ export const Sidebar: React.FC = () => {
 
   const trainDisplayTitle = liveTelemetry
     ? `${liveTelemetry.trno} - Live Consist`
-    : (selectedTrainNumber ? `${selectedTrainNumber} - Coromandel Express` : '12841 - Coromandel Express');
+    : (selectedTrainNumber ? `${selectedTrainNumber} - Express Fleet` : '225256 - Special Express');
 
   return (
     <aside
@@ -175,7 +175,7 @@ export const Sidebar: React.FC = () => {
 
             {/* Subtitle Zone */}
             <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 500, paddingLeft: '2px' }}>
-              South East Railway
+              {liveTelemetry ? 'Eastern Railway • Live Corridor' : 'Indian Railways SCADA'}
             </div>
 
             {/* 2x2 Metric Grid */}

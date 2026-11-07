@@ -4,6 +4,7 @@ import { useApp } from '../state/AppContext';
 import { LevelTrendCard } from '../components/charts/LevelTrendCard';
 import { BaseCard } from '../components/common/BaseCard';
 import { ApiClient } from '../api/client';
+import { mqttService } from '../services/mqttService';
 import {
   LineChart,
   MapPin,
@@ -57,7 +58,7 @@ export interface GpsHistoryRow {
 }
 
 export const HistoryScreen: React.FC = () => {
-  const { liveTank, selectedTrainNumber, setSelectedTrainNumber } = useApp();
+  const { liveTank, selectedTrainNumber, setSelectedTrainNumber, liveTelemetry } = useApp();
 
   const [activeTab, setActiveTab] = useState<'water' | 'gps' | 'battery'>('water');
   const [activeTrain, setActiveTrain] = useState<string>(selectedTrainNumber || '225256');
@@ -98,75 +99,87 @@ export const HistoryScreen: React.FC = () => {
     };
   }, [liveTank?.tankId, selectedRange]);
 
-  // Construct structured historical records
+  // Construct real historical telemetry records
   const waterHistoryRows: WaterHistoryRow[] = useMemo(() => {
-    const rows: WaterHistoryRow[] = [];
-    const now = Date.now();
-    const intervalMinutes = selectedRange === '7d' ? 60 : selectedRange === '24h' ? 30 : 15;
-    const count = selectedRange === '7d' ? 48 : selectedRange === '24h' ? 48 : 24;
+    // 1. Telemetry records buffered from real MQTT stream
+    const mqttHistory = mqttService.getTelemetryHistory();
+    const relevant = mqttHistory.filter(
+      (item) => !activeTrain || item.trno === activeTrain || activeTrain === '225256'
+    );
 
-    for (let i = 0; i < count; i++) {
-      const t = new Date(now - i * intervalMinutes * 60 * 1000);
-      const isAnomaly = i === 7; // demonstrate sudden drop anomaly
-      const arr = isAnomaly ? 38.2 : Math.max(20, Math.min(95, 78 - (i * 0.9) + (Math.sin(i) * 3)));
-      const dep = isAnomaly ? 34.0 : Math.max(15, Math.min(90, 72 - (i * 0.8) + (Math.cos(i) * 2.5)));
-      const batt = Math.max(35, 96 - Math.floor(i * 0.6));
-
-      rows.push({
-        timestamp: t.toLocaleString(),
-        trainNumber: activeTrain,
-        coachNumber: i % 2 === 0 ? 'C4' : 'C1',
-        arrivalLevel: Number(arr.toFixed(1)),
-        departureLevel: Number(dep.toFixed(1)),
-        batteryPercent: batt,
-        deviceStatus: 'Online',
-        isAnomaly,
+    if (relevant.length > 0) {
+      return relevant.map((item) => {
+        const arr = typeof item.cm1 === 'number' ? Number(((item.cm1 / 150.0) * 100).toFixed(1)) : item.wlp1;
+        const dep = typeof item.cm2 === 'number' ? Number(((item.cm2 / 150.0) * 100).toFixed(1)) : item.wlp2;
+        return {
+          timestamp: new Date(item.receivedAt).toLocaleTimeString(),
+          trainNumber: item.trno,
+          coachNumber: item.chno,
+          arrivalLevel: arr,
+          departureLevel: dep,
+          batteryPercent: item.bat,
+          deviceStatus: !item.isStale ? 'Online' : 'Offline',
+          isAnomaly: !item.wlv1 || !item.wlv2 || (dep != null && dep < 10),
+        };
       });
     }
 
-    return rows;
-  }, [activeTrain, selectedRange]);
+    // 2. Active live telemetry packet snapshot
+    if (liveTelemetry && (activeTrain === liveTelemetry.trno || activeTrain === '225256')) {
+      const arr = typeof liveTelemetry.cm1 === 'number' ? Number(((liveTelemetry.cm1 / 150.0) * 100).toFixed(1)) : liveTelemetry.wlp1;
+      const dep = typeof liveTelemetry.cm2 === 'number' ? Number(((liveTelemetry.cm2 / 150.0) * 100).toFixed(1)) : liveTelemetry.wlp2;
+      return [
+        {
+          timestamp: new Date(liveTelemetry.receivedAt).toLocaleTimeString(),
+          trainNumber: liveTelemetry.trno,
+          coachNumber: liveTelemetry.chno,
+          arrivalLevel: arr,
+          departureLevel: dep,
+          batteryPercent: liveTelemetry.bat,
+          deviceStatus: !liveTelemetry.isStale ? 'Online' : 'Offline',
+          isAnomaly: !liveTelemetry.wlv1 || !liveTelemetry.wlv2 || (dep != null && dep < 10),
+        },
+      ];
+    }
 
-  // Construct GPS Historical Records
+    return [];
+  }, [activeTrain, liveTelemetry, selectedRange]);
+
+  // Construct GPS Historical Records from live telemetry
   const gpsHistoryRows: GpsHistoryRow[] = useMemo(() => {
-    const rows: GpsHistoryRow[] = [];
-    const now = Date.now();
-    const stations = [
-      'Chennai Central',
-      'Gudur Junction',
-      'Nellore',
-      'Ongole',
-      'Vijayawada Junction',
-      'Rajahmundry',
-      'Visakhapatnam Junction',
-      'Bhubaneswar',
-      'Kharagpur',
-      'Howrah Junction',
-    ];
+    const mqttHistory = mqttService.getTelemetryHistory();
+    const relevant = mqttHistory.filter(
+      (item) => (!activeTrain || item.trno === activeTrain || activeTrain === '225256') && item.lat != null && item.long != null
+    );
 
-    const baseLat = 13.0827;
-    const baseLon = 80.2707;
-
-    for (let i = 0; i < 20; i++) {
-      const t = new Date(now - i * 30 * 60 * 1000);
-      const lat = baseLat + (i * 0.42);
-      const lon = baseLon + (i * 0.38);
-      const stIdx = Math.min(stations.length - 1, Math.floor(i / 2));
-      const spd = i % 5 === 0 ? 0 : 70 + ((i * 3) % 40);
-
-      rows.push({
-        timestamp: t.toLocaleString(),
-        trainNumber: activeTrain,
-        coachNumber: 'C4',
-        latitude: Number(lat.toFixed(4)),
-        longitude: Number(lon.toFixed(4)),
-        speedKmh: spd,
-        nearestStation: stations[stIdx],
-      });
+    if (relevant.length > 0) {
+      return relevant.map((item) => ({
+        timestamp: new Date(item.receivedAt).toLocaleTimeString(),
+        trainNumber: item.trno,
+        coachNumber: item.chno,
+        latitude: item.lat!,
+        longitude: item.long!,
+        speedKmh: item.speed ?? 0,
+        nearestStation: 'Active Track (Live GPS)',
+      }));
     }
 
-    return rows;
-  }, [activeTrain]);
+    if (liveTelemetry && (activeTrain === liveTelemetry.trno || activeTrain === '225256') && liveTelemetry.lat != null && liveTelemetry.long != null) {
+      return [
+        {
+          timestamp: new Date(liveTelemetry.receivedAt).toLocaleTimeString(),
+          trainNumber: liveTelemetry.trno,
+          coachNumber: liveTelemetry.chno,
+          latitude: liveTelemetry.lat,
+          longitude: liveTelemetry.long,
+          speedKmh: liveTelemetry.speed ?? 0,
+          nearestStation: 'Active Track (Live GPS)',
+        },
+      ];
+    }
+
+    return [];
+  }, [activeTrain, liveTelemetry]);
 
   // Filtered water history rows
   const filteredWaterRows = useMemo(() => {
@@ -503,46 +516,54 @@ export const HistoryScreen: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredWaterRows.map((row, idx) => (
-                    <tr
-                      key={idx}
-                      style={{
-                        borderBottom: '1px solid #F1F5F9',
-                        backgroundColor: row.isAnomaly ? '#EFF6FF' : idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
-                      }}
-                    >
-                      <td style={{ padding: '10px 14px', color: '#0F172A', fontWeight: 500 }}>
-                        {row.timestamp}
-                      </td>
-                      <td style={{ padding: '10px 14px', color: '#334155' }}>
-                        {row.trainNumber}
-                      </td>
-                      <td style={{ padding: '10px 14px', fontWeight: 700, color: '#2563EB' }}>
-                        {row.coachNumber}
-                      </td>
-                      <td style={{ padding: '10px 14px' }}>
-                        <strong style={{ color: row.arrivalLevel < 20 ? '#DC2626' : '#0F172A' }}>
-                          {row.arrivalLevel.toFixed(1)}%
-                        </strong>
-                      </td>
-                      <td style={{ padding: '10px 14px' }}>
-                        <strong style={{ color: row.departureLevel < 20 ? '#DC2626' : '#0F172A' }}>
-                          {row.departureLevel.toFixed(1)}%
-                        </strong>
-                      </td>
-                      <td style={{ padding: '10px 14px' }}>
-                        <span style={{ color: row.batteryPercent < 40 ? '#DC2626' : '#16A34A', fontWeight: 700 }}>
-                          {row.batteryPercent}%
-                        </span>
-                      </td>
-                      <td style={{ padding: '10px 14px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#16A34A' }} />
-                          <span style={{ color: '#16A34A', fontWeight: 600 }}>{row.deviceStatus}</span>
-                        </div>
+                  {filteredWaterRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: '#64748B', fontSize: '13px' }}>
+                        No historical telemetry records found for Train {activeTrain}. Awaiting live transmissions.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    filteredWaterRows.map((row, idx) => (
+                      <tr
+                        key={idx}
+                        style={{
+                          borderBottom: '1px solid #F1F5F9',
+                          backgroundColor: row.isAnomaly ? '#EFF6FF' : idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
+                        }}
+                      >
+                        <td style={{ padding: '10px 14px', color: '#0F172A', fontWeight: 500 }}>
+                          {row.timestamp}
+                        </td>
+                        <td style={{ padding: '10px 14px', color: '#334155' }}>
+                          {row.trainNumber}
+                        </td>
+                        <td style={{ padding: '10px 14px', fontWeight: 700, color: '#2563EB' }}>
+                          {row.coachNumber}
+                        </td>
+                        <td style={{ padding: '10px 14px' }}>
+                          <strong style={{ color: row.arrivalLevel < 20 ? '#DC2626' : '#0F172A' }}>
+                            {row.arrivalLevel.toFixed(1)}%
+                          </strong>
+                        </td>
+                        <td style={{ padding: '10px 14px' }}>
+                          <strong style={{ color: row.departureLevel < 20 ? '#DC2626' : '#0F172A' }}>
+                            {row.departureLevel.toFixed(1)}%
+                          </strong>
+                        </td>
+                        <td style={{ padding: '10px 14px' }}>
+                          <span style={{ color: row.batteryPercent < 40 ? '#DC2626' : '#16A34A', fontWeight: 700 }}>
+                            {row.batteryPercent}%
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 14px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#16A34A' }} />
+                            <span style={{ color: '#16A34A', fontWeight: 600 }}>{row.deviceStatus}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -582,37 +603,45 @@ export const HistoryScreen: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {gpsHistoryRows.map((row, idx) => (
-                  <tr
-                    key={idx}
-                    style={{
-                      borderBottom: '1px solid #F1F5F9',
-                      backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
-                    }}
-                  >
-                    <td style={{ padding: '10px 14px', color: '#0F172A', fontWeight: 500 }}>
-                      {row.timestamp}
-                    </td>
-                    <td style={{ padding: '10px 14px', color: '#334155' }}>
-                      {row.trainNumber}
-                    </td>
-                    <td style={{ padding: '10px 14px', fontWeight: 700, color: '#2563EB' }}>
-                      {row.coachNumber}
-                    </td>
-                    <td style={{ padding: '10px 14px', color: '#0F172A' }}>
-                      {row.latitude}° N
-                    </td>
-                    <td style={{ padding: '10px 14px', color: '#0F172A' }}>
-                      {row.longitude}° E
-                    </td>
-                    <td style={{ padding: '10px 14px', color: row.speedKmh > 0 ? '#0F172A' : '#64748B', fontWeight: 600 }}>
-                      {row.speedKmh > 0 ? `${row.speedKmh} km/h` : 'Halted (0 km/h)'}
-                    </td>
-                    <td style={{ padding: '10px 14px', color: '#2563EB', fontWeight: 500 }}>
-                      {row.nearestStation}
+                {gpsHistoryRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: '#64748B', fontSize: '13px' }}>
+                      No GPS telemetry fixes recorded for Train {activeTrain}. Awaiting live transmissions.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  gpsHistoryRows.map((row, idx) => (
+                    <tr
+                      key={idx}
+                      style={{
+                        borderBottom: '1px solid #F1F5F9',
+                        backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
+                      }}
+                    >
+                      <td style={{ padding: '10px 14px', color: '#0F172A', fontWeight: 500 }}>
+                        {row.timestamp}
+                      </td>
+                      <td style={{ padding: '10px 14px', color: '#334155' }}>
+                        {row.trainNumber}
+                      </td>
+                      <td style={{ padding: '10px 14px', fontWeight: 700, color: '#2563EB' }}>
+                        {row.coachNumber}
+                      </td>
+                      <td style={{ padding: '10px 14px', color: '#0F172A' }}>
+                        {row.latitude}° N
+                      </td>
+                      <td style={{ padding: '10px 14px', color: '#0F172A' }}>
+                        {row.longitude}° E
+                      </td>
+                      <td style={{ padding: '10px 14px', color: row.speedKmh > 0 ? '#0F172A' : '#64748B', fontWeight: 600 }}>
+                        {row.speedKmh > 0 ? `${row.speedKmh} km/h` : 'Halted (0 km/h)'}
+                      </td>
+                      <td style={{ padding: '10px 14px', color: '#2563EB', fontWeight: 500 }}>
+                        {row.nearestStation}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

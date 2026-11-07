@@ -386,7 +386,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setMqttBrokerStatus('CONNECTED');
       setConnectionStatus('CONNECTED');
 
-      // 1. Construct Dual Tanks from validated MQTT telemetry
+      // 1. Calculate water level percentages based on configured maximum height (150 cm)
+      const configuredMaxHeightCm = 150.0;
+      const arrivalLevelPct = telemetry.cm1 != null && configuredMaxHeightCm > 0
+        ? Number(Math.min(100, Math.max(0, (telemetry.cm1 / configuredMaxHeightCm) * 100)).toFixed(1))
+        : (telemetry.wlp1 != null ? Number(telemetry.wlp1.toFixed(1)) : null);
+
+      const departureLevelPct = telemetry.cm2 != null && configuredMaxHeightCm > 0
+        ? Number(Math.min(100, Math.max(0, (telemetry.cm2 / configuredMaxHeightCm) * 100)).toFixed(1))
+        : (telemetry.wlp2 != null ? Number(telemetry.wlp2.toFixed(1)) : null);
+
+      const arrivalVolume = arrivalLevelPct != null ? Number(((arrivalLevelPct / 100) * 500).toFixed(1)) : null;
+      const departureVolume = departureLevelPct != null ? Number(((departureLevelPct / 100) * 500).toFixed(1)) : null;
+
+      // Construct Dual Tanks from validated MQTT telemetry
       const arrivalTank: TankLiveStatus = {
         tankId: `${telemetry.uid}-arrival`,
         tankName: 'Arrival Side (Tank 1)',
@@ -395,15 +408,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         deviceId: telemetry.uid,
         trainNumber: telemetry.trno,
         coachNumber: telemetry.chno,
-        levelPercent: telemetry.wlp1,
+        levelPercent: arrivalLevelPct,
         rawLevelPercent: telemetry.wlp1,
-        volumeLiters: Number(((telemetry.wlp1 / 100) * 500).toFixed(1)),
+        volumeLiters: arrivalVolume,
         heightCm: telemetry.cm1,
         capacityLiters: 500,
-        maxHeightCm: 150,
+        maxHeightCm: configuredMaxHeightCm,
         crossSectionalAreaM2: 0.33,
-        rank: telemetry.wlp1 > 70 ? 'GOOD' : telemetry.wlp1 > 30 ? 'MODERATE' : 'LOW',
-        alarmStatus: !telemetry.wlv1 ? 'VALVE_ALERT' : telemetry.wlp1 < 10 ? 'CRITICAL_LOW' : telemetry.wlp1 < 20 ? 'WARNING_LOW' : 'NORMAL',
+        rank: arrivalLevelPct && arrivalLevelPct > 70 ? 'GOOD' : arrivalLevelPct && arrivalLevelPct > 30 ? 'MODERATE' : 'LOW',
+        alarmStatus: !telemetry.wlv1 ? 'VALVE_ALERT' : arrivalLevelPct != null && arrivalLevelPct < 10 ? 'CRITICAL_LOW' : arrivalLevelPct != null && arrivalLevelPct < 20 ? 'WARNING_LOW' : 'NORMAL',
         batteryVoltage: Number((3.2 + (telemetry.bat / 100) * 1.0).toFixed(2)),
         isOnline: !telemetry.isStale,
         hasTelemetry: true,
@@ -421,15 +434,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         deviceId: telemetry.uid,
         trainNumber: telemetry.trno,
         coachNumber: telemetry.chno,
-        levelPercent: telemetry.wlp2,
+        levelPercent: departureLevelPct,
         rawLevelPercent: telemetry.wlp2,
-        volumeLiters: Number(((telemetry.wlp2 / 100) * 500).toFixed(1)),
+        volumeLiters: departureVolume,
         heightCm: telemetry.cm2,
         capacityLiters: 500,
-        maxHeightCm: 150,
+        maxHeightCm: configuredMaxHeightCm,
         crossSectionalAreaM2: 0.33,
-        rank: telemetry.wlp2 > 70 ? 'GOOD' : telemetry.wlp2 > 30 ? 'MODERATE' : 'LOW',
-        alarmStatus: !telemetry.wlv2 ? 'VALVE_ALERT' : telemetry.wlp2 < 10 ? 'CRITICAL_LOW' : telemetry.wlp2 < 20 ? 'WARNING_LOW' : 'NORMAL',
+        rank: departureLevelPct && departureLevelPct > 70 ? 'GOOD' : departureLevelPct && departureLevelPct > 30 ? 'MODERATE' : 'LOW',
+        alarmStatus: !telemetry.wlv2 ? 'VALVE_ALERT' : departureLevelPct != null && departureLevelPct < 10 ? 'CRITICAL_LOW' : departureLevelPct != null && departureLevelPct < 20 ? 'WARNING_LOW' : 'NORMAL',
         batteryVoltage: Number((3.2 + (telemetry.bat / 100) * 1.0).toFixed(2)),
         isOnline: !telemetry.isStale,
         hasTelemetry: true,
@@ -441,6 +454,96 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       setLiveTank(arrivalTank);
       setTanks([arrivalTank, departureTank]);
+
+      // Dynamic real alarms evaluated from telemetry
+      const dynamicAlarms: AlarmItem[] = [];
+      if (!telemetry.wlv1) {
+        dynamicAlarms.push({
+          id: `alarm-s1-${telemetry.uid}`,
+          deviceId: telemetry.uid,
+          deviceUid: telemetry.uid,
+          trainNumber: telemetry.trno,
+          coachNumber: telemetry.chno,
+          tankId: `${telemetry.uid}-arrival`,
+          alarmType: 'SENSOR_FAULT',
+          severity: 'WARNING',
+          status: 'ACTIVE',
+          triggerValue: telemetry.cm1,
+          thresholdValue: 10,
+          message: `Arrival Sensor 1 (Coach ${telemetry.chno}) fault signal`,
+          triggeredAt: new Date(telemetry.receivedAt).toISOString(),
+          isAcknowledged: false,
+        });
+      }
+      if (!telemetry.wlv2) {
+        dynamicAlarms.push({
+          id: `alarm-s2-${telemetry.uid}`,
+          deviceId: telemetry.uid,
+          deviceUid: telemetry.uid,
+          trainNumber: telemetry.trno,
+          coachNumber: telemetry.chno,
+          tankId: `${telemetry.uid}-departure`,
+          alarmType: 'SENSOR_FAULT',
+          severity: 'WARNING',
+          status: 'ACTIVE',
+          triggerValue: telemetry.cm2,
+          thresholdValue: 10,
+          message: `Departure Sensor 2 (Coach ${telemetry.chno}) fault / valve closed`,
+          triggeredAt: new Date(telemetry.receivedAt).toISOString(),
+          isAcknowledged: false,
+        });
+      }
+      if (departureLevelPct != null && departureLevelPct < 10) {
+        dynamicAlarms.push({
+          id: `alarm-low-tank2-${telemetry.uid}`,
+          deviceId: telemetry.uid,
+          deviceUid: telemetry.uid,
+          trainNumber: telemetry.trno,
+          coachNumber: telemetry.chno,
+          tankId: `${telemetry.uid}-departure`,
+          alarmType: 'CRITICAL_LOW',
+          severity: 'CRITICAL',
+          status: 'ACTIVE',
+          triggerValue: departureLevelPct,
+          thresholdValue: 10,
+          message: `Departure Tank 2 (Coach ${telemetry.chno}) critical low level: ${departureLevelPct}%`,
+          triggeredAt: new Date(telemetry.receivedAt).toISOString(),
+          isAcknowledged: false,
+        });
+      }
+      if (telemetry.bat < 40) {
+        dynamicAlarms.push({
+          id: `alarm-bat-${telemetry.uid}`,
+          deviceId: telemetry.uid,
+          deviceUid: telemetry.uid,
+          trainNumber: telemetry.trno,
+          coachNumber: telemetry.chno,
+          alarmType: 'LOW_BATTERY',
+          severity: telemetry.bat < 20 ? 'CRITICAL' : 'WARNING',
+          status: 'ACTIVE',
+          triggerValue: telemetry.bat,
+          thresholdValue: 40,
+          message: `Device ${telemetry.uid} low battery: ${telemetry.bat}%`,
+          triggeredAt: new Date(telemetry.receivedAt).toISOString(),
+          isAcknowledged: false,
+        });
+      }
+
+      if (dynamicAlarms.length > 0) {
+        setActiveAlarms((prev) => {
+          const merged = [...dynamicAlarms];
+          prev.forEach((p) => {
+            if (!merged.some((m) => m.id === p.id)) merged.push(p);
+          });
+          return merged;
+        });
+        setAlarmStats((prev) => ({
+          ...prev,
+          totalActive: dynamicAlarms.length,
+          criticalCount: dynamicAlarms.filter((a) => a.severity === 'CRITICAL').length,
+          warningCount: dynamicAlarms.filter((a) => a.severity === 'WARNING').length,
+        }));
+      }
 
       // 2. Dynamic Device registration from UID
       setDevices((prev) => {
@@ -454,11 +557,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           batteryPercent: telemetry.bat,
           batteryVoltage: Number((3.2 + (telemetry.bat / 100) * 1.0).toFixed(2)),
           temperature: 28.5,
-          primaryLevel: telemetry.wlp1,
-          secondaryLevel: telemetry.wlp2,
+          primaryLevel: arrivalLevelPct ?? telemetry.wlp1,
+          secondaryLevel: departureLevelPct ?? telemetry.wlp2,
           lastSeenAt: new Date(telemetry.receivedAt).toISOString(),
           lastHeartbeat: new Date(telemetry.receivedAt).toISOString(),
-          hasActiveAlarm: !telemetry.wlv1 || !telemetry.wlv2 || telemetry.wlp1 < 15,
+          hasActiveAlarm: !telemetry.wlv1 || !telemetry.wlv2 || (arrivalLevelPct != null && arrivalLevelPct < 15),
           firmwareVersion: '2.2.0-prod',
           hardwareVersion: 'WLI-EC200U',
         };
