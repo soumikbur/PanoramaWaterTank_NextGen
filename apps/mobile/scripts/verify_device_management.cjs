@@ -293,3 +293,4 @@ preserve mapping   - assignmentStatus: 'AVAILABLE'
 runDeviceManagementVerification().then((ok) => {
   if (!ok) process.exit(1);
 });
+

@@ -660,9 +660,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/App.tsx": {
-    "mtime": 1794048093.9679804,
-    "seen": 1794051204.6118374,
-    "ast_hash": "fdcebb7d7e9a8ea17bb3ae6c6410f407",
+    "mtime": 1794052609.4590464,
+    "seen": 1794052957.5799665,
+    "ast_hash": "4c17e40692c0c72987ab5d019e8100c4",
     "semantic_hash": ""
   },
   "apps/mobile/src/api/client.ts": {
@@ -696,9 +696,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/components/common/Header.tsx": {
-    "mtime": 1794048064.0528636,
-    "seen": 1794051204.6124048,
-    "ast_hash": "49a01cf47767105f26ca5b5cd47f5c7a",
+    "mtime": 1794052660.0222976,
+    "seen": 1794052957.580578,
+    "ast_hash": "bfe38888ace841b23823e67a03e9e188",
     "semantic_hash": ""
   },
   "apps/mobile/src/components/common/InfoRow.tsx": {
@@ -708,9 +708,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/components/common/Sidebar.tsx": {
-    "mtime": 1794049075.8577662,
-    "seen": 1794051204.6124933,
-    "ast_hash": "88a80a6f9087809d4e1934ccfc5bd771",
+    "mtime": 1794052737.8772962,
+    "seen": 1794052957.580662,
+    "ast_hash": "de48d13336c3621233b5908d1fceff03",
     "semantic_hash": ""
   },
   "apps/mobile/src/components/common/StatusBadge.tsx": {
@@ -762,9 +762,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/screens/DashboardScreen.tsx": {
-    "mtime": 1793946323.816584,
-    "seen": 1793946869.707073,
-    "ast_hash": "039eb3a61cee6cc7eaad54fb666d8c4d",
+    "mtime": 1794052602.3236587,
+    "seen": 1794052957.5819702,
+    "ast_hash": "bfeb691021898cc54491dc98130a11da",
     "semantic_hash": ""
   },
   "apps/mobile/src/screens/DevicesScreen.tsx": {
@@ -3312,9 +3312,9 @@
     "semantic_hash": ""
   },
   "backend/static/assets/index.js": {
-    "mtime": 1794052092.3881516,
-    "seen": 1794052110.4352064,
-    "ast_hash": "45a1c16af219323928a021b39e99ff77",
+    "mtime": 1794052939.4993303,
+    "seen": 1794052957.597087,
+    "ast_hash": "e65f397898e26df1ea51fcde7b8b77da",
     "semantic_hash": ""
   },
   "scripts/verify_react_production_app.cjs": {
@@ -3324,8 +3324,8 @@
     "semantic_hash": ""
   },
   "backend/static/index.html": {
-    "mtime": 1794052092.3891485,
-    "seen": 1794052110.4799268,
+    "mtime": 1794052939.5003297,
+    "seen": 1794052957.6215925,
     "ast_hash": "b992a7156f1fd5efe1b14226739d1269",
     "semantic_hash": ""
   },
@@ -3660,8 +3660,8 @@
     "semantic_hash": ""
   },
   "backend/static/404.html": {
-    "mtime": 1794052092.3896482,
-    "seen": 1794052110.4799228,
+    "mtime": 1794052939.5008302,
+    "seen": 1794052957.62159,
     "ast_hash": "428ecfd8ac04dbed543894a9d68f1dae",
     "semantic_hash": ""
   },
@@ -3702,9 +3702,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/services/router.ts": {
-    "mtime": 1794048113.5477111,
-    "seen": 1794051204.6150541,
-    "ast_hash": "9de2b5939291fcef810f89b8091bacf6",
+    "mtime": 1794052595.051776,
+    "seen": 1794052957.5833962,
+    "ast_hash": "8c684127ba9d9827c9af44ad9cc1f4aa",
     "semantic_hash": ""
   },
   "WLI_DOCS/COMPLETE_WEB_AUDIT_REPORT.md": {
@@ -3726,9 +3726,9 @@
     "semantic_hash": ""
   },
   "WLI_DOCS/MQTT_12_SCENARIOS_VERIFICATION_REPORT.json": {
-    "mtime": 1794049674.1899927,
-    "seen": 1794051204.59975,
-    "ast_hash": "cda662105b9bd589e97180d5a4475cff",
+    "mtime": 1794052904.6419463,
+    "seen": 1794052957.5674229,
+    "ast_hash": "c2ab655c83a38681834cf3c300057567",
     "semantic_hash": ""
   },
   "apps/mobile/scripts/verify_12_scenarios.cjs": {
@@ -3768,9 +3768,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/scripts/verify_device_management.cjs": {
-    "mtime": 1794052060.1848552,
-    "seen": 1794052110.4250014,
-    "ast_hash": "53c361c5959503d1804e60b3c16b239e",
+    "mtime": 1794052204.7282553,
+    "seen": 1794052957.579204,
+    "ast_hash": "ddc85bb2c01db1838631d063a2705a3f",
     "semantic_hash": ""
   },
   "apps/mobile/src/services/deviceRegistry.ts": {
@@ -3780,9 +3780,15 @@
     "semantic_hash": ""
   },
   "DEVICE_MANAGEMENT_AUDIT.md": {
-    "mtime": 1794052065.86809,
-    "seen": 1794052110.452202,
+    "mtime": 1794052931.253605,
+    "seen": 1794052957.6088958,
     "ast_hash": "e874216eef8b7ae8c659fe00af8ea394",
+    "semantic_hash": ""
+  },
+  "apps/mobile/scripts/verify_navigation_and_dashboard.cjs": {
+    "mtime": 1794052858.6601562,
+    "seen": 1794052957.5796237,
+    "ast_hash": "28211e3cf624bd0995b79a73c553b43e",
     "semantic_hash": ""
   },
   "apps/mobile/package-lock.json": {

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { colors, typography } from '../../theme';
 import { useApp, ScreenName } from '../../state/AppContext';
 import { useDisplayPreferences } from '../../context/DisplayPreferencesContext';
+import { AppRouter } from '../../services/router';
 import { DEFAULT_CORRIDOR_STATIONS, TrainOverviewItem, TankLiveStatus, Device } from '../../types';
 import panoramaLogoHeader from '../../assets/panorama_logo_header.png';
 import panoramaLogoIcon from '../../assets/panorama_logo_icon.png';
@@ -101,8 +102,8 @@ export const Header: React.FC = () => {
       subtitle: 'Sign in to access Panorama SCADA console',
     },
     dashboard: {
-      title: 'Train Management',
-      subtitle: 'Railway Fleet Operations & Consist Management',
+      title: 'Water Tank Dashboard',
+      subtitle: 'SCADA Telemetry, Dual Tanks, Consist & Fleet Status',
     },
     trains: {
       title: 'Train Management',
@@ -509,40 +510,72 @@ export const Header: React.FC = () => {
         flexShrink: 0,
       }}
     >
-      {/* Left: Panorama Icon, Home Button, Divider, and Page Title/Subtitle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-        {/* Official Panorama Icon */}
+      {/* Left: Panorama Logo, Compact Branding, Home Button, Divider, and Page Title/Subtitle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+        {/* Official Panorama Logo and Compact Two-Line Branding */}
         <div
-          onClick={() => setActiveScreen('dashboard')}
+          onClick={() => {
+            setActiveScreen('dashboard');
+            AppRouter.navigate('dashboard');
+          }}
           style={{
             display: 'flex',
             alignItems: 'center',
+            gap: '10px',
             cursor: 'pointer',
+            paddingRight: '2px',
           }}
-          title="Panorama Water Tank Monitor"
+          title="Panorama Water Tank Monitor — Go to Dashboard"
         >
           <img
             src={panoramaLogoIcon}
             alt="Panorama"
             style={{
-              width: '26px',
-              height: '26px',
+              width: '28px',
+              height: '28px',
               objectFit: 'contain',
-              borderRadius: '4px',
+              borderRadius: '6px',
             }}
           />
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.15' }}>
+            <span
+              style={{
+                fontSize: '13px',
+                fontWeight: 800,
+                color: '#0F172A',
+                letterSpacing: '0.4px',
+                fontFamily: typography.fontFamily,
+              }}
+            >
+              PANORAMA WATER
+            </span>
+            <span
+              style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                color: '#2563EB',
+                letterSpacing: '0.6px',
+                fontFamily: typography.fontFamily,
+              }}
+            >
+              TANK MONITOR
+            </span>
+          </div>
         </div>
 
         {/* Home Button (Qt-style 34x34 rounded button) */}
         <button
-          onClick={() => setActiveScreen('dashboard')}
-          title="Dashboard / Train Management"
+          onClick={() => {
+            setActiveScreen('dashboard');
+            AppRouter.navigate('dashboard');
+          }}
+          title="Home — Go to Dashboard"
           style={{
             width: '34px',
             height: '34px',
             borderRadius: '6px',
-            backgroundColor: '#FFFFFF',
-            border: '1px solid #DCE3EA',
+            backgroundColor: activeScreen === 'dashboard' ? '#EFF6FF' : '#FFFFFF',
+            border: activeScreen === 'dashboard' ? '1px solid #2563EB' : '1px solid #DCE3EA',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -551,19 +584,23 @@ export const Header: React.FC = () => {
             transition: 'all 0.15s ease',
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#EFF6FF';
-            (e.currentTarget as HTMLButtonElement).style.borderColor = '#2563EB';
+            if (activeScreen !== 'dashboard') {
+              (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#EFF6FF';
+              (e.currentTarget as HTMLButtonElement).style.borderColor = '#2563EB';
+            }
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#FFFFFF';
-            (e.currentTarget as HTMLButtonElement).style.borderColor = '#DCE3EA';
+            if (activeScreen !== 'dashboard') {
+              (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#FFFFFF';
+              (e.currentTarget as HTMLButtonElement).style.borderColor = '#DCE3EA';
+            }
           }}
         >
           <Home size={17} strokeWidth={1.8} />
         </button>
 
         {/* Vertical Divider */}
-        <div style={{ width: '1px', height: '26px', backgroundColor: '#DCE3EA', margin: '0 2px' }} />
+        <div style={{ width: '1px', height: '24px', backgroundColor: '#DCE3EA', margin: '0 2px' }} />
 
         {/* Page Title & Subtitle Column */}
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>

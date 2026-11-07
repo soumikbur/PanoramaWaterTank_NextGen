@@ -55,8 +55,9 @@ export const Sidebar: React.FC = () => {
   const isConnected = connectionStatus === 'CONNECTED' || mqttConnectionStatus === 'CONNECTED';
   const isAdmin = currentUser?.role === 'ADMIN';
 
-  // Navigation Items exactly matching Qt Sidebar.qml specification
+  // Navigation Items matching restructured SCADA specification
   const primaryNavItems: NavItemDef[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'trains', label: 'Train Management', icon: Train },
     { id: 'watertank', label: 'All Tanks', icon: Gauge },
     { id: 'devices', label: 'Devices', icon: Cpu },
@@ -68,9 +69,6 @@ export const Sidebar: React.FC = () => {
 
   const systemNavItems: NavItemDef[] = [
     { id: 'settings', label: 'Settings', icon: SettingsIcon },
-    { id: 'settings', label: 'Configuration', icon: Sliders },
-    { id: 'users', label: 'Users', icon: UsersIcon },
-    { id: 'logs', label: 'Logs', icon: ScrollText },
   ];
 
   const onlineDevicesCount = devices.filter((d) => d.isOnline ?? d.is_online).length;
@@ -115,46 +113,7 @@ export const Sidebar: React.FC = () => {
         overflow: 'hidden',
       }}
     >
-      {/* 0. BRANDING HEADER AREA (Matching Qt Sidebar.qml and Image 2) */}
-      <div
-        style={{
-          padding: isCollapsed ? '14px 10px 10px 10px' : '14px 14px 10px 14px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          borderBottom: '1px solid #E2E8F0',
-          flexShrink: 0,
-        }}
-      >
-        <div
-          style={{
-            width: '38px',
-            height: '38px',
-            borderRadius: '10px',
-            backgroundColor: '#EFF6FF',
-            border: '1px solid #DBEAFE',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#2563EB',
-            flexShrink: 0,
-          }}
-        >
-          <Droplet size={20} fill="#2563EB" color="#2563EB" />
-        </div>
-        {!isCollapsed && (
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', letterSpacing: '0.6px', lineHeight: '18px' }}>
-              PANORAMA
-            </span>
-            <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748B', lineHeight: '14px' }}>
-              Water Tank Monitor
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* 1. TOP: TRAIN SUMMARY CARD (Matching Qt Sidebar.qml and Image 2) */}
+      {/* 1. TOP: TRAIN SUMMARY CARD (Directly at top of sidebar) */}
       <div style={{ padding: isCollapsed ? '12px 10px 6px 10px' : '12px 12px 6px 12px', flexShrink: 0 }}>
         {!isCollapsed ? (
           <div
@@ -330,8 +289,11 @@ export const Sidebar: React.FC = () => {
 
         {primaryNavItems.map((item) => {
           const isActive =
-            activeScreen === item.id ||
-            (item.id === 'trains' && (activeScreen === 'dashboard' || activeScreen === 'coaches' || activeScreen === 'coach-details'));
+            item.id === 'dashboard'
+              ? activeScreen === 'dashboard'
+              : item.id === 'trains'
+              ? activeScreen === 'trains' || activeScreen === 'coaches' || activeScreen === 'coach-details'
+              : activeScreen === item.id;
           const IconComp = item.icon;
 
           return (
@@ -428,13 +390,13 @@ export const Sidebar: React.FC = () => {
           </div>
         )}
 
-        {systemNavItems.map((item, idx) => {
-          const isActive = activeScreen === item.id && (idx === 0 || activeScreen !== 'settings');
+        {systemNavItems.map((item) => {
+          const isActive = activeScreen === item.id;
           const IconComp = item.icon;
 
           return (
             <button
-              key={`${item.id}-${item.label}-${idx}`}
+              key={`${item.id}-${item.label}`}
               data-screen={item.id}
               className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
               onClick={() => setActiveScreen(item.id)}

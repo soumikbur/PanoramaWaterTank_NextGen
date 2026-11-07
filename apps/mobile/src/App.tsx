@@ -106,11 +106,11 @@ const MainContent: React.FC = () => {
           boxSizing: 'border-box',
         }}
       >
-        <ErrorBoundary fallbackTitle="Screen Error" onReset={() => setActiveScreen('trains')}>
+        <ErrorBoundary fallbackTitle="Screen Error" onReset={() => setActiveScreen('dashboard')}>
+          {activeScreen === 'dashboard' && <DashboardScreen />}
           {activeScreen === 'trains' && <TrainManagementScreen />}
           {activeScreen === 'coaches' && <CoachManagementScreen />}
           {activeScreen === 'coach-details' && <CoachDetailsScreen />}
-          {activeScreen === 'dashboard' && <TrainManagementScreen />}
           {activeScreen === 'watertank' && <WaterTankScreen />}
           {activeScreen === 'devices' && <DeviceMappingScreen />}
           {activeScreen === 'location' && <LocationScreen />}
