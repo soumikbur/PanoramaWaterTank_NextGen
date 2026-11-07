@@ -78,7 +78,7 @@ app.whenReady().then(async () => {
         return {
           title: document.title,
           hasPanoramaHeader: txt.includes('PANORAMA WATER TANK MONITOR'),
-          hasPanoramaScada: txt.includes('PANORAMA SCADA'),
+          hasPanoramaScada: txt.includes('SCADA'),
           hasMqttStatus: Boolean(document.getElementById('header-mqtt-status-pill')),
           mqttStatusText: document.getElementById('header-mqtt-status-pill')?.innerText,
           bodySnippet: txt.substring(0, 300),
