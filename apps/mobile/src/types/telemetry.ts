@@ -19,3 +19,25 @@ export interface TelemetryHistory {
   dataPoints: TelemetryPoint[];
 }
 
+export interface LiveTelemetryPayload {
+  uid: string;
+  lat: number | null;
+  long: number | null;
+  speed: number;
+  time: string;
+  cm1: number;
+  cm2: number;
+  wlp1: number;
+  wlp2: number;
+  wlv1: boolean;
+  wlv2: boolean;
+  bat: number;
+  chno: string;
+  trno: string;
+  receivedAt: number;
+  isStale?: boolean;
+}
+
+export type MqttConnectionStatus = 'CONNECTED' | 'CONNECTING' | 'STALE' | 'DISCONNECTED';
+
+

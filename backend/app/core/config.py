@@ -56,8 +56,8 @@ class Settings(BaseSettings):
     MQTT_STATUS_TOPIC: str = "panorama/status/+"
 
     # Default Fleet Information
-    DEFAULT_DEVICE_UID: str = "0026004D4B42501120353332"
-    DEFAULT_TRAIN_NUMBER: str = "12002"
+    DEFAULT_DEVICE_UID: str = "0023004D4B42501120353332"
+    DEFAULT_TRAIN_NUMBER: str = "225256"
     DEFAULT_COACH_NUMBER: str = "B4"
 
     # Default Cylindrical Tank Geometry (Exact Legacy Milestone 2 Values)

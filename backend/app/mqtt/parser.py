@@ -38,6 +38,17 @@ class TelemetryParser:
             if "coachNumber" in data and "chno" not in data:
                 data["chno"] = data["coachNumber"]
 
+            # Valve status alias normalization (wlv1 -> wlvl)
+            if "wlv1" in data and "wlvl" not in data:
+                data["wlvl"] = data["wlv1"]
+
+            # Battery percentage to voltage fallback approximation (3.2V to 4.2V range)
+            if "bat" in data and "v1" not in data and data["bat"] is not None:
+                try:
+                    data["v1"] = round(3.2 + (float(data["bat"]) / 100.0) * 1.0, 2)
+                except (ValueError, TypeError):
+                    pass
+
             # Timestamp normalization
             if "time" in data and "dt" not in data:
                 data["dt"] = data["time"]

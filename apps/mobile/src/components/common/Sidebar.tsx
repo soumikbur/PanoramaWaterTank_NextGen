@@ -1,6 +1,7 @@
 import React from 'react';
 import { typography } from '../../theme';
 import { useApp, ScreenName } from '../../state/AppContext';
+import panoramaLogoIcon from '../../assets/panorama_logo_icon.png';
 import {
   Train,
   LayoutDashboard,
@@ -125,34 +126,30 @@ export const Sidebar: React.FC = () => {
           gap: '10px',
         }}
       >
-        <div
+        <img
+          src={panoramaLogoIcon}
+          alt="Panorama"
           style={{
-            width: '32px',
-            height: '32px',
-            borderRadius: '6px',
-            backgroundColor: 'var(--color-primary-surface, #EFF6FF)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--color-primary, #2563EB)',
+            width: '28px',
+            height: '28px',
+            objectFit: 'contain',
+            borderRadius: '4px',
             flexShrink: 0,
-            border: '1px solid var(--color-primary-border, #BFDBFE)',
           }}
-        >
-          <Droplet size={18} strokeWidth={2.2} />
-        </div>
+        />
         {!sidebarCollapsed && (
           <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <span
               style={{
                 fontFamily: typography.fontFamily,
-                fontSize: '13px',
+                fontSize: '12px',
                 fontWeight: 800,
                 color: 'var(--color-text-primary, #0F172A)',
-                letterSpacing: '0.6px',
+                letterSpacing: '0.5px',
+                lineHeight: 1.2,
               }}
             >
-              WLI RAILWAY
+              PANORAMA SCADA
             </span>
             <span
               style={{
@@ -162,7 +159,7 @@ export const Sidebar: React.FC = () => {
                 fontWeight: 500,
               }}
             >
-              {isAdmin ? 'Admin SCADA Console' : 'Employee Portal'}
+              {isAdmin ? 'Admin HMI Console' : 'Water Tank Telemetry'}
             </span>
           </div>
         )}

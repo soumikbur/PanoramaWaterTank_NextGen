@@ -3,7 +3,6 @@ import { typography } from '../theme';
 import { useApp } from '../state/AppContext';
 import { TankLiveStatus } from '../types';
 import { TankVisualization } from '../components/tank/TankVisualization';
-import { DEMO_ARRIVAL_TANK, DEMO_DEPARTURE_TANK } from '../data/demonstrationData';
 import {
   Activity,
   Gauge,
@@ -45,7 +44,7 @@ export interface MonitoringRow {
 }
 
 export const MonitoringScreen: React.FC = () => {
-  const { liveTank, tanks, devices, selectedTrainNumber, setSelectedTrainNumber, setActiveScreen } = useApp();
+  const { liveTank, tanks, devices, selectedTrainNumber, setSelectedTrainNumber, setActiveScreen, liveTelemetry } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<'ALL' | 'ONLINE' | 'LOW_WATER' | 'LOW_BATTERY'>('ALL');
@@ -56,69 +55,40 @@ export const MonitoringScreen: React.FC = () => {
   const fleetData: MonitoringRow[] = useMemo(() => {
     const list: MonitoringRow[] = [];
 
-    // 1. Initial Demonstration Train & Coach: Coromandel Express 12841, C4
-    list.push({
-      trainNumber: '12841',
-      trainName: 'Coromandel Express',
-      coachNumber: 'C4',
-      coachType: 'AC Chair Car',
-      deviceCode: 'Device-1',
-      isOnline: true,
-      batteryPercent: 88,
-      arrivalLevel: 75.0,
-      arrivalHeightCm: 37.5,
-      arrivalStatus: 'NORMAL',
-      departureLevel: 68.0,
-      departureHeightCm: 34.0,
-      departureStatus: 'NORMAL',
-      gpsCoordinates: '13.0827° N, 80.2707° E',
-      hasGps: true,
-      lastCommunication: 'Active Telemetry',
-      isDemo: true,
-    });
-
-    // Add extra demonstrative coaches on 12841 to provide a realistic multi-coach rake
-    const demoConfigs = [
-      { coach: 'C1', type: 'Executive AC', dev: 'DEV-WLI-01', batt: 94, arr: 82, dep: 79 },
-      { coach: 'C2', type: 'AC 3-Tier', dev: 'DEV-WLI-02', batt: 34, arr: 64, dep: 58 }, // LOW BATTERY DEMO <40%
-      { coach: 'C3', type: 'AC 3-Tier', dev: 'DEV-WLI-03', batt: 76, arr: 18, dep: 22 }, // LOW WATER DEMO <20%
-      { coach: 'C5', type: 'Sleeper Class', dev: 'DEV-WLI-05', batt: 38, arr: 52, dep: 48 }, // LOW BATTERY DEMO <40%
-      { coach: 'C6', type: 'Sleeper Class', dev: 'DEV-WLI-06', batt: 91, arr: 90, dep: 88 },
-    ];
-
-    demoConfigs.forEach((cfg) => {
+    // 1. Live MQTT Telemetry Train & Coach
+    if (liveTelemetry) {
       list.push({
-        trainNumber: '12841',
-        trainName: 'Coromandel Express',
-        coachNumber: cfg.coach,
-        coachType: cfg.type,
-        deviceCode: cfg.dev,
-        isOnline: true,
-        batteryPercent: cfg.batt,
-        arrivalLevel: cfg.arr,
-        arrivalHeightCm: (cfg.arr / 100) * 50,
-        arrivalStatus: cfg.arr < 20 ? 'CRITICAL' : 'NORMAL',
-        departureLevel: cfg.dep,
-        departureHeightCm: (cfg.dep / 100) * 50,
-        departureStatus: cfg.dep < 20 ? 'CRITICAL' : 'NORMAL',
-        gpsCoordinates: '13.0827° N, 80.2707° E',
-        hasGps: true,
-        lastCommunication: 'Active Stream',
-        isDemo: true,
+        trainNumber: liveTelemetry.trno,
+        trainName: `Train ${liveTelemetry.trno}`,
+        coachNumber: liveTelemetry.chno,
+        coachType: 'Passenger',
+        deviceCode: liveTelemetry.uid,
+        isOnline: !liveTelemetry.isStale,
+        batteryPercent: liveTelemetry.bat,
+        arrivalLevel: liveTelemetry.wlp1,
+        arrivalHeightCm: liveTelemetry.cm1,
+        arrivalStatus: !liveTelemetry.wlv1 ? 'WARNING' : liveTelemetry.wlp1 < 20 ? 'CRITICAL' : 'NORMAL',
+        departureLevel: liveTelemetry.wlp2,
+        departureHeightCm: liveTelemetry.cm2,
+        departureStatus: !liveTelemetry.wlv2 ? 'WARNING' : liveTelemetry.wlp2 < 20 ? 'CRITICAL' : 'NORMAL',
+        gpsCoordinates: liveTelemetry.lat != null ? `${liveTelemetry.lat.toFixed(4)}° N, ${liveTelemetry.long?.toFixed(4)}° E` : 'Awaiting Fix',
+        hasGps: liveTelemetry.lat != null,
+        lastCommunication: liveTelemetry.time,
+        isDemo: false,
       });
-    });
+    }
 
     // 2. Real Backend Fleet Devices
     devices.forEach((d) => {
-      if (d.uid === 'Device-1') return; // avoid duplicate with demo
+      if (liveTelemetry && d.uid === liveTelemetry.uid) return;
       const arrLvl = liveTank?.levelPercent ?? d.primaryLevel ?? null;
       const depLvl = d.secondaryLevel ?? null;
       const batt = d.batteryPercent ?? 85;
 
       list.push({
-        trainNumber: d.trainNumber || '12002',
-        trainName: 'Shatabdi Express',
-        coachNumber: d.coachNumber || 'B1',
+        trainNumber: d.trainNumber || '225256',
+        trainName: `Express ${d.trainNumber || '225256'}`,
+        coachNumber: d.coachNumber || 'C1',
         coachType: 'Standard Coach',
         deviceCode: d.uid,
         isOnline: d.isOnline,

@@ -33,15 +33,16 @@ export const CoachDetailsScreen: React.FC = () => {
     liveTank,
     connectionStatus,
     refreshData,
+    liveTelemetry,
   } = useApp();
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const trainNum = selectedTrainNumber || '12841';
-  const coachNum = (selectedCoachNumber || 'C4').toUpperCase();
+  const trainNum = liveTelemetry?.trno || selectedTrainNumber || '225256';
+  const coachNum = (selectedCoachNumber || liveTelemetry?.chno || 'C4').toUpperCase();
 
   // Known train names mapping
   const trainNames: Record<string, { name: string; from: string; to: string; region: string }> = {
-    '12841': { name: 'Coromandel Express', from: 'Chennai (MAS)', to: 'Howrah (HWH)', region: 'South East' },
+    '225256': { name: 'Express Fleet 225256', from: 'Kharagpur (KGP)', to: 'Howrah (HWH)', region: 'South East' },
     '12002': { name: 'Shatabdi Express', from: 'New Delhi (NDLS)', to: 'Bhopal (BPL)', region: 'Northern' },
     '12951': { name: 'Mumbai Rajdhani', from: 'Mumbai Central (MMCT)', to: 'New Delhi (NDLS)', region: 'Western' },
     '12301': { name: 'Howrah Rajdhani', from: 'Howrah (HWH)', to: 'New Delhi (NDLS)', region: 'Eastern' },
@@ -71,25 +72,17 @@ export const CoachDetailsScreen: React.FC = () => {
     );
   }, [devices, coachNum, trainNum]);
 
-  const deviceId = matchingDevice?.uid || (coachNum === 'C4' ? 'Device-1' : `DEV-WLI-${coachIndex < 10 ? '0' + coachIndex : coachIndex}`);
-  const isOnline = matchingDevice?.isOnline ?? (coachIndex % 7 !== 0);
-  const batteryPercent = matchingDevice?.batteryPercent ?? (coachNum === 'C4' ? 62 : 40 + ((coachIndex * 9) % 55));
+  const deviceId = liveTelemetry?.uid || matchingDevice?.uid || `DEV-${coachNum}`;
+  const isOnline = liveTelemetry ? !liveTelemetry.isStale : (matchingDevice?.isOnline ?? false);
+  const batteryPercent = liveTelemetry ? liveTelemetry.bat : (matchingDevice?.batteryPercent ?? 0);
   const isBatteryLow = batteryPercent < 40;
 
   // Dual Tank Telemetry values
-  const arrivalPercent = coachNum === 'C4'
-    ? 70.0
-    : isOnline
-    ? 25 + ((coachIndex * 13) % 70)
-    : null;
-  const arrivalHeight = arrivalPercent != null ? (arrivalPercent / 100) * 50.0 : null;
+  const arrivalPercent = liveTelemetry ? liveTelemetry.wlp1 : (matchingDevice?.primaryLevel ?? null);
+  const arrivalHeight = liveTelemetry ? liveTelemetry.cm1 : (arrivalPercent != null ? (arrivalPercent / 100) * 50.0 : null);
 
-  const departurePercent = coachNum === 'C4'
-    ? 40.0
-    : isOnline
-    ? 20 + ((coachIndex * 11) % 65)
-    : null;
-  const departureHeight = departurePercent != null ? (departurePercent / 100) * 50.0 : null;
+  const departurePercent = liveTelemetry ? liveTelemetry.wlp2 : (matchingDevice?.secondaryLevel ?? null);
+  const departureHeight = liveTelemetry ? liveTelemetry.cm2 : (departurePercent != null ? (departurePercent / 100) * 50.0 : null);
 
   // Build TankLiveStatus objects for TankVisualization
   const arrivalTank: TankLiveStatus = useMemo(() => {
@@ -101,12 +94,12 @@ export const CoachDetailsScreen: React.FC = () => {
       trainNumber: trainNum,
       coachNumber: coachNum,
       tankName: `Arrival Side (Tank 1)`,
-      capacityLiters: 20.0,
-      maxHeightCm: 50.0,
-      crossSectionalAreaM2: 0.04,
+      capacityLiters: 500.0,
+      maxHeightCm: 150.0,
+      crossSectionalAreaM2: 0.33,
       levelPercent: arrivalPercent,
       rawLevelPercent: arrivalPercent,
-      volumeLiters: arrivalPercent != null ? (arrivalPercent / 100) * 20.0 : null,
+      volumeLiters: arrivalPercent != null ? (arrivalPercent / 100) * 500.0 : null,
       heightCm: arrivalHeight,
       rank: arrivalPercent && arrivalPercent < 20 ? 'LOW' : 'GOOD',
       alarmStatus: arrivalPercent && arrivalPercent < 15 ? 'CRITICAL_LOW' : arrivalPercent && arrivalPercent < 25 ? 'WARNING_LOW' : 'NORMAL',
@@ -128,12 +121,12 @@ export const CoachDetailsScreen: React.FC = () => {
       trainNumber: trainNum,
       coachNumber: coachNum,
       tankName: `Departure Side (Tank 2)`,
-      capacityLiters: 20.0,
-      maxHeightCm: 50.0,
-      crossSectionalAreaM2: 0.04,
+      capacityLiters: 500.0,
+      maxHeightCm: 150.0,
+      crossSectionalAreaM2: 0.33,
       levelPercent: departurePercent,
       rawLevelPercent: departurePercent,
-      volumeLiters: departurePercent != null ? (departurePercent / 100) * 20.0 : null,
+      volumeLiters: departurePercent != null ? (departurePercent / 100) * 500.0 : null,
       heightCm: departureHeight,
       rank: departurePercent && departurePercent < 20 ? 'LOW' : 'GOOD',
       alarmStatus: departurePercent && departurePercent < 15 ? 'CRITICAL_LOW' : departurePercent && departurePercent < 25 ? 'WARNING_LOW' : 'NORMAL',
@@ -637,7 +630,7 @@ export const CoachDetailsScreen: React.FC = () => {
                   Arrival Side (Tank 1)
                 </h4>
               </div>
-              <span style={{ fontSize: '11px', color: '#64748B' }}>50.0 cm / 20.0 L Capacity</span>
+              <span style={{ fontSize: '11px', color: '#64748B' }}>150.0 cm / 500.0 L Capacity</span>
             </div>
 
             <TankVisualization
@@ -709,7 +702,7 @@ export const CoachDetailsScreen: React.FC = () => {
                   Departure Side (Tank 2)
                 </h4>
               </div>
-              <span style={{ fontSize: '11px', color: '#64748B' }}>50.0 cm / 20.0 L Capacity</span>
+              <span style={{ fontSize: '11px', color: '#64748B' }}>150.0 cm / 500.0 L Capacity</span>
             </div>
 
             <TankVisualization

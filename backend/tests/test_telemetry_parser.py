@@ -55,3 +55,39 @@ def test_invalid_json():
     payload = TelemetryParser.parse_payload(b"CORRUPT_NOT_JSON")
     assert payload is None
 
+
+def test_parse_contract_payload():
+    """Verify parsing of the exact edge contract JSON payload."""
+    raw = b"""{
+        "uid": "0023004D4B42501120353332",
+        "lat": 22.557279,
+        "long": 88.352432,
+        "speed": 3.4,
+        "time": "12:15:39",
+        "cm1": 120.8,
+        "cm2": 0.0,
+        "wlp1": 12.1,
+        "wlp2": 0.0,
+        "wlv1": true,
+        "wlv2": false,
+        "bat": 83.6,
+        "chno": "CR123456",
+        "trno": "225256"
+    }"""
+    payload = TelemetryParser.parse_payload(raw)
+    assert payload is not None
+    assert payload.uid == "0023004D4B42501120353332"
+    assert payload.trno == "225256"
+    assert payload.chno == "CR123456"
+    assert payload.cm1 == 120.8
+    assert payload.cm2 == 0.0
+    assert payload.wlp1 == 12.1
+    assert payload.wlp2 == 0.0
+    assert payload.wlvl is True
+    assert payload.wlv2 is False
+    assert payload.bat == 83.6
+    assert payload.lat == 22.557279
+    assert payload.effective_longitude == 88.352432
+    assert payload.speed == 3.4
+
+

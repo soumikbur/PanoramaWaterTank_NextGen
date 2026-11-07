@@ -153,3 +153,4 @@ All 8 automated tests executed successfully against production build:
 - **CI/CD Pipeline:** `.github/workflows/backend-ci.yml` (Pytest $\rightarrow$ OpenAPI validation $\rightarrow$ Frontend build $\rightarrow$ Static asset verification $\rightarrow$ GitHub Pages deployment).
 - **Vercel Elimination:** Fully removed all Vercel references, configurations, and build hooks.
 - **Production URL:** [https://soumikbur.github.io/PanoramaWaterTank_NextGen/](https://soumikbur.github.io/PanoramaWaterTank_NextGen/)
+

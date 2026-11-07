@@ -9,10 +9,13 @@ import {
   AlarmItem,
   AlarmStats,
   UserProfile,
-  RegionSummary
+  RegionSummary,
+  LiveTelemetryPayload,
+  MqttConnectionStatus
 } from '../types';
 import { ApiClient } from '../api/client';
 import { wsService } from '../services/websocket';
+import { mqttService } from '../services/mqttService';
 import { DisplayPreferencesService, ScalePreset } from '../services/displayPreferencesService';
 import { AppRouter } from '../services/router';
 
@@ -45,6 +48,8 @@ interface AppContextType {
   alarmStats: AlarmStats;
   connectionStatus: 'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED';
   mqttBrokerStatus: 'CONNECTED' | 'DISCONNECTED' | 'UNKNOWN';
+  mqttConnectionStatus: MqttConnectionStatus;
+  liveTelemetry: LiveTelemetryPayload | null;
   currentTime: string;
   currentDate: string;
   currentUser: UserProfile | null;
@@ -96,12 +101,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [alarmStats, setAlarmStats] = useState<AlarmStats>(defaultStats);
   const [connectionStatus, setConnectionStatus] = useState<'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED'>('DISCONNECTED');
   const [mqttBrokerStatus, setMqttBrokerStatus] = useState<'CONNECTED' | 'DISCONNECTED' | 'UNKNOWN'>('UNKNOWN');
+  const [mqttConnectionStatus, setMqttConnectionStatus] = useState<MqttConnectionStatus>('DISCONNECTED');
+  const [liveTelemetry, setLiveTelemetry] = useState<LiveTelemetryPayload | null>(null);
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
-  const [selectedTrainNumber, setSelectedTrainNumber] = useState<string>('12841');
-  const [selectedCoachNumber, setSelectedCoachNumber] = useState<string>('C4');
+  const [selectedTrainNumber, setSelectedTrainNumber] = useState<string>('225256');
+  const [selectedCoachNumber, setSelectedCoachNumber] = useState<string>('CR123456');
   const [selectedTankId, setSelectedTankId] = useState<string | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [selectedStationCode, setSelectedStationCode] = useState<string | null>(null);
@@ -358,6 +365,122 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
   }, []);
 
+  // Setup Live MQTT Client stream (Topic: 0023004D4B42501120353332)
+  useEffect(() => {
+    mqttService.connect();
+
+    const unsubMqttStatus = mqttService.onStatusChange((st) => {
+      setMqttConnectionStatus(st);
+      if (st === 'CONNECTED') {
+        setConnectionStatus('CONNECTED');
+        setMqttBrokerStatus('CONNECTED');
+      } else if (st === 'CONNECTING') {
+        setConnectionStatus('RECONNECTING');
+      } else if (st === 'DISCONNECTED') {
+        setMqttBrokerStatus('DISCONNECTED');
+      }
+    });
+
+    const unsubMqttTelemetry = mqttService.onTelemetry((telemetry) => {
+      setLiveTelemetry(telemetry);
+      setMqttBrokerStatus('CONNECTED');
+      setConnectionStatus('CONNECTED');
+
+      // 1. Construct Dual Tanks from validated MQTT telemetry
+      const arrivalTank: TankLiveStatus = {
+        tankId: `${telemetry.uid}-arrival`,
+        tankName: 'Arrival Side (Tank 1)',
+        tankIndex: 1,
+        deviceUid: telemetry.uid,
+        deviceId: telemetry.uid,
+        trainNumber: telemetry.trno,
+        coachNumber: telemetry.chno,
+        levelPercent: telemetry.wlp1,
+        rawLevelPercent: telemetry.wlp1,
+        volumeLiters: Number(((telemetry.wlp1 / 100) * 500).toFixed(1)),
+        heightCm: telemetry.cm1,
+        capacityLiters: 500,
+        maxHeightCm: 150,
+        crossSectionalAreaM2: 0.33,
+        rank: telemetry.wlp1 > 70 ? 'GOOD' : telemetry.wlp1 > 30 ? 'MODERATE' : 'LOW',
+        alarmStatus: !telemetry.wlv1 ? 'VALVE_ALERT' : telemetry.wlp1 < 10 ? 'CRITICAL_LOW' : telemetry.wlp1 < 20 ? 'WARNING_LOW' : 'NORMAL',
+        batteryVoltage: Number((3.2 + (telemetry.bat / 100) * 1.0).toFixed(2)),
+        isOnline: !telemetry.isStale,
+        hasTelemetry: true,
+        isStale: !!telemetry.isStale,
+        lastUpdate: telemetry.time,
+        latitude: telemetry.lat,
+        longitude: telemetry.long,
+      };
+
+      const departureTank: TankLiveStatus = {
+        tankId: `${telemetry.uid}-departure`,
+        tankName: 'Departure Side (Tank 2)',
+        tankIndex: 2,
+        deviceUid: telemetry.uid,
+        deviceId: telemetry.uid,
+        trainNumber: telemetry.trno,
+        coachNumber: telemetry.chno,
+        levelPercent: telemetry.wlp2,
+        rawLevelPercent: telemetry.wlp2,
+        volumeLiters: Number(((telemetry.wlp2 / 100) * 500).toFixed(1)),
+        heightCm: telemetry.cm2,
+        capacityLiters: 500,
+        maxHeightCm: 150,
+        crossSectionalAreaM2: 0.33,
+        rank: telemetry.wlp2 > 70 ? 'GOOD' : telemetry.wlp2 > 30 ? 'MODERATE' : 'LOW',
+        alarmStatus: !telemetry.wlv2 ? 'VALVE_ALERT' : telemetry.wlp2 < 10 ? 'CRITICAL_LOW' : telemetry.wlp2 < 20 ? 'WARNING_LOW' : 'NORMAL',
+        batteryVoltage: Number((3.2 + (telemetry.bat / 100) * 1.0).toFixed(2)),
+        isOnline: !telemetry.isStale,
+        hasTelemetry: true,
+        isStale: !!telemetry.isStale,
+        lastUpdate: telemetry.time,
+        latitude: telemetry.lat,
+        longitude: telemetry.long,
+      };
+
+      setLiveTank(arrivalTank);
+      setTanks([arrivalTank, departureTank]);
+
+      // 2. Dynamic Device registration from UID
+      setDevices((prev) => {
+        const updatedDevice: Device = {
+          id: telemetry.uid,
+          uid: telemetry.uid,
+          name: `WLI-${telemetry.chno} (${telemetry.trno})`,
+          trainNumber: telemetry.trno,
+          coachNumber: telemetry.chno,
+          isOnline: !telemetry.isStale,
+          batteryPercent: telemetry.bat,
+          batteryVoltage: Number((3.2 + (telemetry.bat / 100) * 1.0).toFixed(2)),
+          temperature: 28.5,
+          primaryLevel: telemetry.wlp1,
+          secondaryLevel: telemetry.wlp2,
+          lastSeenAt: new Date(telemetry.receivedAt).toISOString(),
+          lastHeartbeat: new Date(telemetry.receivedAt).toISOString(),
+          hasActiveAlarm: !telemetry.wlv1 || !telemetry.wlv2 || telemetry.wlp1 < 15,
+          firmwareVersion: '2.2.0-prod',
+          hardwareVersion: 'WLI-EC200U',
+        };
+        const exists = prev.find((d) => d.uid === telemetry.uid);
+        if (exists) {
+          return prev.map((d) => (d.uid === telemetry.uid ? updatedDevice : d));
+        }
+        return [updatedDevice, ...prev];
+      });
+
+      // 3. Dynamic train & coach selection
+      setSelectedTrainNumber((prev) => (!prev || prev === '12841' ? telemetry.trno : prev));
+      setSelectedCoachNumber((prev) => (!prev || prev === 'C4' ? telemetry.chno : prev));
+    });
+
+    return () => {
+      unsubMqttStatus();
+      unsubMqttTelemetry();
+      mqttService.disconnect();
+    };
+  }, []);
+
   const acknowledgeAlarm = async (alarmId: string, comment?: string) => {
     await ApiClient.acknowledgeAlarm(alarmId, comment);
     await refreshData();
@@ -438,6 +561,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         alarmStats,
         connectionStatus,
         mqttBrokerStatus,
+        mqttConnectionStatus,
+        liveTelemetry,
         currentTime,
         currentDate,
         currentUser,

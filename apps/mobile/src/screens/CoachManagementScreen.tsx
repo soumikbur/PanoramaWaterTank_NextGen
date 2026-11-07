@@ -3,7 +3,6 @@ import { typography } from '../theme';
 import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
 import { TankLiveStatus, Device, AlarmStatus } from '../types';
-import { DEMO_TRAIN, DEMO_ARRIVAL_TANK, DEMO_DEPARTURE_TANK } from '../data/demonstrationData';
 import { TankVisualization } from '../components/tank/TankVisualization';
 import {
   Layers,
@@ -53,11 +52,12 @@ export const CoachManagementScreen: React.FC = () => {
     devices,
     tanks,
     liveTank,
+    liveTelemetry,
     connectionStatus,
     refreshData,
   } = useApp();
 
-  const [activeTrain, setActiveTrain] = useState<string>(selectedTrainNumber || '12841');
+  const [activeTrain, setActiveTrain] = useState<string>(selectedTrainNumber || '225256');
   const [viewMode, setViewMode] = useState<'track' | 'grid'>('track');
   const [selectedCoach, setSelectedCoach] = useState<CoachRecord | null>(null);
   const [isAddCoachOpen, setIsAddCoachOpen] = useState(false);
@@ -89,60 +89,51 @@ export const CoachManagementScreen: React.FC = () => {
 
   // Construct coach fleet for active train
   const coachesList: CoachRecord[] = useMemo(() => {
-    if (activeTrain === '12841') {
-      // Demo Coromandel Express with 24 Coach Capacity support
-      const baseCoaches: CoachRecord[] = [
-        {
-          id: 'coach-12841-C4',
-          coachNumber: 'C4',
-          coachType: 'AC Chair Car',
-          trainNumber: '12841',
-          deviceId: 'Device-1',
-          isOnline: true,
-          batteryPercent: 88,
-          arrivalLevel: 75.0,
-          arrivalHeightCm: 37.5,
-          departureLevel: 68.0,
-          departureHeightCm: 34.0,
-          arrivalAlarmStatus: 'NORMAL',
-          departureAlarmStatus: 'NORMAL',
-        },
-      ];
+    if (activeTrain === '225256' || (liveTelemetry && activeTrain === liveTelemetry.trno)) {
+      const trainNo = liveTelemetry?.trno || '225256';
+      const liveCoachNum = liveTelemetry?.chno || 'C4';
+      const baseCoaches: CoachRecord[] = [];
+      const coachTypes = ['Executive AC', 'AC 2-Tier', 'AC 3-Tier', 'AC Chair Car', 'Sleeper Class', 'Passenger'];
 
-      // Add default 23 sequential coaches to demonstrate 24-coach capability
-      const coachTypes = ['Executive AC', 'AC 2-Tier', 'AC 3-Tier', 'AC Chair Car', 'Sleeper Class', 'Pantry Car'];
       for (let i = 1; i <= 24; i++) {
         const cNum = `C${i}`;
-        if (cNum === 'C4') continue; // already added
         const typeIndex = (i - 1) % coachTypes.length;
-        const batt = 35 + ((i * 7) % 60); // some under 40% to demonstrate battery alert
-        const isOnline = i % 7 !== 0;
-        const arrLvl = isOnline ? 20 + ((i * 11) % 75) : null;
-        const depLvl = isOnline ? 15 + ((i * 9) % 75) : null;
+        const isLiveCoach = cNum === liveCoachNum || (cNum === 'C4' && liveCoachNum === 'CR123456');
 
-        baseCoaches.push({
-          id: `coach-12841-${cNum}`,
-          coachNumber: cNum,
-          coachType: coachTypes[typeIndex],
-          trainNumber: '12841',
-          deviceId: isOnline ? `DEV-WLI-${i < 10 ? '0' + i : i}` : 'Unassigned',
-          isOnline,
-          batteryPercent: batt,
-          arrivalLevel: arrLvl,
-          arrivalHeightCm: arrLvl ? (arrLvl / 100) * 50 : null,
-          departureLevel: depLvl,
-          departureHeightCm: depLvl ? (depLvl / 100) * 50 : null,
-          arrivalAlarmStatus: arrLvl && arrLvl < 20 ? 'WARNING' : 'NORMAL',
-          departureAlarmStatus: depLvl && depLvl < 20 ? 'WARNING' : 'NORMAL',
-        });
+        if (isLiveCoach && liveTelemetry) {
+          baseCoaches.push({
+            id: `coach-${trainNo}-${cNum}`,
+            coachNumber: cNum,
+            coachType: coachTypes[typeIndex],
+            trainNumber: trainNo,
+            deviceId: liveTelemetry.uid,
+            isOnline: !liveTelemetry.isStale,
+            batteryPercent: liveTelemetry.bat,
+            arrivalLevel: liveTelemetry.wlp1,
+            arrivalHeightCm: liveTelemetry.cm1,
+            departureLevel: liveTelemetry.wlp2,
+            departureHeightCm: liveTelemetry.cm2,
+            arrivalAlarmStatus: !liveTelemetry.wlv1 ? 'VALVE_ALERT' : liveTelemetry.wlp1 < 20 ? 'WARNING' : 'NORMAL',
+            departureAlarmStatus: !liveTelemetry.wlv2 ? 'VALVE_ALERT' : liveTelemetry.wlp2 < 20 ? 'WARNING' : 'NORMAL',
+          });
+        } else {
+          baseCoaches.push({
+            id: `coach-${trainNo}-${cNum}`,
+            coachNumber: cNum,
+            coachType: coachTypes[typeIndex],
+            trainNumber: trainNo,
+            deviceId: `DEV-${cNum}`,
+            isOnline: liveTelemetry ? !liveTelemetry.isStale : false,
+            batteryPercent: liveTelemetry ? liveTelemetry.bat : 0,
+            arrivalLevel: liveTelemetry ? liveTelemetry.wlp1 : 0,
+            arrivalHeightCm: liveTelemetry ? liveTelemetry.cm1 : 0,
+            departureLevel: liveTelemetry ? liveTelemetry.wlp2 : 0,
+            departureHeightCm: liveTelemetry ? liveTelemetry.cm2 : 0,
+            arrivalAlarmStatus: 'NORMAL',
+            departureAlarmStatus: 'NORMAL',
+          });
+        }
       }
-
-      // Sort in sequential order: C1, C2, C3, ..., C24
-      baseCoaches.sort((a, b) => {
-        const numA = parseInt(a.coachNumber.replace(/\D/g, '')) || 0;
-        const numB = parseInt(b.coachNumber.replace(/\D/g, '')) || 0;
-        return numA - numB;
-      });
 
       return baseCoaches;
     }
@@ -407,7 +398,7 @@ export const CoachManagementScreen: React.FC = () => {
                 cursor: 'pointer',
               }}
             >
-              <option value="12841">12841 &bull; Coromandel Express (24 Coaches)</option>
+              <option value="225256">225256 &bull; Express Fleet (24 Coaches)</option>
               <option value="12002">12002 &bull; Shatabdi Express</option>
               <option value="12951">12951 &bull; Mumbai Rajdhani</option>
             </select>
@@ -415,7 +406,7 @@ export const CoachManagementScreen: React.FC = () => {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: '#64748B' }}>
             <span>
-              Route: <strong>{activeTrain === '12841' ? 'Chennai Central → Howrah' : 'New Delhi → Howrah'}</strong>
+              Route: <strong>{activeTrain === '225256' ? 'Active Corridor → Destination' : 'New Delhi → Howrah'}</strong>
             </span>
             <span>&bull;</span>
             <span>

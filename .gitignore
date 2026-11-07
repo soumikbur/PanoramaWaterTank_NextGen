@@ -45,6 +45,7 @@ multi_res_*.log
 *.tmp
 screenshots_employee/
 screenshots_theme/
+screenshots_scada/
 scripts/debug_page.cjs
 scripts/measure_tank.cjs
 scripts/test_dev_server.cjs

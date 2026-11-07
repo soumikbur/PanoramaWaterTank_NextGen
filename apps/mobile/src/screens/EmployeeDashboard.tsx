@@ -4,7 +4,6 @@ import { typography } from '../theme';
 import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
 import { TrainOverviewItem, TankLiveStatus } from '../types';
-import { DEMO_TRAIN, DEMO_ARRIVAL_TANK, DEMO_DEPARTURE_TANK } from '../data/demonstrationData';
 import { useDisplayPreferences } from '../context/DisplayPreferencesContext';
 import {
   Train,
@@ -62,12 +61,15 @@ export const EmployeeDashboard: React.FC = () => {
     liveTank,
     tanks,
     devices,
+    activeAlarms,
+    liveTelemetry,
+    mqttConnectionStatus,
   } = useApp();
 
   const { dashboard } = useDisplayPreferences();
 
   const [selectedRegion, setSelectedRegion] = useState<string>('South East');
-  const [searchQuery, setSearchQuery] = useState<string>('12841');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [backendTrains, setBackendTrains] = useState<TrainOverviewItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
@@ -140,22 +142,25 @@ export const EmployeeDashboard: React.FC = () => {
 
   // Selected train object
   const currentTrain = useMemo(() => {
-    if (selectedTrainNumber === '12841' || !selectedTrainNumber) {
+    // 1. If real MQTT telemetry is active, use it as the primary live train
+    if (liveTelemetry) {
       return {
-        trainNumber: '12841',
-        name: 'Coromandel Express',
-        source: 'Chennai (MAS)',
-        destination: 'Howrah (HWH)',
-        region: 'South East',
-        status: 'Active',
-        latitude: 22.5726,
-        longitude: 88.3639,
-        speedKmh: 0,
-        nearestStation: 'Kharagpur (KGP)',
-        lastUpdate: '23 Jan 2025, 11:26:20',
+        trainNumber: liveTelemetry.trno,
+        name: `Train ${liveTelemetry.trno}`,
+        source: 'Live Route Corridor',
+        destination: 'In Service',
+        region: selectedRegion === 'ALL' ? 'Eastern' : selectedRegion,
+        status: !liveTelemetry.isStale ? 'Active' : 'Standby',
+        latitude: liveTelemetry.lat ?? 22.557279,
+        longitude: liveTelemetry.long ?? 88.352432,
+        speedKmh: liveTelemetry.speed ?? 0,
+        nearestStation: 'Active Track',
+        lastUpdate: liveTelemetry.time,
         totalCoaches: 24,
       };
     }
+
+    // 2. Otherwise look in backend registered trains
     const match = backendTrains.find((t) => t.train_number === selectedTrainNumber);
     if (match) {
       return {
@@ -165,29 +170,49 @@ export const EmployeeDashboard: React.FC = () => {
         destination: (match as any).destination || 'Station B',
         region: match.region || 'Eastern',
         status: match.is_online ? 'Active' : 'Standby',
-        latitude: (match as any).latitude || 22.5726,
-        longitude: (match as any).longitude || 88.3639,
+        latitude: (match as any).latitude || 22.557279,
+        longitude: (match as any).longitude || 88.352432,
         speedKmh: (match as any).speed_kmh || 0,
         nearestStation: (match as any).nearest_station || 'Howrah Junction (HWH)',
-        lastUpdate: match.last_telemetry || 'Just now',
+        lastUpdate: match.last_telemetry || 'Awaiting telemetry',
         totalCoaches: match.coaches_count || 24,
       };
     }
+
+    if (backendTrains.length > 0) {
+      const first = backendTrains[0];
+      return {
+        trainNumber: first.train_number,
+        name: first.name,
+        source: (first as any).source || 'Station A',
+        destination: (first as any).destination || 'Station B',
+        region: first.region || 'Eastern',
+        status: first.is_online ? 'Active' : 'Standby',
+        latitude: (first as any).latitude || 22.557279,
+        longitude: (first as any).longitude || 88.352432,
+        speedKmh: 0,
+        nearestStation: 'Station A',
+        lastUpdate: first.last_telemetry || 'Awaiting telemetry',
+        totalCoaches: first.coaches_count || 24,
+      };
+    }
+
+    // 3. Clean empty fallback
     return {
-      trainNumber: '12841',
-      name: 'Coromandel Express',
-      source: 'Chennai (MAS)',
-      destination: 'Howrah (HWH)',
-      region: 'South East',
-      status: 'Active',
-      latitude: 22.5726,
-      longitude: 88.3639,
+      trainNumber: selectedTrainNumber || '225256',
+      name: `Train ${selectedTrainNumber || '225256'}`,
+      source: 'Awaiting Route',
+      destination: 'Awaiting Route',
+      region: selectedRegion === 'ALL' ? 'Eastern' : selectedRegion,
+      status: 'Awaiting Telemetry',
+      latitude: 22.557279,
+      longitude: 88.352432,
       speedKmh: 0,
-      nearestStation: 'Kharagpur (KGP)',
-      lastUpdate: '23 Jan 2025, 11:26:20',
+      nearestStation: 'Awaiting Fix',
+      lastUpdate: 'No live telemetry received',
       totalCoaches: 24,
     };
-  }, [selectedTrainNumber, backendTrains]);
+  }, [liveTelemetry, selectedTrainNumber, backendTrains, selectedRegion]);
 
   // Generate 24 coaches for current train
   const coaches24: DashboardCoach[] = useMemo(() => {
@@ -196,45 +221,57 @@ export const EmployeeDashboard: React.FC = () => {
 
     for (let i = 1; i <= 24; i++) {
       const cNum = `C${i}`;
-      if (cNum === 'C4') {
-        // C4 matches reference image: Device-1, Passenger, 62% battery, Arrival 70%, Departure 40%
-        list.push({
-          coachNumber: 'C4',
-          coachType: 'Passenger',
-          deviceId: 'Device-1',
-          deviceStatus: 'Online',
-          batteryPercent: 62,
-          arrivalLevel: 70,
-          arrivalHeightCm: 35.0,
-          departureLevel: 40,
-          departureHeightCm: 20.0,
-        });
-      } else {
-        const typeIndex = (i - 1) % coachTypes.length;
-        // In reference image: C1, C2, C3 are healthy green (~70-85%)
-        const arr = i <= 3 ? 75 + ((i * 3) % 15) : 30 + ((i * 7) % 60);
-        const dep = i <= 3 ? 70 + ((i * 4) % 15) : 25 + ((i * 9) % 65);
-        const batt = 45 + ((i * 5) % 50);
+      const typeIndex = (i - 1) % coachTypes.length;
 
+      // If this coach matches active selection or live telemetry coach
+      const isTargetCoach = (liveTelemetry && liveTelemetry.chno === cNum) || cNum === activeCoachNum || (cNum === 'C4' && !activeCoachNum);
+
+      if (isTargetCoach && liveTelemetry) {
         list.push({
           coachNumber: cNum,
           coachType: coachTypes[typeIndex],
-          deviceId: `Device-${i}`,
-          deviceStatus: i % 8 === 0 ? 'Offline' : 'Online',
-          batteryPercent: batt,
-          arrivalLevel: arr,
-          arrivalHeightCm: (arr / 100) * 50,
-          departureLevel: dep,
-          departureHeightCm: (dep / 100) * 50,
+          deviceId: liveTelemetry.uid,
+          deviceStatus: !liveTelemetry.isStale ? 'Online' : 'Offline',
+          batteryPercent: liveTelemetry.bat,
+          arrivalLevel: liveTelemetry.wlp1,
+          arrivalHeightCm: liveTelemetry.cm1,
+          departureLevel: liveTelemetry.wlp2,
+          departureHeightCm: liveTelemetry.cm2,
+        });
+      } else if (liveTelemetry) {
+        list.push({
+          coachNumber: cNum,
+          coachType: coachTypes[typeIndex],
+          deviceId: `DEV-${cNum}`,
+          deviceStatus: !liveTelemetry.isStale ? 'Online' : 'Offline',
+          batteryPercent: liveTelemetry.bat,
+          arrivalLevel: liveTelemetry.wlp1,
+          arrivalHeightCm: liveTelemetry.cm1,
+          departureLevel: liveTelemetry.wlp2,
+          departureHeightCm: liveTelemetry.cm2,
+        });
+      } else {
+        list.push({
+          coachNumber: cNum,
+          coachType: coachTypes[typeIndex],
+          deviceId: `Awaiting`,
+          deviceStatus: 'Offline',
+          batteryPercent: 0,
+          arrivalLevel: 0,
+          arrivalHeightCm: 0,
+          departureLevel: 0,
+          departureHeightCm: 0,
         });
       }
     }
     return list;
-  }, [currentTrain.trainNumber]);
+  }, [currentTrain.trainNumber, liveTelemetry, activeCoachNum]);
 
   // Selected coach data
   const selectedCoach = useMemo(() => {
-    return coaches24.find((c) => c.coachNumber === activeCoachNum) || coaches24[3]; // default C4
+    const found = coaches24.find((c) => c.coachNumber === activeCoachNum);
+    if (found) return found;
+    return coaches24[3] || coaches24[0];
   }, [coaches24, activeCoachNum]);
 
   // Leaflet map setup for Train Location
@@ -437,6 +474,236 @@ export const EmployeeDashboard: React.FC = () => {
       )}
 
       {/* =========================================================================
+          ROW 1: SYSTEM KPI SUMMARY CARDS
+          ========================================================================= */}
+      <div
+        id="dashboard-row-1-kpis"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+          gap: '12px',
+        }}
+      >
+        {/* KPI 1: Total Devices */}
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #FFFFFF)',
+            borderRadius: '8px',
+            border: '1px solid var(--color-border, #E2E8F0)',
+            padding: '12px 14px',
+            boxShadow: 'var(--shadow-card, 0 1px 3px rgba(0,0,0,0.05))',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+          }}
+        >
+          <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
+            <Cpu size={18} />
+          </div>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--color-text-secondary, #64748B)', textTransform: 'uppercase' }}>Total Devices</div>
+            <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-text-primary, #0F172A)' }}>{devices.length || (liveTelemetry ? 1 : 0)}</div>
+          </div>
+        </div>
+
+        {/* KPI 2: Online Devices */}
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #FFFFFF)',
+            borderRadius: '8px',
+            border: '1px solid var(--color-border, #E2E8F0)',
+            padding: '12px 14px',
+            boxShadow: 'var(--shadow-card, 0 1px 3px rgba(0,0,0,0.05))',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+          }}
+        >
+          <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16A34A' }}>
+            <Activity size={18} />
+          </div>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--color-text-secondary, #64748B)', textTransform: 'uppercase' }}>Online Devices</div>
+            <div style={{ fontSize: '18px', fontWeight: 800, color: '#16A34A' }}>{devices.filter((d) => d.isOnline).length || (liveTelemetry && !liveTelemetry.isStale ? 1 : 0)}</div>
+          </div>
+        </div>
+
+        {/* KPI 3: Offline / Stale Devices */}
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #FFFFFF)',
+            borderRadius: '8px',
+            border: '1px solid var(--color-border, #E2E8F0)',
+            padding: '12px 14px',
+            boxShadow: 'var(--shadow-card, 0 1px 3px rgba(0,0,0,0.05))',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+          }}
+        >
+          <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D97706' }}>
+            <Clock size={18} />
+          </div>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--color-text-secondary, #64748B)', textTransform: 'uppercase' }}>Offline / Stale</div>
+            <div style={{ fontSize: '18px', fontWeight: 800, color: '#D97706' }}>{devices.filter((d) => !d.isOnline).length || (liveTelemetry?.isStale ? 1 : 0)}</div>
+          </div>
+        </div>
+
+        {/* KPI 4: Active Trains */}
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #FFFFFF)',
+            borderRadius: '8px',
+            border: '1px solid var(--color-border, #E2E8F0)',
+            padding: '12px 14px',
+            boxShadow: 'var(--shadow-card, 0 1px 3px rgba(0,0,0,0.05))',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+          }}
+        >
+          <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
+            <Train size={18} />
+          </div>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--color-text-secondary, #64748B)', textTransform: 'uppercase' }}>Active Trains</div>
+            <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-text-primary, #0F172A)' }}>{backendTrains.length || (liveTelemetry ? 1 : 0)}</div>
+          </div>
+        </div>
+
+        {/* KPI 5: Active Coaches */}
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #FFFFFF)',
+            borderRadius: '8px',
+            border: '1px solid var(--color-border, #E2E8F0)',
+            padding: '12px 14px',
+            boxShadow: 'var(--shadow-card, 0 1px 3px rgba(0,0,0,0.05))',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+          }}
+        >
+          <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569' }}>
+            <Layers size={18} />
+          </div>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--color-text-secondary, #64748B)', textTransform: 'uppercase' }}>Active Coaches</div>
+            <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-text-primary, #0F172A)' }}>{coaches24.length}</div>
+          </div>
+        </div>
+
+        {/* KPI 6: Critical Alerts */}
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #FFFFFF)',
+            borderRadius: '8px',
+            border: '1px solid var(--color-border, #E2E8F0)',
+            padding: '12px 14px',
+            boxShadow: 'var(--shadow-card, 0 1px 3px rgba(0,0,0,0.05))',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+          }}
+        >
+          <div style={{ width: '36px', height: '36px', borderRadius: '8px', backgroundColor: '#FEE2E2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#DC2626' }}>
+            <AlertTriangle size={18} />
+          </div>
+          <div>
+            <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--color-text-secondary, #64748B)', textTransform: 'uppercase' }}>System Alerts</div>
+            <div style={{ fontSize: '18px', fontWeight: 800, color: '#DC2626' }}>
+              {activeAlarms.length || (liveTelemetry && (!liveTelemetry.wlv1 || !liveTelemetry.wlv2 || liveTelemetry.wlp1 < 10) ? 1 : 0)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* =========================================================================
+          ROW 2: LIVE TELEMETRY SUMMARY STRIP
+          ========================================================================= */}
+      <div
+        id="dashboard-row-2-telemetry-strip"
+        style={{
+          backgroundColor: 'var(--color-surface, #FFFFFF)',
+          borderRadius: '8px',
+          border: '1px solid var(--color-border, #CBD5E1)',
+          padding: '10px 16px',
+          boxShadow: 'var(--shadow-card, 0 1px 3px rgba(0,0,0,0.05))',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary, #64748B)' }}>Selected Train:</span>
+            <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--color-primary, #2563EB)' }}>{currentTrain.trainNumber}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary, #64748B)' }}>Selected Coach:</span>
+            <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--color-text-primary, #0F172A)' }}>{selectedCoach.coachNumber}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary, #64748B)' }}>Hardware UID:</span>
+            <span style={{ fontSize: '11px', fontWeight: 700, fontFamily: 'monospace', color: '#475569' }}>
+              {liveTelemetry?.uid || selectedCoach.deviceId || '0023004D4B42501120353332'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary, #64748B)' }}>Tank 1 (Arr):</span>
+            <span style={{ fontSize: '12px', fontWeight: 800, color: selectedCoach.arrivalLevel < 20 ? '#DC2626' : '#2563EB' }}>
+              {selectedCoach.arrivalLevel.toFixed(1)}% ({selectedCoach.arrivalHeightCm.toFixed(1)} cm)
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary, #64748B)' }}>Tank 2 (Dep):</span>
+            <span style={{ fontSize: '12px', fontWeight: 800, color: selectedCoach.departureLevel < 20 ? '#DC2626' : '#2563EB' }}>
+              {selectedCoach.departureLevel.toFixed(1)}% ({selectedCoach.departureHeightCm.toFixed(1)} cm)
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary, #64748B)' }}>Battery:</span>
+            <span style={{ fontSize: '12px', fontWeight: 800, color: selectedCoach.batteryPercent < 30 ? '#DC2626' : '#16A34A' }}>
+              {selectedCoach.batteryPercent.toFixed(1)}%
+            </span>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div
+            style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor:
+                mqttConnectionStatus === 'CONNECTED'
+                  ? '#16A34A'
+                  : mqttConnectionStatus === 'STALE'
+                  ? '#D97706'
+                  : '#DC2626',
+            }}
+          />
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              color:
+                mqttConnectionStatus === 'CONNECTED'
+                  ? '#16A34A'
+                  : mqttConnectionStatus === 'STALE'
+                  ? '#D97706'
+                  : '#DC2626',
+            }}
+          >
+            {mqttConnectionStatus === 'CONNECTED' ? 'LIVE MQTT STREAM' : mqttConnectionStatus === 'STALE' ? 'STALE TELEMETRY' : 'DISCONNECTED'}
+          </span>
+        </div>
+      </div>
+
+      {/* =========================================================================
           SECTION 1: DASHBOARD - TRAIN LIST (Matching Reference Layout)
           ========================================================================= */}
       <div
@@ -601,68 +868,117 @@ export const EmployeeDashboard: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {/* Primary Demo Train: 12841 Coromandel Express */}
-              <tr
-                onClick={() => handleSelectTrain('12841')}
-                style={{
-                  backgroundColor:
-                    currentTrain.trainNumber === '12841'
-                      ? 'var(--color-primary-surface, #EFF6FF)'
-                      : 'var(--color-surface, #FFFFFF)',
-                  borderLeft:
-                    currentTrain.trainNumber === '12841'
-                      ? '3px solid var(--color-primary, #2563EB)'
-                      : '3px solid transparent',
-                  borderBottom: '1px solid var(--color-border, #E2E8F0)',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.12s ease',
-                }}
-              >
-                <td style={{ padding: '10px 14px', fontWeight: 800, color: 'var(--color-primary, #2563EB)' }}>
-                  12841
-                </td>
-                <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--color-text-primary, #0F172A)' }}>
-                  Coromandel Express
-                </td>
-                <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
-                  Chennai (MAS)
-                </td>
-                <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
-                  Howrah (HWH)
-                </td>
-                <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
-                  South East
-                </td>
-                <td style={{ padding: '10px 14px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <div
-                      style={{
-                        width: '7px',
-                        height: '7px',
-                        borderRadius: '50%',
-                        backgroundColor: 'var(--color-status-success, #16A34A)',
-                      }}
-                    />
-                    <span style={{ fontWeight: 600, color: 'var(--color-status-success, #16A34A)' }}>Active</span>
-                  </div>
-                </td>
-                <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                    <MapPin size={13} color="var(--color-primary, #2563EB)" />
-                    22.5726&deg; N, 88.3639&deg; E
-                  </span>
-                </td>
-                <td
+              {/* Live Telemetry Train (Dynamic via MQTT Topic 0023004D4B42501120353332) */}
+              {liveTelemetry && (
+                <tr
+                  onClick={() => handleSelectTrain(liveTelemetry.trno)}
                   style={{
-                    padding: '10px 14px',
-                    textAlign: 'right',
-                    color: 'var(--color-text-muted, #64748B)',
-                    fontSize: '11px',
+                    backgroundColor:
+                      currentTrain.trainNumber === liveTelemetry.trno
+                        ? 'var(--color-primary-surface, #EFF6FF)'
+                        : 'var(--color-surface, #FFFFFF)',
+                    borderLeft:
+                      currentTrain.trainNumber === liveTelemetry.trno
+                        ? '3px solid var(--color-primary, #2563EB)'
+                        : '3px solid transparent',
+                    borderBottom: '1px solid var(--color-border, #E2E8F0)',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.12s ease',
                   }}
                 >
-                  23 Jan 2025, 11:26:20
-                </td>
-              </tr>
+                  <td style={{ padding: '10px 14px', fontWeight: 800, color: 'var(--color-primary, #2563EB)' }}>
+                    {liveTelemetry.trno}
+                  </td>
+                  <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--color-text-primary, #0F172A)' }}>
+                    Train {liveTelemetry.trno}{' '}
+                    <span
+                      style={{
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        backgroundColor: '#DCFCE7',
+                        color: '#16A34A',
+                        padding: '1px 5px',
+                        borderRadius: '4px',
+                        marginLeft: '4px',
+                      }}
+                    >
+                      LIVE MQTT
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
+                    Live Fleet Corridor
+                  </td>
+                  <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
+                    In Operation
+                  </td>
+                  <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
+                    {selectedRegion === 'ALL' ? 'Eastern' : selectedRegion}
+                  </td>
+                  <td style={{ padding: '10px 14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <div
+                        style={{
+                          width: '7px',
+                          height: '7px',
+                          borderRadius: '50%',
+                          backgroundColor: !liveTelemetry.isStale
+                            ? 'var(--color-status-success, #16A34A)'
+                            : 'var(--color-status-warning, #D97706)',
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          color: !liveTelemetry.isStale
+                            ? 'var(--color-status-success, #16A34A)'
+                            : 'var(--color-status-warning, #D97706)',
+                        }}
+                      >
+                        {!liveTelemetry.isStale ? 'Active' : 'Stale'}
+                      </span>
+                    </div>
+                  </td>
+                  <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <MapPin size={13} color="var(--color-primary, #2563EB)" />
+                      {liveTelemetry.lat != null && liveTelemetry.long != null
+                        ? `${liveTelemetry.lat.toFixed(4)}° N, ${liveTelemetry.long.toFixed(4)}° E`
+                        : 'Awaiting Fix'}
+                    </span>
+                  </td>
+                  <td
+                    style={{
+                      padding: '10px 14px',
+                      textAlign: 'right',
+                      color: 'var(--color-text-muted, #64748B)',
+                      fontSize: '11px',
+                    }}
+                  >
+                    {liveTelemetry.time}
+                  </td>
+                </tr>
+              )}
+
+              {/* Empty state when no trains and no live telemetry */}
+              {!liveTelemetry && backendTrains.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={8}
+                    style={{
+                      padding: '24px',
+                      textAlign: 'center',
+                      color: 'var(--color-text-secondary, #64748B)',
+                      fontSize: '13px',
+                    }}
+                  >
+                    No registered trains found. Awaiting telemetry packet on MQTT topic{' '}
+                    <code style={{ color: '#2563EB', fontWeight: 700, backgroundColor: '#EFF6FF', padding: '2px 6px', borderRadius: '4px' }}>
+                      0023004D4B42501120353332
+                    </code>{' '}
+                    or click &ldquo;Add Train&rdquo;.
+                  </td>
+                </tr>
+              )}
 
               {/* Additional Backend Trains */}
               {backendTrains.map((train) => {
@@ -1437,9 +1753,20 @@ export const EmployeeDashboard: React.FC = () => {
                   fontWeight: 600,
                   color: 'var(--color-text-secondary, #475569)',
                   marginTop: '4px',
+                  textAlign: 'center',
                 }}
               >
-                {selectedCoach.arrivalHeightCm.toFixed(1)} cm &bull; 14.0 L
+                {selectedCoach.arrivalHeightCm.toFixed(1)} cm &bull; {((selectedCoach.arrivalLevel / 100) * 500).toFixed(0)} L
+              </span>
+              <span
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  color: liveTelemetry ? (liveTelemetry.wlv1 ? '#16A34A' : '#DC2626') : '#64748B',
+                  marginTop: '2px',
+                }}
+              >
+                {liveTelemetry ? (liveTelemetry.wlv1 ? '✓ Valve Normal' : '⚠ Valve Alert') : 'Standby'}
               </span>
             </div>
 
@@ -1529,9 +1856,20 @@ export const EmployeeDashboard: React.FC = () => {
                   fontWeight: 600,
                   color: 'var(--color-text-secondary, #475569)',
                   marginTop: '4px',
+                  textAlign: 'center',
                 }}
               >
-                {selectedCoach.departureHeightCm.toFixed(1)} cm &bull; 8.0 L
+                {selectedCoach.departureHeightCm.toFixed(1)} cm &bull; {((selectedCoach.departureLevel / 100) * 500).toFixed(0)} L
+              </span>
+              <span
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  color: liveTelemetry ? (liveTelemetry.wlv2 ? '#16A34A' : '#DC2626') : '#64748B',
+                  marginTop: '2px',
+                }}
+              >
+                {liveTelemetry ? (liveTelemetry.wlv2 ? '✓ Valve Normal' : '⚠ Valve Alert') : 'Standby'}
               </span>
             </div>
           </div>
@@ -1612,7 +1950,7 @@ export const EmployeeDashboard: React.FC = () => {
                   <span>Speed</span>
                 </span>
                 <strong style={{ color: 'var(--color-text-primary, #0F172A)' }}>
-                  {currentTrain.speedKmh} km/h (Stopped)
+                  {currentTrain.speedKmh.toFixed(1)} km/h {currentTrain.speedKmh > 0 ? '(In Transit)' : '(Stopped)'}
                 </strong>
               </div>
 
@@ -1631,7 +1969,7 @@ export const EmployeeDashboard: React.FC = () => {
                   <Clock size={12} color="#64748B" />
                   <span>Last Update</span>
                 </span>
-                <span style={{ color: 'var(--color-text-muted, #64748B)' }}>11:26:20</span>
+                <span style={{ color: 'var(--color-text-muted, #64748B)', fontWeight: 600 }}>{currentTrain.lastUpdate}</span>
               </div>
             </div>
           </div>

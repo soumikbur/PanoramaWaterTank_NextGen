@@ -1,0 +1,99 @@
+{
+  "timestamp": "2026-11-07T07:36:43.681Z",
+  "allPassed": true,
+  "scenarios": {
+    "Scenario_1_Connect": {
+      "passed": true,
+      "details": {
+        "available": true,
+        "status": "CONNECTED",
+        "title": "Panorama Water Tank Monitor — Railway SCADA/HMI"
+      }
+    },
+    "Scenario_2_TelemetryPublish": {
+      "passed": true,
+      "details": {
+        "parsedUid": "0023004D4B42501120353332",
+        "cm1": 120.8,
+        "cm2": 0,
+        "wlp1": 12.1,
+        "wlp2": 0,
+        "bat": 83.6,
+        "trno": "225256",
+        "chno": "CR123456"
+      }
+    },
+    "Scenario_3_Tank1_Update": {
+      "passed": true,
+      "details": {
+        "hasPct": true,
+        "hasCm": true,
+        "hasValve": true
+      }
+    },
+    "Scenario_4_Tank2_Update": {
+      "passed": true,
+      "details": {
+        "hasPct": true,
+        "hasCm": true,
+        "hasValve": true
+      }
+    },
+    "Scenario_5_Battery_Update": {
+      "passed": true,
+      "details": {
+        "hasBat": true
+      }
+    },
+    "Scenario_6_GPS_Update": {
+      "passed": true,
+      "details": {
+        "hasLat": true,
+        "hasLon": true,
+        "hasSpeed": true,
+        "hasTime": true
+      }
+    },
+    "Scenario_7_TrainCoach_Update": {
+      "passed": true,
+      "details": {
+        "hasTrno": true,
+        "hasChno": true
+      }
+    },
+    "Scenario_8_Disconnect_Detection": {
+      "passed": true,
+      "details": {
+        "status": "DISCONNECTED",
+        "domHasOffline": true
+      }
+    },
+    "Scenario_9_Stale_Timeout": {
+      "passed": true,
+      "details": {
+        "status": "STALE",
+        "hasStale": true
+      }
+    },
+    "Scenario_10_Malformed_JSON": {
+      "passed": true,
+      "details": {
+        "res1Null": true,
+        "res2Null": true
+      }
+    },
+    "Scenario_11_Auto_Reconnection": {
+      "passed": true,
+      "details": {
+        "status": "CONNECTED"
+      }
+    },
+    "Scenario_12_Reload_Persistence": {
+      "passed": true,
+      "details": {
+        "hasService": true,
+        "hasTitle": true
+      }
+    }
+  }
+}

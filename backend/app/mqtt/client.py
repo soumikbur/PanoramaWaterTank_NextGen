@@ -104,6 +104,7 @@ class MqttService:
             logger.info(f"Connected to MQTT Broker successfully! Subscribing to: {settings.MQTT_TELEMETRY_TOPIC}")
             client.subscribe(settings.MQTT_TELEMETRY_TOPIC, qos=1)
             client.subscribe(settings.MQTT_STATUS_TOPIC, qos=1)
+            client.subscribe("0023004D4B42501120353332", qos=1)
         else:
             logger.error(f"MQTT Connection failed with return code {rc_code}")
 

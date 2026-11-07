@@ -26,7 +26,7 @@ export const ReportsScreen: React.FC = () => {
   const { liveTank, selectedTrainNumber, devices, tanks } = useApp();
 
   const [reportType, setReportType] = useState<EmployeeReportType>('train_water');
-  const [selectedTrain, setSelectedTrain] = useState<string>(selectedTrainNumber || '12841');
+  const [selectedTrain, setSelectedTrain] = useState<string>(selectedTrainNumber || '225256');
   const [timeRange, setTimeRange] = useState<string>('24h');
   const [dateFilter, setDateFilter] = useState<string>(new Date().toISOString().slice(0, 10));
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
@@ -68,7 +68,7 @@ export const ReportsScreen: React.FC = () => {
   const reportData = useMemo(() => {
     if (reportType === 'train_water') {
       return [
-        { train: selectedTrain, name: 'Coromandel Express', region: 'South East', totalCapacity: '480 L', currentVolume: '360 L', avgLevel: '75.0%', status: 'Nominal' },
+        { train: selectedTrain, name: `Express Fleet ${selectedTrain}`, region: 'South East', totalCapacity: '480 L', currentVolume: '360 L', avgLevel: '75.0%', status: 'Nominal' },
         { train: '12002', name: 'Shatabdi Express', region: 'Northern', totalCapacity: '240 L', currentVolume: '168 L', avgLevel: '70.0%', status: 'Nominal' },
         { train: '12951', name: 'Mumbai Rajdhani', region: 'Western', totalCapacity: '360 L', currentVolume: '234 L', avgLevel: '65.0%', status: 'Nominal' },
       ];
@@ -179,7 +179,7 @@ export const ReportsScreen: React.FC = () => {
                 cursor: 'pointer',
               }}
             >
-              <option value="12841">12841 - Coromandel Express</option>
+              <option value="225256">225256 - Express Fleet</option>
               <option value="12002">12002 - Shatabdi Express</option>
               <option value="12951">12951 - Mumbai Rajdhani</option>
             </select>

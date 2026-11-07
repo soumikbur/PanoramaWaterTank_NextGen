@@ -60,15 +60,15 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({
   let isOverflow = false;
 
   if (state === 'VALID_READING' || state === 'STALE') {
-    if (tank?.heightCm != null) {
+    if (tank?.levelPercent != null) {
+      fillPercentage = Math.max(0, Math.min(100, tank.levelPercent));
+      waterHeightCm = tank?.heightCm != null ? tank.heightCm : (fillPercentage / 100.0) * tankHeightCm;
+    } else if (tank?.heightCm != null) {
       waterHeightCm = tank.heightCm;
       fillPercentage = Math.max(0, Math.min(100, (waterHeightCm / tankHeightCm) * 100));
-    } else {
-      fillPercentage = Math.max(0, Math.min(100, tank!.levelPercent!));
-      waterHeightCm = (fillPercentage / 100.0) * tankHeightCm;
     }
     waterVolumeLiters = tank?.volumeLiters != null ? tank.volumeLiters : (fillPercentage / 100.0) * capacityLiters;
-    isOverflow = fillPercentage >= 100.0 || (tankHeightCm > 0 && waterHeightCm >= tankHeightCm);
+    isOverflow = fillPercentage >= 100.0;
   } else if (state === 'VALID_ZERO') {
     fillPercentage = 0.0;
     waterHeightCm = 0.0;

@@ -60,7 +60,7 @@ export const HistoryScreen: React.FC = () => {
   const { liveTank, selectedTrainNumber, setSelectedTrainNumber } = useApp();
 
   const [activeTab, setActiveTab] = useState<'water' | 'gps' | 'battery'>('water');
-  const [activeTrain, setActiveTrain] = useState<string>(selectedTrainNumber || '12841');
+  const [activeTrain, setActiveTrain] = useState<string>(selectedTrainNumber || '225256');
   const [selectedRange, setSelectedRange] = useState<'12h' | '24h' | '7d'>('12h');
   const [coachFilter, setCoachFilter] = useState<string>('ALL');
   const [tankFilter, setTankFilter] = useState<'ALL' | 'ARRIVAL' | 'DEPARTURE'>('ALL');
@@ -272,7 +272,7 @@ export const HistoryScreen: React.FC = () => {
                 cursor: 'pointer',
               }}
             >
-              <option value="12841">12841 &bull; Coromandel Express</option>
+              <option value="225256">225256 &bull; Express Fleet</option>
               <option value="12002">12002 &bull; Shatabdi Express</option>
               <option value="12951">12951 &bull; Mumbai Rajdhani</option>
             </select>

@@ -3,6 +3,8 @@ import { colors, typography } from '../../theme';
 import { useApp, ScreenName } from '../../state/AppContext';
 import { useDisplayPreferences } from '../../context/DisplayPreferencesContext';
 import { DEFAULT_CORRIDOR_STATIONS, TrainOverviewItem, TankLiveStatus, Device } from '../../types';
+import panoramaLogoHeader from '../../assets/panorama_logo_header.png';
+import panoramaLogoIcon from '../../assets/panorama_logo_icon.png';
 import {
   Droplet,
   Home,
@@ -53,6 +55,8 @@ export const Header: React.FC = () => {
     devices,
     regions,
     mqttBrokerStatus,
+    mqttConnectionStatus,
+    liveTelemetry,
     setSelectedTrainNumber,
     setSelectedTankId,
     setSelectedDeviceId,
@@ -512,29 +516,24 @@ export const Header: React.FC = () => {
             gap: '10px',
             cursor: 'pointer',
           }}
-          title="WLI – Water Level Indicator (Railway)"
+          title="Panorama Water Tank Monitor — Real-Time Water Tank Monitoring & Telemetry"
         >
-          <div
+          <img
+            src={panoramaLogoIcon}
+            alt="Panorama"
             style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-              backgroundColor: '#EFF6FF',
-              border: '1px solid #BFDBFE',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#2563EB',
+              width: '32px',
+              height: '32px',
+              objectFit: 'contain',
+              borderRadius: '6px',
             }}
-          >
-            <Droplet size={20} strokeWidth={2.2} />
-          </div>
+          />
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: '12px', fontWeight: 800, color: '#0F172A', letterSpacing: '0.4px', lineHeight: 1.15 }}>
-              WLI – RAILWAY
+            <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', letterSpacing: '0.3px', lineHeight: 1.15 }}>
+              PANORAMA WATER TANK MONITOR
             </span>
-            <span style={{ fontSize: '9px', fontWeight: 600, color: '#2563EB' }}>
-              Water Level Indicator
+            <span style={{ fontSize: '9px', fontWeight: 600, color: '#2563EB', letterSpacing: '0.2px' }}>
+              Real-Time Water Tank Monitoring &amp; Telemetry
             </span>
           </div>
         </div>
@@ -1156,36 +1155,72 @@ export const Header: React.FC = () => {
           </div>
         )}
 
-        {/* Online Status Pill */}
+        {/* MQTT Status Pill */}
         <div
+          id="header-mqtt-status-pill"
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            backgroundColor: isConnected ? 'var(--color-success-surface, #ECFDF5)' : isReconnecting ? 'var(--color-warning-surface, #FEF3C7)' : 'var(--color-critical-surface, #FEE2E2)',
-            border: `1px solid ${isConnected ? 'var(--color-success-border, #DCFCE7)' : isReconnecting ? 'var(--color-warning-border, #FDE68A)' : 'var(--color-critical-border, #FCA5A5)'}`,
+            backgroundColor:
+              mqttConnectionStatus === 'CONNECTED'
+                ? 'var(--color-success-surface, #ECFDF5)'
+                : mqttConnectionStatus === 'STALE'
+                ? 'var(--color-warning-surface, #FEF3C7)'
+                : mqttConnectionStatus === 'CONNECTING'
+                ? '#EFF6FF'
+                : 'var(--color-critical-surface, #FEE2E2)',
+            border: `1px solid ${
+              mqttConnectionStatus === 'CONNECTED'
+                ? 'var(--color-success-border, #DCFCE7)'
+                : mqttConnectionStatus === 'STALE'
+                ? 'var(--color-warning-border, #FDE68A)'
+                : mqttConnectionStatus === 'CONNECTING'
+                ? '#BFDBFE'
+                : 'var(--color-critical-border, #FCA5A5)'
+            }`,
             borderRadius: '16px',
             padding: '3px 10px',
           }}
-          title={`SCADA Link: ${connectionStatus}\nMQTT Broker: ${mqttBrokerStatus}\nTelemetry Stream: ${liveTank?.hasTelemetry !== false && liveTank?.levelPercent != null ? 'Active' : 'Awaiting Telemetry'}`}
+          title={`MQTT Topic: 0023004D4B42501120353332\nStatus: ${mqttConnectionStatus}\nLast Telemetry: ${liveTelemetry ? liveTelemetry.time : 'None'}`}
         >
           <div
             style={{
               width: '7px',
               height: '7px',
               borderRadius: '50%',
-              backgroundColor: isConnected ? 'var(--color-success, #16A34A)' : isReconnecting ? 'var(--color-warning, #D97706)' : 'var(--color-critical, #DC2626)',
+              backgroundColor:
+                mqttConnectionStatus === 'CONNECTED'
+                  ? 'var(--color-success, #16A34A)'
+                  : mqttConnectionStatus === 'STALE'
+                  ? '#D97706'
+                  : mqttConnectionStatus === 'CONNECTING'
+                  ? '#2563EB'
+                  : 'var(--color-critical, #DC2626)',
             }}
           />
           <span
             style={{
               fontSize: '10px',
               fontWeight: 700,
-              color: isConnected ? 'var(--color-success, #16A34A)' : isReconnecting ? 'var(--color-warning, #D97706)' : 'var(--color-critical, #DC2626)',
+              color:
+                mqttConnectionStatus === 'CONNECTED'
+                  ? 'var(--color-success, #16A34A)'
+                  : mqttConnectionStatus === 'STALE'
+                  ? '#B45309'
+                  : mqttConnectionStatus === 'CONNECTING'
+                  ? '#1D4ED8'
+                  : 'var(--color-critical, #DC2626)',
               letterSpacing: '0.4px',
             }}
           >
-            {isConnected ? 'ONLINE' : isReconnecting ? 'RECONNECT' : 'OFFLINE'}
+            {mqttConnectionStatus === 'CONNECTED'
+              ? 'MQTT LIVE'
+              : mqttConnectionStatus === 'STALE'
+              ? 'STALE DATA'
+              : mqttConnectionStatus === 'CONNECTING'
+              ? 'CONNECTING...'
+              : 'MQTT OFFLINE'}
           </span>
         </div>
 

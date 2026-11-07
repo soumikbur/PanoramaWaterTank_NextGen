@@ -3,7 +3,6 @@ import { typography } from '../theme';
 import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
 import { Device } from '../types';
-import { DEMO_DEVICE } from '../data/demonstrationData';
 import {
   Cpu,
   Plus,
@@ -37,7 +36,7 @@ export interface DeviceMappingItem {
 }
 
 export const DeviceMappingScreen: React.FC = () => {
-  const { devices, refreshData } = useApp();
+  const { devices, refreshData, liveTelemetry } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ENGAGED' | 'FREE'>('ALL');
@@ -62,31 +61,36 @@ export const DeviceMappingScreen: React.FC = () => {
   // Local device mappings state combining demo + backend
   const [localOverrides, setLocalOverrides] = useState<Record<string, { train: string | null; coach: string | null }>>({});
 
-  // Map backend devices into human-readable mapping items
+  // Map backend devices and live telemetry into human-readable mapping items
   const deviceList: DeviceMappingItem[] = useMemo(() => {
-    // 1. Initial Demonstration Device: 1 Coach -> 1 Device -> 2 Tanks
-    const demoItem: DeviceMappingItem = {
-      id: DEMO_DEVICE.id,
-      deviceCode: DEMO_DEVICE.uid,
-      name: DEMO_DEVICE.name,
-      trainNumber: localOverrides[DEMO_DEVICE.id] ? localOverrides[DEMO_DEVICE.id].train : DEMO_DEVICE.trainNumber || '12841',
-      coachNumber: localOverrides[DEMO_DEVICE.id] ? localOverrides[DEMO_DEVICE.id].coach : DEMO_DEVICE.coachNumber || 'C4',
-      assignmentStatus: (localOverrides[DEMO_DEVICE.id] ? localOverrides[DEMO_DEVICE.id].train : DEMO_DEVICE.trainNumber) ? 'ENGAGED' : 'FREE',
-      isOnline: DEMO_DEVICE.isOnline,
-      batteryPercent: DEMO_DEVICE.batteryPercent || 88,
-      hardwareModel: DEMO_DEVICE.hardwareVersion || 'WLI Node Rev-B',
-      lastCommunication: 'Active Stream',
-      isDemo: true,
-    };
+    const items: DeviceMappingItem[] = [];
 
-    // 2. Real Backend Devices
-    const backendItems: DeviceMappingItem[] = devices.map((d) => {
+    // 1. Live MQTT Telemetry Device if available
+    if (liveTelemetry) {
+      items.push({
+        id: liveTelemetry.uid,
+        deviceCode: liveTelemetry.uid,
+        name: `WLI Node (${liveTelemetry.uid.slice(-6)})`,
+        trainNumber: localOverrides[liveTelemetry.uid]?.train ?? liveTelemetry.trno,
+        coachNumber: localOverrides[liveTelemetry.uid]?.coach ?? liveTelemetry.chno,
+        assignmentStatus: 'ENGAGED',
+        isOnline: !liveTelemetry.isStale,
+        batteryPercent: liveTelemetry.bat,
+        hardwareModel: 'WLI EC200U-CN',
+        lastCommunication: liveTelemetry.time,
+        isDemo: false,
+      });
+    }
+
+    // 2. Real Backend Devices (deduplicating against liveTelemetry.uid)
+    devices.forEach((d) => {
+      if (liveTelemetry && d.uid === liveTelemetry.uid) return;
       const override = localOverrides[d.id];
       const assignedTrain = override !== undefined ? override.train : (d.trainNumber || null);
       const assignedCoach = override !== undefined ? override.coach : (d.coachNumber || null);
       const isEngaged = Boolean(assignedTrain && assignedCoach);
 
-      return {
+      items.push({
         id: d.id,
         deviceCode: d.uid,
         name: d.name || `Monitor Node (${d.uid})`,
@@ -98,11 +102,11 @@ export const DeviceMappingScreen: React.FC = () => {
         hardwareModel: d.hardwareVersion || 'Standard WLI Node',
         lastCommunication: d.lastHeartbeat ? new Date(d.lastHeartbeat).toLocaleTimeString() : 'Recent Link',
         isDemo: false,
-      };
+      });
     });
 
-    return [demoItem, ...backendItems];
-  }, [devices, localOverrides]);
+    return items;
+  }, [devices, localOverrides, liveTelemetry]);
 
   // Filtered devices
   const filteredDevices = useMemo(() => {
