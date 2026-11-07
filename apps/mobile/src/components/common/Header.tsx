@@ -94,55 +94,59 @@ export const Header: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Screen titles and subtitles
+  // Screen titles and subtitles matching Qt App.qml specification
   const screenInfo: Record<ScreenName, { title: string; subtitle: string }> = {
     login: {
       title: 'Authentication',
       subtitle: 'Sign in to access Panorama SCADA console',
     },
     dashboard: {
-      title: 'Water Tank Dashboard',
-      subtitle: 'Real-time telemetry, capacity level & diagnostic indicators',
+      title: 'Train Management',
+      subtitle: 'Railway Fleet Operations & Consist Management',
     },
     trains: {
       title: 'Train Management',
-      subtitle: 'Railway fleet operations & regional consist management',
+      subtitle: 'Railway Fleet Operations & Consist Management',
     },
     coaches: {
       title: 'Coach Management',
       subtitle: 'Consist coach status, 24-coach graphical layout & dual water tanks',
     },
+    'coach-details': {
+      title: 'Coach Details',
+      subtitle: 'Live telemetry, dual water reservoir levels & diagnostics',
+    },
     watertank: {
       title: 'All Tanks',
-      subtitle: 'Fleet-wide water reservoir level & volume monitoring',
+      subtitle: 'Global tank overview and live levels',
     },
     devices: {
-      title: 'Device Mapping',
-      subtitle: 'Operational device assignments, engaged vs free status & telemetry link',
+      title: 'Devices',
+      subtitle: 'Industrial IoT Hardware & Telemetry',
     },
     location: {
-      title: 'Location & GPS Tracking',
-      subtitle: 'Live train coordinates, speed, route map & corridor intelligence',
+      title: 'Location',
+      subtitle: 'Route intelligence & water refill monitoring',
     },
     monitoring: {
       title: 'Operational Monitoring',
       subtitle: 'Real-time multi-train coach telemetry, dual tank levels & battery alerts',
     },
     alerts: {
-      title: 'Alerts & Alarm Management',
-      subtitle: 'Active system alarms, critical thresholds & acknowledgments',
+      title: 'Alerts',
+      subtitle: 'Active alarms and event notifications',
     },
     history: {
-      title: 'Historical Telemetry Logs',
-      subtitle: 'Downsampled multi-interval sensor time-series & CSV export',
+      title: 'History',
+      subtitle: 'Historical water level trends',
     },
     reports: {
-      title: 'Operational Reports',
-      subtitle: 'Water consumption analysis, refill logs & compliance audit',
+      title: 'Reports',
+      subtitle: 'Operational reports and analytics',
     },
     settings: {
       title: 'Settings',
-      subtitle: 'Tank geometry, alarm thresholds & device configuration',
+      subtitle: 'Device and communication setup',
     },
     users: {
       title: 'User Management & RBAC',

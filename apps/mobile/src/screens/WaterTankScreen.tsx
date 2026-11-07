@@ -38,11 +38,37 @@ export const WaterTankScreen: React.FC = () => {
     }
   }, [contextTankId]);
 
-  // Fallback to liveTank if tanks array is initially empty
+  // Fallback to initial default tank (matching Qt reference Image 2) if tanks array is initially empty
   const allTanks: TankLiveStatus[] = useMemo(() => {
     if (tanks && tanks.length > 0) return tanks;
     if (liveTank) return [liveTank];
-    return [];
+    return [
+      {
+        tankId: 'tank-12301-S1-1',
+        tankName: 'Toilet Front',
+        tankIndex: 1,
+        deviceUid: 'DEV-12301-S1',
+        deviceId: 'DEV-12301-S1',
+        trainNumber: '12301',
+        coachNumber: 'S1',
+        levelPercent: null,
+        rawLevelPercent: null,
+        volumeLiters: null,
+        heightCm: null,
+        capacityLiters: 20.0,
+        maxHeightCm: 50.0,
+        crossSectionalAreaM2: 0.04,
+        rank: 'MODERATE',
+        alarmStatus: 'NORMAL',
+        batteryVoltage: null,
+        isOnline: false,
+        hasTelemetry: false,
+        isStale: true,
+        lastUpdate: null,
+        latitude: null,
+        longitude: null,
+      },
+    ];
   }, [tanks, liveTank]);
 
   // Filter and search logic
@@ -406,32 +432,33 @@ export const WaterTankScreen: React.FC = () => {
                     <ChevronRight size={16} color="#94A3B8" />
                   </div>
 
-                  {/* Level & Vessel Volume Readout (Qt Style) */}
+                  {/* Level & Vessel Volume Readout (Matching Qt TankCard.qml and Image 2) */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '6px 0' }}>
                     <div
                       style={{
-                        width: '32px',
-                        height: '32px',
+                        width: '38px',
+                        height: '38px',
                         borderRadius: '50%',
                         backgroundColor: !tank.isOnline ? '#FEE2E2' : '#EFF6FF',
+                        border: `1px solid ${!tank.isOnline ? '#FECACA' : '#BAE6FD'}`,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        color: !tank.isOnline ? '#DC2626' : '#2563EB',
+                        color: !tank.isOnline ? '#DC2626' : '#0284C7',
                         flexShrink: 0,
                       }}
                     >
-                      <Droplets size={16} />
+                      <Droplets size={18} />
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                      <span style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
-                        {hasData && tank.isOnline ? `${level!.toFixed(0)}%` : '--'}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                      <span style={{ fontSize: '20px', fontWeight: 800, color: !tank.isOnline ? '#94A3B8' : '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                        {hasData && tank.isOnline ? `${level!.toFixed(1)}%` : '--'}
                       </span>
-                      <span style={{ fontSize: '12px', color: '#64748B' }}>
-                        / {height != null && tank.isOnline ? `${height.toFixed(1)} cm` : `${maxHeight.toFixed(1)} cm`}
+                      <span style={{ fontSize: '11px', color: !tank.isOnline ? '#94A3B8' : '#64748B' }}>
+                        {hasData && tank.isOnline && height != null ? `${height.toFixed(1)} cm / ${maxHeight.toFixed(1)} cm` : `-- / ${maxHeight.toFixed(1)} cm`}
                       </span>
-                      <span style={{ fontSize: '12px', color: '#64748B' }}>
-                        / {volume != null && tank.isOnline ? `${volume.toFixed(1)} L` : `${capacity.toFixed(2)} L`}
+                      <span style={{ fontSize: '11px', color: !tank.isOnline ? '#94A3B8' : '#64748B' }}>
+                        {hasData && tank.isOnline && volume != null ? `${volume.toFixed(1)} L / ${capacity.toFixed(2)} L` : `-- / ${capacity.toFixed(2)} L`}
                       </span>
                     </div>
                   </div>

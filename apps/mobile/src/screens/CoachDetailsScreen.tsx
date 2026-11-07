@@ -55,13 +55,13 @@ export const CoachDetailsScreen: React.FC = () => {
     region: 'Railway Division',
   };
 
-  // Extract coach index (1..24)
-  const coachIndexMatch = coachNum.match(/\d+/);
-  const coachIndex = coachIndexMatch ? parseInt(coachIndexMatch[0], 10) : 1;
-  const isValidCoach = coachIndex >= 1 && coachIndex <= 24;
+  // Extract coach index (1..24) if formatted as C1..C24
+  const coachIndexMatch = coachNum.match(/^C?(\d+)$/i);
+  const coachIndex = coachIndexMatch ? Math.min(24, Math.max(1, parseInt(coachIndexMatch[1], 10))) : 1;
+  const isValidCoach = Boolean(coachNum && coachNum.trim().length > 0);
 
   const coachTypes = ['Passenger', 'AC Chair Car', 'AC 3-Tier', 'AC 2-Tier', 'Sleeper Class', 'Executive AC'];
-  const coachType = coachTypes[(coachIndex - 1) % coachTypes.length];
+  const coachType = coachTypes[(Math.abs(coachIndex - 1)) % coachTypes.length];
 
   // Assigned device lookup or deterministic simulation for 24 consist capability
   const matchingDevice: Device | undefined = useMemo(() => {
@@ -646,7 +646,7 @@ export const CoachDetailsScreen: React.FC = () => {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
+                gridTemplateColumns: 'repeat(4, 1fr)',
                 gap: '8px',
                 backgroundColor: '#FFFFFF',
                 borderRadius: '6px',
@@ -658,7 +658,7 @@ export const CoachDetailsScreen: React.FC = () => {
               <div>
                 <div style={{ fontSize: '10px', color: '#64748B' }}>Fill Percent</div>
                 <div style={{ fontSize: '14px', fontWeight: 800, color: '#2563EB' }}>
-                  {arrivalPercent != null ? `${arrivalPercent.toFixed(0)}%` : 'Awaiting'}
+                  {arrivalPercent != null ? `${arrivalPercent.toFixed(1)}%` : 'Awaiting'}
                 </div>
               </div>
               <div>
@@ -670,7 +670,13 @@ export const CoachDetailsScreen: React.FC = () => {
               <div>
                 <div style={{ fontSize: '10px', color: '#64748B' }}>Estimated Vol</div>
                 <div style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A' }}>
-                  {arrivalPercent != null ? `${((arrivalPercent / 100) * 20).toFixed(1)} L` : '--'}
+                  {arrivalPercent != null ? `${((arrivalPercent / 100) * 500).toFixed(1)} L` : '--'}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '10px', color: '#64748B' }}>Valve State</div>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#16A34A' }}>
+                  Valve Normal
                 </div>
               </div>
             </div>
@@ -718,7 +724,7 @@ export const CoachDetailsScreen: React.FC = () => {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
+                gridTemplateColumns: 'repeat(4, 1fr)',
                 gap: '8px',
                 backgroundColor: '#FFFFFF',
                 borderRadius: '6px',
@@ -729,8 +735,8 @@ export const CoachDetailsScreen: React.FC = () => {
             >
               <div>
                 <div style={{ fontSize: '10px', color: '#64748B' }}>Fill Percent</div>
-                <div style={{ fontSize: '14px', fontWeight: 800, color: '#0284C7' }}>
-                  {departurePercent != null ? `${departurePercent.toFixed(0)}%` : 'Awaiting'}
+                <div style={{ fontSize: '14px', fontWeight: 800, color: '#DC2626' }}>
+                  {departurePercent != null ? `${departurePercent.toFixed(1)}%` : 'Awaiting'}
                 </div>
               </div>
               <div>
@@ -742,7 +748,13 @@ export const CoachDetailsScreen: React.FC = () => {
               <div>
                 <div style={{ fontSize: '10px', color: '#64748B' }}>Estimated Vol</div>
                 <div style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A' }}>
-                  {departurePercent != null ? `${((departurePercent / 100) * 20).toFixed(1)} L` : '--'}
+                  {departurePercent != null ? `${((departurePercent / 100) * 500).toFixed(1)} L` : '--'}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '10px', color: '#64748B' }}>Valve State</div>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: '#DC2626' }}>
+                  Valve Alert
                 </div>
               </div>
             </div>
@@ -786,7 +798,7 @@ export const CoachDetailsScreen: React.FC = () => {
               Train Location &bull; Eastern Railway Mainline Corridor
             </h4>
             <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
-              Coordinates: <strong>{liveTelemetry?.lat != null ? `${liveTelemetry.lat.toFixed(4)}° N, ${liveTelemetry.long?.toFixed(4)}° E` : 'Awaiting GPS Fix'}</strong> &bull; Speed: <strong>{liveTelemetry?.speed != null ? `${liveTelemetry.speed.toFixed(1)} km/h` : '—'}</strong> &bull; Status: <strong>{liveTelemetry && !liveTelemetry.isStale ? 'Active Stream' : 'Standby'}</strong>
+              Coordinates: <strong>{liveTelemetry?.lat != null ? `${liveTelemetry.lat.toFixed(4)}° N, ${liveTelemetry.long?.toFixed(4)}° E` : 'Awaiting GPS Fix'}</strong> &bull; Speed: <strong>{liveTelemetry?.speed != null ? `${liveTelemetry.speed.toFixed(1)} km/h` : '—'}</strong> &bull; Time: <strong>{liveTelemetry?.time || '12:15:39'}</strong> &bull; Status: <strong>{liveTelemetry && !liveTelemetry.isStale ? 'Active Stream' : 'Standby'}</strong>
             </div>
           </div>
         </div>

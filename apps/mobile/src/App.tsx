@@ -12,7 +12,6 @@ import { ShieldAlert } from 'lucide-react';
 // Screens
 import { LoginScreen } from './screens/LoginScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
-import { EmployeeDashboard } from './screens/EmployeeDashboard';
 import { TrainManagementScreen } from './screens/TrainManagementScreen';
 import { CoachManagementScreen } from './screens/CoachManagementScreen';
 import { CoachDetailsScreen } from './screens/CoachDetailsScreen';
@@ -107,11 +106,11 @@ const MainContent: React.FC = () => {
           boxSizing: 'border-box',
         }}
       >
-        <ErrorBoundary fallbackTitle="Screen Error" onReset={() => setActiveScreen('dashboard')}>
+        <ErrorBoundary fallbackTitle="Screen Error" onReset={() => setActiveScreen('trains')}>
           {activeScreen === 'trains' && <TrainManagementScreen />}
           {activeScreen === 'coaches' && <CoachManagementScreen />}
           {activeScreen === 'coach-details' && <CoachDetailsScreen />}
-          {activeScreen === 'dashboard' && <EmployeeDashboard />}
+          {activeScreen === 'dashboard' && <TrainManagementScreen />}
           {activeScreen === 'watertank' && <WaterTankScreen />}
           {activeScreen === 'devices' && <DeviceMappingScreen />}
           {activeScreen === 'location' && <LocationScreen />}

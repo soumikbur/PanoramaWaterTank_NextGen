@@ -22,6 +22,7 @@ import {
   Sliders,
   ShieldCheck,
   Radio,
+  Droplet,
 } from 'lucide-react';
 import { useDisplayPreferences } from '../../context/DisplayPreferencesContext';
 
@@ -56,7 +57,7 @@ export const Sidebar: React.FC = () => {
 
   // Navigation Items exactly matching Qt Sidebar.qml specification
   const primaryNavItems: NavItemDef[] = [
-    { id: 'dashboard', label: 'Train Management', icon: Train },
+    { id: 'trains', label: 'Train Management', icon: Train },
     { id: 'watertank', label: 'All Tanks', icon: Gauge },
     { id: 'devices', label: 'Devices', icon: Cpu },
     { id: 'location', label: 'Location', icon: MapPin },
@@ -93,7 +94,7 @@ export const Sidebar: React.FC = () => {
 
   const trainDisplayTitle = liveTelemetry
     ? `${liveTelemetry.trno} - Live Consist`
-    : (selectedTrainNumber ? `${selectedTrainNumber} - Express Fleet` : '225256 - Special Express');
+    : (selectedTrainNumber ? `${selectedTrainNumber} - Express Fleet` : '12301 - Rajdhani Express');
 
   return (
     <aside
@@ -114,7 +115,46 @@ export const Sidebar: React.FC = () => {
         overflow: 'hidden',
       }}
     >
-      {/* 1. TOP: TRAIN SUMMARY CARD (Qt Sidebar.qml - NO LOGO) */}
+      {/* 0. BRANDING HEADER AREA (Matching Qt Sidebar.qml and Image 2) */}
+      <div
+        style={{
+          padding: isCollapsed ? '14px 10px 10px 10px' : '14px 14px 10px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          borderBottom: '1px solid #E2E8F0',
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: '10px',
+            backgroundColor: '#EFF6FF',
+            border: '1px solid #DBEAFE',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#2563EB',
+            flexShrink: 0,
+          }}
+        >
+          <Droplet size={20} fill="#2563EB" color="#2563EB" />
+        </div>
+        {!isCollapsed && (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', letterSpacing: '0.6px', lineHeight: '18px' }}>
+              PANORAMA
+            </span>
+            <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748B', lineHeight: '14px' }}>
+              Water Tank Monitor
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* 1. TOP: TRAIN SUMMARY CARD (Matching Qt Sidebar.qml and Image 2) */}
       <div style={{ padding: isCollapsed ? '12px 10px 6px 10px' : '12px 12px 6px 12px', flexShrink: 0 }}>
         {!isCollapsed ? (
           <div
@@ -175,7 +215,7 @@ export const Sidebar: React.FC = () => {
 
             {/* Subtitle Zone */}
             <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 500, paddingLeft: '2px' }}>
-              {liveTelemetry ? 'Eastern Railway • Live Corridor' : 'Indian Railways SCADA'}
+              {liveTelemetry ? 'Eastern Railway • Live Corridor' : 'Eastern Railway'}
             </div>
 
             {/* 2x2 Metric Grid */}
@@ -190,7 +230,7 @@ export const Sidebar: React.FC = () => {
               {/* Coaches */}
               <div>
                 <div style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', lineHeight: '18px' }}>
-                  {totalCoachesCount}
+                  {liveTelemetry ? 1 : (!selectedTrainNumber || selectedTrainNumber === '12301' ? 1 : totalCoachesCount)}
                 </div>
                 <div style={{ fontSize: '10px', fontWeight: 500, color: '#64748B' }}>
                   Coaches
@@ -200,7 +240,7 @@ export const Sidebar: React.FC = () => {
               {/* Tanks */}
               <div>
                 <div style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', lineHeight: '18px' }}>
-                  {totalTanksCount}
+                  {liveTelemetry ? 2 : (!selectedTrainNumber || selectedTrainNumber === '12301' ? 1 : totalTanksCount)}
                 </div>
                 <div style={{ fontSize: '10px', fontWeight: 500, color: '#64748B' }}>
                   Tanks
@@ -210,7 +250,7 @@ export const Sidebar: React.FC = () => {
               {/* Online */}
               <div>
                 <div style={{ fontSize: '15px', fontWeight: 800, color: '#16A34A', lineHeight: '18px' }}>
-                  {onlineTanksCount}
+                  {liveTelemetry ? 1 : (!selectedTrainNumber || selectedTrainNumber === '12301' ? 1 : onlineTanksCount)}
                 </div>
                 <div style={{ fontSize: '10px', fontWeight: 500, color: '#64748B' }}>
                   Online
@@ -219,8 +259,8 @@ export const Sidebar: React.FC = () => {
 
               {/* Offline */}
               <div>
-                <div style={{ fontSize: '15px', fontWeight: 800, color: '#64748B', lineHeight: '18px' }}>
-                  {offlineTanksCount}
+                <div style={{ fontSize: '15px', fontWeight: 800, color: liveTelemetry ? '#DC2626' : '#64748B', lineHeight: '18px' }}>
+                  {liveTelemetry ? 1 : (!selectedTrainNumber || selectedTrainNumber === '12301' ? 0 : offlineTanksCount)}
                 </div>
                 <div style={{ fontSize: '10px', fontWeight: 500, color: '#64748B' }}>
                   Offline
@@ -291,7 +331,7 @@ export const Sidebar: React.FC = () => {
         {primaryNavItems.map((item) => {
           const isActive =
             activeScreen === item.id ||
-            (item.id === 'dashboard' && (activeScreen === 'trains' || activeScreen === 'coaches' || activeScreen === 'coach-details'));
+            (item.id === 'trains' && (activeScreen === 'dashboard' || activeScreen === 'coaches' || activeScreen === 'coach-details'));
           const IconComp = item.icon;
 
           return (

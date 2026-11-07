@@ -248,11 +248,24 @@ app.whenReady().then(async () => {
     await sleep(2500);
 
     // Login
-    console.log('[RUNNER] Triggering login...');
-    await win.webContents.executeJavaScript(\`
+    console.log('[RUNNER] Inspecting login state...');
+    const initialState = await win.webContents.executeJavaScript(\`
+      (() => ({
+        bodyText: document.body.innerText,
+        hasQuick: Boolean(document.getElementById('btn-quick-login-employee')),
+        hasUser: Boolean(document.getElementById('login-username')),
+        hash: window.location.hash
+      }))();
+    \`);
+    console.log('[RUNNER] Initial state:', JSON.stringify(initialState));
+
+    const loginResult = await win.webContents.executeJavaScript(\`
       (() => {
         const quick = document.getElementById('btn-quick-login-employee');
-        if (quick) { quick.click(); return; }
+        if (quick) {
+          quick.click();
+          return 'clicked quick';
+        }
         const u = document.getElementById('login-username');
         const p = document.getElementById('login-password');
         const btn = document.querySelector('button[type="submit"]');
@@ -262,9 +275,12 @@ app.whenReady().then(async () => {
           p.value = 'Employee@123';
           p.dispatchEvent(new Event('input', { bubbles: true }));
           btn.click();
+          return 'submitted form';
         }
+        return 'no login form found';
       })();
     \`);
+    console.log('[RUNNER] Login trigger result:', loginResult);
     await sleep(2500);
 
     // Scenario 1: Connect / MQTT Service available
@@ -325,15 +341,32 @@ app.whenReady().then(async () => {
     };
     await sleep(1500);
 
+    // Navigate to coach-details to verify live coach and dual tank telemetry
+    await win.webContents.executeJavaScript(\`
+      (() => {
+        if (typeof window.panoramaNavigate === 'function') {
+          window.panoramaNavigate('coach-details', '225256', 'CR123456');
+        } else {
+          window.location.hash = '#/coach-details?train=225256&coach=CR123456';
+          window.dispatchEvent(new Event('hashchange'));
+        }
+      })();
+    \`);
+    await sleep(2500);
+
     // Scenario 3: Tank 1 update (12.1%, 120.8 cm, Valve Normal)
     console.log('[RUNNER] Verifying Scenario 3: Tank 1 Update in DOM...');
     const s3 = await win.webContents.executeJavaScript(\`
       (() => {
         const txt = document.body.innerText;
+        console.log('[DEBUG S3 TXT]: length=' + txt.length + ' hash=' + window.location.hash);
         return {
           hasPct: txt.includes('80.5%') || txt.includes('81%') || txt.includes('12.1%'),
           hasCm: txt.includes('120.8 cm'),
           hasValve: txt.includes('Valve Normal') || txt.includes('Valve Open'),
+          hash: window.location.hash,
+          txtLen: txt.length,
+          fullTxt: txt,
         };
       })();
     \`);
@@ -518,7 +551,12 @@ app.whenReady().then(async () => {
     console.log('[RUNNER] Navigating to Coach Details & capturing...');
     await win.webContents.executeJavaScript(\`
       (() => {
-        window.location.hash = '#/coach-details?train=225256&coach=C4';
+        if (typeof window.panoramaNavigate === 'function') {
+          window.panoramaNavigate('coach-details', '225256', 'C4');
+        } else {
+          window.location.hash = '#/coach-details?train=225256&coach=C4';
+          window.dispatchEvent(new Event('hashchange'));
+        }
       })();
     \`);
     await sleep(2000);
@@ -528,7 +566,12 @@ app.whenReady().then(async () => {
     console.log('[RUNNER] Navigating to All Tanks & capturing...');
     await win.webContents.executeJavaScript(\`
       (() => {
-        window.location.hash = '#/watertank';
+        if (typeof window.panoramaNavigate === 'function') {
+          window.panoramaNavigate('watertank');
+        } else {
+          window.location.hash = '#/watertank';
+          window.dispatchEvent(new Event('hashchange'));
+        }
       })();
     \`);
     await sleep(2000);

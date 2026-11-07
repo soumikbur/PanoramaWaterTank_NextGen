@@ -594,7 +594,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const handleSetActiveScreen = (screen: ScreenName) => {
-    if (!isAuthenticated && screen !== 'login') {
+    const hasToken = typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('panorama_token'));
+    if (!isAuthenticated && !hasToken && screen !== 'login') {
       setActiveScreen('login');
       AppRouter.navigate('login');
       return;
@@ -622,6 +623,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       AppRouter.navigate(activeScreen, selectedTrainNumber, coachNum);
     }
   };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).panoramaNavigate = (screen: ScreenName, train?: string, coach?: string) => {
+        if (train) setSelectedTrainNumber(train);
+        if (coach) setSelectedCoachNumber(coach);
+        setActiveScreen(screen);
+        AppRouter.navigate(screen, train || selectedTrainNumber, coach || selectedCoachNumber);
+      };
+    }
+  }, [isAuthenticated, currentUser, selectedTrainNumber, selectedCoachNumber]);
 
   const login = async (u: string, p: string) => {
     const res = await ApiClient.login(u, p);

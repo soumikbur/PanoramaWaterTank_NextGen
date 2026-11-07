@@ -59,6 +59,11 @@ export class AppRouter {
       }
 
       if (screen) {
+        if (screen === 'dashboard' && coachNumber) {
+          screen = 'coach-details';
+        } else if (screen === 'dashboard') {
+          screen = 'trains';
+        }
         return {
           screen,
           trainNumber,
@@ -70,15 +75,22 @@ export class AppRouter {
     // 3. Check regular search params (?screen=coach-details&train=12841&coach=C4)
     const screenParam = urlParams.get('screen');
     if (screenParam) {
+      let sc = screenParam;
+      const coach = urlParams.get('coach') || undefined;
+      if (sc === 'dashboard' && coach) {
+        sc = 'coach-details';
+      } else if (sc === 'dashboard') {
+        sc = 'trains';
+      }
       return {
-        screen: screenParam,
+        screen: sc,
         trainNumber: urlParams.get('train') || undefined,
-        coachNumber: urlParams.get('coach') || undefined,
+        coachNumber: coach,
       };
     }
 
-    // Default to dashboard
-    return { screen: 'dashboard' };
+    // Default to Train Management
+    return { screen: 'trains' };
   }
 
   public static navigate(screen: string, trainNumber?: string, coachNumber?: string) {
