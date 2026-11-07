@@ -109,6 +109,18 @@ app.whenReady().then(async () => {
     await sleep(3000);
     await saveScreenshot(win, '03_live_published_panorama_coach_details.png');
 
+    // Navigate to watertank (All Tanks) and capture
+    console.log('[LIVE VERIFY] Navigating to All Tanks on published site...');
+    await win.webContents.executeJavaScript(`
+      (() => {
+        window.location.hash = '#/watertank';
+      })();
+    `);
+    await sleep(3000);
+    win.setSize(1920, 1080);
+    await sleep(1500);
+    await saveScreenshot(win, '04_live_published_panorama_all_tanks_1920x1080.png');
+
     console.log('CONSOLE_ERRORS_COUNT:', consoleErrors.length);
     console.log('NETWORK_FAILED_COUNT:', networkFailed.length);
     console.log('ALL_CHECKS_PASSED:', domCheck.hasPanoramaHeader && domCheck.hasPanoramaScada);
