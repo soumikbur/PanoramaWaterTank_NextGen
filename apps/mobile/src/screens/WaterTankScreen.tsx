@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 
 export const WaterTankScreen: React.FC = () => {
-  const { tanks, liveTank, connectionStatus, refreshData, selectedTankId: contextTankId, setSelectedTankId: setContextTankId } = useApp();
+  const { tanks, liveTank, connectionStatus, refreshData, selectedTankId: contextTankId, setSelectedTankId: setContextTankId, setActiveScreen } = useApp();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'ONLINE' | 'OFFLINE' | 'LOW_LEVEL'>('ALL');
@@ -104,40 +104,222 @@ export const WaterTankScreen: React.FC = () => {
           gap: metrics.space16,
         }}
       >
-        {/* 1. Header with Title & Aggregate Cards */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#0F172A', fontFamily: typography.fontFamily }}>
-              All Tanks
-            </h1>
-            <p style={{ margin: '2px 0 0 0', fontSize: '14px', color: '#64748B', fontFamily: typography.fontFamily }}>
-              Fleet-wide water reservoir levels, capacity calculations, and sensor health
-            </p>
+        {/* 0. Breadcrumb Line (Qt AllTanksPage.qml) */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
+            <span
+              onClick={() => setActiveScreen('dashboard')}
+              style={{ color: '#2563EB', fontWeight: 600, cursor: 'pointer' }}
+            >
+              Train Management
+            </span>
+            <span style={{ color: '#94A3B8' }}>›</span>
+            <span style={{ color: '#0F172A', fontWeight: 600 }}>All Tanks</span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            onClick={() => setActiveScreen('dashboard')}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#2563EB',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+          >
+            <span>Select Train →</span>
+          </button>
+        </div>
+
+        {/* 1. Filter Pills Row & Search Bar (Qt AllTanksPage.qml) */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+          {/* Filter Pills */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {/* All Tanks */}
+            <button
+              onClick={() => setActiveFilter('ALL')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 14px',
+                borderRadius: '16px',
+                border: activeFilter === 'ALL' ? '1px solid #2563EB' : '1px solid #E2E8F0',
+                backgroundColor: activeFilter === 'ALL' ? '#2563EB' : '#FFFFFF',
+                color: activeFilter === 'ALL' ? '#FFFFFF' : '#475569',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span>All Tanks</span>
+              <span
+                style={{
+                  backgroundColor: activeFilter === 'ALL' ? '#1D4ED8' : '#F1F5F9',
+                  color: activeFilter === 'ALL' ? '#FFFFFF' : '#475569',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  padding: '1px 6px',
+                  borderRadius: '10px',
+                }}
+              >
+                {totalTanks}
+              </span>
+            </button>
+
+            {/* Online */}
+            <button
+              onClick={() => setActiveFilter('ONLINE')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 14px',
+                borderRadius: '16px',
+                border: activeFilter === 'ONLINE' ? '1px solid #16A34A' : '1px solid #E2E8F0',
+                backgroundColor: activeFilter === 'ONLINE' ? '#16A34A' : '#FFFFFF',
+                color: activeFilter === 'ONLINE' ? '#FFFFFF' : '#475569',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span>Online</span>
+              <span
+                style={{
+                  backgroundColor: activeFilter === 'ONLINE' ? '#15803D' : '#DCFCE7',
+                  color: activeFilter === 'ONLINE' ? '#FFFFFF' : '#15803D',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  padding: '1px 6px',
+                  borderRadius: '10px',
+                }}
+              >
+                {onlineTanks}
+              </span>
+            </button>
+
+            {/* Offline */}
+            <button
+              onClick={() => setActiveFilter('OFFLINE')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 14px',
+                borderRadius: '16px',
+                border: activeFilter === 'OFFLINE' ? '1px solid #DC2626' : '1px solid #E2E8F0',
+                backgroundColor: activeFilter === 'OFFLINE' ? '#DC2626' : '#FFFFFF',
+                color: activeFilter === 'OFFLINE' ? '#FFFFFF' : '#475569',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span>Offline</span>
+              <span
+                style={{
+                  backgroundColor: activeFilter === 'OFFLINE' ? '#B91C1C' : '#FEE2E2',
+                  color: activeFilter === 'OFFLINE' ? '#FFFFFF' : '#DC2626',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  padding: '1px 6px',
+                  borderRadius: '10px',
+                }}
+              >
+                {offlineTanks}
+              </span>
+            </button>
+
+            {/* Low Level */}
+            <button
+              onClick={() => setActiveFilter('LOW_LEVEL')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 14px',
+                borderRadius: '16px',
+                border: activeFilter === 'LOW_LEVEL' ? '1px solid #D97706' : '1px solid #E2E8F0',
+                backgroundColor: activeFilter === 'LOW_LEVEL' ? '#D97706' : '#FFFFFF',
+                color: activeFilter === 'LOW_LEVEL' ? '#FFFFFF' : '#475569',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span>Low Level</span>
+              <span
+                style={{
+                  backgroundColor: activeFilter === 'LOW_LEVEL' ? '#B45309' : '#FEF3C7',
+                  color: activeFilter === 'LOW_LEVEL' ? '#FFFFFF' : '#D97706',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  padding: '1px 6px',
+                  borderRadius: '10px',
+                }}
+              >
+                {lowLevelTanks}
+              </span>
+            </button>
+          </div>
+
+          {/* Right Controls: Search & View Toggles */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Search Input */}
+            <div style={{ position: 'relative', width: '220px' }}>
+              <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+              <input
+                type="text"
+                placeholder="Search tank or coach..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  height: '32px',
+                  paddingLeft: '32px',
+                  paddingRight: '10px',
+                  backgroundColor: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontFamily: typography.fontFamily,
+                  color: '#0F172A',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
             {/* View Mode Toggle */}
-            <div style={{ display: 'flex', backgroundColor: '#F1F5F9', borderRadius: '6px', padding: '2px', border: '1px solid #CBD5E1' }}>
+            <div style={{ display: 'flex', backgroundColor: '#FFFFFF', borderRadius: '6px', padding: '2px', border: '1px solid #E2E8F0' }}>
               <button
                 onClick={() => setViewMode('grid')}
                 title="Grid View"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 12px',
+                  gap: '4px',
+                  padding: '4px 10px',
                   borderRadius: '4px',
                   border: 'none',
-                  backgroundColor: viewMode === 'grid' ? '#FFFFFF' : 'transparent',
-                  color: viewMode === 'grid' ? '#0F172A' : '#64748B',
+                  backgroundColor: viewMode === 'grid' ? '#EFF6FF' : 'transparent',
+                  color: viewMode === 'grid' ? '#2563EB' : '#64748B',
                   fontWeight: viewMode === 'grid' ? 700 : 500,
-                  fontSize: '12px',
+                  fontSize: '11px',
                   cursor: 'pointer',
-                  boxShadow: viewMode === 'grid' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
                 }}
               >
-                <LayoutGrid size={14} />
-                <span>Grid</span>
+                <LayoutGrid size={13} />
+                <span>Grid View</span>
               </button>
               <button
                 onClick={() => setViewMode('list')}
@@ -145,140 +327,23 @@ export const WaterTankScreen: React.FC = () => {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 12px',
+                  gap: '4px',
+                  padding: '4px 10px',
                   borderRadius: '4px',
                   border: 'none',
-                  backgroundColor: viewMode === 'list' ? '#FFFFFF' : 'transparent',
-                  color: viewMode === 'list' ? '#0F172A' : '#64748B',
+                  backgroundColor: viewMode === 'list' ? '#EFF6FF' : 'transparent',
+                  color: viewMode === 'list' ? '#2563EB' : '#64748B',
                   fontWeight: viewMode === 'list' ? 700 : 500,
-                  fontSize: '12px',
+                  fontSize: '11px',
                   cursor: 'pointer',
-                  boxShadow: viewMode === 'list' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
                 }}
               >
-                <List size={14} />
-                <span>List</span>
+                <List size={13} />
+                <span>List View</span>
               </button>
             </div>
-
-            <button
-              onClick={() => refreshData()}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 14px',
-                borderRadius: '6px',
-                border: '1px solid #CBD5E1',
-                backgroundColor: '#FFFFFF',
-                color: '#334155',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <RefreshCw size={13} />
-              <span>Refresh</span>
-            </button>
           </div>
         </div>
-
-        {/* 2. Top Metric KPI Row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-          <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#EFF6FF', display: 'flex', alignItems: 'center', justifySelf: 'center', justifyContent: 'center', color: '#2563EB' }}>
-              <Droplets size={20} />
-            </div>
-            <div>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748B' }}>TOTAL TANKS</div>
-              <div style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A' }}>{totalTanks}</div>
-            </div>
-          </div>
-
-          <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#ECFDF5', display: 'flex', alignItems: 'center', justifySelf: 'center', justifyContent: 'center', color: '#16A34A' }}>
-              <Wifi size={20} />
-            </div>
-            <div>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748B' }}>ONLINE</div>
-              <div style={{ fontSize: '20px', fontWeight: 800, color: '#16A34A' }}>{onlineTanks}</div>
-            </div>
-          </div>
-
-          <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#F8FAFC', display: 'flex', alignItems: 'center', justifySelf: 'center', justifyContent: 'center', color: '#64748B' }}>
-              <WifiOff size={20} />
-            </div>
-            <div>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748B' }}>OFFLINE</div>
-              <div style={{ fontSize: '20px', fontWeight: 800, color: offlineTanks > 0 ? '#DC2626' : '#64748B' }}>{offlineTanks}</div>
-            </div>
-          </div>
-
-          <div style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#FFFBEB', display: 'flex', alignItems: 'center', justifySelf: 'center', justifyContent: 'center', color: '#D97706' }}>
-              <AlertTriangle size={20} />
-            </div>
-            <div>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748B' }}>LOW LEVEL (&lt;20%)</div>
-              <div style={{ fontSize: '20px', fontWeight: 800, color: lowLevelTanks > 0 ? '#D97706' : '#0F172A' }}>{lowLevelTanks}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. Search Bar and Filter Tabs */}
-        <BaseCard style={{ padding: '12px', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-            {/* Search Input */}
-            <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
-              <Search size={15} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
-              <input
-                type="text"
-                placeholder="Search by tank ID, coach (e.g. B4), train, or device..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px 8px 34px',
-                  borderRadius: '6px',
-                  border: '1px solid #CBD5E1',
-                  fontSize: '13px',
-                  fontFamily: typography.fontFamily,
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </div>
-
-            {/* Filter Tabs */}
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {[
-                { id: 'ALL', label: 'All Tanks' },
-                { id: 'ONLINE', label: 'Online' },
-                { id: 'OFFLINE', label: 'Offline' },
-                { id: 'LOW_LEVEL', label: 'Low Level (<20%)' },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveFilter(tab.id as any)}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    border: activeFilter === tab.id ? '1px solid #2563EB' : '1px solid #CBD5E1',
-                    backgroundColor: activeFilter === tab.id ? '#EFF6FF' : '#FFFFFF',
-                    color: activeFilter === tab.id ? '#2563EB' : '#475569',
-                  }}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </BaseCard>
 
         {/* 4. Main Tanks Display (Grid or List) */}
         {filteredTanks.length === 0 ? (
@@ -325,96 +390,88 @@ export const WaterTankScreen: React.FC = () => {
                     transition: 'all 0.15s ease',
                   }}
                 >
-                  {/* Card Header */}
+                  {/* Card Header (Qt Style) */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
-                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>{tank.tankName}</span>
+                      <div style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A' }}>
+                        Coach {tank.coachNumber}
                       </div>
                       <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
-                        Coach <strong>{tank.coachNumber}</strong> • Train <strong>{tank.trainNumber}</strong>
+                        {tank.tankName || 'Toilet Front'}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#94A3B8' }}>
+                        Cylindrical
                       </div>
                     </div>
+                    <ChevronRight size={16} color="#94A3B8" />
+                  </div>
 
-                    {/* Status Pill */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          padding: '2px 8px',
-                          borderRadius: '12px',
-                          backgroundColor: !tank.isOnline
-                            ? '#F1F5F9'
-                            : tank.alarmStatus === 'CRITICAL'
-                            ? '#FEF2F2'
-                            : tank.alarmStatus === 'WARNING'
-                            ? '#FFFBEB'
-                            : '#ECFDF5',
-                          color: !tank.isOnline
-                            ? '#64748B'
-                            : tank.alarmStatus === 'CRITICAL'
-                            ? '#DC2626'
-                            : tank.alarmStatus === 'WARNING'
-                            ? '#D97706'
-                            : '#16A34A',
-                        }}
-                      >
-                        {!tank.isOnline ? 'OFFLINE' : tank.alarmStatus === 'STALE_DATA' ? 'STALE' : tank.alarmStatus}
+                  {/* Level & Vessel Volume Readout (Qt Style) */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '6px 0' }}>
+                    <div
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        backgroundColor: !tank.isOnline ? '#FEE2E2' : '#EFF6FF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: !tank.isOnline ? '#DC2626' : '#2563EB',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Droplets size={16} />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                      <span style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
+                        {hasData && tank.isOnline ? `${level!.toFixed(0)}%` : '--'}
+                      </span>
+                      <span style={{ fontSize: '12px', color: '#64748B' }}>
+                        / {height != null && tank.isOnline ? `${height.toFixed(1)} cm` : `${maxHeight.toFixed(1)} cm`}
+                      </span>
+                      <span style={{ fontSize: '12px', color: '#64748B' }}>
+                        / {volume != null && tank.isOnline ? `${volume.toFixed(1)} L` : `${capacity.toFixed(2)} L`}
                       </span>
                     </div>
                   </div>
 
                   {/* Visual Progress Bar */}
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
-                      <span style={{ color: '#64748B', fontWeight: 500 }}>Water Level</span>
-                      <strong style={{ color: '#0F172A' }}>{hasData ? `${level!.toFixed(1)}%` : '—'}</strong>
-                    </div>
-                    <div style={{ height: '8px', backgroundColor: '#F1F5F9', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ height: '6px', backgroundColor: '#F1F5F9', borderRadius: '3px', overflow: 'hidden' }}>
                       <div
                         style={{
                           height: '100%',
-                          width: hasData ? `${Math.min(100, Math.max(0, level!))}%` : '0%',
+                          width: hasData && tank.isOnline ? `${Math.min(100, Math.max(0, level!))}%` : '0%',
                           backgroundColor: barColor,
-                          borderRadius: '4px',
+                          borderRadius: '3px',
                           transition: 'width 0.4s ease',
                         }}
                       />
                     </div>
                   </div>
 
-                  {/* Metric Grid */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', backgroundColor: '#F8FAFC', padding: '10px', borderRadius: '6px' }}>
-                    <div>
-                      <div style={{ fontSize: '11px', color: '#64748B' }}>HEIGHT</div>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
-                        {height != null ? `${height.toFixed(1)} cm` : '—'}
-                      </div>
+                  {/* Card Footer: Status Dot + Chevron (Qt Style) */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', borderTop: '1px solid #F1F5F9', paddingTop: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <div
+                        style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '3px',
+                          backgroundColor: !tank.isOnline ? '#DC2626' : '#16A34A',
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color: !tank.isOnline ? '#DC2626' : '#16A34A',
+                        }}
+                      >
+                        {!tank.isOnline ? 'Offline' : 'Online'}
+                      </span>
                     </div>
-                    <div>
-                      <div style={{ fontSize: '11px', color: '#64748B' }}>VOLUME</div>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
-                        {volume != null ? `${volume.toFixed(1)} L` : '—'}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '11px', color: '#64748B' }}>CAPACITY</div>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
-                        {capacity.toFixed(0)} L
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card Footer: Timestamp + Inspect Action */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: '#94A3B8', borderTop: '1px solid #F1F5F9', paddingTop: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Clock size={12} />
-                      <span>{tank.lastUpdate ? new Date(tank.lastUpdate).toLocaleTimeString() : 'Awaiting Telemetry'}</span>
-                    </div>
-                    <span style={{ color: '#2563EB', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '2px' }}>
-                      Inspect <ChevronRight size={13} />
-                    </span>
+                    <ChevronRight size={14} color="#94A3B8" />
                   </div>
                 </div>
               );

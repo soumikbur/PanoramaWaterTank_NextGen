@@ -14,7 +14,7 @@ export const colors = {
   primarySubtle: 'var(--color-primary-subtle, #E3F2FD)',
 
   // Surfaces & Backgrounds
-  background: 'var(--color-background, #F1F5F9)',
+  background: 'var(--color-background, #F4F6F9)',
   surface: 'var(--color-surface, #FFFFFF)',
   surfaceAlt: 'var(--color-surface-alt, #F8FAFC)',
   surfaceHighlight: 'var(--color-surface-highlight, #EDF2F7)',

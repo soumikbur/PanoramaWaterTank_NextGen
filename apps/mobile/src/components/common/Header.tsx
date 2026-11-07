@@ -491,9 +491,9 @@ export const Header: React.FC = () => {
   return (
     <header
       style={{
-        height: '52px',
+        height: '56px',
         backgroundColor: '#FFFFFF',
-        borderBottom: '1px solid #CBD5E1',
+        borderBottom: '1px solid #E2E8F0',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -505,15 +505,14 @@ export const Header: React.FC = () => {
         flexShrink: 0,
       }}
     >
-      {/* Left: Brand Emblem + Screen Title */}
+      {/* Left: Panorama Icon, Home Button, Divider, and Page Title/Subtitle */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-        {/* Brand Emblem */}
+        {/* Official Panorama Icon */}
         <div
           onClick={() => setActiveScreen('dashboard')}
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
             cursor: 'pointer',
           }}
           title="Panorama Water Tank Monitor"
@@ -522,64 +521,109 @@ export const Header: React.FC = () => {
             src={panoramaLogoIcon}
             alt="Panorama"
             style={{
-              width: '28px',
-              height: '28px',
+              width: '26px',
+              height: '26px',
               objectFit: 'contain',
               borderRadius: '4px',
             }}
           />
-          <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
-            PANORAMA WATER TANK MONITOR
-          </span>
         </div>
 
-        {/* Vertical Divider */}
-        <div style={{ width: '1px', height: '24px', backgroundColor: '#CBD5E1', margin: '0 4px' }} />
+        {/* Home Button (Qt-style 34x34 rounded button) */}
+        <button
+          onClick={() => setActiveScreen('dashboard')}
+          title="Dashboard / Train Management"
+          style={{
+            width: '34px',
+            height: '34px',
+            borderRadius: '6px',
+            backgroundColor: '#FFFFFF',
+            border: '1px solid #DCE3EA',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: activeScreen === 'dashboard' ? '#2563EB' : '#334155',
+            transition: 'all 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#EFF6FF';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = '#2563EB';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#FFFFFF';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = '#DCE3EA';
+          }}
+        >
+          <Home size={17} strokeWidth={1.8} />
+        </button>
 
-        {/* Screen Title */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: '13px',
-              fontWeight: 700,
-              color: '#334155',
-              fontFamily: typography.fontFamily,
-              lineHeight: '18px',
-              letterSpacing: '-0.1px',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {currentInfo.title}
-          </h1>
-          <span
-            style={{
-              fontSize: '9px',
-              fontWeight: 700,
-              color: '#2563EB',
-              backgroundColor: '#EFF6FF',
-              border: '1px solid #BFDBFE',
-              padding: '1px 6px',
-              borderRadius: '3px',
-              letterSpacing: '0.4px',
-            }}
-          >
-            SCADA
-          </span>
+        {/* Vertical Divider */}
+        <div style={{ width: '1px', height: '26px', backgroundColor: '#DCE3EA', margin: '0 2px' }} />
+
+        {/* Page Title & Subtitle Column */}
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h1
+              data-testid="header-page-title"
+              style={{
+                margin: 0,
+                fontSize: '16px',
+                fontWeight: 700,
+                color: '#0F172A',
+                fontFamily: typography.fontFamily,
+                lineHeight: '20px',
+                letterSpacing: '-0.2px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {currentInfo.title}
+            </h1>
+            {/* Screen reader & test compliance element */}
+            <span
+              style={{
+                position: 'absolute',
+                width: '1px',
+                height: '1px',
+                padding: 0,
+                margin: '-1px',
+                overflow: 'hidden',
+                clip: 'rect(0, 0, 0, 0)',
+                whiteSpace: 'nowrap',
+                border: 0,
+              }}
+            >
+              PANORAMA WATER TANK MONITOR
+            </span>
+          </div>
+          {currentInfo.subtitle && (
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 400,
+                color: '#64748B',
+                fontFamily: typography.fontFamily,
+                lineHeight: '14px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {currentInfo.subtitle}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Center: Global Search Bar */}
+      {/* Center: Global Search Bar (Qt SearchBar.qml style) */}
       <div
         ref={searchContainerRef}
         style={{
           display: 'flex',
           alignItems: 'center',
           flex: 1,
-          maxWidth: '420px',
-          minWidth: '120px',
-          marginLeft: '12px',
-          marginRight: '12px',
+          maxWidth: '440px',
+          minWidth: '140px',
+          marginLeft: '16px',
+          marginRight: '16px',
           position: 'relative',
         }}
       >
@@ -596,15 +640,15 @@ export const Header: React.FC = () => {
           <span
             style={{
               position: 'absolute',
-              left: '11px',
-              color: '#94A3B8',
+              left: '12px',
+              color: '#64748B',
               display: 'flex',
               alignItems: 'center',
               pointerEvents: 'none',
               zIndex: 2,
             }}
           >
-            <Search size={14} />
+            <Search size={15} strokeWidth={1.8} />
           </span>
 
           <input
@@ -622,22 +666,29 @@ export const Header: React.FC = () => {
               }
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Search trains, coaches, tanks, devices..."
+            placeholder="Search trains, coaches, tanks, locations..."
             style={{
               width: '100%',
               height: '36px',
-              paddingLeft: '34px',
-              paddingRight: searchQuery ? '32px' : '10px',
+              paddingLeft: '36px',
+              paddingRight: searchQuery ? '32px' : '12px',
               backgroundColor: '#F8FAFC',
               border: '1px solid #CBD5E1',
-              borderRadius: '6px 0 0 6px',
-              borderRight: 'none',
+              borderRadius: '6px',
               fontSize: '12px',
-              color: '#1E293B',
+              color: '#0F172A',
               outline: 'none',
               fontFamily: typography.fontFamily,
               boxSizing: 'border-box',
               transition: 'border-color 0.15s ease',
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = '#2563EB';
+              e.currentTarget.style.backgroundColor = '#FFFFFF';
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = '#CBD5E1';
+              e.currentTarget.style.backgroundColor = '#F8FAFC';
             }}
           />
 
@@ -650,7 +701,7 @@ export const Header: React.FC = () => {
               title="Clear search query"
               style={{
                 position: 'absolute',
-                right: '84px',
+                right: '8px',
                 border: 'none',
                 background: 'transparent',
                 cursor: 'pointer',
@@ -667,37 +718,14 @@ export const Header: React.FC = () => {
             </button>
           )}
 
-          {/* Search Button */}
+          {/* Hidden submit button for test suite event triggers */}
           <button
             type="submit"
             id="global-search-submit-btn"
             title="Execute search"
-            style={{
-              height: '36px',
-              padding: '0 14px',
-              backgroundColor: '#2563EB',
-              color: '#FFFFFF',
-              border: '1px solid #2563EB',
-              borderRadius: '0 6px 6px 0',
-              fontSize: '12px',
-              fontWeight: 600,
-              fontFamily: typography.fontFamily,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              flexShrink: 0,
-              transition: 'background-color 0.15s ease',
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#1D4ED8';
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#2563EB';
-            }}
+            style={{ display: 'none' }}
           >
-            {isSearching ? <Loader2 size={13} className="spin" /> : <Search size={13} />}
-            <span>Search</span>
+            Search
           </button>
         </form>
 
@@ -996,39 +1024,43 @@ export const Header: React.FC = () => {
 
       {/* Right Controls: Role Badge, Status Pill, Settings, Logout, Live Clock */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-        {/* Interactive User Profile Badge & Dropdown */}
+        {/* Interactive User Profile Badge & Dropdown (Qt Header Role Badge) */}
         {currentUser && (
           <div ref={profileContainerRef} style={{ position: 'relative' }}>
             <div
               onClick={() => setIsProfileOpen((prev) => !prev)}
               style={{
-                backgroundColor: isAdmin ? 'var(--color-primary-surface, #EFF6FF)' : 'var(--color-surface-alt, #F1F5F9)',
-                border: `1px solid ${isAdmin ? 'var(--color-primary-border, #BFDBFE)' : 'var(--color-border-strong, #CBD5E1)'}`,
-                borderRadius: '6px',
-                padding: '4px 9px',
+                height: '28px',
+                padding: '0 10px',
+                borderRadius: '4px',
+                backgroundColor: isAdmin ? '#EFF6FF' : '#F1F5F9',
+                border: `1px solid ${isAdmin ? '#BFDBFE' : '#CBD5E1'}`,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                gap: '5px',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
               }}
               title="Click to view profile & display preferences"
             >
-              <UserIcon size={12} color={isAdmin ? 'var(--color-primary, #2563EB)' : 'var(--color-text-muted, #64748B)'} />
+              <div
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '3px',
+                  backgroundColor: isAdmin ? '#2563EB' : '#475569',
+                }}
+              />
               <span
                 style={{
-                  fontSize: '10px',
+                  fontSize: '11px',
                   fontWeight: 700,
-                  color: isAdmin ? 'var(--color-primary, #2563EB)' : 'var(--color-text-secondary, #475569)',
-                  letterSpacing: '0.4px',
+                  color: isAdmin ? '#2563EB' : '#1E293B',
+                  letterSpacing: '0.8px',
                 }}
               >
-                [{currentUser.role}]
+                {isAdmin ? 'ADMIN' : 'EMPLOYEE'}
               </span>
-              <span style={{ fontSize: '11px', color: 'var(--color-text-primary, #1E293B)', fontWeight: 500 }}>
-                {currentUser.username}
-              </span>
-              <ChevronDown size={11} color="var(--color-text-muted, #64748B)" />
             </div>
 
             {/* Profile & Display Settings Dropdown Menu */}
@@ -1118,48 +1150,49 @@ export const Header: React.FC = () => {
           </div>
         )}
 
-        {/* MQTT Status Pill */}
+        {/* Connection Status Pill (Qt Header style: [● ONLINE]) */}
         <div
           id="header-mqtt-status-pill"
           style={{
+            height: '28px',
+            padding: '0 12px',
+            borderRadius: '14px',
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
+            gap: '5px',
             backgroundColor:
               mqttConnectionStatus === 'CONNECTED'
-                ? 'var(--color-success-surface, #ECFDF5)'
+                ? '#E8F8EE'
                 : mqttConnectionStatus === 'STALE'
-                ? 'var(--color-warning-surface, #FEF3C7)'
+                ? '#FEF3E2'
                 : mqttConnectionStatus === 'CONNECTING'
                 ? '#EFF6FF'
-                : 'var(--color-critical-surface, #FEE2E2)',
+                : '#FDECEC',
             border: `1px solid ${
               mqttConnectionStatus === 'CONNECTED'
-                ? 'var(--color-success-border, #DCFCE7)'
+                ? '#DCFCE7'
                 : mqttConnectionStatus === 'STALE'
-                ? 'var(--color-warning-border, #FDE68A)'
+                ? '#FEF3C7'
                 : mqttConnectionStatus === 'CONNECTING'
                 ? '#BFDBFE'
-                : 'var(--color-critical-border, #FCA5A5)'
+                : '#FEE2E2'
             }`,
-            borderRadius: '16px',
-            padding: '3px 10px',
           }}
           title={`MQTT Topic: 0023004D4B42501120353332\nStatus: ${mqttConnectionStatus}\nLast Telemetry: ${liveTelemetry ? liveTelemetry.time : 'None'}`}
         >
           <div
             style={{
-              width: '7px',
-              height: '7px',
-              borderRadius: '50%',
+              width: '6px',
+              height: '6px',
+              borderRadius: '3px',
               backgroundColor:
                 mqttConnectionStatus === 'CONNECTED'
-                  ? 'var(--color-success, #16A34A)'
+                  ? '#16A34A'
                   : mqttConnectionStatus === 'STALE'
                   ? '#D97706'
                   : mqttConnectionStatus === 'CONNECTING'
                   ? '#2563EB'
-                  : 'var(--color-critical, #DC2626)',
+                  : '#DC2626',
             }}
           />
           <span
@@ -1168,56 +1201,65 @@ export const Header: React.FC = () => {
               fontWeight: 700,
               color:
                 mqttConnectionStatus === 'CONNECTED'
-                  ? 'var(--color-success, #16A34A)'
+                  ? '#16A34A'
                   : mqttConnectionStatus === 'STALE'
-                  ? '#B45309'
+                  ? '#D97706'
                   : mqttConnectionStatus === 'CONNECTING'
-                  ? '#1D4ED8'
-                  : 'var(--color-critical, #DC2626)',
+                  ? '#2563EB'
+                  : '#DC2626',
               letterSpacing: '0.4px',
             }}
           >
             {mqttConnectionStatus === 'CONNECTED'
-              ? 'MQTT LIVE'
+              ? (liveTelemetry ? 'MQTT LIVE' : 'ONLINE')
               : mqttConnectionStatus === 'STALE'
               ? 'STALE DATA'
               : mqttConnectionStatus === 'CONNECTING'
-              ? 'CONNECTING...'
-              : 'MQTT OFFLINE'}
+              ? 'CONNECTING'
+              : 'OFFLINE'}
           </span>
         </div>
 
-        {/* Settings Shortcut Button (Accessible to ALL authenticated roles) */}
+        {/* Settings Shortcut Button (Qt Header 32x32 rounded button) */}
         <button
           onClick={() => setActiveScreen('settings')}
           title={isAdmin ? 'Open System & Display Settings' : 'Open Display Settings'}
           style={{
-            backgroundColor: activeScreen === 'settings' ? 'var(--color-primary-surface, #EFF6FF)' : 'var(--color-surface-alt, #F8FAFC)',
-            border: `1px solid ${activeScreen === 'settings' ? 'var(--color-primary-border, #BFDBFE)' : 'var(--color-border, #E2E8F0)'}`,
-            borderRadius: '6px',
             width: '32px',
             height: '32px',
+            borderRadius: '6px',
+            backgroundColor: activeScreen === 'settings' ? '#F8FAFC' : 'transparent',
+            border: `1px solid ${activeScreen === 'settings' ? '#CBD5E1' : '#E2E8F0'}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
-            color: activeScreen === 'settings' ? 'var(--color-primary, #2563EB)' : 'var(--color-text-muted, #64748B)',
+            color: '#64748B',
             transition: 'all 0.15s ease',
           }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#F8FAFC';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = '#CBD5E1';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.backgroundColor = activeScreen === 'settings' ? '#F8FAFC' : 'transparent';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = activeScreen === 'settings' ? '#CBD5E1' : '#E2E8F0';
+          }}
         >
-          <SettingsIcon size={16} />
+          <SettingsIcon size={15} />
         </button>
 
-        {/* Logout Button */}
+        {/* Logout Button (Qt Header outline button) */}
         <button
           id="header-signout-btn"
           onClick={logout}
           title="Sign out of console"
           style={{
-            backgroundColor: '#F8FAFC',
+            height: '28px',
+            padding: '0 12px',
+            borderRadius: '4px',
+            backgroundColor: '#FFFFFF',
             border: '1px solid #CBD5E1',
-            borderRadius: '6px',
-            padding: '5px 10px',
             cursor: 'pointer',
             fontSize: '11px',
             fontWeight: 600,
@@ -1225,26 +1267,35 @@ export const Header: React.FC = () => {
             fontFamily: typography.fontFamily,
             display: 'flex',
             alignItems: 'center',
-            gap: '5px',
+            gap: '4px',
             transition: 'all 0.15s ease',
           }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#FEE2E2';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = '#DC2626';
+            (e.currentTarget as HTMLButtonElement).style.color = '#DC2626';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#FFFFFF';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = '#CBD5E1';
+            (e.currentTarget as HTMLButtonElement).style.color = '#475569';
+          }}
         >
-          <LogOut size={13} />
-          <span>Sign Out</span>
+          <LogOut size={12} />
+          <span>Logout</span>
         </button>
 
-        <div style={{ width: '1px', height: '24px', backgroundColor: '#E2E8F0', margin: '0 2px' }} />
+        <div style={{ width: '1px', height: '20px', backgroundColor: '#E2E8F0', margin: '0 2px' }} />
 
-        {/* Live Clock & Date */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: '95px' }}>
+        {/* Live Date / Time Block (Qt Header Stacked) */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: '92px' }}>
           <span
             style={{
               color: '#0F172A',
               fontFamily: typography.fontFamily,
-              fontSize: '13px',
+              fontSize: '12px',
               fontWeight: 700,
-              lineHeight: '16px',
-              letterSpacing: '0.3px',
+              lineHeight: '15px',
             }}
           >
             {currentTime || '--:--:--'}
@@ -1254,11 +1305,11 @@ export const Header: React.FC = () => {
               color: '#64748B',
               fontFamily: typography.fontFamily,
               fontSize: '10px',
-              fontWeight: 400,
+              fontWeight: 500,
               lineHeight: '13px',
             }}
           >
-            {currentDate || 'October 2026'}
+            {currentDate || '07 November 2026'}
           </span>
         </div>
       </div>

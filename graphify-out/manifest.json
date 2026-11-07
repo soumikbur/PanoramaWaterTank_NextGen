@@ -696,9 +696,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/components/common/Header.tsx": {
-    "mtime": 1794040881.6258304,
-    "seen": 1794040957.5225472,
-    "ast_hash": "7f65c4cdd834783d30228baeedae1fe0",
+    "mtime": 1794042562.6553092,
+    "seen": 1794042888.0609038,
+    "ast_hash": "b322a8fe72b3d6be1af32b24ad88108c",
     "semantic_hash": ""
   },
   "apps/mobile/src/components/common/InfoRow.tsx": {
@@ -708,9 +708,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/components/common/Sidebar.tsx": {
-    "mtime": 1794040312.3180556,
-    "seen": 1794040957.523135,
-    "ast_hash": "ec816929ffa880834228f210a08aaa6e",
+    "mtime": 1794042619.562332,
+    "seen": 1794042888.0610359,
+    "ast_hash": "05cac219387af07e24783e9026597706",
     "semantic_hash": ""
   },
   "apps/mobile/src/components/common/StatusBadge.tsx": {
@@ -816,9 +816,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/screens/WaterTankScreen.tsx": {
-    "mtime": 1793799626.3911417,
-    "seen": 1793865617.208915,
-    "ast_hash": "fd7089d6840fc900d4ede8af61bde591",
+    "mtime": 1794042721.567161,
+    "seen": 1794042888.067086,
+    "ast_hash": "be92632d26a303dd84559363a9c36bf1",
     "semantic_hash": ""
   },
   "apps/mobile/src/services/websocket.ts": {
@@ -834,9 +834,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/theme/colors.ts": {
-    "mtime": 1793970070.6747968,
-    "seen": 1793971501.717051,
-    "ast_hash": "5680fc74fdd35acd0e8429011cea042c",
+    "mtime": 1794042448.317657,
+    "seen": 1794042888.069174,
+    "ast_hash": "52f62ef63c294e4d01df86ad75ab986c",
     "semantic_hash": ""
   },
   "apps/mobile/src/theme/index.ts": {
@@ -3312,9 +3312,9 @@
     "semantic_hash": ""
   },
   "backend/static/assets/index.js": {
-    "mtime": 1794040888.6587574,
-    "seen": 1794040957.5473394,
-    "ast_hash": "204432b8cd5e1d5fc362b970733e7a3a",
+    "mtime": 1794042823.3974783,
+    "seen": 1794042888.0838912,
+    "ast_hash": "839bd2e15c8771a37c0b25b3b1494879",
     "semantic_hash": ""
   },
   "scripts/verify_react_production_app.cjs": {
@@ -3324,8 +3324,8 @@
     "semantic_hash": ""
   },
   "backend/static/index.html": {
-    "mtime": 1794040888.6602592,
-    "seen": 1794040957.5852952,
+    "mtime": 1794042823.3984857,
+    "seen": 1794042888.1235006,
     "ast_hash": "b992a7156f1fd5efe1b14226739d1269",
     "semantic_hash": ""
   },
@@ -3660,8 +3660,8 @@
     "semantic_hash": ""
   },
   "backend/static/404.html": {
-    "mtime": 1794040888.6607573,
-    "seen": 1794040957.5852919,
+    "mtime": 1794042823.3984857,
+    "seen": 1794042888.1234982,
     "ast_hash": "428ecfd8ac04dbed543894a9d68f1dae",
     "semantic_hash": ""
   },
@@ -3726,15 +3726,15 @@
     "semantic_hash": ""
   },
   "WLI_DOCS/MQTT_12_SCENARIOS_VERIFICATION_REPORT.json": {
-    "mtime": 1794040918.0197976,
-    "seen": 1794040957.4959593,
-    "ast_hash": "d95e92570ad00f4ae41117b6945653b9",
+    "mtime": 1794042849.4687786,
+    "seen": 1794042888.031595,
+    "ast_hash": "c0aa676b959c155a265a118d1d01eecf",
     "semantic_hash": ""
   },
   "apps/mobile/scripts/verify_12_scenarios.cjs": {
-    "mtime": 1794036834.8912964,
-    "seen": 1794037092.212074,
-    "ast_hash": "56f61863de56ef9026c9314a41467b31",
+    "mtime": 1794042816.4061637,
+    "seen": 1794042888.0583663,
+    "ast_hash": "ddb9e612911e0f0423bb3e575420d323",
     "semantic_hash": ""
   },
   "apps/mobile/src/services/mqttService.ts": {
@@ -3756,9 +3756,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/scripts/verify_live_github_pages.cjs": {
-    "mtime": 1794038773.0632782,
-    "seen": 1794040957.5196118,
-    "ast_hash": "49fd38cacab4185f89cceae1897e5938",
+    "mtime": 1794041170.1980045,
+    "seen": 1794042888.0589972,
+    "ast_hash": "3804edec1bc98b877b9f808c38c07615",
     "semantic_hash": ""
   },
   "apps/mobile/package-lock.json": {

@@ -524,6 +524,18 @@ app.whenReady().then(async () => {
     await sleep(2000);
     await saveScreenshot(win, '03_panorama_coach_details.png');
 
+    // Navigate to All Tanks & capture
+    console.log('[RUNNER] Navigating to All Tanks & capturing...');
+    await win.webContents.executeJavaScript(\`
+      (() => {
+        window.location.hash = '#/watertank';
+      })();
+    \`);
+    await sleep(2000);
+    win.setSize(1920, 1080);
+    await sleep(1200);
+    await saveScreenshot(win, '04_panorama_all_tanks_1920x1080.png');
+
     console.log('\\n==================================================');
     console.log('RESULTS_JSON_START' + JSON.stringify(results) + 'RESULTS_JSON_END');
     console.log('==================================================');
