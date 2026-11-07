@@ -116,13 +116,14 @@ export const Sidebar: React.FC = () => {
         overflow: 'hidden',
       }}
     >
-      {/* Brand Header */}
+      {/* Brand Header: Panorama Icon Only as per SCADA guidelines */}
       <div
         style={{
-          padding: isCollapsed ? '16px 8px' : '16px 14px',
+          padding: isCollapsed ? '14px 8px' : '14px 16px',
           borderBottom: '1px solid var(--color-border, #E2E8F0)',
           display: 'flex',
           alignItems: 'center',
+          justifyContent: isCollapsed ? 'center' : 'flex-start',
           gap: '10px',
         }}
       >
@@ -137,129 +138,7 @@ export const Sidebar: React.FC = () => {
             flexShrink: 0,
           }}
         />
-        {!sidebarCollapsed && (
-          <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <span
-              style={{
-                fontFamily: typography.fontFamily,
-                fontSize: '12px',
-                fontWeight: 800,
-                color: 'var(--color-text-primary, #0F172A)',
-                letterSpacing: '0.5px',
-                lineHeight: 1.2,
-              }}
-            >
-              PANORAMA SCADA
-            </span>
-            <span
-              style={{
-                fontFamily: typography.fontFamily,
-                fontSize: '10px',
-                color: 'var(--color-text-muted, #64748B)',
-                fontWeight: 500,
-              }}
-            >
-              {isAdmin ? 'Admin HMI Console' : 'Water Tank Telemetry'}
-            </span>
-          </div>
-        )}
       </div>
-
-      {/* Train Summary Card (Collapsible) */}
-      {!sidebarCollapsed && (
-        <div
-          style={{
-            margin: '10px 12px',
-            padding: '10px 12px',
-            borderRadius: '8px',
-            backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
-            border: '1px solid var(--color-border, #CBD5E1)',
-            boxSizing: 'border-box',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                color: 'var(--color-text-primary, #0F172A)',
-              }}
-            >
-              {selectedTrainNumber} &bull; Active Consist
-            </span>
-            <span
-              style={{
-                fontSize: '9px',
-                fontWeight: 700,
-                color: 'var(--color-primary, #2563EB)',
-                backgroundColor: 'var(--color-primary-surface, #EFF6FF)',
-                border: '1px solid var(--color-primary-border, #BFDBFE)',
-                padding: '1px 5px',
-                borderRadius: '4px',
-              }}
-            >
-              LIVE
-            </span>
-          </div>
-          <div
-            style={{
-              fontSize: '10px',
-              color: 'var(--color-text-muted, #64748B)',
-              marginTop: '2px',
-              marginBottom: '8px',
-            }}
-          >
-            Railway Telemetry Corridor
-          </div>
-
-          {/* 2x2 Grid */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '6px',
-              fontSize: '10px',
-            }}
-          >
-            <div style={{ backgroundColor: 'var(--color-surface, #FFFFFF)', padding: '4px 6px', borderRadius: '4px', border: '1px solid var(--color-border, #E2E8F0)' }}>
-              <span style={{ color: 'var(--color-text-muted, #64748B)' }}>Coaches: </span>
-              <strong style={{ color: 'var(--color-text-primary, #0F172A)' }}>{devices.length || 1}</strong>
-            </div>
-            <div style={{ backgroundColor: 'var(--color-surface, #FFFFFF)', padding: '4px 6px', borderRadius: '4px', border: '1px solid var(--color-border, #E2E8F0)' }}>
-              <span style={{ color: 'var(--color-text-muted, #64748B)' }}>Tanks: </span>
-              <strong style={{ color: 'var(--color-text-primary, #0F172A)' }}>{totalTanksCount || 2}</strong>
-            </div>
-            <div style={{ backgroundColor: 'var(--color-surface, #FFFFFF)', padding: '4px 6px', borderRadius: '4px', border: '1px solid var(--color-border, #E2E8F0)' }}>
-              <span style={{ color: 'var(--color-text-muted, #64748B)' }}>Online: </span>
-              <strong style={{ color: onlineDevicesCount > 0 ? 'var(--color-success, #16A34A)' : 'var(--color-text-muted, #64748B)' }}>{onlineDevicesCount}</strong>
-            </div>
-            <div style={{ backgroundColor: 'var(--color-surface, #FFFFFF)', padding: '4px 6px', borderRadius: '4px', border: '1px solid var(--color-border, #E2E8F0)' }}>
-              <span style={{ color: 'var(--color-text-muted, #64748B)' }}>Offline: </span>
-              <strong style={{ color: 'var(--color-text-muted, #64748B)' }}>{offlineDevicesCount}</strong>
-            </div>
-          </div>
-
-          {/* Alerts Row */}
-          <div
-            style={{
-              marginTop: '6px',
-              padding: '3px 6px',
-              borderRadius: '4px',
-              backgroundColor: totalAlertsCount > 0 ? 'var(--color-critical-surface, #FEE2E2)' : 'var(--color-success-surface, #ECFDF5)',
-              color: totalAlertsCount > 0 ? 'var(--color-critical, #DC2626)' : 'var(--color-success, #16A34A)',
-              border: `1px solid ${totalAlertsCount > 0 ? 'var(--color-critical-border, #FCA5A5)' : 'var(--color-success-border, #DCFCE7)'}`,
-              fontSize: '10px',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <span>Alerts:</span>
-            <span>{totalAlertsCount > 0 ? `${totalAlertsCount} Active` : '0 Normal'}</span>
-          </div>
-        </div>
-      )}
 
       {/* Nav List Area */}
       <div

@@ -491,117 +491,80 @@ export const Header: React.FC = () => {
   return (
     <header
       style={{
-        height: '72px',
+        height: '52px',
         backgroundColor: '#FFFFFF',
-        borderBottom: '1px solid #E2E8F0',
+        borderBottom: '1px solid #CBD5E1',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingLeft: '20px',
-        paddingRight: '20px',
+        paddingLeft: '16px',
+        paddingRight: '16px',
         boxSizing: 'border-box',
         userSelect: 'none',
         zIndex: 100,
         flexShrink: 0,
       }}
     >
-      {/* Left: Brand Emblem + Home + Screen Title */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+      {/* Left: Brand Emblem + Screen Title */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
         {/* Brand Emblem */}
         <div
           onClick={() => setActiveScreen('dashboard')}
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '10px',
+            gap: '8px',
             cursor: 'pointer',
           }}
-          title="Panorama Water Tank Monitor — Real-Time Water Tank Monitoring & Telemetry"
+          title="Panorama Water Tank Monitor"
         >
           <img
             src={panoramaLogoIcon}
             alt="Panorama"
             style={{
-              width: '32px',
-              height: '32px',
+              width: '28px',
+              height: '28px',
               objectFit: 'contain',
-              borderRadius: '6px',
+              borderRadius: '4px',
             }}
           />
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', letterSpacing: '0.3px', lineHeight: 1.15 }}>
-              PANORAMA WATER TANK MONITOR
-            </span>
-            <span style={{ fontSize: '9px', fontWeight: 600, color: '#2563EB', letterSpacing: '0.2px' }}>
-              Real-Time Water Tank Monitoring &amp; Telemetry
-            </span>
-          </div>
+          <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
+            PANORAMA WATER TANK MONITOR
+          </span>
         </div>
 
-        {/* Home Button */}
-        <button
-          onClick={() => setActiveScreen('dashboard')}
-          title="Return to Home Dashboard"
-          style={{
-            background: activeScreen === 'dashboard' ? '#EFF6FF' : '#F8FAFC',
-            border: '1px solid #E2E8F0',
-            borderRadius: '6px',
-            width: '34px',
-            height: '34px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: activeScreen === 'dashboard' ? '#2563EB' : '#64748B',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          <Home size={16} />
-        </button>
-
         {/* Vertical Divider */}
-        <div style={{ width: '1px', height: '32px', backgroundColor: '#E2E8F0' }} />
+        <div style={{ width: '1px', height: '24px', backgroundColor: '#CBD5E1', margin: '0 4px' }} />
 
-        {/* Screen Title & Subtitle */}
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: '17px',
-                fontWeight: 700,
-                color: '#0F172A',
-                fontFamily: typography.fontFamily,
-                lineHeight: '22px',
-                letterSpacing: '-0.2px',
-              }}
-            >
-              {currentInfo.title}
-            </h1>
-            <span
-              style={{
-                fontSize: '10px',
-                fontWeight: 600,
-                color: '#2563EB',
-                backgroundColor: '#EFF6FF',
-                padding: '2px 7px',
-                borderRadius: '4px',
-                letterSpacing: '0.4px',
-              }}
-            >
-              SCADA HMI
-            </span>
-          </div>
-          <span
+        {/* Screen Title */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h1
             style={{
-              fontSize: '11px',
-              color: '#64748B',
+              margin: 0,
+              fontSize: '13px',
+              fontWeight: 700,
+              color: '#334155',
               fontFamily: typography.fontFamily,
-              marginTop: '1px',
-              lineHeight: '15px',
+              lineHeight: '18px',
+              letterSpacing: '-0.1px',
+              whiteSpace: 'nowrap',
             }}
           >
-            {currentInfo.subtitle}
+            {currentInfo.title}
+          </h1>
+          <span
+            style={{
+              fontSize: '9px',
+              fontWeight: 700,
+              color: '#2563EB',
+              backgroundColor: '#EFF6FF',
+              border: '1px solid #BFDBFE',
+              padding: '1px 6px',
+              borderRadius: '3px',
+              letterSpacing: '0.4px',
+            }}
+          >
+            SCADA
           </span>
         </div>
       </div>

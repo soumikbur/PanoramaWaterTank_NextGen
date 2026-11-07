@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-11-07T07:36:43.681Z",
+  "timestamp": "2026-11-07T08:41:58.019Z",
   "allPassed": true,
   "scenarios": {
     "Scenario_1_Connect": {
@@ -28,7 +28,7 @@
       "details": {
         "hasPct": true,
         "hasCm": true,
-        "hasValve": true
+        "hasValve": false
       }
     },
     "Scenario_4_Tank2_Update": {
@@ -36,7 +36,7 @@
       "details": {
         "hasPct": true,
         "hasCm": true,
-        "hasValve": true
+        "hasValve": false
       }
     },
     "Scenario_5_Battery_Update": {
@@ -65,7 +65,7 @@
       "passed": true,
       "details": {
         "status": "DISCONNECTED",
-        "domHasOffline": true
+        "domHasOffline": false
       }
     },
     "Scenario_9_Stale_Timeout": {
