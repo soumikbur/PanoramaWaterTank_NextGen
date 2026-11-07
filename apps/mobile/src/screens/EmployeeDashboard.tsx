@@ -783,7 +783,29 @@ export const EmployeeDashboard: React.FC = () => {
             </h2>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            {/* Coach Consist Button */}
+            <button
+              onClick={() => setActiveScreen('coaches')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 12px',
+                borderRadius: '16px',
+                backgroundColor: 'var(--color-primary-surface, #EFF6FF)',
+                border: '1px solid var(--color-primary-border, #BFDBFE)',
+                color: 'var(--color-primary, #2563EB)',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+              title="Open Coach Consist Overview"
+            >
+              <Layers size={13} />
+              <span>Coach Consist</span>
+            </button>
+
             {/* Live Monitoring Pill */}
             <button
               onClick={() => setActiveScreen('monitoring')}
@@ -1130,16 +1152,41 @@ export const EmployeeDashboard: React.FC = () => {
             flexDirection: 'column',
           }}
         >
-          <h3
-            style={{
-              margin: '0 0 16px 0',
-              fontSize: '15px',
-              fontWeight: 800,
-              color: 'var(--color-text-primary, #0F172A)',
-            }}
-          >
-            Coach : {selectedCoach.coachNumber}
-          </h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: '15px',
+                fontWeight: 800,
+                color: 'var(--color-text-primary, #0F172A)',
+              }}
+            >
+              Coach : {selectedCoach.coachNumber}
+            </h3>
+            <button
+              onClick={() => {
+                setSelectedCoachNumber(selectedCoach.coachNumber);
+                setActiveScreen('coach-details');
+              }}
+              style={{
+                padding: '4px 10px',
+                backgroundColor: 'var(--color-primary, #2563EB)',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+              title="Open full coach details and dual tank telemetry"
+            >
+              <span>Coach Details</span>
+              <ArrowRight size={12} />
+            </button>
+          </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1, justifyContent: 'center' }}>
             {/* Coach No. */}
@@ -1678,12 +1725,16 @@ export const EmployeeDashboard: React.FC = () => {
           </button>
         </div>
 
-        {/* View Details Button (Primary Action) */}
+        {/* View Details Button (Primary Action - Matching Reference Image) */}
         <button
-          onClick={() => setActiveScreen('coaches')}
+          onClick={() => {
+            setSelectedCoachNumber(selectedCoach.coachNumber);
+            setActiveScreen('coach-details');
+          }}
           style={{
             padding: '10px 24px',
-            backgroundColor: 'var(--color-primary, #2563EB)',
+            backgroundColor: '#4F46E5',
+            backgroundImage: 'linear-gradient(135deg, #5B50E6 0%, #4338CA 100%)',
             color: '#FFFFFF',
             border: 'none',
             borderRadius: '8px',
@@ -1693,9 +1744,10 @@ export const EmployeeDashboard: React.FC = () => {
             alignItems: 'center',
             gap: '8px',
             cursor: 'pointer',
-            boxShadow: '0 2px 4px rgba(37,99,235,0.25)',
+            boxShadow: '0 2px 6px rgba(79,70,229,0.35)',
             transition: 'all 0.15s ease',
           }}
+          title="View full coach details and dual tank telemetry"
         >
           <span>View Details</span>
           <ArrowRight size={16} strokeWidth={2.4} />

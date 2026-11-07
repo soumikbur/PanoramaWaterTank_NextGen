@@ -12,6 +12,24 @@
         try {
           document.documentElement.setAttribute('data-theme', 'light');
         } catch (e) {}
+
+        // GitHub Pages SPA Redirect Decoder
+        try {
+          var url = new URL(window.location.href);
+          var p = url.searchParams.get('p');
+          if (p) {
+            var q = url.searchParams.get('q');
+            var cleanPath = p;
+            if (cleanPath.indexOf('#/') === 0) cleanPath = cleanPath.substring(2);
+            else if (cleanPath.indexOf('#') === 0) cleanPath = cleanPath.substring(1);
+            if (cleanPath.indexOf('/') === 0) cleanPath = cleanPath.substring(1);
+
+            var newHash = '#/' + cleanPath + (q ? '?' + q.replace(/~and~/g, '&') : '');
+            window.location.hash = newHash;
+            var cleanUrl = window.location.pathname + window.location.hash;
+            window.history.replaceState(null, null, cleanUrl);
+          }
+        } catch (e) {}
       })();
     </script>
     <style>

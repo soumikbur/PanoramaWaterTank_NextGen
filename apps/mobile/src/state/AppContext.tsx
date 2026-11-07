@@ -14,12 +14,14 @@ import {
 import { ApiClient } from '../api/client';
 import { wsService } from '../services/websocket';
 import { DisplayPreferencesService, ScalePreset } from '../services/displayPreferencesService';
+import { AppRouter } from '../services/router';
 
 export type ScreenName =
   | 'login'
   | 'dashboard'
   | 'trains'
   | 'coaches'
+  | 'coach-details'
   | 'watertank'
   | 'devices'
   | 'location'
@@ -152,13 +154,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const user = await ApiClient.fetchCurrentUser();
         setCurrentUser(user);
         setIsAuthenticated(true);
-        setActiveScreen('dashboard');
+        const parsed = AppRouter.parseCurrentRoute();
+        if (parsed.trainNumber) setSelectedTrainNumber(parsed.trainNumber);
+        if (parsed.coachNumber) setSelectedCoachNumber(parsed.coachNumber);
+        const targetScreen = (parsed.screen && parsed.screen !== 'login' ? parsed.screen : 'dashboard') as ScreenName;
+        setActiveScreen(targetScreen);
+        AppRouter.navigate(targetScreen, parsed.trainNumber || selectedTrainNumber, parsed.coachNumber || selectedCoachNumber);
       } catch (err) {
         console.warn('[AppContext] Stale or invalid session token. Resetting to login:', err);
         ApiClient.logout();
         setIsAuthenticated(false);
         setCurrentUser(null);
         setActiveScreen('login');
+        AppRouter.navigate('login');
       } finally {
         setAuthLoading(false);
       }
@@ -166,6 +174,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     checkAuthSession();
   }, []);
+
+  // Listen to browser URL navigation (Back/Forward buttons, hashchange)
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const parsed = AppRouter.parseCurrentRoute();
+      if (parsed.screen && parsed.screen !== activeScreen) {
+        setActiveScreen(parsed.screen as ScreenName);
+      }
+      if (parsed.trainNumber && parsed.trainNumber !== selectedTrainNumber) {
+        setSelectedTrainNumber(parsed.trainNumber);
+      }
+      if (parsed.coachNumber && parsed.coachNumber !== selectedCoachNumber) {
+        setSelectedCoachNumber(parsed.coachNumber);
+      }
+    };
+
+    window.addEventListener('hashchange', handleUrlChange);
+    window.addEventListener('popstate', handleUrlChange);
+    return () => {
+      window.removeEventListener('hashchange', handleUrlChange);
+      window.removeEventListener('popstate', handleUrlChange);
+    };
+  }, [activeScreen, selectedTrainNumber, selectedCoachNumber]);
 
   // Clock & Date ticker
   useEffect(() => {
@@ -339,21 +370,43 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const handleSetActiveScreen = (screen: ScreenName) => {
     if (!isAuthenticated && screen !== 'login') {
       setActiveScreen('login');
+      AppRouter.navigate('login');
       return;
     }
     const adminOnlyScreens: ScreenName[] = ['users', 'logs'];
     if (adminOnlyScreens.includes(screen) && currentUser?.role !== 'ADMIN') {
       setActiveScreen(screen); // App.tsx will gracefully render AccessDeniedScreen
+      AppRouter.navigate(screen);
       return;
     }
     setActiveScreen(screen);
+    AppRouter.navigate(screen, selectedTrainNumber, selectedCoachNumber);
+  };
+
+  const handleSetSelectedTrainNumber = (trainNum: string) => {
+    setSelectedTrainNumber(trainNum);
+    if (activeScreen === 'coach-details' || activeScreen === 'coaches') {
+      AppRouter.navigate(activeScreen, trainNum, selectedCoachNumber);
+    }
+  };
+
+  const handleSetSelectedCoachNumber = (coachNum: string) => {
+    setSelectedCoachNumber(coachNum);
+    if (activeScreen === 'coach-details' || activeScreen === 'coaches') {
+      AppRouter.navigate(activeScreen, selectedTrainNumber, coachNum);
+    }
   };
 
   const login = async (u: string, p: string) => {
     const res = await ApiClient.login(u, p);
     setCurrentUser(res.user);
     setIsAuthenticated(true);
-    setActiveScreen('dashboard');
+    const parsed = AppRouter.parseCurrentRoute();
+    if (parsed.trainNumber) setSelectedTrainNumber(parsed.trainNumber);
+    if (parsed.coachNumber) setSelectedCoachNumber(parsed.coachNumber);
+    const targetScreen = (parsed.screen && parsed.screen !== 'login' ? parsed.screen : 'dashboard') as ScreenName;
+    setActiveScreen(targetScreen);
+    AppRouter.navigate(targetScreen, parsed.trainNumber || selectedTrainNumber, parsed.coachNumber || selectedCoachNumber);
     await refreshData();
   };
 
@@ -368,6 +421,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setIsAuthenticated(false);
     setCurrentUser(null);
     setActiveScreen('login');
+    AppRouter.navigate('login');
   };
 
   return (
@@ -393,9 +447,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         sidebarCollapsed,
         toggleSidebar,
         selectedTrainNumber,
-        setSelectedTrainNumber,
+        setSelectedTrainNumber: handleSetSelectedTrainNumber,
         selectedCoachNumber,
-        setSelectedCoachNumber,
+        setSelectedCoachNumber: handleSetSelectedCoachNumber,
         selectedTankId,
         setSelectedTankId,
         selectedDeviceId,

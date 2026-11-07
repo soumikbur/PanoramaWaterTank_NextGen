@@ -13,6 +13,16 @@ interface TankVisualizationProps {
 
 export type TankVisualizationState = 'NO_TELEMETRY' | 'VALID_ZERO' | 'STALE' | 'VALID_READING';
 
+const resolveCanvasColor = (colorStr: string, fallback: string): string => {
+  if (!colorStr) return fallback;
+  if (!colorStr.startsWith('var(')) return colorStr;
+  const match = colorStr.match(/var\([^,]+,\s*([^)]+)\)/);
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+  return fallback;
+};
+
 export const TankVisualization: React.FC<TankVisualizationProps> = ({
   tank,
   batteryPercent,
@@ -201,175 +211,179 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-    const w = containerSize.width;
-    const h = containerSize.height;
+    try {
+      const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+      const w = containerSize.width;
+      const h = containerSize.height;
 
-    if (w <= 0 || h <= 0) return;
+      if (w <= 0 || h <= 0) return;
 
-    const tr = Math.min(metrics.topRadius, w * 0.1, h * 0.05);
-    const br = Math.min(metrics.bottomRadius, w * 0.15, h * 0.08);
+      const tr = Math.min(metrics.topRadius, w * 0.1, h * 0.05);
+      const br = Math.min(metrics.bottomRadius, w * 0.15, h * 0.08);
 
-    ctx.save();
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, w, h);
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, w, h);
 
-    // 1. Vessel Body Outline Path (for clipping interior)
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(tr, 0);
-    ctx.lineTo(w - tr, 0);
-    ctx.quadraticCurveTo(w, 0, w, tr);
-    ctx.lineTo(w, h - br);
-    ctx.quadraticCurveTo(w, h, w - br, h);
-    ctx.lineTo(br, h);
-    ctx.quadraticCurveTo(0, h, 0, h - br);
-    ctx.lineTo(0, tr);
-    ctx.quadraticCurveTo(0, 0, tr, 0);
-    ctx.closePath();
+      // 1. Vessel Body Outline Path (for clipping interior)
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(tr, 0);
+      ctx.lineTo(w - tr, 0);
+      ctx.quadraticCurveTo(w, 0, w, tr);
+      ctx.lineTo(w, h - br);
+      ctx.quadraticCurveTo(w, h, w - br, h);
+      ctx.lineTo(br, h);
+      ctx.quadraticCurveTo(0, h, 0, h - br);
+      ctx.lineTo(0, tr);
+      ctx.quadraticCurveTo(0, 0, tr, 0);
+      ctx.closePath();
 
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fill();
 
-    // 2. CLIP water fill to inner tank body
-    ctx.clip();
+      // 2. CLIP water fill to inner tank body
+      ctx.clip();
 
-    if (state === 'VALID_READING') {
-      const waterH = h * (animatedFillRef.current / 100.0);
-      if (waterH > 0) {
-        const waterTopY = h - waterH;
+      if (state === 'VALID_READING') {
+        const waterH = h * (animatedFillRef.current / 100.0);
+        if (waterH > 0) {
+          const waterTopY = h - waterH;
 
-        // Linear Gradient Fill
-        const grad = ctx.createLinearGradient(0, waterTopY, 0, h);
-        const colorTop = isOverflow
-          ? '#EF4444'
-          : fillPercentage < 10
-          ? '#EF4444'
-          : fillPercentage < 20
-          ? '#F59E0B'
-          : colors.waterTop;
-        const colorBottom = isOverflow
-          ? '#B91C1C'
-          : fillPercentage < 10
-          ? '#DC2626'
-          : fillPercentage < 20
-          ? '#D97706'
-          : colors.waterBottom;
-        grad.addColorStop(0, colorTop);
-        grad.addColorStop(1, colorBottom);
-        ctx.fillStyle = grad;
+          // Linear Gradient Fill
+          const grad = ctx.createLinearGradient(0, waterTopY, 0, h);
+          const colorTop = isOverflow
+            ? '#EF4444'
+            : fillPercentage < 10
+            ? '#EF4444'
+            : fillPercentage < 20
+            ? '#F59E0B'
+            : resolveCanvasColor(colors.waterTop, '#0284C7');
+          const colorBottom = isOverflow
+            ? '#B91C1C'
+            : fillPercentage < 10
+            ? '#DC2626'
+            : fillPercentage < 20
+            ? '#D97706'
+            : resolveCanvasColor(colors.waterBottom, '#1D4ED8');
+          grad.addColorStop(0, colorTop);
+          grad.addColorStop(1, colorBottom);
+          ctx.fillStyle = grad;
 
-        // Dual smooth sine waves scaled proportionally with tank size
-        const phase1 = wavePhase;
-        const phase2 = wavePhase * 1.6 + 1.2;
-        const amp1 = Math.min(3.0, h * 0.012);
-        const amp2 = Math.min(1.8, h * 0.007);
+          // Dual smooth sine waves scaled proportionally with tank size
+          const phase1 = wavePhase;
+          const phase2 = wavePhase * 1.6 + 1.2;
+          const amp1 = Math.min(3.0, h * 0.012);
+          const amp2 = Math.min(1.8, h * 0.007);
 
-        ctx.beginPath();
-        ctx.moveTo(0, h);
-        ctx.lineTo(0, waterTopY);
-
-        for (let x = 0; x <= w; x += 3) {
-          const waveY =
-            waterTopY +
-            Math.sin((x / w) * Math.PI * 2.0 + phase1) * amp1 +
-            Math.sin((x / w) * Math.PI * 4.0 + phase2) * amp2;
-          ctx.lineTo(x, waveY);
-        }
-
-        ctx.lineTo(w, h);
-        ctx.closePath();
-        ctx.fill();
-
-        // Wave crest highlight
-        ctx.beginPath();
-        for (let x2 = 0; x2 <= w; x2 += 3) {
-          const waveY2 =
-            waterTopY +
-            Math.sin((x2 / w) * Math.PI * 2.0 + phase1) * amp1 +
-            Math.sin((x2 / w) * Math.PI * 4.0 + phase2) * amp2;
-          if (x2 === 0) ctx.moveTo(x2, waveY2);
-          else ctx.lineTo(x2, waveY2);
-        }
-        ctx.lineWidth = 2.0;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
-        ctx.stroke();
-      }
-    } else if (state === 'STALE') {
-      const waterH = h * (animatedFillRef.current / 100.0);
-      if (waterH > 0) {
-        const waterTopY = h - waterH;
-
-        // Frozen / desaturated flat water fill
-        const grad = ctx.createLinearGradient(0, waterTopY, 0, h);
-        grad.addColorStop(0, 'rgba(148, 163, 184, 0.7)');
-        grad.addColorStop(1, 'rgba(100, 116, 139, 0.85)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, waterTopY, w, waterH);
-
-        // Diagonal hatch pattern indicating inactive telemetry
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-        ctx.lineWidth = 1.5;
-        for (let x = -h; x < w + h; x += 14) {
           ctx.beginPath();
-          ctx.moveTo(x, h);
-          ctx.lineTo(x + waterH, waterTopY);
+          ctx.moveTo(0, h);
+          ctx.lineTo(0, waterTopY);
+
+          for (let x = 0; x <= w; x += 3) {
+            const waveY =
+              waterTopY +
+              Math.sin((x / w) * Math.PI * 2.0 + phase1) * amp1 +
+              Math.sin((x / w) * Math.PI * 4.0 + phase2) * amp2;
+            ctx.lineTo(x, waveY);
+          }
+
+          ctx.lineTo(w, h);
+          ctx.closePath();
+          ctx.fill();
+
+          // Wave crest highlight
+          ctx.beginPath();
+          for (let x2 = 0; x2 <= w; x2 += 3) {
+            const waveY2 =
+              waterTopY +
+              Math.sin((x2 / w) * Math.PI * 2.0 + phase1) * amp1 +
+              Math.sin((x2 / w) * Math.PI * 4.0 + phase2) * amp2;
+            if (x2 === 0) ctx.moveTo(x2, waveY2);
+            else ctx.lineTo(x2, waveY2);
+          }
+          ctx.lineWidth = 2.0;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
           ctx.stroke();
         }
+      } else if (state === 'STALE') {
+        const waterH = h * (animatedFillRef.current / 100.0);
+        if (waterH > 0) {
+          const waterTopY = h - waterH;
 
-        // Stale watermark line
-        ctx.strokeStyle = '#D97706';
+          // Frozen / desaturated flat water fill
+          const grad = ctx.createLinearGradient(0, waterTopY, 0, h);
+          grad.addColorStop(0, 'rgba(148, 163, 184, 0.7)');
+          grad.addColorStop(1, 'rgba(100, 116, 139, 0.85)');
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, waterTopY, w, waterH);
+
+          // Diagonal hatch pattern indicating inactive telemetry
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+          ctx.lineWidth = 1.5;
+          for (let x = -h; x < w + h; x += 14) {
+            ctx.beginPath();
+            ctx.moveTo(x, h);
+            ctx.lineTo(x + waterH, waterTopY);
+            ctx.stroke();
+          }
+
+          // Stale watermark line
+          ctx.strokeStyle = '#D97706';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(0, waterTopY);
+          ctx.lineTo(w, waterTopY);
+          ctx.stroke();
+        }
+      } else if (state === 'VALID_ZERO') {
+        // Empty tank with subtle red 0% baseline marker
+        ctx.strokeStyle = '#EF4444';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(0, waterTopY);
-        ctx.lineTo(w, waterTopY);
+        ctx.moveTo(6, h - 2);
+        ctx.lineTo(w - 6, h - 2);
         ctx.stroke();
+
+        ctx.fillStyle = '#EF4444';
+        ctx.font = '600 11px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Tank Empty (0.00%)', w / 2, h - 14);
+      } else {
+        // STATE A: NO TELEMETRY
+        ctx.fillStyle = '#94A3B8';
+        ctx.font = '600 12px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Awaiting Telemetry', w / 2, h / 2 - 2);
+
+        ctx.fillStyle = '#CBD5E1';
+        ctx.font = '500 10px Inter, sans-serif';
+        ctx.fillText('No Sensor Stream', w / 2, h / 2 + 14);
       }
-    } else if (state === 'VALID_ZERO') {
-      // Empty tank with subtle red 0% baseline marker
-      ctx.strokeStyle = '#EF4444';
-      ctx.lineWidth = 2;
+
+      ctx.restore(); // End clipping
+
+      // 3. Draw Outer Tank Outline Overlay
       ctx.beginPath();
-      ctx.moveTo(6, h - 2);
-      ctx.lineTo(w - 6, h - 2);
+      ctx.moveTo(tr, 1);
+      ctx.lineTo(w - tr, 1);
+      ctx.quadraticCurveTo(w - 1, 1, w - 1, tr);
+      ctx.lineTo(w - 1, h - br);
+      ctx.quadraticCurveTo(w - 1, h - 1, w - br, h - 1);
+      ctx.lineTo(br, h - 1);
+      ctx.quadraticCurveTo(1, h - 1, 1, h - br);
+      ctx.lineTo(1, tr);
+      ctx.quadraticCurveTo(1, 1, tr, 1);
+      ctx.closePath();
+
+      ctx.lineWidth = 2.0;
+      ctx.strokeStyle = resolveCanvasColor(colors.tankOutline, '#94A3B8');
       ctx.stroke();
 
-      ctx.fillStyle = '#EF4444';
-      ctx.font = '600 11px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('Tank Empty (0.00%)', w / 2, h - 14);
-    } else {
-      // STATE A: NO TELEMETRY
-      ctx.fillStyle = '#94A3B8';
-      ctx.font = '600 12px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('Awaiting Telemetry', w / 2, h / 2 - 2);
-
-      ctx.fillStyle = '#CBD5E1';
-      ctx.font = '500 10px Inter, sans-serif';
-      ctx.fillText('No Sensor Stream', w / 2, h / 2 + 14);
+      ctx.restore(); // End dpr scale
+    } catch (err) {
+      console.warn('[TankVisualization canvas render error]:', err);
     }
-
-    ctx.restore(); // End clipping
-
-    // 3. Draw Outer Tank Outline Overlay
-    ctx.beginPath();
-    ctx.moveTo(tr, 1);
-    ctx.lineTo(w - tr, 1);
-    ctx.quadraticCurveTo(w - 1, 1, w - 1, tr);
-    ctx.lineTo(w - 1, h - br);
-    ctx.quadraticCurveTo(w - 1, h - 1, w - br, h - 1);
-    ctx.lineTo(br, h - 1);
-    ctx.quadraticCurveTo(1, h - 1, 1, h - br);
-    ctx.lineTo(1, tr);
-    ctx.quadraticCurveTo(1, 1, tr, 1);
-    ctx.closePath();
-
-    ctx.lineWidth = 2.0;
-    ctx.strokeStyle = colors.tankOutline;
-    ctx.stroke();
-
-    ctx.restore(); // End dpr scale
   }, [state, fillPercentage, wavePhase, isOverflow, containerSize]);
 
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;

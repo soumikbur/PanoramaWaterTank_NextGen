@@ -44,8 +44,12 @@ export interface CoachRecord {
 
 export const CoachManagementScreen: React.FC = () => {
   const {
+    activeScreen,
+    setActiveScreen,
     selectedTrainNumber,
     setSelectedTrainNumber,
+    selectedCoachNumber,
+    setSelectedCoachNumber,
     devices,
     tanks,
     liveTank,
@@ -184,6 +188,21 @@ export const CoachManagementScreen: React.FC = () => {
   }, [activeTrain, devices, liveTank]);
 
   const allCoaches = [...coachesList, ...customCoaches];
+
+  // Auto-select coach matching global context or default to first coach
+  useEffect(() => {
+    if (allCoaches.length > 0) {
+      if (!selectedCoach) {
+        const match = selectedCoachNumber
+          ? allCoaches.find((c) => c.coachNumber.toUpperCase() === selectedCoachNumber.toUpperCase())
+          : null;
+        setSelectedCoach(match || allCoaches[0]);
+      } else if (selectedCoachNumber && selectedCoach.coachNumber.toUpperCase() !== selectedCoachNumber.toUpperCase()) {
+        const match = allCoaches.find((c) => c.coachNumber.toUpperCase() === selectedCoachNumber.toUpperCase());
+        if (match) setSelectedCoach(match);
+      }
+    }
+  }, [allCoaches, selectedCoach, selectedCoachNumber]);
 
   const handleScrollTrack = (dir: 'left' | 'right') => {
     if (trackScrollRef.current) {
@@ -347,6 +366,26 @@ export const CoachManagementScreen: React.FC = () => {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setActiveScreen('dashboard')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              backgroundColor: '#F8FAFC',
+              border: '1px solid #CBD5E1',
+              borderRadius: '6px',
+              color: '#0F172A',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            <ChevronLeft size={14} />
+            <span>Dashboard</span>
+          </button>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>Selected Train:</span>
             <select
@@ -600,7 +639,10 @@ export const CoachManagementScreen: React.FC = () => {
               return (
                 <div
                   key={coach.id}
-                  onClick={() => setSelectedCoach(coach)}
+                  onClick={() => {
+                    setSelectedCoach(coach);
+                    setSelectedCoachNumber(coach.coachNumber);
+                  }}
                   style={{
                     width: '210px',
                     minWidth: '210px',
@@ -752,7 +794,10 @@ export const CoachManagementScreen: React.FC = () => {
               return (
                 <div
                   key={coach.id}
-                  onClick={() => setSelectedCoach(coach)}
+                  onClick={() => {
+                    setSelectedCoach(coach);
+                    setSelectedCoachNumber(coach.coachNumber);
+                  }}
                   style={{
                     borderRadius: '8px',
                     backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
@@ -884,6 +929,29 @@ export const CoachManagementScreen: React.FC = () => {
               >
                 <span>Next Coach</span>
                 <ChevronRight size={14} />
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedCoachNumber(selectedCoach.coachNumber);
+                  setActiveScreen('coach-details');
+                }}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  backgroundColor: '#2563EB',
+                  color: '#FFFFFF',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+                title="Open full dedicated coach details page"
+              >
+                <span>Full Details</span>
+                <ArrowRight size={13} />
               </button>
               <button
                 onClick={() => handleOpenEditCoach(selectedCoach)}

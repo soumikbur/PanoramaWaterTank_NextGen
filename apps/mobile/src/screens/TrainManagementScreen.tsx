@@ -720,7 +720,30 @@ export const TrainManagementScreen: React.FC = () => {
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => {
+                  setSelectedTrainNumber(selectedTrain.train_number);
+                  setActiveScreen('coaches');
+                }}
+                style={{
+                  backgroundColor: '#EFF6FF',
+                  border: '1px solid #BFDBFE',
+                  color: '#2563EB',
+                  borderRadius: '6px',
+                  padding: '8px 14px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <span>Coach Consist</span>
+                <Layers size={13} />
+              </button>
+
               <button
                 onClick={() => {
                   setSelectedTrainNumber(selectedTrain.train_number);
@@ -810,19 +833,45 @@ export const TrainManagementScreen: React.FC = () => {
                     </span>
                   </div>
 
-                  <span
-                    style={{
-                      backgroundColor: coach.is_online ? '#ECFDF5' : '#F1F5F9',
-                      color: coach.is_online ? '#16A34A' : '#64748B',
-                      border: `1px solid ${coach.is_online ? '#DCFCE7' : '#E2E8F0'}`,
-                      borderRadius: '10px',
-                      padding: '2px 8px',
-                      fontSize: '10px',
-                      fontWeight: 700,
-                    }}
-                  >
-                    {coach.is_online ? 'DEVICE ONLINE' : 'DEVICE OFFLINE'}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      onClick={() => {
+                        setSelectedTrainNumber(selectedTrain.train_number);
+                        setSelectedCoachNumber(coach.coach_number);
+                        setActiveScreen('coach-details');
+                      }}
+                      style={{
+                        padding: '3px 8px',
+                        backgroundColor: '#EFF6FF',
+                        border: '1px solid #BFDBFE',
+                        borderRadius: '4px',
+                        color: '#2563EB',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <span>Coach Details</span>
+                      <ArrowRight size={10} />
+                    </button>
+
+                    <span
+                      style={{
+                        backgroundColor: coach.is_online ? '#ECFDF5' : '#F1F5F9',
+                        color: coach.is_online ? '#16A34A' : '#64748B',
+                        border: `1px solid ${coach.is_online ? '#DCFCE7' : '#E2E8F0'}`,
+                        borderRadius: '10px',
+                        padding: '2px 8px',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {coach.is_online ? 'DEVICE ONLINE' : 'DEVICE OFFLINE'}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Tanks Grid for this coach */}

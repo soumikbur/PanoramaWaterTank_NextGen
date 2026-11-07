@@ -6,6 +6,7 @@ import { Sidebar } from './components/common/Sidebar';
 import { Footer } from './components/common/Footer';
 import { DisplayPreferencesProvider } from './context/DisplayPreferencesContext';
 import { AppLayout } from './components/layout/AppLayout';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { ShieldAlert } from 'lucide-react';
 
 // Screens
@@ -14,6 +15,7 @@ import { DashboardScreen } from './screens/DashboardScreen';
 import { EmployeeDashboard } from './screens/EmployeeDashboard';
 import { TrainManagementScreen } from './screens/TrainManagementScreen';
 import { CoachManagementScreen } from './screens/CoachManagementScreen';
+import { CoachDetailsScreen } from './screens/CoachDetailsScreen';
 import { WaterTankScreen } from './screens/WaterTankScreen';
 import { DeviceMappingScreen } from './screens/DeviceMappingScreen';
 import { LocationScreen } from './screens/LocationScreen';
@@ -105,19 +107,22 @@ const MainContent: React.FC = () => {
           boxSizing: 'border-box',
         }}
       >
-        {activeScreen === 'trains' && <TrainManagementScreen />}
-        {activeScreen === 'coaches' && <CoachManagementScreen />}
-        {activeScreen === 'dashboard' && <EmployeeDashboard />}
-        {activeScreen === 'watertank' && <WaterTankScreen />}
-        {activeScreen === 'devices' && <DeviceMappingScreen />}
-        {activeScreen === 'location' && <LocationScreen />}
-        {activeScreen === 'monitoring' && <MonitoringScreen />}
-        {activeScreen === 'alerts' && <AlertsScreen />}
-        {activeScreen === 'history' && <HistoryScreen />}
-        {activeScreen === 'reports' && <ReportsScreen />}
-        {activeScreen === 'settings' && <SettingsScreen />}
-        {activeScreen === 'users' && (isAdmin ? <UsersScreen /> : <AccessDeniedScreen />)}
-        {activeScreen === 'logs' && (isAdmin ? <LogsScreen /> : <AccessDeniedScreen />)}
+        <ErrorBoundary fallbackTitle="Screen Error" onReset={() => setActiveScreen('dashboard')}>
+          {activeScreen === 'trains' && <TrainManagementScreen />}
+          {activeScreen === 'coaches' && <CoachManagementScreen />}
+          {activeScreen === 'coach-details' && <CoachDetailsScreen />}
+          {activeScreen === 'dashboard' && <EmployeeDashboard />}
+          {activeScreen === 'watertank' && <WaterTankScreen />}
+          {activeScreen === 'devices' && <DeviceMappingScreen />}
+          {activeScreen === 'location' && <LocationScreen />}
+          {activeScreen === 'monitoring' && <MonitoringScreen />}
+          {activeScreen === 'alerts' && <AlertsScreen />}
+          {activeScreen === 'history' && <HistoryScreen />}
+          {activeScreen === 'reports' && <ReportsScreen />}
+          {activeScreen === 'settings' && <SettingsScreen />}
+          {activeScreen === 'users' && (isAdmin ? <UsersScreen /> : <AccessDeniedScreen />)}
+          {activeScreen === 'logs' && (isAdmin ? <LogsScreen /> : <AccessDeniedScreen />)}
+        </ErrorBoundary>
       </main>
       <Footer />
     </div>
@@ -178,9 +183,11 @@ const AppShell: React.FC = () => {
 
 export const App: React.FC = () => {
   return (
-    <AppProvider>
-      <AppShell />
-    </AppProvider>
+    <ErrorBoundary fallbackTitle="Application Initialization Error">
+      <AppProvider>
+        <AppShell />
+      </AppProvider>
+    </ErrorBoundary>
   );
 };
 

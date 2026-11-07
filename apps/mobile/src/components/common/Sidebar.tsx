@@ -291,7 +291,7 @@ export const Sidebar: React.FC = () => {
 
         {/* Primary Items */}
         {currentNavItems.map((item) => {
-          const isActive = activeScreen === item.id;
+          const isActive = activeScreen === item.id || (item.id === 'coaches' && activeScreen === 'coach-details');
           const IconComp = item.icon;
           return (
             <button
