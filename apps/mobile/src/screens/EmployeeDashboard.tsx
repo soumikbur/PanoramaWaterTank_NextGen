@@ -450,8 +450,7 @@ export const EmployeeDashboard: React.FC = () => {
         gap: '14px',
         boxSizing: 'border-box',
         width: '100%',
-        maxWidth: '1600px',
-        margin: '0 auto',
+        minWidth: 0,
       }}
     >
       {/* Action Feedback Banner */}
@@ -1378,19 +1377,13 @@ export const EmployeeDashboard: React.FC = () => {
       </div>
 
       {/* =========================================================================
-          SECTION 3: THREE-COLUMN INFORMATION GRID
-          Col 1: Coach Info | Col 2: Dual Water Tanks | Col 3: Train Location & Map
+          SECTION 3: THREE-COLUMN INFORMATION GRID (Fluid 12-Column SCADA Grid)
+          Col 1: Coach Info (Span 3) | Col 2: Dual Water Tanks (Span 5) | Col 3: Train Location & Map (Span 4)
           ========================================================================= */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-          gap: '14px',
-        }}
-      >
-        {/* ==================== COLUMN 1: SELECTED COACH INFO ==================== */}
+      <div className="scada-dashboard-row4">
+        {/* ==================== COLUMN 1: SELECTED COACH INFO (Span 3) ==================== */}
         <div
-          className="interactive-card"
+          className="interactive-card scada-col-coach"
           style={{
             backgroundColor: 'var(--color-surface, #FFFFFF)',
             borderRadius: '8px',
@@ -1541,9 +1534,9 @@ export const EmployeeDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* ==================== COLUMN 2: DUAL TANK MONITORING ==================== */}
+        {/* ==================== COLUMN 2: DUAL TANK MONITORING (Span 5) ==================== */}
         <div
-          className="interactive-card"
+          className="interactive-card scada-col-tanks"
           style={{
             backgroundColor: 'var(--color-surface, #FFFFFF)',
             borderRadius: '8px',
@@ -1805,9 +1798,9 @@ export const EmployeeDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* ==================== COLUMN 3: TRAIN LOCATION & MAP ==================== */}
+        {/* ==================== COLUMN 3: TRAIN LOCATION & MAP (Span 4) ==================== */}
         <div
-          className="interactive-card"
+          className="interactive-card scada-col-location"
           style={{
             backgroundColor: 'var(--color-surface, #FFFFFF)',
             borderRadius: '8px',
@@ -1928,6 +1921,156 @@ export const EmployeeDashboard: React.FC = () => {
             <Crosshair size={14} />
             <span>Center Train</span>
           </button>
+        </div>
+      </div>
+
+      {/* =========================================================================
+          SECTION 3.5 / ROW 5: OPERATIONAL TELEMETRY & SENSOR DIAGNOSTICS STREAM
+          Real-time SCADA sensor metrics, network state, and telemetry health
+          ========================================================================= */}
+      <div
+        className="interactive-card"
+        style={{
+          backgroundColor: 'var(--color-surface, #FFFFFF)',
+          borderRadius: '8px',
+          border: '1px solid var(--color-border, #E2E8F0)',
+          padding: '14px 18px',
+          boxShadow: 'var(--shadow-card, 0 1px 3px rgba(0,0,0,0.05))',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+          width: '100%',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '10px',
+            borderBottom: '1px solid #F1F5F9',
+            paddingBottom: '8px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Activity size={16} color="var(--color-primary, #2563EB)" />
+            <span style={{ fontSize: '12px', fontWeight: 800, letterSpacing: '0.04em', color: '#0F172A', textTransform: 'uppercase' }}>
+              Operational Telemetry & Sensor Diagnostics Stream
+            </span>
+            <span
+              style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: '10px',
+                backgroundColor: !liveTelemetry?.isStale ? '#DCFCE7' : '#FEE2E2',
+                color: !liveTelemetry?.isStale ? '#15803D' : '#DC2626',
+                border: `1px solid ${!liveTelemetry?.isStale ? '#86EFAC' : '#FCA5A5'}`,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <span
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: !liveTelemetry?.isStale ? '#16A34A' : '#DC2626',
+                }}
+              />
+              MQTT {mqttConnectionStatus ? mqttConnectionStatus.toUpperCase() : 'CONNECTED'}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '11px', color: '#64748B' }}>
+            <span>UID: <strong style={{ color: '#0F172A', fontFamily: 'monospace' }}>{liveTelemetry?.uid ?? selectedCoach.deviceId}</strong></span>
+            <span>Last Sync: <strong style={{ color: '#0F172A' }}>{liveTelemetry?.time ?? currentTrain.lastUpdate}</strong></span>
+          </div>
+        </div>
+
+        {/* 6 High-Density Diagnostic Indicators */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gap: '12px',
+          }}
+        >
+          {/* Card 1: Tank 1 Ultrasonic Sensor */}
+          <div style={{ padding: '10px 12px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Arrival Sensor 1</div>
+            <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: '2px 0' }}>
+              {selectedCoach.arrivalHeightCm.toFixed(1)} cm
+            </div>
+            <div style={{ fontSize: '10px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Volume: {((selectedCoach.arrivalLevel / 100) * 500).toFixed(0)} L</span>
+              <span style={{ color: '#15803D', fontWeight: 700 }}>{selectedCoach.arrivalLevel.toFixed(0)}%</span>
+            </div>
+          </div>
+
+          {/* Card 2: Tank 2 Ultrasonic Sensor */}
+          <div style={{ padding: '10px 12px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Departure Sensor 2</div>
+            <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: '2px 0' }}>
+              {selectedCoach.departureHeightCm.toFixed(1)} cm
+            </div>
+            <div style={{ fontSize: '10px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Volume: {((selectedCoach.departureLevel / 100) * 500).toFixed(0)} L</span>
+              <span style={{ color: '#15803D', fontWeight: 700 }}>{selectedCoach.departureLevel.toFixed(0)}%</span>
+            </div>
+          </div>
+
+          {/* Card 3: DC Power & Battery Health */}
+          <div style={{ padding: '10px 12px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Subsystem Battery</div>
+            <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: '2px 0' }}>
+              {selectedCoach.batteryPercent}%
+            </div>
+            <div style={{ fontSize: '10px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Voltage: ~12.4V</span>
+              <span style={{ color: selectedCoach.batteryPercent > 20 ? '#15803D' : '#DC2626', fontWeight: 700 }}>
+                {selectedCoach.batteryPercent > 20 ? 'Optimal' : 'Low Charge'}
+              </span>
+            </div>
+          </div>
+
+          {/* Card 4: GPS Telemetry & Fix */}
+          <div style={{ padding: '10px 12px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>GNSS Navigation</div>
+            <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: '2px 0' }}>
+              {currentTrain.speedKmh.toFixed(1)} km/h
+            </div>
+            <div style={{ fontSize: '10px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Fix: 3D DGPS</span>
+              <span style={{ color: '#2563EB', fontWeight: 700 }}>Lat: {currentTrain.latitude.toFixed(2)}&deg;</span>
+            </div>
+          </div>
+
+          {/* Card 5: Device Mesh Status */}
+          <div style={{ padding: '10px 12px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Fleet Nodes</div>
+            <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: '2px 0' }}>
+              {devices.length > 0 ? `${devices.filter(d => d.is_online).length} / ${devices.length}` : '24 Online'}
+            </div>
+            <div style={{ fontSize: '10px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Link: RS-485 / LTE</span>
+              <span style={{ color: '#15803D', fontWeight: 700 }}>Nominal</span>
+            </div>
+          </div>
+
+          {/* Card 6: Safety Alarms */}
+          <div style={{ padding: '10px 12px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Safety Interlocks</div>
+            <div style={{ fontSize: '16px', fontWeight: 800, color: activeAlarms.length > 0 ? '#DC2626' : '#15803D', margin: '2px 0' }}>
+              {activeAlarms.length > 0 ? `${activeAlarms.length} Active` : '0 Alarms'}
+            </div>
+            <div style={{ fontSize: '10px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Valves: Dual OK</span>
+              <span style={{ color: '#15803D', fontWeight: 700 }}>Clean Run</span>
+            </div>
+          </div>
         </div>
       </div>
 

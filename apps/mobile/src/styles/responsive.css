@@ -287,3 +287,54 @@
     display: none !important;
   }
 }
+
+/* ========================================================================= */
+/* INDUSTRIAL SCADA FLUID 12-COLUMN DASHBOARD GRID                         */
+/* ========================================================================= */
+.scada-dashboard-row4 {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 14px;
+  width: 100%;
+}
+
+.scada-col-coach {
+  grid-column: span 3;
+}
+
+.scada-col-tanks {
+  grid-column: span 5;
+}
+
+.scada-col-location {
+  grid-column: span 4;
+}
+
+@media (max-width: 1180px) {
+  .scada-dashboard-row4 {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+  .scada-col-coach {
+    grid-column: span 12;
+  }
+  .scada-col-tanks {
+    grid-column: span 7;
+  }
+  .scada-col-location {
+    grid-column: span 5;
+  }
+}
+
+@media (max-width: 860px) {
+  .scada-dashboard-row4 {
+    display: flex;
+    flex-direction: column;
+  }
+  .scada-col-coach,
+  .scada-col-tanks,
+  .scada-col-location {
+    grid-column: span 12;
+    width: 100%;
+  }
+}
+

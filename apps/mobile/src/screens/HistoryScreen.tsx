@@ -232,8 +232,7 @@ export const HistoryScreen: React.FC = () => {
         gap: '16px',
         boxSizing: 'border-box',
         width: '100%',
-        maxWidth: '1600px',
-        margin: '0 auto',
+        minWidth: 0,
       }}
     >
       {/* 1. Header & Train Context Selector */}
