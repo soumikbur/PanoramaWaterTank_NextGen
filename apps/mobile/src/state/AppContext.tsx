@@ -18,6 +18,7 @@ import { wsService } from '../services/websocket';
 import { mqttService } from '../services/mqttService';
 import { DisplayPreferencesService, ScalePreset } from '../services/displayPreferencesService';
 import { AppRouter } from '../services/router';
+import { deviceRegistry, ManagedDevice } from '../services/deviceRegistry';
 
 export type ScreenName =
   | 'login'
@@ -44,6 +45,7 @@ interface AppContextType {
   liveTank: TankLiveStatus | null;
   tanks: TankLiveStatus[];
   devices: Device[];
+  managedDevices: ManagedDevice[];
   activeAlarms: AlarmItem[];
   alarmStats: AlarmStats;
   connectionStatus: 'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED';
@@ -96,7 +98,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const [liveTank, setLiveTank] = useState<TankLiveStatus | null>(null);
   const [tanks, setTanks] = useState<TankLiveStatus[]>([]);
-  const [devices, setDevices] = useState<Device[]>([]);
+  const [managedDevices, setManagedDevices] = useState<ManagedDevice[]>(() => deviceRegistry.getDevices());
+  const [devices, setDevices] = useState<Device[]>(() =>
+    deviceRegistry.getDevices().map((m) => ({
+      id: m.uid,
+      uid: m.uid,
+      name: m.name,
+      trainNumber: m.trainNumber || '',
+      coachNumber: m.coachNumber || '',
+      train_number: m.trainNumber || '',
+      coach_number: m.coachNumber || '',
+      hardwareVersion: m.hardwareModel,
+      hardware_version: m.hardwareModel,
+      firmwareVersion: 'v2.2.0',
+      firmware_version: 'v2.2.0',
+      isOnline: m.isOnline,
+      is_online: m.isOnline,
+      lastSeenAt: m.lastSeen,
+      last_seen_at: m.lastSeen,
+      lastHeartbeat: m.lastSeen,
+      batteryPercent: m.batteryPercent,
+      batteryVoltage: m.batteryVoltage,
+      primaryLevel: m.tank1Level ?? undefined,
+      secondaryLevel: m.tank2Level ?? undefined,
+      hasActiveAlarm: !m.valve1Normal || !m.valve2Normal || m.batteryPercent < 20,
+    }))
+  );
   const [activeAlarms, setActiveAlarms] = useState<AlarmItem[]>([]);
   const [alarmStats, setAlarmStats] = useState<AlarmStats>(defaultStats);
   const [connectionStatus, setConnectionStatus] = useState<'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED'>('DISCONNECTED');
@@ -228,6 +255,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     updateClock();
     const timer = setInterval(updateClock, 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Subscribe to persistent device registry updates
+  useEffect(() => {
+    const unsub = deviceRegistry.subscribe((list) => {
+      setManagedDevices(list);
+      setDevices(
+        list.map((m) => ({
+          id: m.uid,
+          uid: m.uid,
+          name: m.name,
+          trainNumber: m.trainNumber || '',
+          coachNumber: m.coachNumber || '',
+          train_number: m.trainNumber || '',
+          coach_number: m.coachNumber || '',
+          hardwareVersion: m.hardwareModel,
+          hardware_version: m.hardwareModel,
+          firmwareVersion: 'v2.2.0',
+          firmware_version: 'v2.2.0',
+          isOnline: m.isOnline,
+          is_online: m.isOnline,
+          lastSeenAt: m.lastSeen,
+          last_seen_at: m.lastSeen,
+          lastHeartbeat: m.lastSeen,
+          batteryPercent: m.batteryPercent,
+          batteryVoltage: m.batteryVoltage,
+          primaryLevel: m.tank1Level ?? undefined,
+          secondaryLevel: m.tank2Level ?? undefined,
+          hasActiveAlarm: !m.valve1Normal || !m.valve2Normal || m.batteryPercent < 20,
+        }))
+      );
+    });
+    return unsub;
   }, []);
 
   const refreshRegions = async () => {
@@ -386,6 +446,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setMqttBrokerStatus('CONNECTED');
       setConnectionStatus('CONNECTED');
 
+      // Record / update discovered device in registry without duplicates
+      deviceRegistry.recordDiscoveredDevice(telemetry);
+      const mappedDev = deviceRegistry.getDeviceByUid(telemetry.uid);
+      const activeTrno = mappedDev?.trainNumber || telemetry.trno;
+      const activeChno = mappedDev?.coachNumber || telemetry.chno;
+
       // 1. Calculate water level percentages based on configured maximum height (150 cm)
       const configuredMaxHeightCm = 150.0;
       const arrivalLevelPct = telemetry.cm1 != null && configuredMaxHeightCm > 0
@@ -406,8 +472,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         tankIndex: 1,
         deviceUid: telemetry.uid,
         deviceId: telemetry.uid,
-        trainNumber: telemetry.trno,
-        coachNumber: telemetry.chno,
+        trainNumber: activeTrno,
+        coachNumber: activeChno,
         levelPercent: arrivalLevelPct,
         rawLevelPercent: telemetry.wlp1,
         volumeLiters: arrivalVolume,
@@ -432,8 +498,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         tankIndex: 2,
         deviceUid: telemetry.uid,
         deviceId: telemetry.uid,
-        trainNumber: telemetry.trno,
-        coachNumber: telemetry.chno,
+        trainNumber: activeTrno,
+        coachNumber: activeChno,
         levelPercent: departureLevelPct,
         rawLevelPercent: telemetry.wlp2,
         volumeLiters: departureVolume,
@@ -672,6 +738,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         liveTank,
         tanks,
         devices,
+        managedDevices,
         activeAlarms,
         alarmStats,
         connectionStatus,

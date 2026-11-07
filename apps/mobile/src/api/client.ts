@@ -17,6 +17,7 @@ import {
   EmployeeRegistrationPayload,
   TrainLocation
 } from '../types';
+import { deviceRegistry } from '../services/deviceRegistry';
 
 const API_BASE =
   (typeof process !== 'undefined' && (process.env?.API_URL || process.env?.REACT_APP_API_URL || process.env?.VITE_API_URL)) ||
@@ -776,38 +777,152 @@ export class ApiClient {
 
   // Devices
   static async fetchDevices(search?: string, isOnline?: boolean): Promise<Device[]> {
-    const params = new URLSearchParams();
-    if (search) params.append('search', search);
-    if (isOnline !== undefined) params.append('is_online', String(isOnline));
-    const query = params.toString() ? `?${params.toString()}` : '';
-    return this.request<Device[]>(`/devices${query}`);
+    try {
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (isOnline !== undefined) params.append('is_online', String(isOnline));
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const remote = await this.request<Device[]>(`/devices${query}`);
+      if (Array.isArray(remote) && remote.length > 0) {
+        // Reconcile into local persistent registry
+        remote.forEach((d) => {
+          deviceRegistry.registerDevice(d.uid, {
+            name: d.name,
+            trainNumber: d.trainNumber || d.train_number || null,
+            coachNumber: d.coachNumber || d.coach_number || null,
+            hardwareModel: d.hardwareVersion || d.hardware_version || 'WLI EC200U-CN',
+          });
+        });
+        return remote;
+      }
+    } catch {
+      // Offline / GitHub Pages fallback
+    }
+
+    const managed = deviceRegistry.getDevices();
+    let filtered = managed;
+    if (search) {
+      const s = search.toLowerCase();
+      filtered = filtered.filter(
+        (m) =>
+          m.uid.toLowerCase().includes(s) ||
+          m.name.toLowerCase().includes(s) ||
+          (m.trainNumber && m.trainNumber.toLowerCase().includes(s)) ||
+          (m.coachNumber && m.coachNumber.toLowerCase().includes(s))
+      );
+    }
+    if (isOnline !== undefined) {
+      filtered = filtered.filter((m) => m.isOnline === isOnline);
+    }
+
+    return filtered.map((m) => ({
+      id: m.uid,
+      uid: m.uid,
+      name: m.name,
+      trainNumber: m.trainNumber || '',
+      coachNumber: m.coachNumber || '',
+      train_number: m.trainNumber || '',
+      coach_number: m.coachNumber || '',
+      hardwareVersion: m.hardwareModel,
+      hardware_version: m.hardwareModel,
+      firmwareVersion: 'v2.2.0',
+      firmware_version: 'v2.2.0',
+      isOnline: m.isOnline,
+      is_online: m.isOnline,
+      lastSeenAt: m.lastSeen,
+      last_seen_at: m.lastSeen,
+      lastHeartbeat: m.lastSeen,
+      batteryPercent: m.batteryPercent,
+      batteryVoltage: m.batteryVoltage,
+      primaryLevel: m.tank1Level ?? undefined,
+      secondaryLevel: m.tank2Level ?? undefined,
+      hasActiveAlarm: !m.valve1Normal || !m.valve2Normal || m.batteryPercent < 20,
+    }));
   }
 
   static async createDevice(data: { uid: string; train_number: string; coach_number: string; name: string; hardware_version?: string; firmware_version?: string }): Promise<Device> {
-    return this.request<Device>('/devices', {
-      method: 'POST',
-      body: JSON.stringify({
-        uid: data.uid,
-        train_number: data.train_number,
-        coach_number: data.coach_number,
-        name: data.name,
-        hardware_version: data.hardware_version,
-        firmware_version: data.firmware_version,
-      }),
+    // Record into persistent registry first
+    const registered = deviceRegistry.registerDevice(data.uid, {
+      name: data.name,
+      trainNumber: data.train_number || null,
+      coachNumber: data.coach_number || null,
+      hardwareModel: data.hardware_version || 'WLI EC200U-CN',
     });
+
+    try {
+      return await this.request<Device>('/devices', {
+        method: 'POST',
+        body: JSON.stringify({
+          uid: data.uid,
+          train_number: data.train_number,
+          coach_number: data.coach_number,
+          name: data.name,
+          hardware_version: data.hardware_version,
+          firmware_version: data.firmware_version,
+        }),
+      });
+    } catch {
+      return {
+        id: registered.uid,
+        uid: registered.uid,
+        name: registered.name,
+        trainNumber: registered.trainNumber || '',
+        coachNumber: registered.coachNumber || '',
+        train_number: registered.trainNumber || '',
+        coach_number: registered.coachNumber || '',
+        hardwareVersion: registered.hardwareModel,
+        hardware_version: registered.hardwareModel,
+        firmwareVersion: 'v2.2.0',
+        firmware_version: 'v2.2.0',
+        isOnline: registered.isOnline,
+        is_online: registered.isOnline,
+        lastSeenAt: registered.lastSeen,
+        last_seen_at: registered.lastSeen,
+        lastHeartbeat: registered.lastSeen,
+        batteryPercent: registered.batteryPercent,
+        hasActiveAlarm: false,
+      };
+    }
   }
 
   static async updateDevice(deviceId: string, data: { name?: string; trainNumber?: string; coachNumber?: string; firmwareVersion?: string }): Promise<Device> {
-    return this.request<Device>(`/devices/${deviceId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+    if (data.trainNumber || data.coachNumber) {
+      deviceRegistry.assignDevice(deviceId, data.trainNumber || '', data.coachNumber || '');
+    }
+    try {
+      return await this.request<Device>(`/devices/${deviceId}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    } catch {
+      const dev = deviceRegistry.getDeviceByUid(deviceId);
+      return {
+        id: deviceId,
+        uid: deviceId,
+        name: dev?.name || `Node (${deviceId})`,
+        trainNumber: dev?.trainNumber || '',
+        coachNumber: dev?.coachNumber || '',
+        train_number: dev?.trainNumber || '',
+        coach_number: dev?.coachNumber || '',
+        hardwareVersion: dev?.hardwareModel || 'WLI EC200U-CN',
+        firmwareVersion: 'v2.2.0',
+        isOnline: dev?.isOnline ?? true,
+        lastSeenAt: dev?.lastSeen || null,
+        batteryPercent: dev?.batteryPercent || 85,
+        hasActiveAlarm: false,
+      };
+    }
   }
 
   static async deleteDevice(deviceId: string): Promise<any> {
-    return this.request(`/devices/${deviceId}`, {
-      method: 'DELETE',
-    });
+    deviceRegistry.deleteDevice(deviceId);
+    try {
+      return await this.request(`/devices/${deviceId}`, {
+        method: 'DELETE',
+      });
+    } catch {
+      return { success: true };
+    }
   }
 
   static async fetchDeviceDiagnostics(deviceId: string): Promise<DeviceDiagnostics> {

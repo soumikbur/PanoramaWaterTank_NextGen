@@ -30,6 +30,7 @@ export const CoachDetailsScreen: React.FC = () => {
     selectedCoachNumber,
     setSelectedCoachNumber,
     devices,
+    managedDevices,
     liveTank,
     connectionStatus,
     refreshData,
@@ -64,13 +65,20 @@ export const CoachDetailsScreen: React.FC = () => {
   const coachType = coachTypes[(Math.abs(coachIndex - 1)) % coachTypes.length];
 
   // Assigned device lookup or deterministic simulation for 24 consist capability
-  const matchingDevice: Device | undefined = useMemo(() => {
-    return devices.find(
-      (d) =>
-        (d.coachNumber && d.coachNumber.toUpperCase() === coachNum) ||
-        (d.trainNumber === trainNum && d.coachNumber === coachNum)
+  const matchingDevice: any = useMemo(() => {
+    return (
+      managedDevices?.find(
+        (d) =>
+          (d.coachNumber && d.coachNumber.toUpperCase() === coachNum) ||
+          (d.trainNumber === trainNum && d.coachNumber === coachNum)
+      ) ||
+      devices.find(
+        (d) =>
+          (d.coachNumber && d.coachNumber.toUpperCase() === coachNum) ||
+          (d.trainNumber === trainNum && d.coachNumber === coachNum)
+      )
     );
-  }, [devices, coachNum, trainNum]);
+  }, [managedDevices, devices, coachNum, trainNum]);
 
   const hasLiveTelemetry = Boolean(liveTelemetry && (liveTelemetry.chno.toUpperCase() === coachNum || coachNum === 'CR123456'));
   const deviceId = (hasLiveTelemetry && liveTelemetry?.uid) || matchingDevice?.uid || (hasLiveTelemetry ? '0023004D4B42501120353332' : `DEV-${coachNum}`);

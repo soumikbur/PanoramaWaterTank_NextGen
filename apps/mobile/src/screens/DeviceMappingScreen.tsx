@@ -1,16 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { typography } from '../theme';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../state/AppContext';
-import { ApiClient } from '../api/client';
-import { Device } from '../types';
+import { deviceRegistry, ManagedDevice, DeviceOperationalStatus } from '../services/deviceRegistry';
 import {
   Cpu,
   Plus,
-  Edit3,
   Search,
   CheckCircle2,
   AlertTriangle,
   Battery,
+  BatteryCharging,
   BatteryWarning,
   Link2,
   Unlink,
@@ -19,181 +17,270 @@ import {
   Clock,
   Train,
   Layers,
+  Copy,
+  Check,
+  RefreshCw,
+  Trash2,
+  Sliders,
+  ExternalLink,
 } from 'lucide-react';
 
-export interface DeviceMappingItem {
-  id: string;
-  deviceCode: string;
-  name: string;
-  trainNumber: string | null;
-  coachNumber: string | null;
-  assignmentStatus: 'ENGAGED' | 'FREE';
-  isOnline: boolean;
-  batteryPercent: number;
-  hardwareModel: string;
-  lastCommunication: string;
-  isDemo?: boolean;
-}
+type FilterTab = 'ALL' | 'DISCOVERED' | 'REGISTERED' | 'ENGAGED' | 'AVAILABLE' | 'OFFLINE';
 
 export const DeviceMappingScreen: React.FC = () => {
-  const { devices, refreshData, liveTelemetry } = useApp();
+  const { managedDevices, liveTelemetry, mqttBrokerStatus, setActiveScreen, setSelectedTrainNumber, setSelectedCoachNumber } = useApp();
 
+  const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ENGAGED' | 'FREE'>('ALL');
+  const [copiedUid, setCopiedUid] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
-  // Modals
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [isAssignOpen, setIsAssignOpen] = useState(false);
-  const [selectedDeviceForAssign, setSelectedDeviceForAssign] = useState<DeviceMappingItem | null>(null);
+  // Modals state
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
+  const [targetDevice, setTargetDevice] = useState<ManagedDevice | null>(null);
 
-  // Form states
-  const [newDeviceCode, setNewDeviceCode] = useState('');
-  const [newDeviceName, setNewDeviceName] = useState('');
-  const [newHwModel, setNewHwModel] = useState('Standard WLI Gateway');
-  const [newAssignTrain, setNewAssignTrain] = useState('');
-  const [newAssignCoach, setNewAssignCoach] = useState('');
+  // Form states for Map Modal
+  const [trainNumberInput, setTrainNumberInput] = useState('');
+  const [coachNumberInput, setCoachNumberInput] = useState('');
+  const [deviceNameInput, setDeviceNameInput] = useState('');
+  const [hardwareModelInput, setHardwareModelInput] = useState('WLI EC200U-CN');
 
-  // Assign modal state
-  const [targetTrain, setTargetTrain] = useState('');
-  const [targetCoach, setTargetCoach] = useState('');
+  // Form states for Manual Register Modal
+  const [manualUid, setManualUid] = useState('');
+  const [manualName, setManualName] = useState('');
+  const [manualTrain, setManualTrain] = useState('');
+  const [manualCoach, setManualCoach] = useState('');
+  const [manualModel, setManualModel] = useState('WLI EC200U-CN');
 
-  // Local device mappings state combining demo + backend
-  const [localOverrides, setLocalOverrides] = useState<Record<string, { train: string | null; coach: string | null }>>({});
+  // Metrics calculation
+  const totalCount = managedDevices.length;
+  const discoveredCount = managedDevices.filter((d) => d.registrationStatus === 'DISCOVERED').length;
+  const registeredCount = managedDevices.filter((d) => d.registrationStatus === 'REGISTERED').length;
+  const engagedCount = managedDevices.filter((d) => d.assignmentStatus === 'ENGAGED').length;
+  const availableCount = managedDevices.filter((d) => d.assignmentStatus === 'AVAILABLE' && d.registrationStatus === 'REGISTERED').length;
+  const offlineCount = managedDevices.filter((d) => !d.isOnline).length;
 
-  // Map backend devices and live telemetry into human-readable mapping items
-  const deviceList: DeviceMappingItem[] = useMemo(() => {
-    const items: DeviceMappingItem[] = [];
-
-    // 1. Live MQTT Telemetry Device if available
-    if (liveTelemetry) {
-      items.push({
-        id: liveTelemetry.uid,
-        deviceCode: liveTelemetry.uid,
-        name: `WLI Node (${liveTelemetry.uid.slice(-6)})`,
-        trainNumber: localOverrides[liveTelemetry.uid]?.train ?? liveTelemetry.trno,
-        coachNumber: localOverrides[liveTelemetry.uid]?.coach ?? liveTelemetry.chno,
-        assignmentStatus: 'ENGAGED',
-        isOnline: !liveTelemetry.isStale,
-        batteryPercent: liveTelemetry.bat,
-        hardwareModel: 'WLI EC200U-CN',
-        lastCommunication: liveTelemetry.time,
-        isDemo: false,
-      });
-    }
-
-    // 2. Real Backend Devices (deduplicating against liveTelemetry.uid)
-    devices.forEach((d) => {
-      if (liveTelemetry && d.uid === liveTelemetry.uid) return;
-      const override = localOverrides[d.id];
-      const assignedTrain = override !== undefined ? override.train : (d.trainNumber || null);
-      const assignedCoach = override !== undefined ? override.coach : (d.coachNumber || null);
-      const isEngaged = Boolean(assignedTrain && assignedCoach);
-
-      items.push({
-        id: d.id,
-        deviceCode: d.uid,
-        name: d.name || `Monitor Node (${d.uid})`,
-        trainNumber: assignedTrain,
-        coachNumber: assignedCoach,
-        assignmentStatus: isEngaged ? 'ENGAGED' : 'FREE',
-        isOnline: d.isOnline,
-        batteryPercent: d.batteryPercent ?? 85,
-        hardwareModel: d.hardwareVersion || 'Standard WLI Node',
-        lastCommunication: d.lastHeartbeat ? new Date(d.lastHeartbeat).toLocaleTimeString() : 'Recent Link',
-        isDemo: false,
-      });
-    });
-
-    return items;
-  }, [devices, localOverrides, liveTelemetry]);
-
-  // Filtered devices
+  // Filtered devices list
   const filteredDevices = useMemo(() => {
-    return deviceList.filter((dev) => {
-      if (statusFilter !== 'ALL' && dev.assignmentStatus !== statusFilter) return false;
+    return managedDevices.filter((dev) => {
+      // Tab filter
+      if (activeTab === 'DISCOVERED' && dev.registrationStatus !== 'DISCOVERED') return false;
+      if (activeTab === 'REGISTERED' && dev.registrationStatus !== 'REGISTERED') return false;
+      if (activeTab === 'ENGAGED' && dev.assignmentStatus !== 'ENGAGED') return false;
+      if (activeTab === 'AVAILABLE' && (dev.assignmentStatus !== 'AVAILABLE' || dev.registrationStatus !== 'REGISTERED')) return false;
+      if (activeTab === 'OFFLINE' && dev.isOnline) return false;
+
+      // Search query
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchCode = dev.deviceCode.toLowerCase().includes(q);
+        const q = searchQuery.toLowerCase().trim();
+        const matchUid = dev.uid.toLowerCase().includes(q);
         const matchName = dev.name.toLowerCase().includes(q);
         const matchTrain = dev.trainNumber ? dev.trainNumber.toLowerCase().includes(q) : false;
         const matchCoach = dev.coachNumber ? dev.coachNumber.toLowerCase().includes(q) : false;
-        if (!matchCode && !matchName && !matchTrain && !matchCoach) return false;
+        const matchModel = dev.hardwareModel.toLowerCase().includes(q);
+        if (!matchUid && !matchName && !matchTrain && !matchCoach && !matchModel) return false;
       }
       return true;
     });
-  }, [deviceList, statusFilter, searchQuery]);
+  }, [managedDevices, activeTab, searchQuery]);
 
-  const totalEngaged = deviceList.filter((d) => d.assignmentStatus === 'ENGAGED').length;
-  const totalFree = deviceList.filter((d) => d.assignmentStatus === 'FREE').length;
-
-  const handleOpenAssignModal = (dev: DeviceMappingItem) => {
-    setSelectedDeviceForAssign(dev);
-    setTargetTrain(dev.trainNumber || '225256');
-    setTargetCoach(dev.coachNumber || 'C1');
-    setIsAssignOpen(true);
+  const handleCopyUid = (uid: string) => {
+    navigator.clipboard.writeText(uid);
+    setCopiedUid(uid);
+    setTimeout(() => setCopiedUid(null), 2000);
   };
 
-  const handleSaveAssignment = async (e: React.FormEvent) => {
+  const handleOpenMapModal = (dev: ManagedDevice) => {
+    setTargetDevice(dev);
+    setTrainNumberInput(dev.trainNumber || dev.payloadTrno || '225256');
+    setCoachNumberInput(dev.coachNumber || dev.payloadChno || 'CR123456');
+    setDeviceNameInput(dev.name || `Coach ${dev.payloadChno || 'CR123456'} Sensor`);
+    setHardwareModelInput(dev.hardwareModel || 'WLI EC200U-CN');
+    setIsMapModalOpen(true);
+  };
+
+  const handleApplyDetectedConsist = () => {
+    if (targetDevice?.payloadTrno) setTrainNumberInput(targetDevice.payloadTrno);
+    if (targetDevice?.payloadChno) setCoachNumberInput(targetDevice.payloadChno);
+  };
+
+  const handleConfirmMapping = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDeviceForAssign) return;
+    if (!targetDevice) return;
 
-    const isUnassigning = !targetTrain.trim() || !targetCoach.trim();
-    const newTrain = isUnassigning ? null : targetTrain.trim();
-    const newCoach = isUnassigning ? null : targetCoach.trim();
+    const tr = trainNumberInput.trim();
+    const ch = coachNumberInput.trim();
 
-    setLocalOverrides((prev) => ({
-      ...prev,
-      [selectedDeviceForAssign.id]: { train: newTrain, coach: newCoach },
-    }));
-
-    if (!selectedDeviceForAssign.isDemo) {
-      try {
-        await ApiClient.updateDevice(selectedDeviceForAssign.id, {
-          trainNumber: newTrain || '',
-          coachNumber: newCoach || '',
-        });
-      } catch (err) {
-        console.warn('API update failed, preserved locally:', err);
-      }
+    if (!tr || !ch) {
+      alert('Please specify both Train Number and Coach Number to complete consist mapping.');
+      return;
     }
 
-    setIsAssignOpen(false);
-    setActionFeedback(
-      isUnassigning
-        ? `Device ${selectedDeviceForAssign.deviceCode} unassigned and returned to Free Pool.`
-        : `Device ${selectedDeviceForAssign.deviceCode} successfully assigned to Train ${newTrain}, Coach ${newCoach}.`
-    );
+    deviceRegistry.registerDevice(targetDevice.uid, {
+      name: deviceNameInput.trim() || `Coach ${ch} Sensor`,
+      trainNumber: tr,
+      coachNumber: ch,
+      hardwareModel: hardwareModelInput,
+    });
+
+    setIsMapModalOpen(false);
+    setActionFeedback(`Device ${targetDevice.uid.slice(-6)} mapped to Train ${tr}, Coach ${ch}.`);
     setTimeout(() => setActionFeedback(null), 4000);
   };
 
-  const handleCreateDeviceSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newDeviceCode.trim()) return;
+  const handleUnmapDevice = (dev: ManagedDevice) => {
+    if (!window.confirm(`Unassign device ${dev.uid} from Train ${dev.trainNumber}, Coach ${dev.coachNumber}? It will be returned to the Available Pool.`)) {
+      return;
+    }
+    deviceRegistry.unassignDevice(dev.uid);
+    setActionFeedback(`Device ${dev.uid.slice(-6)} unmapped and returned to Free Available Pool.`);
+    setTimeout(() => setActionFeedback(null), 4000);
+  };
 
-    try {
-      await ApiClient.createDevice({
-        uid: newDeviceCode.trim(),
-        name: newDeviceName.trim() || `Node (${newDeviceCode.trim()})`,
-        train_number: newAssignTrain.trim() || '225256',
-        coach_number: newAssignCoach.trim() || 'C1',
-        hardware_version: newHwModel,
-      });
-      await refreshData();
-      setActionFeedback(`New device ${newDeviceCode} registered and mapped.`);
-    } catch (err: any) {
-      // Local addition fallback
-      setLocalOverrides((prev) => ({
-        ...prev,
-        [`dev-${Date.now()}`]: { train: newAssignTrain.trim() || null, coach: newAssignCoach.trim() || null },
-      }));
-      setActionFeedback(`Device ${newDeviceCode} added to mapping registry.`);
+  const handleDeleteDevice = (dev: ManagedDevice) => {
+    if (!window.confirm(`Delete device ${dev.uid} from the system registry?`)) {
+      return;
+    }
+    deviceRegistry.deleteDevice(dev.uid);
+    setActionFeedback(`Device ${dev.uid.slice(-6)} removed from registry.`);
+    setTimeout(() => setActionFeedback(null), 4000);
+  };
+
+  const handleManualRegisterSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualUid.trim()) {
+      alert('Please enter a valid Device UID.');
+      return;
     }
 
-    setIsAddOpen(false);
-    setNewDeviceCode('');
-    setNewDeviceName('');
+    deviceRegistry.registerDevice(manualUid.trim(), {
+      name: manualName.trim() || `Node (${manualUid.trim().slice(-6)})`,
+      trainNumber: manualTrain.trim() || null,
+      coachNumber: manualCoach.trim() || null,
+      hardwareModel: manualModel,
+    });
+
+    setIsRegisterModalOpen(false);
+    setManualUid('');
+    setManualName('');
+    setManualTrain('');
+    setManualCoach('');
+    setActionFeedback(`Device ${manualUid.trim()} registered successfully.`);
     setTimeout(() => setActionFeedback(null), 4000);
+  };
+
+  const getOperationalStatus = (dev: ManagedDevice): DeviceOperationalStatus => {
+    if (!dev.isOnline) return 'OFFLINE';
+    if (dev.registrationStatus === 'DISCOVERED') return 'DISCOVERED';
+    if (dev.assignmentStatus === 'ENGAGED') return 'ENGAGED';
+    return 'AVAILABLE';
+  };
+
+  const renderStatusBadge = (status: DeviceOperationalStatus) => {
+    switch (status) {
+      case 'DISCOVERED':
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '3px 8px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 700,
+              backgroundColor: '#FAF5FF',
+              color: '#7E22CE',
+              border: '1px solid #E9D5FF',
+            }}
+          >
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#9333EA' }} />
+            Discovered
+          </span>
+        );
+      case 'ENGAGED':
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '3px 8px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 700,
+              backgroundColor: '#F0FDF4',
+              color: '#15803D',
+              border: '1px solid #BBF7D0',
+            }}
+          >
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#16A34A' }} />
+            Engaged
+          </span>
+        );
+      case 'AVAILABLE':
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '3px 8px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 700,
+              backgroundColor: '#F0FDFA',
+              color: '#0F766E',
+              border: '1px solid #99F6E4',
+            }}
+          >
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#0D9488' }} />
+            Available
+          </span>
+        );
+      case 'REGISTERED':
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '3px 8px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 700,
+              backgroundColor: '#EFF6FF',
+              color: '#1D4ED8',
+              border: '1px solid #BFDBFE',
+            }}
+          >
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#2563EB' }} />
+            Registered
+          </span>
+        );
+      case 'OFFLINE':
+      default:
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '3px 8px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 700,
+              backgroundColor: '#FEF2F2',
+              color: '#B91C1C',
+              border: '1px solid #FECACA',
+            }}
+          >
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#DC2626' }} />
+            Offline
+          </span>
+        );
+    }
   };
 
   return (
@@ -202,399 +289,870 @@ export const DeviceMappingScreen: React.FC = () => {
         display: 'flex',
         flexDirection: 'column',
         gap: '16px',
-        boxSizing: 'border-box',
         width: '100%',
         minWidth: 0,
+        boxSizing: 'border-box',
       }}
     >
-      {/* 1. Metrics Overview */}
+      {/* 1. Breadcrumbs and Title Header */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          flexWrap: 'wrap',
           gap: '12px',
         }}
       >
-        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
-            <Cpu size={22} />
+        <div>
+          <div style={{ fontSize: '12px', color: '#64748B', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>Train Management</span>
+            <span>&rsaquo;</span>
+            <span style={{ color: '#0F172A' }}>Devices</span>
           </div>
-          <div>
-            <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600, textTransform: 'uppercase' }}>Total Registered</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>{deviceList.length}</div>
-          </div>
-        </div>
-
-        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16A34A' }}>
-            <Link2 size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600, textTransform: 'uppercase' }}>Engaged (Assigned)</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#16A34A', marginTop: '2px' }}>{totalEngaged} Nodes</div>
+          <h1 style={{ fontSize: '20px', fontWeight: 800, color: '#0F172A', margin: '4px 0 2px 0' }}>
+            Device Management & MQTT Auto-Discovery
+          </h1>
+          <div style={{ fontSize: '12px', color: '#64748B' }}>
+            Industrial SCADA Node Registry & Telemetry Mapping
           </div>
         </div>
 
-        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#FEF3C7', border: '1px solid #FDE68A', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D97706' }}>
-            <Unlink size={22} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '6px 12px',
+              backgroundColor: '#FFFFFF',
+              borderRadius: '6px',
+              border: '1px solid #E2E8F0',
+              fontSize: '12px',
+              color: '#334155',
+            }}
+          >
+            <Radio size={14} color={mqttBrokerStatus === 'CONNECTED' ? '#16A34A' : '#DC2626'} />
+            <span>Broker: <strong>{mqttBrokerStatus === 'CONNECTED' ? 'Online' : 'Reconnecting'}</strong></span>
           </div>
-          <div>
-            <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600, textTransform: 'uppercase' }}>Free (Available)</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#D97706', marginTop: '2px' }}>{totalFree} Available</div>
-          </div>
-        </div>
 
-        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#EFF6FF', border: '1px solid #BFDBFE', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284C7' }}>
-            <Layers size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600, textTransform: 'uppercase' }}>Mapping Topology</div>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', marginTop: '4px' }}>1 Coach → 1 Device → 2 Tanks</div>
-          </div>
+          <button
+            onClick={() => setIsRegisterModalOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 14px',
+              backgroundColor: '#2563EB',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <Plus size={16} />
+            <span>Register New Device</span>
+          </button>
         </div>
       </div>
 
-      {/* Action Feedback */}
+      {/* 2. Action Feedback Alert */}
       {actionFeedback && (
-        <div style={{ backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '6px', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '8px', color: '#065F46', fontSize: '12px', fontWeight: 600 }}>
-          <CheckCircle2 size={16} />
+        <div
+          style={{
+            backgroundColor: '#F0FDF4',
+            border: '1px solid #86EFAC',
+            color: '#166534',
+            borderRadius: '6px',
+            padding: '10px 14px',
+            fontSize: '12px',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
           <span>{actionFeedback}</span>
+          <button
+            onClick={() => setActionFeedback(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#166534' }}
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
 
-      {/* 2. Search & Filters Bar */}
+      {/* 3. Summary Statistics Cards */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: '12px',
+        }}
+      >
+        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '14px 16px' }}>
+          <div style={{ fontSize: '11px', color: '#64748B', fontWeight: 600, textTransform: 'uppercase' }}>Total Devices</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0F172A', marginTop: '4px' }}>{totalCount}</div>
+          <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>Discovered + Registered</div>
+        </div>
+
+        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '14px 16px' }}>
+          <div style={{ fontSize: '11px', color: '#7E22CE', fontWeight: 600, textTransform: 'uppercase' }}>Discovered</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#7E22CE', marginTop: '4px' }}>{discoveredCount}</div>
+          <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>Awaiting formal mapping</div>
+        </div>
+
+        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '14px 16px' }}>
+          <div style={{ fontSize: '11px', color: '#2563EB', fontWeight: 600, textTransform: 'uppercase' }}>Registered</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#2563EB', marginTop: '4px' }}>{registeredCount}</div>
+          <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>Administrator authorized</div>
+        </div>
+
+        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '14px 16px' }}>
+          <div style={{ fontSize: '11px', color: '#16A34A', fontWeight: 600, textTransform: 'uppercase' }}>Engaged</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#16A34A', marginTop: '4px' }}>{engagedCount}</div>
+          <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>Mapped to Train & Coach</div>
+        </div>
+
+        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '14px 16px' }}>
+          <div style={{ fontSize: '11px', color: '#0D9488', fontWeight: 600, textTransform: 'uppercase' }}>Available</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#0D9488', marginTop: '4px' }}>{availableCount}</div>
+          <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>Ready for consist assignment</div>
+        </div>
+
+        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '14px 16px' }}>
+          <div style={{ fontSize: '11px', color: '#DC2626', fontWeight: 600, textTransform: 'uppercase' }}>Offline</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: '#DC2626', marginTop: '4px' }}>{offlineCount}</div>
+          <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>No telemetry {'>'} 90s</div>
+        </div>
+      </div>
+
+      {/* 4. Filter Tabs and Search Bar */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
+          backgroundColor: '#FFFFFF',
+          borderRadius: '8px',
+          border: '1px solid #E2E8F0',
+          padding: '8px 12px',
+        }}
+      >
+        {/* 6 Filter Tabs */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          <button
+            onClick={() => setActiveTab('ALL')}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: activeTab === 'ALL' ? '#2563EB' : '#F1F5F9',
+              color: activeTab === 'ALL' ? '#FFFFFF' : '#475569',
+            }}
+          >
+            All Devices ({totalCount})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('DISCOVERED')}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: activeTab === 'DISCOVERED' ? '#7E22CE' : '#F1F5F9',
+              color: activeTab === 'DISCOVERED' ? '#FFFFFF' : '#475569',
+            }}
+          >
+            Discovered ({discoveredCount})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('REGISTERED')}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: activeTab === 'REGISTERED' ? '#2563EB' : '#F1F5F9',
+              color: activeTab === 'REGISTERED' ? '#FFFFFF' : '#475569',
+            }}
+          >
+            Registered ({registeredCount})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('ENGAGED')}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: activeTab === 'ENGAGED' ? '#16A34A' : '#F1F5F9',
+              color: activeTab === 'ENGAGED' ? '#FFFFFF' : '#475569',
+            }}
+          >
+            Engaged ({engagedCount})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('AVAILABLE')}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: activeTab === 'AVAILABLE' ? '#0D9488' : '#F1F5F9',
+              color: activeTab === 'AVAILABLE' ? '#FFFFFF' : '#475569',
+            }}
+          >
+            Available ({availableCount})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('OFFLINE')}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 600,
+              border: 'none',
+              cursor: 'pointer',
+              backgroundColor: activeTab === 'OFFLINE' ? '#DC2626' : '#F1F5F9',
+              color: activeTab === 'OFFLINE' ? '#FFFFFF' : '#475569',
+            }}
+          >
+            Offline ({offlineCount})
+          </button>
+        </div>
+
+        {/* Search Input */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            backgroundColor: '#F8FAFC',
+            borderRadius: '6px',
+            border: '1px solid #CBD5E1',
+            padding: '5px 10px',
+            minWidth: '240px',
+          }}
+        >
+          <Search size={14} color="#64748B" />
+          <input
+            type="text"
+            placeholder="Search by UID, Train, Coach..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              border: 'none',
+              outline: 'none',
+              backgroundColor: 'transparent',
+              fontSize: '12px',
+              width: '100%',
+              color: '#0F172A',
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 5. 8-Column SCADA Table */}
       <div
         style={{
           backgroundColor: '#FFFFFF',
           borderRadius: '8px',
           border: '1px solid #E2E8F0',
-          padding: '12px 16px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
+          overflow: 'hidden',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
         }}
       >
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px', flex: 1 }}>
-          {/* Status Tabs */}
-          <div style={{ display: 'flex', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
-            {(['ALL', 'ENGAGED', 'FREE'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setStatusFilter(tab)}
-                style={{
-                  border: 'none',
-                  background: statusFilter === tab ? '#FFFFFF' : 'transparent',
-                  color: statusFilter === tab ? '#2563EB' : '#64748B',
-                  padding: '5px 12px',
-                  borderRadius: '4px',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  boxShadow: statusFilter === tab ? '0 1px 2px rgba(0,0,0,0.05)' : 'none',
-                }}
-              >
-                {tab === 'ALL' ? 'All Devices' : tab === 'ENGAGED' ? 'Engaged Only' : 'Free Pool Only'}
-              </button>
-            ))}
-          </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '950px' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                <th style={{ padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  UID
+                </th>
+                <th style={{ padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Train
+                </th>
+                <th style={{ padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Coach
+                </th>
+                <th style={{ padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Battery
+                </th>
+                <th style={{ padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Tank 1
+                </th>
+                <th style={{ padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Tank 2
+                </th>
+                <th style={{ padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Status
+                </th>
+                <th style={{ padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Last Seen
+                </th>
+                <th style={{ padding: '10px 14px', fontSize: '11px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'right' }}>
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredDevices.length === 0 ? (
+                <tr>
+                  <td colSpan={9} style={{ padding: '40px 16px', textAlign: 'center', color: '#64748B' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                      <Radio size={28} color="#94A3B8" />
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>
+                        No devices found matching filter "{activeTab}"
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#94A3B8', maxWidth: '400px' }}>
+                        Devices broadcasting on MQTT topic <code>0023004D4B42501120353332</code> will appear automatically under Discovered.
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredDevices.map((dev) => {
+                  const status = getOperationalStatus(dev);
+                  const isCopied = copiedUid === dev.uid;
 
-          {/* Search Input */}
-          <div style={{ position: 'relative', width: '280px' }}>
-            <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8', display: 'flex' }}>
-              <Search size={14} />
-            </span>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search device code, train, coach..."
-              style={{
-                width: '100%',
-                height: '34px',
-                paddingLeft: '32px',
-                paddingRight: '10px',
-                borderRadius: '6px',
-                border: '1px solid #CBD5E1',
-                backgroundColor: '#F8FAFC',
-                fontSize: '12px',
-                color: '#0F172A',
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-        </div>
+                  return (
+                    <tr
+                      key={dev.uid}
+                      style={{
+                        borderBottom: '1px solid #F1F5F9',
+                        transition: 'background-color 0.15s ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F8FAFC')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                    >
+                      {/* Column 1: UID */}
+                      <td style={{ padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span
+                            style={{
+                              fontFamily: 'SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              color: '#0F172A',
+                              backgroundColor: '#F1F5F9',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              border: '1px solid #E2E8F0',
+                            }}
+                          >
+                            {dev.uid}
+                          </span>
+                          <button
+                            onClick={() => handleCopyUid(dev.uid)}
+                            title="Copy UID"
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '2px',
+                              color: isCopied ? '#16A34A' : '#94A3B8',
+                            }}
+                          >
+                            {isCopied ? <Check size={14} /> : <Copy size={14} />}
+                          </button>
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
+                          {dev.name} &bull; {dev.hardwareModel}
+                        </div>
+                      </td>
 
-        {/* Add Device Button */}
-        <button
-          onClick={() => setIsAddOpen(true)}
-          style={{
-            height: '34px',
-            padding: '0 14px',
-            backgroundColor: '#2563EB',
-            color: '#FFFFFF',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '12px',
-            fontWeight: 600,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            cursor: 'pointer',
-          }}
-        >
-          <Plus size={15} />
-          <span>Register Device</span>
-        </button>
-      </div>
+                      {/* Column 2: Train */}
+                      <td style={{ padding: '12px 14px' }}>
+                        {dev.trainNumber ? (
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              backgroundColor: '#EFF6FF',
+                              border: '1px solid #BFDBFE',
+                              color: '#1E40AF',
+                              fontWeight: 700,
+                              fontSize: '12px',
+                            }}
+                          >
+                            {dev.trainNumber}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#94A3B8', fontStyle: 'italic', fontSize: '12px' }}>
+                            &mdash; Unassigned &mdash;
+                          </span>
+                        )}
+                      </td>
 
-      {/* 3. Device Mapping Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '14px' }}>
-        {filteredDevices.map((dev) => {
-          const isBatteryLow = dev.batteryPercent < 40;
-          const isEngaged = dev.assignmentStatus === 'ENGAGED';
+                      {/* Column 3: Coach */}
+                      <td style={{ padding: '12px 14px' }}>
+                        {dev.coachNumber ? (
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              backgroundColor: '#F8FAFC',
+                              border: '1px solid #CBD5E1',
+                              color: '#0F172A',
+                              fontWeight: 700,
+                              fontSize: '12px',
+                            }}
+                          >
+                            {dev.coachNumber}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#94A3B8', fontStyle: 'italic', fontSize: '12px' }}>
+                            &mdash; Unassigned &mdash;
+                          </span>
+                        )}
+                      </td>
 
-          return (
-            <div
-              key={dev.id}
-              style={{
-                backgroundColor: '#FFFFFF',
-                borderRadius: '8px',
-                border: isBatteryLow ? '2px solid #EF4444' : '1px solid #E2E8F0',
-                padding: '16px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                gap: '12px',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                position: 'relative',
-              }}
-            >
-              {/* Demo Badge */}
-              {dev.isDemo && (
-                <div style={{ position: 'absolute', top: '10px', right: '12px', backgroundColor: '#EFF6FF', color: '#2563EB', fontSize: '9px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px', border: '1px solid #BFDBFE' }}>
-                  DEMO NODE
-                </div>
+                      {/* Column 4: Battery */}
+                      <td style={{ padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Battery
+                            size={16}
+                            color={
+                              dev.batteryPercent > 50
+                                ? '#16A34A'
+                                : dev.batteryPercent > 20
+                                ? '#D97706'
+                                : '#DC2626'
+                            }
+                          />
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A' }}>
+                            {dev.batteryPercent.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            width: '60px',
+                            height: '4px',
+                            backgroundColor: '#E2E8F0',
+                            borderRadius: '2px',
+                            marginTop: '4px',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${Math.min(100, Math.max(0, dev.batteryPercent))}%`,
+                              height: '100%',
+                              backgroundColor:
+                                dev.batteryPercent > 50
+                                  ? '#16A34A'
+                                  : dev.batteryPercent > 20
+                                  ? '#D97706'
+                                  : '#DC2626',
+                            }}
+                          />
+                        </div>
+                      </td>
+
+                      {/* Column 5: Tank 1 */}
+                      <td style={{ padding: '12px 14px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A' }}>
+                          {dev.tank1Level != null ? `${dev.tank1Level.toFixed(1)}%` : '—'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748B' }}>
+                          {dev.tank1HeightCm != null ? `${dev.tank1HeightCm.toFixed(1)} cm` : '—'}
+                          {dev.valve1Normal ? (
+                            <span style={{ color: '#16A34A', marginLeft: '4px' }}>&bull; Valve OK</span>
+                          ) : (
+                            <span style={{ color: '#DC2626', marginLeft: '4px' }}>&bull; Valve Alert</span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Column 6: Tank 2 */}
+                      <td style={{ padding: '12px 14px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A' }}>
+                          {dev.tank2Level != null ? `${dev.tank2Level.toFixed(1)}%` : '—'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748B' }}>
+                          {dev.tank2HeightCm != null ? `${dev.tank2HeightCm.toFixed(1)} cm` : '—'}
+                          {dev.valve2Normal ? (
+                            <span style={{ color: '#16A34A', marginLeft: '4px' }}>&bull; Valve OK</span>
+                          ) : (
+                            <span style={{ color: '#DC2626', marginLeft: '4px' }}>&bull; Valve Alert</span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Column 7: Status */}
+                      <td style={{ padding: '12px 14px' }}>
+                        {renderStatusBadge(status)}
+                      </td>
+
+                      {/* Column 8: Last Seen */}
+                      <td style={{ padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {dev.isOnline && (
+                            <span
+                              style={{
+                                width: '6px',
+                                height: '6px',
+                                borderRadius: '50%',
+                                backgroundColor: '#16A34A',
+                              }}
+                            />
+                          )}
+                          <span style={{ fontSize: '12px', color: '#334155', fontWeight: 600 }}>
+                            {dev.lastSeen || 'Awaiting stream'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#94A3B8' }}>
+                          {dev.speedKmh != null ? `${dev.speedKmh.toFixed(1)} km/h` : 'Stationary'}
+                        </div>
+                      </td>
+
+                      {/* Column 9: Actions */}
+                      <td style={{ padding: '12px 14px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                          {dev.registrationStatus === 'DISCOVERED' ? (
+                            <button
+                              onClick={() => handleOpenMapModal(dev)}
+                              style={{
+                                padding: '5px 10px',
+                                backgroundColor: '#2563EB',
+                                color: '#FFFFFF',
+                                border: 'none',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Register & Map
+                            </button>
+                          ) : dev.assignmentStatus === 'AVAILABLE' ? (
+                            <button
+                              onClick={() => handleOpenMapModal(dev)}
+                              style={{
+                                padding: '5px 10px',
+                                backgroundColor: '#0D9488',
+                                color: '#FFFFFF',
+                                border: 'none',
+                                borderRadius: '4px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Assign Consist
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => handleOpenMapModal(dev)}
+                                title="Edit Train/Coach Mapping"
+                                style={{
+                                  padding: '5px 8px',
+                                  backgroundColor: '#F1F5F9',
+                                  color: '#334155',
+                                  border: '1px solid #CBD5E1',
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleUnmapDevice(dev)}
+                                title="Unassign from Consist"
+                                style={{
+                                  padding: '5px 8px',
+                                  backgroundColor: '#FEF2F2',
+                                  color: '#DC2626',
+                                  border: '1px solid #FECACA',
+                                  borderRadius: '4px',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Unmap
+                              </button>
+                            </>
+                          )}
+
+                          <button
+                            onClick={() => handleDeleteDevice(dev)}
+                            title="Delete Device"
+                            style={{
+                              padding: '5px',
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              color: '#94A3B8',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
-
-              {/* Header: Code & Online Status */}
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '32px', height: '32px', borderRadius: '6px', backgroundColor: isEngaged ? '#EFF6FF' : '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isEngaged ? '#2563EB' : '#D97706' }}>
-                    <Cpu size={16} />
-                  </div>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
-                      {dev.deviceCode}
-                    </h3>
-                    <div style={{ fontSize: '11px', color: '#64748B' }}>{dev.name}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Assignment Details Box */}
-              <div
-                style={{
-                  backgroundColor: '#F8FAFC',
-                  borderRadius: '6px',
-                  border: '1px solid #E2E8F0',
-                  padding: '10px 12px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px',
-                  fontSize: '12px',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: '#64748B' }}>Assignment Status:</span>
-                  <span
-                    style={{
-                      padding: '2px 8px',
-                      borderRadius: '12px',
-                      fontSize: '10px',
-                      fontWeight: 700,
-                      backgroundColor: isEngaged ? '#EFF6FF' : '#FEF3C7',
-                      color: isEngaged ? '#2563EB' : '#D97706',
-                      border: `1px solid ${isEngaged ? '#BFDBFE' : '#FDE68A'}`,
-                    }}
-                  >
-                    {isEngaged ? 'ENGAGED' : 'FREE POOL'}
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#64748B' }}>Assigned Train:</span>
-                  <strong style={{ color: dev.trainNumber ? '#0F172A' : '#94A3B8' }}>
-                    {dev.trainNumber ? `Train ${dev.trainNumber}` : 'Unassigned'}
-                  </strong>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#64748B' }}>Assigned Coach:</span>
-                  <strong style={{ color: dev.coachNumber ? '#0F172A' : '#94A3B8' }}>
-                    {dev.coachNumber ? `Coach ${dev.coachNumber}` : 'Unassigned'}
-                  </strong>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#64748B' }}>Dual Water Tanks:</span>
-                  <span style={{ color: isEngaged ? '#2563EB' : '#94A3B8', fontWeight: 600 }}>
-                    {isEngaged ? 'Arrival (S1) & Departure (S2)' : 'Detached'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Telemetry Footer */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  fontSize: '11px',
-                  borderTop: '1px solid #F1F5F9',
-                  paddingTop: '8px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <div style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: dev.isOnline ? '#16A34A' : '#DC2626' }} />
-                  <span style={{ color: dev.isOnline ? '#16A34A' : '#DC2626', fontWeight: 600 }}>
-                    {dev.isOnline ? 'Active Stream' : 'Offline'}
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: isBatteryLow ? '#DC2626' : '#16A34A', fontWeight: 700 }}>
-                  {isBatteryLow ? <BatteryWarning size={14} /> : <Battery size={14} />}
-                  <span>{dev.batteryPercent}%</span>
-                </div>
-
-                {/* Assign / Change Action Button */}
-                <button
-                  onClick={() => handleOpenAssignModal(dev)}
-                  style={{
-                    padding: '4px 10px',
-                    backgroundColor: '#EFF6FF',
-                    border: '1px solid #BFDBFE',
-                    borderRadius: '4px',
-                    color: '#2563EB',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                  }}
-                >
-                  <Link2 size={12} />
-                  <span>{isEngaged ? 'Reassign' : 'Assign'}</span>
-                </button>
-              </div>
-            </div>
-          );
-        })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* MODAL 1: Assign / Reassign Device Modal */}
-      {isAssignOpen && selectedDeviceForAssign && (
+      {/* MODAL 1: Map / Register Device to Consist */}
+      {isMapModalOpen && targetDevice && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
             backgroundColor: 'rgba(15, 23, 42, 0.55)',
-            zIndex: 1000,
+            backdropFilter: 'blur(3px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '20px',
+            zIndex: 9999,
+            padding: '16px',
           }}
         >
           <div
             style={{
               backgroundColor: '#FFFFFF',
-              borderRadius: '10px',
+              borderRadius: '8px',
+              border: '1px solid #E2E8F0',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
               width: '100%',
-              maxWidth: '420px',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
-              overflow: 'hidden',
+              maxWidth: '480px',
+              padding: '24px',
             }}
           >
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC' }}>
-              <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
-                Assign Device: {selectedDeviceForAssign.deviceCode}
-              </h3>
-              <button onClick={() => setIsAssignOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
-                <X size={16} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                  Map Device to Railway Consist
+                </h2>
+                <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
+                  Assign hardware node to operational train & coach
+                </div>
+              </div>
+              <button
+                onClick={() => setIsMapModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}
+              >
+                <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveAssignment} style={{ padding: '18px' }}>
-              <div style={{ fontSize: '12px', color: '#64748B', marginBottom: '14px' }}>
-                Assign this device to monitor Arrival and Departure tanks for a specific coach consist.
-              </div>
-
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                  Target Train Number
-                </label>
-                <select
-                  value={targetTrain}
-                  onChange={(e) => setTargetTrain(e.target.value)}
+            {/* Detected Telemetry Suggestion Banner */}
+            {(targetDevice.payloadTrno || targetDevice.payloadChno) && (
+              <div
+                style={{
+                  backgroundColor: '#EFF6FF',
+                  border: '1px solid #BFDBFE',
+                  borderRadius: '6px',
+                  padding: '10px 12px',
+                  marginBottom: '16px',
+                }}
+              >
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#1E40AF', textTransform: 'uppercase' }}>
+                  Telemetry Stream Association
+                </div>
+                <div style={{ fontSize: '12px', color: '#1E3A8A', margin: '4px 0 8px 0' }}>
+                  Detected from MQTT frames: <strong>Train {targetDevice.payloadTrno || '—'}</strong>, <strong>Coach {targetDevice.payloadChno || '—'}</strong>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleApplyDetectedConsist}
                   style={{
-                    width: '100%',
-                    height: '34px',
-                    padding: '0 10px',
-                    borderRadius: '6px',
-                    border: '1px solid #CBD5E1',
-                    fontSize: '12px',
-                    boxSizing: 'border-box',
+                    padding: '4px 8px',
+                    backgroundColor: '#2563EB',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
                   }}
                 >
-                  <option value="225256">225256 - Special Express</option>
-                  <option value="12002">12002 - Shatabdi Express</option>
-                  <option value="12951">12951 - Mumbai Rajdhani</option>
-                  <option value="">-- Unassign to Free Pool --</option>
-                </select>
+                  Use Detected Consist ({targetDevice.payloadTrno} / {targetDevice.payloadChno})
+                </button>
               </div>
+            )}
 
-              <div style={{ marginBottom: '18px' }}>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                  Target Coach Label
+            <form onSubmit={handleConfirmMapping} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '4px' }}>
+                  Hardware UID (Read-only)
                 </label>
                 <input
                   type="text"
-                  value={targetCoach}
-                  onChange={(e) => setTargetCoach(e.target.value)}
-                  placeholder="e.g. C4 or B2"
-                  disabled={!targetTrain}
+                  value={targetDevice.uid}
+                  disabled
                   style={{
                     width: '100%',
-                    height: '34px',
-                    padding: '0 10px',
+                    padding: '8px 10px',
                     borderRadius: '6px',
-                    border: '1px solid #CBD5E1',
+                    border: '1px solid #E2E8F0',
+                    backgroundColor: '#F8FAFC',
+                    fontFamily: 'monospace',
                     fontSize: '12px',
+                    color: '#0F172A',
                     boxSizing: 'border-box',
-                    backgroundColor: !targetTrain ? '#F1F5F9' : '#FFFFFF',
                   }}
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '4px' }}>
+                    Train Number *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={trainNumberInput}
+                    onChange={(e) => setTrainNumberInput(e.target.value)}
+                    placeholder="e.g. 225256"
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12px',
+                      color: '#0F172A',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '4px' }}>
+                    Coach Number *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={coachNumberInput}
+                    onChange={(e) => setCoachNumberInput(e.target.value)}
+                    placeholder="e.g. CR123456"
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12px',
+                      color: '#0F172A',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '4px' }}>
+                  Device Name
+                </label>
+                <input
+                  type="text"
+                  value={deviceNameInput}
+                  onChange={(e) => setDeviceNameInput(e.target.value)}
+                  placeholder="e.g. Coach CR123456 Primary WLI"
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '12px',
+                    color: '#0F172A',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '4px' }}>
+                  Hardware Model
+                </label>
+                <input
+                  type="text"
+                  value={hardwareModelInput}
+                  onChange={(e) => setHardwareModelInput(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '12px',
+                    color: '#0F172A',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
                 <button
                   type="button"
-                  onClick={() => setIsAssignOpen(false)}
-                  style={{ padding: '8px 14px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                  onClick={() => setIsMapModalOpen(false)}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    backgroundColor: '#FFFFFF',
+                    color: '#475569',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    backgroundColor: '#2563EB',
+                    color: '#FFFFFF',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
                 >
-                  Confirm Assignment
+                  Confirm & Engage
                 </button>
               </div>
             </form>
@@ -602,107 +1160,189 @@ export const DeviceMappingScreen: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 2: Register New Device Modal */}
-      {isAddOpen && (
+      {/* MODAL 2: Manual Device Registration */}
+      {isRegisterModalOpen && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
             backgroundColor: 'rgba(15, 23, 42, 0.55)',
-            zIndex: 1000,
+            backdropFilter: 'blur(3px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '20px',
+            zIndex: 9999,
+            padding: '16px',
           }}
         >
           <div
             style={{
               backgroundColor: '#FFFFFF',
-              borderRadius: '10px',
+              borderRadius: '8px',
+              border: '1px solid #E2E8F0',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
               width: '100%',
-              maxWidth: '420px',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
-              overflow: 'hidden',
+              maxWidth: '480px',
+              padding: '24px',
             }}
           >
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC' }}>
-              <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
-                Register Operational Device
-              </h3>
-              <button onClick={() => setIsAddOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
-                <X size={16} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h2 style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: 0 }}>
+                  Register New Hardware Device
+                </h2>
+                <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
+                  Add a provisioned WLI telemetry node to the registry
+                </div>
+              </div>
+              <button
+                onClick={() => setIsRegisterModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}
+              >
+                <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateDeviceSubmit} style={{ padding: '18px' }}>
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                  Device Identifier Code *
+            <form onSubmit={handleManualRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '4px' }}>
+                  Hardware UID *
                 </label>
                 <input
                   type="text"
-                  value={newDeviceCode}
-                  onChange={(e) => setNewDeviceCode(e.target.value)}
-                  placeholder="e.g. DEV-WLI-10"
                   required
-                  style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', boxSizing: 'border-box' }}
+                  value={manualUid}
+                  onChange={(e) => setManualUid(e.target.value)}
+                  placeholder="e.g. 0023004D4B42501120353332"
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    color: '#0F172A',
+                    boxSizing: 'border-box',
+                  }}
                 />
               </div>
 
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                  Friendly Name / Label
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '4px' }}>
+                  Device Name
                 </label>
                 <input
                   type="text"
-                  value={newDeviceName}
-                  onChange={(e) => setNewDeviceName(e.target.value)}
-                  placeholder="e.g. Coach C5 Primary Sensor"
-                  style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', boxSizing: 'border-box' }}
+                  value={manualName}
+                  onChange={(e) => setManualName(e.target.value)}
+                  placeholder="e.g. Express WLI Gateway"
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '12px',
+                    color: '#0F172A',
+                    boxSizing: 'border-box',
+                  }}
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                    Initial Train
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '4px' }}>
+                    Train Number (Optional)
                   </label>
                   <input
                     type="text"
-                    value={newAssignTrain}
-                    onChange={(e) => setNewAssignTrain(e.target.value)}
+                    value={manualTrain}
+                    onChange={(e) => setManualTrain(e.target.value)}
                     placeholder="e.g. 225256"
-                    style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', boxSizing: 'border-box' }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12px',
+                      color: '#0F172A',
+                      boxSizing: 'border-box',
+                    }}
                   />
                 </div>
+
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                    Initial Coach
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '4px' }}>
+                    Coach Number (Optional)
                   </label>
                   <input
                     type="text"
-                    value={newAssignCoach}
-                    onChange={(e) => setNewAssignCoach(e.target.value)}
-                    placeholder="e.g. C5"
-                    style={{ width: '100%', height: '34px', padding: '0 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', boxSizing: 'border-box' }}
+                    value={manualCoach}
+                    onChange={(e) => setManualCoach(e.target.value)}
+                    placeholder="e.g. CR123456"
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12px',
+                      color: '#0F172A',
+                      boxSizing: 'border-box',
+                    }}
                   />
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '4px' }}>
+                  Hardware Model
+                </label>
+                <input
+                  type="text"
+                  value={manualModel}
+                  onChange={(e) => setManualModel(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '12px',
+                    color: '#0F172A',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
                 <button
                   type="button"
-                  onClick={() => setIsAddOpen(false)}
-                  style={{ padding: '8px 14px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                  onClick={() => setIsRegisterModalOpen(false)}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    backgroundColor: '#FFFFFF',
+                    color: '#475569',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    backgroundColor: '#2563EB',
+                    color: '#FFFFFF',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
                 >
-                  Register Node
+                  Register Device
                 </button>
               </div>
             </form>
@@ -712,4 +1352,3 @@ export const DeviceMappingScreen: React.FC = () => {
     </div>
   );
 };
-
