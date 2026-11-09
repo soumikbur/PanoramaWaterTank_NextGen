@@ -204,14 +204,187 @@
 }
 
 /* Header & Sidebar responsive adaptivity */
-.app-layout header {
-  height: var(--header-height, 72px) !important;
+@media (min-width: 1024px) {
+  .app-layout header {
+    height: var(--header-height, 68px) !important;
+  }
+
+  .app-layout aside.sidebar-desktop {
+    display: flex !important;
+    width: var(--sidebar-width, 224px) !important;
+    min-width: var(--sidebar-width, 224px) !important;
+    max-width: var(--sidebar-width, 224px) !important;
+  }
+
+  .sidebar-mobile-drawer-portal,
+  .mobile-drawer-backdrop,
+  .mobile-drawer-sheet {
+    display: none !important;
+  }
+
+  .show-on-mobile,
+  .show-on-mobile-flex {
+    display: none !important;
+  }
+
+  .hide-on-desktop {
+    display: none !important;
+  }
 }
 
-.app-layout aside {
-  width: var(--sidebar-width, 224px) !important;
-  min-width: var(--sidebar-width, 224px) !important;
-  max-width: var(--sidebar-width, 224px) !important;
+@media (max-width: 1023px) {
+  .app-layout header {
+    height: 62px !important;
+    min-height: 62px !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .app-layout aside.sidebar-desktop {
+    display: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    overflow: hidden !important;
+  }
+
+  .app-layout main {
+    padding: 12px 12px 28px 12px !important;
+  }
+
+  .hide-on-mobile {
+    display: none !important;
+  }
+
+  .show-on-mobile {
+    display: block !important;
+  }
+
+  .show-on-mobile-flex {
+    display: flex !important;
+  }
+}
+
+/* Global Overflow Prevention */
+html, body, #root, .app-layout {
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+}
+
+/* ========================================================================= */
+/* MOBILE NAVIGATION DRAWER                                                  */
+/* ========================================================================= */
+@keyframes drawerFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes drawerSlideInLeft {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+.mobile-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 9999;
+  animation: drawerFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mobile-drawer-sheet {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(320px, 85vw);
+  max-width: 320px;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--color-surface, #FFFFFF);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 4px 0 28px rgba(0, 0, 0, 0.28);
+  animation: drawerSlideInLeft 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Interactive touch target standards */
+.touch-target-44 {
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.touch-target-48 {
+  min-height: 48px;
+  min-width: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Controlled horizontal scroll area for data tables */
+.scada-table-scroll-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #E2E8F0);
+  scrollbar-width: thin;
+}
+
+/* Mobile responsive card list */
+.mobile-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.mobile-train-card {
+  background-color: var(--color-surface, #FFFFFF);
+  border: 1px solid var(--color-border, #E2E8F0);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  transition: transform 0.1s ease, border-color 0.15s ease;
+}
+
+.mobile-train-card.selected {
+  border-left: 4px solid var(--color-primary, #2563EB);
+  background-color: var(--color-primary-surface, #EFF6FF);
+}
+
+.mobile-train-card:active {
+  transform: scale(0.99);
+}
+
+/* Mobile Status Grid */
+.mobile-status-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+
+@media (max-width: 350px) {
+  .mobile-status-kpi-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Dashboard 3-Card Row Adaptive Grid */
@@ -337,4 +510,66 @@
     width: 100%;
   }
 }
+
+/* ========================================================================= */
+/* MOBILE DASHBOARD SCADA REFINEMENTS                                        */
+/* ========================================================================= */
+.mobile-dual-tank-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+}
+
+@media (max-width: 520px) {
+  .mobile-dual-tank-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+}
+
+.mobile-map-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1.3fr;
+  gap: 12px;
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .mobile-map-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  .mobile-map-grid [data-map-container] {
+    height: 220px !important;
+  }
+}
+
+/* Fluid responsive table / card switcher */
+@media (max-width: 767px) {
+  .dashboard-train-table-desktop {
+    display: none !important;
+  }
+  .dashboard-train-cards-mobile {
+    display: flex !important;
+  }
+  .mobile-controls-stack {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+  }
+  .mobile-controls-stack > * {
+    width: 100% !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .dashboard-train-table-desktop {
+    display: block !important;
+  }
+  .dashboard-train-cards-mobile {
+    display: none !important;
+  }
+}
+
 

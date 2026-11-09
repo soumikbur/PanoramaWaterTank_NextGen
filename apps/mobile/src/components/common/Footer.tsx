@@ -5,7 +5,7 @@ export const Footer: React.FC = () => {
   return (
     <footer
       style={{
-        height: `${metrics.footerHeight}px`,
+        minHeight: `${metrics.footerHeight}px`,
         backgroundColor: 'transparent',
         display: 'flex',
         alignItems: 'center',
@@ -13,6 +13,9 @@ export const Footer: React.FC = () => {
         userSelect: 'none',
         flexShrink: 0,
         boxSizing: 'border-box',
+        padding: '8px 16px',
+        textAlign: 'center',
+        maxWidth: '100%',
       }}
     >
       <span

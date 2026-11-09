@@ -60,6 +60,9 @@ interface AppContextType {
   setSearchQuery: (query: string) => void;
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
+  isMobileNavOpen: boolean;
+  setIsMobileNavOpen: (open: boolean) => void;
+  toggleMobileNav: () => void;
   selectedTrainNumber: string;
   setSelectedTrainNumber: (trainNum: string) => void;
   selectedCoachNumber: string;
@@ -134,6 +137,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentDate, setCurrentDate] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
+  const toggleMobileNav = () => setIsMobileNavOpen((prev) => !prev);
   const [selectedTrainNumber, setSelectedTrainNumber] = useState<string>('225256');
   const [selectedCoachNumber, setSelectedCoachNumber] = useState<string>('CR123456');
   const [selectedTankId, setSelectedTankId] = useState<string | null>(null);
@@ -660,6 +665,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const handleSetActiveScreen = (screen: ScreenName) => {
+    setIsMobileNavOpen(false);
     const hasToken = typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('panorama_token'));
     if (!isAuthenticated && !hasToken && screen !== 'login') {
       setActiveScreen('login');
@@ -753,6 +759,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setSearchQuery,
         sidebarCollapsed,
         toggleSidebar,
+        isMobileNavOpen,
+        setIsMobileNavOpen,
+        toggleMobileNav,
         selectedTrainNumber,
         setSelectedTrainNumber: handleSetSelectedTrainNumber,
         selectedCoachNumber,

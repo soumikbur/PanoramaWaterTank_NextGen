@@ -27,6 +27,8 @@ import {
   Monitor,
   Sliders,
   ChevronDown,
+  Menu,
+  Bell,
 } from 'lucide-react';
 
 interface SearchResultItem {
@@ -62,6 +64,10 @@ export const Header: React.FC = () => {
     setSelectedTankId,
     setSelectedDeviceId,
     setSelectedStationCode,
+    toggleMobileNav,
+    isMobileNavOpen,
+    alarmStats,
+    activeAlarms,
   } = useApp();
 
   const { theme, setTheme, resolvedTheme, isDark } = useDisplayPreferences();
@@ -73,6 +79,7 @@ export const Header: React.FC = () => {
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [isSearching, setIsSearching] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
   // Profile menu state
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -493,6 +500,303 @@ export const Header: React.FC = () => {
     }
   };
 
+  const renderSearchResultsPanel = (isMobile: boolean) => {
+    if (!isOpen) return null;
+    return (
+      <div
+        id={isMobile ? 'mobile-search-results-panel' : 'global-search-results-panel'}
+        style={{
+          position: isMobile ? 'fixed' : 'absolute',
+          top: isMobile ? '58px' : 'calc(100% + 6px)',
+          left: isMobile ? '8px' : 0,
+          right: isMobile ? '8px' : 0,
+          minWidth: isMobile ? 'auto' : '460px',
+          maxWidth: isMobile ? 'calc(100vw - 16px)' : '520px',
+          backgroundColor: '#FFFFFF',
+          border: '1px solid #CBD5E1',
+          borderRadius: '8px',
+          boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.18), 0 8px 10px -6px rgba(15, 23, 42, 0.1)',
+          zIndex: 10001,
+          overflow: 'hidden',
+        }}
+      >
+        {/* Case A: No Results Found */}
+        {hasSearched && results.length === 0 && (
+          <div style={{ padding: '24px 20px', textAlign: 'center' }}>
+            <div
+              style={{
+                width: '46px',
+                height: '46px',
+                borderRadius: '50%',
+                backgroundColor: '#FEF2F2',
+                border: '1px solid #FECACA',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#DC2626',
+                marginBottom: '12px',
+              }}
+            >
+              <AlertCircle size={24} />
+            </div>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', marginBottom: '4px' }}>
+              No results found
+            </div>
+            <div
+              style={{
+                fontSize: '12px',
+                color: '#64748B',
+                maxWidth: '380px',
+                margin: '0 auto 16px auto',
+                lineHeight: '18px',
+              }}
+            >
+              No train, coach, tank, device, or location matches <strong style={{ color: '#0F172A' }}>"{lastSearchedTerm}"</strong>.
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+              <button
+                type="button"
+                id="search-clear-btn"
+                onClick={handleClear}
+                style={{
+                  padding: '7px 14px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#475569',
+                  backgroundColor: '#F1F5F9',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                Clear Search
+              </button>
+              <button
+                type="button"
+                id="search-return-dashboard-btn"
+                onClick={() => {
+                  handleClear();
+                  setActiveScreen('dashboard');
+                }}
+                style={{
+                  padding: '7px 14px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#FFFFFF',
+                  backgroundColor: '#2563EB',
+                  border: '1px solid #1D4ED8',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                Return to Dashboard
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Case B: Matching Results Found */}
+        {hasSearched && results.length > 0 && (
+          <div>
+            {/* Panel Header */}
+            <div
+              style={{
+                padding: '10px 14px',
+                backgroundColor: '#F8FAFC',
+                borderBottom: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A' }}>
+                  Search results for "{lastSearchedTerm}"
+                </span>
+                <span
+                  style={{
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    backgroundColor: '#EFF6FF',
+                    color: '#2563EB',
+                    border: '1px solid #BFDBFE',
+                    padding: '1px 7px',
+                    borderRadius: '12px',
+                  }}
+                >
+                  {results.length} found
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  color: '#94A3B8',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '2px',
+                }}
+                title="Dismiss"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Results List */}
+            <div style={{ maxHeight: '340px', overflowY: 'auto' }}>
+              {results.map((item, idx) => {
+                const style = getEntityStyle(item.type);
+                const isSelected = selectedIndex === idx;
+
+                return (
+                  <div
+                    key={item.id}
+                    id={`search-result-item-${idx}`}
+                    onClick={item.onClick}
+                    onMouseEnter={() => setSelectedIndex(idx)}
+                    style={{
+                      padding: '10px 14px',
+                      borderBottom: idx < results.length - 1 ? '1px solid #F1F5F9' : 'none',
+                      backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
+                      borderLeft: isSelected ? '3px solid #2563EB' : '3px solid transparent',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.1s ease',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                      {/* Entity Icon */}
+                      <div
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '6px',
+                          backgroundColor: style.bg,
+                          border: `1px solid ${style.border}`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {style.icon}
+                      </div>
+
+                      {/* Details */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+                          <span
+                            style={{
+                              fontSize: '13px',
+                              fontWeight: 700,
+                              color: '#0F172A',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {item.name}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: '9px',
+                              fontWeight: 700,
+                              backgroundColor: style.tagBg,
+                              color: style.tagColor,
+                              padding: '1px 6px',
+                              borderRadius: '3px',
+                              letterSpacing: '0.3px',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {item.type}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            color: '#64748B',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {item.subtitle}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Status badge + arrow */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '12px', flexShrink: 0 }}>
+                      {item.status && (
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            backgroundColor:
+                              item.status === 'ONLINE' || item.status === 'REFILL READY' || item.status === 'OPERATIONAL'
+                                ? '#DCFCE7'
+                                : item.status === 'OFFLINE' || item.status === 'NO FACILITY'
+                                ? '#FEE2E2'
+                                : '#FEF3C7',
+                            color:
+                              item.status === 'ONLINE' || item.status === 'REFILL READY' || item.status === 'OPERATIONAL'
+                                ? '#15803D'
+                                : item.status === 'OFFLINE' || item.status === 'NO FACILITY'
+                                ? '#B91C1C'
+                                : '#B45309',
+                            border: `1px solid ${
+                              item.status === 'ONLINE' || item.status === 'REFILL READY' || item.status === 'OPERATIONAL'
+                                ? '#BBF7D0'
+                                : item.status === 'OFFLINE' || item.status === 'NO FACILITY'
+                                ? '#FECACA'
+                                : '#FDE68A'
+                            }`,
+                          }}
+                        >
+                          {item.status}
+                        </span>
+                      )}
+                      <ArrowRight size={14} color={isSelected ? '#2563EB' : '#94A3B8'} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Panel Footer */}
+            <div
+              style={{
+                padding: '6px 14px',
+                backgroundColor: '#F8FAFC',
+                borderTop: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '10px',
+                color: '#94A3B8',
+              }}
+            >
+              <span>Press ↑ / ↓ to navigate • Enter to select • Esc to dismiss</span>
+              <span>{results.length} records</span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const activeAlarmCount = alarmStats?.totalActive ?? activeAlarms?.length ?? 0;
+
   return (
     <header
       style={{
@@ -502,16 +806,340 @@ export const Header: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingLeft: '16px',
-        paddingRight: '16px',
+        paddingLeft: '12px',
+        paddingRight: '12px',
         boxSizing: 'border-box',
         userSelect: 'none',
         zIndex: 100,
         flexShrink: 0,
+        position: 'relative',
+        width: '100%',
+        maxWidth: '100vw',
       }}
     >
+      {/* ================================================================= */}
+      {/* MOBILE HEADER (< 1024px)                                          */}
+      {/* ================================================================= */}
+      <div
+        className="show-on-mobile-flex"
+        style={{
+          width: '100%',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '6px',
+        }}
+      >
+        {isMobileSearchOpen ? (
+          /* Mobile Search Bar Mode */
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              width: '100%',
+              gap: '8px',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setIsMobileSearchOpen(false);
+                setIsOpen(false);
+              }}
+              aria-label="Close search"
+              className="touch-target-44"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#475569',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '8px',
+                borderRadius: '6px',
+              }}
+            >
+              <X size={20} />
+            </button>
+
+            <form
+              onSubmit={handleSearchSubmit}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                flex: 1,
+                position: 'relative',
+              }}
+            >
+              <span
+                style={{
+                  position: 'absolute',
+                  left: '10px',
+                  color: '#64748B',
+                  display: 'flex',
+                  alignItems: 'center',
+                  pointerEvents: 'none',
+                }}
+              >
+                <Search size={15} />
+              </span>
+              <input
+                type="text"
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setSelectedIndex(-1);
+                  if (!e.target.value.trim()) {
+                    setIsOpen(false);
+                    setResults([]);
+                    setHasSearched(false);
+                  }
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder="Search fleet, coaches, tanks..."
+                style={{
+                  width: '100%',
+                  height: '38px',
+                  paddingLeft: '32px',
+                  paddingRight: searchQuery ? '32px' : '10px',
+                  backgroundColor: '#F8FAFC',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: '6px',
+                  fontSize: '13px',
+                  color: '#0F172A',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    color: '#94A3B8',
+                    padding: '4px',
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </form>
+            {renderSearchResultsPanel(true)}
+          </div>
+        ) : (
+          /* Normal Mobile Header Mode */
+          <>
+            {/* Left: Hamburger + Logo */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={toggleMobileNav}
+                aria-label="Open Navigation Menu"
+                className="touch-target-44"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '8px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  color: '#0F172A',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Menu size={22} />
+              </button>
+
+              <div
+                onClick={() => {
+                  setActiveScreen('dashboard');
+                  AppRouter.navigate('dashboard');
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                <img
+                  src={panoramaLogoIcon}
+                  alt="Panorama"
+                  style={{ width: '24px', height: '24px', objectFit: 'contain', borderRadius: '4px' }}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.1' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 800, color: '#0F172A', letterSpacing: '0.2px' }}>
+                    PANORAMA
+                  </span>
+                  <span style={{ fontSize: '9px', fontWeight: 700, color: '#2563EB', letterSpacing: '0.4px' }}>
+                    TANK MONITOR
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Center: Truncated Title */}
+            <div
+              style={{
+                flex: 1,
+                minWidth: 0,
+                textAlign: 'center',
+                padding: '0 4px',
+                overflow: 'hidden',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: '#1E293B',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  display: 'block',
+                }}
+              >
+                {currentInfo.title}
+              </span>
+            </div>
+
+            {/* Right: Quick actions (Search, Connection, Alerts) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+              {/* Search Toggle Button */}
+              <button
+                type="button"
+                onClick={() => setIsMobileSearchOpen(true)}
+                aria-label="Search fleet"
+                className="touch-target-44"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#475569',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '8px',
+                  borderRadius: '6px',
+                }}
+              >
+                <Search size={18} />
+              </button>
+
+              {/* Mobile Connection Pill */}
+              <div
+                style={{
+                  height: '28px',
+                  padding: '0 7px',
+                  borderRadius: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  backgroundColor:
+                    mqttConnectionStatus === 'CONNECTED'
+                      ? '#E8F8EE'
+                      : mqttConnectionStatus === 'CONNECTING'
+                      ? '#EFF6FF'
+                      : '#FDECEC',
+                  border: `1px solid ${
+                    mqttConnectionStatus === 'CONNECTED'
+                      ? '#DCFCE7'
+                      : mqttConnectionStatus === 'CONNECTING'
+                      ? '#BFDBFE'
+                      : '#FEE2E2'
+                  }`,
+                }}
+                title={`Status: ${mqttConnectionStatus}`}
+              >
+                <div
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor:
+                      mqttConnectionStatus === 'CONNECTED'
+                        ? '#16A34A'
+                        : mqttConnectionStatus === 'CONNECTING'
+                        ? '#2563EB'
+                        : '#DC2626',
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    color:
+                      mqttConnectionStatus === 'CONNECTED'
+                        ? '#16A34A'
+                        : mqttConnectionStatus === 'CONNECTING'
+                        ? '#2563EB'
+                        : '#DC2626',
+                  }}
+                >
+                  {mqttConnectionStatus === 'CONNECTED' ? 'LIVE' : 'OFF'}
+                </span>
+              </div>
+
+              {/* Mobile Alerts Bell Button */}
+              <button
+                type="button"
+                onClick={() => setActiveScreen('alerts')}
+                aria-label="View Alerts"
+                className="touch-target-44"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: activeAlarmCount > 0 ? '#EF4444' : '#475569',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '8px',
+                  borderRadius: '6px',
+                }}
+              >
+                <Bell size={18} />
+                {activeAlarmCount > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '6px',
+                      right: '6px',
+                      backgroundColor: '#EF4444',
+                      color: '#FFFFFF',
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      borderRadius: '10px',
+                      minWidth: '15px',
+                      height: '15px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '0 2px',
+                    }}
+                  >
+                    {activeAlarmCount > 99 ? '99+' : activeAlarmCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ================================================================= */}
+      {/* DESKTOP HEADER (>= 1024px)                                        */}
+      {/* ================================================================= */}
       {/* Left: Panorama Logo, Compact Branding, Home Button, Divider, and Page Title/Subtitle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+      <div className="hide-on-mobile" style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
         {/* Official Panorama Logo and Compact Two-Line Branding */}
         <div
           onClick={() => {
@@ -657,6 +1285,7 @@ export const Header: React.FC = () => {
       {/* Center: Global Search Bar (Qt SearchBar.qml style) */}
       <div
         ref={searchContainerRef}
+        className="hide-on-mobile"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -771,300 +1400,11 @@ export const Header: React.FC = () => {
         </form>
 
         {/* Results / Feedback Dropdown Panel */}
-        {isOpen && (
-          <div
-            id="global-search-results-panel"
-            style={{
-              position: 'absolute',
-              top: 'calc(100% + 6px)',
-              left: 0,
-              right: 0,
-              minWidth: '460px',
-              backgroundColor: '#FFFFFF',
-              border: '1px solid #CBD5E1',
-              borderRadius: '8px',
-              boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.18), 0 8px 10px -6px rgba(15, 23, 42, 0.1)',
-              zIndex: 1000,
-              overflow: 'hidden',
-            }}
-          >
-            {/* Case A: No Results Found */}
-            {hasSearched && results.length === 0 && (
-              <div style={{ padding: '24px 20px', textAlign: 'center' }}>
-                <div
-                  style={{
-                    width: '46px',
-                    height: '46px',
-                    borderRadius: '50%',
-                    backgroundColor: '#FEF2F2',
-                    border: '1px solid #FECACA',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#DC2626',
-                    marginBottom: '12px',
-                  }}
-                >
-                  <AlertCircle size={24} />
-                </div>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A', marginBottom: '4px' }}>
-                  No results found
-                </div>
-                <div
-                  style={{
-                    fontSize: '12px',
-                    color: '#64748B',
-                    maxWidth: '380px',
-                    margin: '0 auto 16px auto',
-                    lineHeight: '18px',
-                  }}
-                >
-                  No train, coach, tank, device, or location matches <strong style={{ color: '#0F172A' }}>"{lastSearchedTerm}"</strong>.
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-                  <button
-                    type="button"
-                    id="search-clear-btn"
-                    onClick={handleClear}
-                    style={{
-                      padding: '7px 14px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      color: '#475569',
-                      backgroundColor: '#F1F5F9',
-                      border: '1px solid #CBD5E1',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    Clear Search
-                  </button>
-                  <button
-                    type="button"
-                    id="search-return-dashboard-btn"
-                    onClick={() => {
-                      handleClear();
-                      setActiveScreen('dashboard');
-                    }}
-                    style={{
-                      padding: '7px 14px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      color: '#FFFFFF',
-                      backgroundColor: '#2563EB',
-                      border: '1px solid #1D4ED8',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    Return to Dashboard
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Case B: Matching Results Found */}
-            {hasSearched && results.length > 0 && (
-              <div>
-                {/* Panel Header */}
-                <div
-                  style={{
-                    padding: '10px 14px',
-                    backgroundColor: '#F8FAFC',
-                    borderBottom: '1px solid #E2E8F0',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A' }}>
-                      Search results for "{lastSearchedTerm}"
-                    </span>
-                    <span
-                      style={{
-                        fontSize: '10px',
-                        fontWeight: 700,
-                        backgroundColor: '#EFF6FF',
-                        color: '#2563EB',
-                        border: '1px solid #BFDBFE',
-                        padding: '1px 7px',
-                        borderRadius: '12px',
-                      }}
-                    >
-                      {results.length} found
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsOpen(false)}
-                    style={{
-                      border: 'none',
-                      background: 'transparent',
-                      cursor: 'pointer',
-                      color: '#94A3B8',
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '2px',
-                    }}
-                    title="Dismiss"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-
-                {/* Results List */}
-                <div style={{ maxHeight: '340px', overflowY: 'auto' }}>
-                  {results.map((item, idx) => {
-                    const style = getEntityStyle(item.type);
-                    const isSelected = selectedIndex === idx;
-
-                    return (
-                      <div
-                        key={item.id}
-                        id={`search-result-item-${idx}`}
-                        onClick={item.onClick}
-                        onMouseEnter={() => setSelectedIndex(idx)}
-                        style={{
-                          padding: '10px 14px',
-                          borderBottom: idx < results.length - 1 ? '1px solid #F1F5F9' : 'none',
-                          backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
-                          borderLeft: isSelected ? '3px solid #2563EB' : '3px solid transparent',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          cursor: 'pointer',
-                          transition: 'background-color 0.1s ease',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                          {/* Entity Icon */}
-                          <div
-                            style={{
-                              width: '32px',
-                              height: '32px',
-                              borderRadius: '6px',
-                              backgroundColor: style.bg,
-                              border: `1px solid ${style.border}`,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0,
-                            }}
-                          >
-                            {style.icon}
-                          </div>
-
-                          {/* Details */}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-                              <span
-                                style={{
-                                  fontSize: '13px',
-                                  fontWeight: 700,
-                                  color: '#0F172A',
-                                  whiteSpace: 'nowrap',
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                }}
-                              >
-                                {item.name}
-                              </span>
-                              <span
-                                style={{
-                                  fontSize: '9px',
-                                  fontWeight: 700,
-                                  backgroundColor: style.tagBg,
-                                  color: style.tagColor,
-                                  padding: '1px 6px',
-                                  borderRadius: '3px',
-                                  letterSpacing: '0.3px',
-                                  flexShrink: 0,
-                                }}
-                              >
-                                {item.type}
-                              </span>
-                            </div>
-                            <div
-                              style={{
-                                fontSize: '11px',
-                                color: '#64748B',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                              }}
-                            >
-                              {item.subtitle}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Status badge + arrow */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '12px', flexShrink: 0 }}>
-                          {item.status && (
-                            <span
-                              style={{
-                                fontSize: '10px',
-                                fontWeight: 700,
-                                padding: '2px 8px',
-                                borderRadius: '12px',
-                                backgroundColor:
-                                  item.status === 'ONLINE' || item.status === 'REFILL READY' || item.status === 'OPERATIONAL'
-                                    ? '#DCFCE7'
-                                    : item.status === 'OFFLINE' || item.status === 'NO FACILITY'
-                                    ? '#FEE2E2'
-                                    : '#FEF3C7',
-                                color:
-                                  item.status === 'ONLINE' || item.status === 'REFILL READY' || item.status === 'OPERATIONAL'
-                                    ? '#15803D'
-                                    : item.status === 'OFFLINE' || item.status === 'NO FACILITY'
-                                    ? '#B91C1C'
-                                    : '#B45309',
-                                border: `1px solid ${
-                                  item.status === 'ONLINE' || item.status === 'REFILL READY' || item.status === 'OPERATIONAL'
-                                    ? '#BBF7D0'
-                                    : item.status === 'OFFLINE' || item.status === 'NO FACILITY'
-                                    ? '#FECACA'
-                                    : '#FDE68A'
-                                }`,
-                              }}
-                            >
-                              {item.status}
-                            </span>
-                          )}
-                          <ArrowRight size={14} color={isSelected ? '#2563EB' : '#94A3B8'} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Panel Footer */}
-                <div
-                  style={{
-                    padding: '6px 14px',
-                    backgroundColor: '#F8FAFC',
-                    borderTop: '1px solid #E2E8F0',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    fontSize: '10px',
-                    color: '#94A3B8',
-                  }}
-                >
-                  <span>Press ↑ / ↓ to navigate • Enter to select • Esc to dismiss</span>
-                  <span>{results.length} records</span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        {renderSearchResultsPanel(false)}
       </div>
 
       {/* Right Controls: Role Badge, Status Pill, Settings, Logout, Live Clock */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+      <div className="hide-on-mobile" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
         {/* Interactive User Profile Badge & Dropdown (Qt Header Role Badge) */}
         {currentUser && (
           <div ref={profileContainerRef} style={{ position: 'relative' }}>

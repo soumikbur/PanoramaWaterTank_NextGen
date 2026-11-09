@@ -327,12 +327,12 @@ export const TrainManagementScreen: React.FC = () => {
             </p>
           </div>
 
-          {/* 4 Region Cards Grid (3 on row 1, 1 on row 2) */}
+          {/* Region Cards Grid (Responsive auto-fit) */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '16px',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
+              gap: '14px',
               alignItems: 'stretch',
             }}
           >
@@ -511,8 +511,8 @@ export const TrainManagementScreen: React.FC = () => {
                 </div>
               );
             })}
+            </div>
           </div>
-        </div>
       )}
 
       {/* 3. LEVEL 2: TRAINS LIST WITHIN SELECTED REGION */}
@@ -551,33 +551,35 @@ export const TrainManagementScreen: React.FC = () => {
 
           {/* Trains Table / Card List */}
           <div
+            className="scada-table-scroll-container"
             style={{
               backgroundColor: '#FFFFFF',
               border: '1px solid #E2E8F0',
               borderRadius: '8px',
-              overflow: 'hidden',
+              overflowX: 'auto',
             }}
           >
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '120px 2fr 100px 100px 120px 140px',
-                padding: '12px 16px',
-                backgroundColor: '#F8FAFC',
-                borderBottom: '1px solid #E2E8F0',
-                fontSize: '11px',
-                fontWeight: 700,
-                color: '#64748B',
-                letterSpacing: '0.4px',
-              }}
-            >
-              <span>TRAIN NO.</span>
-              <span>NAME / CORRIDOR</span>
-              <span>COACHES</span>
-              <span>TANKS</span>
-              <span>STATUS</span>
-              <span style={{ textAlign: 'right' }}>ACTIONS</span>
-            </div>
+            <div style={{ minWidth: '600px' }}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '120px 2fr 100px 100px 120px 140px',
+                  padding: '12px 16px',
+                  backgroundColor: '#F8FAFC',
+                  borderBottom: '1px solid #E2E8F0',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#64748B',
+                  letterSpacing: '0.4px',
+                }}
+              >
+                <span>TRAIN NO.</span>
+                <span>NAME / CORRIDOR</span>
+                <span>COACHES</span>
+                <span>TANKS</span>
+                <span>STATUS</span>
+                <span style={{ textAlign: 'right' }}>ACTIONS</span>
+              </div>
 
             {(!activeRegionObj?.trains || activeRegionObj.trains.length === 0) && (
               <div style={{ padding: '30px', textAlign: 'center', color: '#94A3B8', fontSize: '13px' }}>
@@ -684,6 +686,7 @@ export const TrainManagementScreen: React.FC = () => {
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
       )}
@@ -993,9 +996,11 @@ export const TrainManagementScreen: React.FC = () => {
             style={{
               backgroundColor: '#FFFFFF',
               borderRadius: '10px',
-              padding: '24px',
+              padding: '20px',
               width: '460px',
-              maxWidth: '90%',
+              maxWidth: 'min(460px, calc(100vw - 24px))',
+              maxHeight: '90vh',
+              overflowY: 'auto',
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
             }}
           >
@@ -1212,9 +1217,10 @@ export const TrainManagementScreen: React.FC = () => {
               backgroundColor: '#FFFFFF',
               borderRadius: '8px',
               width: '460px',
-              maxWidth: '100%',
+              maxWidth: 'min(460px, calc(100vw - 24px))',
+              maxHeight: '90vh',
+              overflowY: 'auto',
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
-              overflow: 'hidden',
             }}
           >
             <div

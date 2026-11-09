@@ -495,6 +495,7 @@ export const EmployeeDashboard: React.FC = () => {
           ========================================================================= */}
       <div
         id="dashboard-row-1-kpis"
+        className="dashboard-train-table-desktop"
         style={{
           backgroundColor: 'var(--color-surface, #FFFFFF)',
           borderRadius: '6px',
@@ -576,6 +577,180 @@ export const EmployeeDashboard: React.FC = () => {
       </div>
 
       {/* =========================================================================
+          MOBILE OPERATIONAL SCADA OVERVIEW (< 768px)
+          Section 1: System Status | Section 2: Train Summary | Section 3: Active Train Info
+          ========================================================================= */}
+      <div
+        className="dashboard-train-cards-mobile"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          width: '100%',
+        }}
+      >
+        {/* Section 1: System Status KPI Card */}
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #FFFFFF)',
+            borderRadius: '8px',
+            border: '1px solid var(--color-border, #E2E8F0)',
+            padding: '12px 14px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              System Status & Connectivity
+            </span>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '2px 8px',
+                borderRadius: '12px',
+                backgroundColor: mqttConnectionStatus === 'CONNECTED' ? '#DCFCE7' : '#FEE2E2',
+                color: mqttConnectionStatus === 'CONNECTED' ? '#15803D' : '#DC2626',
+                border: `1px solid ${mqttConnectionStatus === 'CONNECTED' ? '#86EFAC' : '#FCA5A5'}`,
+                fontSize: '10px',
+                fontWeight: 700,
+              }}
+            >
+              <div
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: mqttConnectionStatus === 'CONNECTED' ? '#16A34A' : '#DC2626',
+                }}
+              />
+              <span>{mqttConnectionStatus === 'CONNECTED' ? 'MQTT LIVE' : 'DISCONNECTED'}</span>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '11px' }}>
+            <div style={{ padding: '8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+              <div style={{ color: '#64748B', fontSize: '10px', fontWeight: 600 }}>Active Fleet Train</div>
+              <strong style={{ color: '#2563EB', fontSize: '13px' }}>{currentTrain.trainNumber}</strong>
+            </div>
+            <div style={{ padding: '8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+              <div style={{ color: '#64748B', fontSize: '10px', fontWeight: 600 }}>Active Alarms</div>
+              <strong style={{ color: activeAlarms.length > 0 ? '#DC2626' : '#16A34A', fontSize: '13px' }}>
+                {activeAlarms.length} Active
+              </strong>
+            </div>
+            <div style={{ padding: '8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+              <div style={{ color: '#64748B', fontSize: '10px', fontWeight: 600 }}>Cloud Telemetry</div>
+              <strong style={{ color: '#0F172A', fontSize: '12px' }}>Ubidots Synced</strong>
+            </div>
+            <div style={{ padding: '8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+              <div style={{ color: '#64748B', fontSize: '10px', fontWeight: 600 }}>Last Stream Sync</div>
+              <strong style={{ color: '#0F172A', fontSize: '12px' }}>{currentTrain.lastUpdate}</strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 2: Train Summary Card */}
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #FFFFFF)',
+            borderRadius: '8px',
+            border: '1px solid var(--color-border, #E2E8F0)',
+            padding: '12px 14px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}
+        >
+          <div style={{ fontSize: '11px', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+            Train Summary
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '11px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: '#64748B' }}>Selected Train</span>
+              <strong style={{ color: '#2563EB', fontSize: '12px' }}>{currentTrain.trainNumber} ({currentTrain.name})</strong>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: '#64748B' }}>Operating Region</span>
+              <strong style={{ color: '#0F172A', fontSize: '12px' }}>{currentTrain.region}</strong>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: '#64748B' }}>Total Coaches</span>
+              <strong style={{ color: '#0F172A', fontSize: '12px' }}>24 Coaches</strong>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: '#64748B' }}>Total Reservoirs</span>
+              <strong style={{ color: '#0F172A', fontSize: '12px' }}>48 Tanks</strong>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: '#64748B' }}>Online Tanks</span>
+              <strong style={{ color: '#16A34A', fontSize: '12px' }}>48 Online</strong>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: '#64748B' }}>Active Alerts</span>
+              <strong style={{ color: activeAlarms.length > 0 ? '#DC2626' : '#16A34A', fontSize: '12px' }}>
+                {activeAlarms.length} Alerts
+              </strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 3: Active Train Info Card */}
+        <div
+          style={{
+            backgroundColor: 'var(--color-surface, #FFFFFF)',
+            borderRadius: '8px',
+            border: '1px solid var(--color-border, #E2E8F0)',
+            padding: '12px 14px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+          }}
+        >
+          <div style={{ fontSize: '11px', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
+            Active Train Telemetry Info
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '11px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: '#64748B' }}>Train No.</span>
+              <strong style={{ color: '#0F172A', fontSize: '12px' }}>{currentTrain.trainNumber}</strong>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: '#64748B' }}>Selected Coach</span>
+              <strong style={{ color: '#0F172A', fontSize: '12px' }}>{selectedCoach.coachNumber}</strong>
+            </div>
+            <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: '#64748B' }}>Hardware Sensor UID</span>
+              <code style={{ fontSize: '10px', color: '#475569', backgroundColor: '#F1F5F9', padding: '3px 6px', borderRadius: '4px', wordBreak: 'break-all' }}>
+                {liveTelemetry?.uid || selectedCoach.deviceId || '0023004D4B42501120353332'}
+              </code>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: '#64748B' }}>Tank 1 (Arrival)</span>
+              <strong style={{ color: selectedCoach.arrivalLevel != null && selectedCoach.arrivalLevel < 20 ? '#DC2626' : '#2563EB', fontSize: '12px' }}>
+                {selectedCoach.arrivalLevel != null ? `${selectedCoach.arrivalLevel.toFixed(1)}% (${selectedCoach.arrivalHeightCm?.toFixed(1)} cm)` : '—'}
+              </strong>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: '#64748B' }}>Tank 2 (Departure)</span>
+              <strong style={{ color: selectedCoach.departureLevel != null && selectedCoach.departureLevel < 20 ? '#DC2626' : '#2563EB', fontSize: '12px' }}>
+                {selectedCoach.departureLevel != null ? `${selectedCoach.departureLevel.toFixed(1)}% (${selectedCoach.departureHeightCm?.toFixed(1)} cm)` : '—'}
+              </strong>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: '#64748B' }}>Telemetry Battery</span>
+              <strong style={{ color: selectedCoach.batteryPercent != null && selectedCoach.batteryPercent < 30 ? '#DC2626' : '#16A34A', fontSize: '12px' }}>
+                {selectedCoach.batteryPercent != null ? `${selectedCoach.batteryPercent.toFixed(1)}%` : '—'}
+              </strong>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: '#64748B' }}>MQTT Broker State</span>
+              <strong style={{ color: mqttConnectionStatus === 'CONNECTED' ? '#16A34A' : '#DC2626', fontSize: '12px' }}>
+                {mqttConnectionStatus}
+              </strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* =========================================================================
           SECTION 1: DASHBOARD - TRAIN LIST (Matching Reference Layout)
           ========================================================================= */}
       <div
@@ -590,6 +765,7 @@ export const EmployeeDashboard: React.FC = () => {
       >
         {/* Header & Controls Row */}
         <div
+          className="mobile-controls-stack"
           style={{
             display: 'flex',
             flexWrap: 'wrap',
@@ -611,17 +787,22 @@ export const EmployeeDashboard: React.FC = () => {
             Dashboard &ndash; Train List
           </h2>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px' }}>
+          <div
+            className="mobile-controls-stack"
+            style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '12px' }}
+          >
             {/* Region Selector */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary, #475569)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: '140px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary, #475569)', whiteSpace: 'nowrap' }}>
                 Region :
               </span>
               <select
                 value={selectedRegion}
                 onChange={(e) => setSelectedRegion(e.target.value)}
                 style={{
-                  height: '32px',
+                  height: '38px',
+                  minHeight: '38px',
+                  width: '100%',
                   padding: '0 10px',
                   borderRadius: '6px',
                   border: '1px solid var(--color-border, #CBD5E1)',
@@ -642,19 +823,20 @@ export const EmployeeDashboard: React.FC = () => {
             </div>
 
             {/* Train No. Search */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary, #475569)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: '150px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--color-text-secondary, #475569)', whiteSpace: 'nowrap' }}>
                 Train No. :
               </span>
-              <div style={{ position: 'relative', width: '130px' }}>
+              <div style={{ position: 'relative', width: '100%' }}>
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="225256"
+                  placeholder="Search train..."
                   style={{
                     width: '100%',
-                    height: '32px',
+                    height: '38px',
+                    minHeight: '38px',
                     paddingLeft: '10px',
                     paddingRight: '28px',
                     borderRadius: '6px',
@@ -684,9 +866,10 @@ export const EmployeeDashboard: React.FC = () => {
             {/* Add Train Button */}
             <button
               onClick={handleOpenAddModal}
+              className="touch-target-44"
               style={{
-                height: '32px',
-                padding: '0 14px',
+                minHeight: '44px',
+                padding: '0 16px',
                 backgroundColor: 'var(--color-primary, #2563EB)',
                 color: '#FFFFFF',
                 border: 'none',
@@ -695,20 +878,21 @@ export const EmployeeDashboard: React.FC = () => {
                 fontWeight: 700,
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: '6px',
                 cursor: 'pointer',
                 boxShadow: '0 1px 2px rgba(37,99,235,0.2)',
                 transition: 'all 0.15s ease',
               }}
             >
-              <Plus size={14} strokeWidth={2.4} />
+              <Plus size={15} strokeWidth={2.4} />
               <span>Add Train</span>
             </button>
           </div>
         </div>
 
-        {/* Train List Table (Matching Reference Columns) */}
-        <div style={{ overflowX: 'auto', borderRadius: '6px', border: '1px solid var(--color-border, #E2E8F0)' }}>
+        {/* Train List Table (Matching Reference Columns - Desktop >= 768px) */}
+        <div className="scada-table-scroll-container dashboard-train-table-desktop">
           <table
             style={{
               width: '100%',
@@ -933,6 +1117,224 @@ export const EmployeeDashboard: React.FC = () => {
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* =========================================================================
+            MOBILE TRAIN CARDS LIST (< 768px Viewport Architecture)
+            ========================================================================= */}
+        <div className="dashboard-train-cards-mobile mobile-card-list">
+          {/* Mobile Live Hardware Train Card */}
+          {liveTelemetry && (
+            <div
+              className={`mobile-train-card ${currentTrain.trainNumber === liveTelemetry.trno ? 'selected' : ''}`}
+              onClick={() => handleSelectTrain(liveTelemetry.trno)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Train size={18} color="#2563EB" />
+                  <span style={{ fontSize: '15px', fontWeight: 800, color: '#2563EB' }}>
+                    {liveTelemetry.trno}
+                  </span>
+                </div>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    padding: '3px 9px',
+                    borderRadius: '12px',
+                    backgroundColor: !liveTelemetry.isStale ? '#DCFCE7' : '#FEF3C7',
+                    color: !liveTelemetry.isStale ? '#15803D' : '#B45309',
+                    border: `1px solid ${!liveTelemetry.isStale ? '#BBF7D0' : '#FDE68A'}`,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                  }}
+                >
+                  <span
+                    style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor: !liveTelemetry.isStale ? '#16A34A' : '#D97706',
+                    }}
+                  />
+                  {!liveTelemetry.isStale ? 'Active (Live)' : 'Stale'}
+                </span>
+              </div>
+
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                Train {liveTelemetry.trno} &bull; Express Fleet (Live Hardware)
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', color: '#475569' }}>
+                <div>
+                  <span style={{ color: '#64748B' }}>Route: </span>
+                  <strong>Corridor &rarr; In Service</strong>
+                </div>
+                <div>
+                  <span style={{ color: '#64748B' }}>Region: </span>
+                  <strong>Eastern</strong>
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <span style={{ color: '#64748B' }}>GPS: </span>
+                  <strong>
+                    {liveTelemetry.lat != null && liveTelemetry.long != null
+                      ? `${liveTelemetry.lat.toFixed(4)}° N, ${liveTelemetry.long.toFixed(4)}° E`
+                      : 'Awaiting Fix'}
+                  </strong>
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <span style={{ color: '#64748B' }}>Last Telemetry: </span>
+                  <strong>{liveTelemetry.time}</strong>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="touch-target-44"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSelectTrain(liveTelemetry.trno);
+                }}
+                style={{
+                  width: '100%',
+                  minHeight: '44px',
+                  backgroundColor: currentTrain.trainNumber === liveTelemetry.trno ? '#2563EB' : '#EFF6FF',
+                  color: currentTrain.trainNumber === liveTelemetry.trno ? '#FFFFFF' : '#2563EB',
+                  border: `1px solid ${currentTrain.trainNumber === liveTelemetry.trno ? '#1D4ED8' : '#BFDBFE'}`,
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                }}
+              >
+                <Train size={15} />
+                <span>{currentTrain.trainNumber === liveTelemetry.trno ? 'Currently Monitored' : 'Select & Inspect Train'}</span>
+              </button>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!liveTelemetry && backendTrains.length === 0 && (
+            <div
+              style={{
+                padding: '24px',
+                textAlign: 'center',
+                backgroundColor: '#F8FAFC',
+                borderRadius: '8px',
+                border: '1px solid #E2E8F0',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <Activity size={24} color="#94A3B8" />
+              <strong style={{ fontSize: '13px', color: '#475569' }}>Awaiting Telemetry</strong>
+              <span style={{ fontSize: '11px', color: '#94A3B8' }}>
+                Listening on topic: <code>0023004D4B42501120353332</code>
+              </span>
+            </div>
+          )}
+
+          {/* Backend Trains Mobile Cards */}
+          {backendTrains.map((train) => {
+            const isSelected = currentTrain.trainNumber === train.train_number;
+            return (
+              <div
+                key={`mobile-train-${train.train_number}`}
+                className={`mobile-train-card ${isSelected ? 'selected' : ''}`}
+                onClick={() => handleSelectTrain(train.train_number)}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Train size={18} color="#2563EB" />
+                    <span style={{ fontSize: '15px', fontWeight: 800, color: '#2563EB' }}>
+                      {train.train_number}
+                    </span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '3px 9px',
+                      borderRadius: '12px',
+                      backgroundColor: train.is_online ? '#DCFCE7' : '#FEF3C7',
+                      color: train.is_online ? '#15803D' : '#B45309',
+                      border: `1px solid ${train.is_online ? '#BBF7D0' : '#FDE68A'}`,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: '6px',
+                        height: '6px',
+                        borderRadius: '50%',
+                        backgroundColor: train.is_online ? '#16A34A' : '#D97706',
+                      }}
+                    />
+                    {train.is_online ? 'Active' : 'Standby'}
+                  </span>
+                </div>
+
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                  {train.name}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', color: '#475569' }}>
+                  <div>
+                    <span style={{ color: '#64748B' }}>Route: </span>
+                    <strong>{(train as any).source || 'Station A'} &rarr; {(train as any).destination || 'Station B'}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: '#64748B' }}>Region: </span>
+                    <strong>{train.region || 'Eastern'}</strong>
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <span style={{ color: '#64748B' }}>Location: </span>
+                    <strong>22.5841° N, 88.3429° E</strong>
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <span style={{ color: '#64748B' }}>Last Telemetry: </span>
+                    <strong>{train.last_telemetry || 'Just now'}</strong>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="touch-target-44"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleSelectTrain(train.train_number);
+                  }}
+                  style={{
+                    width: '100%',
+                    minHeight: '44px',
+                    backgroundColor: isSelected ? '#2563EB' : '#EFF6FF',
+                    color: isSelected ? '#FFFFFF' : '#2563EB',
+                    border: `1px solid ${isSelected ? '#1D4ED8' : '#BFDBFE'}`,
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <Train size={15} />
+                  <span>{isSelected ? 'Currently Monitored' : 'Select & Inspect Train'}</span>
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -1538,10 +1940,8 @@ export const EmployeeDashboard: React.FC = () => {
           </h3>
 
           <div
+            className="mobile-dual-tank-grid"
             style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '12px',
               flex: 1,
               alignItems: 'center',
             }}
@@ -1883,10 +2283,8 @@ export const EmployeeDashboard: React.FC = () => {
           </h3>
 
           <div
+            className="mobile-map-grid"
             style={{
-              display: 'grid',
-              gridTemplateColumns: '1.2fr 1.3fr',
-              gap: '12px',
               flex: 1,
               alignItems: 'center',
             }}
@@ -1894,6 +2292,7 @@ export const EmployeeDashboard: React.FC = () => {
             {/* Map Preview Container */}
             <div
               ref={mapContainerRef}
+              data-map-container="true"
               style={{
                 width: '100%',
                 height: '140px',
@@ -1960,9 +2359,10 @@ export const EmployeeDashboard: React.FC = () => {
           {/* Center Train Button */}
           <button
             onClick={handleCenterTrain}
+            className="touch-target-44"
             style={{
               marginTop: '12px',
-              height: '32px',
+              minHeight: '44px',
               backgroundColor: 'var(--color-primary, #2563EB)',
               color: '#FFFFFF',
               border: 'none',

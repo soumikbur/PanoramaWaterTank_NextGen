@@ -264,8 +264,8 @@ export const AlertsScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Alert Summary Statistics Cards (4 Tiles) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: metrics.space12, width: '100%' }}>
+      {/* 2. Alert Summary Statistics Cards (4 Tiles - Responsive 2x2 on mobile) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))', gap: metrics.space12, width: '100%' }}>
         {/* Critical */}
         <BaseCard style={{ height: '96px', padding: '14px', boxSizing: 'border-box' }}>
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
@@ -341,7 +341,7 @@ export const AlertsScreen: React.FC = () => {
 
       {/* 3. Current Live System Status Strip */}
       <BaseCard style={{ padding: '14px', boxSizing: 'border-box' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr auto 1fr auto 1fr', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))', alignItems: 'center', gap: '14px' }}>
           <div>
             <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B', fontFamily: typography.fontFamily }}>
               CURRENT WATER LEVEL
@@ -350,8 +350,6 @@ export const AlertsScreen: React.FC = () => {
               {fillPct != null ? `${fillPct.toFixed(1)}% (${waterHeight != null ? waterHeight.toFixed(1) : 'N/A'} cm of ${maxHeight.toFixed(0)} cm)` : 'Awaiting Telemetry'}
             </div>
           </div>
-
-          <div style={{ width: '1px', height: '32px', backgroundColor: '#E2E8F0' }} />
 
           <div>
             <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B', fontFamily: typography.fontFamily }}>
@@ -370,8 +368,6 @@ export const AlertsScreen: React.FC = () => {
             </div>
           </div>
 
-          <div style={{ width: '1px', height: '32px', backgroundColor: '#E2E8F0' }} />
-
           <div>
             <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B', fontFamily: typography.fontFamily }}>
               SENSOR HEALTH
@@ -380,8 +376,6 @@ export const AlertsScreen: React.FC = () => {
               Healthy (ADS1115 Active)
             </div>
           </div>
-
-          <div style={{ width: '1px', height: '32px', backgroundColor: '#E2E8F0' }} />
 
           <div>
             <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B', fontFamily: typography.fontFamily }}>
@@ -444,6 +438,7 @@ export const AlertsScreen: React.FC = () => {
                     border: `1px solid ${alert.borderColor}`,
                     padding: '14px',
                     display: 'flex',
+                    flexWrap: 'wrap',
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: '14px',
@@ -451,7 +446,7 @@ export const AlertsScreen: React.FC = () => {
                   }}
                 >
                   {/* Left Severity Indicator & Badge */}
-                  <div style={{ width: '100px', display: 'flex', flexDirection: 'column', gap: '4px', flexShrink: 0 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexShrink: 0 }}>
                     <div
                       style={{
                         height: '24px',
@@ -474,14 +469,14 @@ export const AlertsScreen: React.FC = () => {
                   </div>
 
                   {/* Center Alert Details */}
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ flex: '1 1 200px', minWidth: '180px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     <div style={{ fontSize: '15px', fontWeight: 'bold', color: alert.textColor, fontFamily: typography.fontFamily }}>
                       {alert.title}
                     </div>
                     <div style={{ fontSize: '13px', color: '#475569', fontFamily: typography.fontFamily }}>
                       {alert.description}
                     </div>
-                    <div style={{ display: 'flex', gap: '16px', marginTop: '2px' }}>
+                    <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginTop: '2px' }}>
                       <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', fontFamily: typography.fontFamily }}>
                         Current Level: {alert.currentValue}
                       </span>
@@ -492,7 +487,7 @@ export const AlertsScreen: React.FC = () => {
                   </div>
 
                   {/* Right Status & Acknowledge Action */}
-                  <div style={{ width: '130px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                  <div style={{ minWidth: '130px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                     <div
                       style={{
                         height: '22px',
@@ -515,9 +510,11 @@ export const AlertsScreen: React.FC = () => {
                         if (alert.type === 'sensor') setSensorAlertAcked(true);
                       }}
                       disabled={alert.acknowledged}
+                      className="touch-target-44"
                       style={{
                         width: '100%',
-                        padding: '6px 12px',
+                        minHeight: '44px',
+                        padding: '8px 14px',
                         borderRadius: '6px',
                         border: '1px solid #CBD5E1',
                         backgroundColor: alert.acknowledged ? '#F1F5F9' : '#FFFFFF',

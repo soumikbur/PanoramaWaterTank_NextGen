@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { typography } from '../../theme';
 import { useApp, ScreenName } from '../../state/AppContext';
+import panoramaLogoIcon from '../../assets/panorama_logo_icon.png';
 import {
   Train,
   LayoutDashboard,
@@ -23,6 +24,8 @@ import {
   ShieldCheck,
   Radio,
   Droplet,
+  X,
+  RadioTower,
 } from 'lucide-react';
 import { useDisplayPreferences } from '../../context/DisplayPreferencesContext';
 
@@ -42,6 +45,8 @@ export const Sidebar: React.FC = () => {
     mqttConnectionStatus,
     sidebarCollapsed,
     toggleSidebar,
+    isMobileNavOpen,
+    setIsMobileNavOpen,
     devices,
     activeAlarms,
     selectedTrainNumber,
@@ -49,6 +54,24 @@ export const Sidebar: React.FC = () => {
     logout,
     liveTelemetry,
   } = useApp();
+
+  useEffect(() => {
+    if (isMobileNavOpen) {
+      document.body.style.overflow = 'hidden';
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          setIsMobileNavOpen(false);
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => {
+        document.body.style.overflow = '';
+        window.removeEventListener('keydown', handleKeyDown);
+      };
+    } else {
+      document.body.style.overflow = '';
+    }
+  }, [isMobileNavOpen, setIsMobileNavOpen]);
 
   const { sidebarMode, setSidebarMode } = useDisplayPreferences();
 
@@ -95,8 +118,9 @@ export const Sidebar: React.FC = () => {
     : (selectedTrainNumber ? `${selectedTrainNumber} - Express Fleet` : '12301 - Rajdhani Express');
 
   return (
-    <aside
-      className="sidebar-container"
+    <>
+      <aside
+      className="sidebar-container sidebar-desktop"
       style={{
         width: sidebarWidth,
         minWidth: sidebarWidth,
@@ -582,5 +606,354 @@ export const Sidebar: React.FC = () => {
         </div>
       )}
     </aside>
+
+    {/* =========================================================================
+        MOBILE NAVIGATION DRAWER OVERLAY
+        ========================================================================= */}
+    {isMobileNavOpen && (
+      <div className="sidebar-mobile-drawer-portal">
+        <div
+          className="mobile-drawer-backdrop"
+          onClick={() => setIsMobileNavOpen(false)}
+          aria-hidden="true"
+        />
+        <div
+          className="mobile-drawer-sheet"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation Menu"
+        >
+          {/* 1. Header with Logo, Title, and Close Button (X, min 44x44px) */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '14px 16px',
+              borderBottom: '1px solid #E2E8F0',
+              backgroundColor: '#FFFFFF',
+              flexShrink: 0,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <img
+                src={panoramaLogoIcon}
+                alt="Panorama"
+                style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '6px' }}
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', letterSpacing: '0.4px' }}>
+                  PANORAMA
+                </span>
+                <span style={{ fontSize: '10px', fontWeight: 700, color: '#2563EB', letterSpacing: '0.5px' }}>
+                  WATER TANK MONITOR
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsMobileNavOpen(false)}
+              aria-label="Close menu"
+              className="touch-target-44"
+              style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '8px',
+                backgroundColor: '#F1F5F9',
+                border: '1px solid #CBD5E1',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#475569',
+              }}
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* 2. Scrollable Drawer Content */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Train Summary Card in Mobile Drawer */}
+            <div
+              id="mobile-drawer-train-summary-card"
+              style={{
+                backgroundColor: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: '8px',
+                padding: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+              }}
+            >
+              <div style={{ fontSize: '10px', fontWeight: 700, color: '#94A3B8', letterSpacing: '0.8px', textTransform: 'uppercase' }}>
+                TRAIN SUMMARY
+              </div>
+              <div
+                onClick={() => {
+                  setActiveScreen('dashboard');
+                  setIsMobileNavOpen(false);
+                }}
+                style={{
+                  backgroundColor: '#EFF6FF',
+                  border: '1px solid #BFDBFE',
+                  borderRadius: '6px',
+                  padding: '6px 10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ width: '6px', height: '6px', borderRadius: '3px', backgroundColor: '#2563EB', flexShrink: 0 }} />
+                <span style={{ fontSize: '12px', fontWeight: 700, color: '#2563EB', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {trainDisplayTitle}
+                </span>
+              </div>
+
+              <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 500 }}>
+                {liveTelemetry ? 'Eastern Railway • Live Corridor' : 'Eastern Railway'}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', paddingTop: '4px' }}>
+                <div style={{ backgroundColor: '#FFFFFF', padding: '8px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
+                    {liveTelemetry ? 1 : totalCoachesCount}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>Coaches</div>
+                </div>
+                <div style={{ backgroundColor: '#FFFFFF', padding: '8px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
+                    {liveTelemetry ? 2 : totalTanksCount}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>Tanks</div>
+                </div>
+                <div style={{ backgroundColor: '#FFFFFF', padding: '8px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#16A34A' }}>
+                    {liveTelemetry ? 2 : onlineTanksCount}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>Online</div>
+                </div>
+                <div style={{ backgroundColor: '#FFFFFF', padding: '8px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: totalAlertsCount > 0 ? '#DC2626' : '#64748B' }}>
+                    {totalAlertsCount}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>Alerts</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Primary Navigation List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <div style={{ fontSize: '10px', fontWeight: 700, color: '#94A3B8', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: '4px' }}>
+                NAVIGATION
+              </div>
+              {primaryNavItems.map((item) => {
+                const isActive = activeScreen === item.id;
+                const IconComp = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    data-screen={item.id}
+                    onClick={() => {
+                      setActiveScreen(item.id);
+                      setIsMobileNavOpen(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      width: '100%',
+                      minHeight: '48px',
+                      padding: '0 12px',
+                      borderRadius: '6px',
+                      backgroundColor: isActive ? '#EFF6FF' : 'transparent',
+                      border: 'none',
+                      borderLeft: isActive ? '3px solid #2563EB' : '3px solid transparent',
+                      color: isActive ? '#2563EB' : '#334155',
+                      fontSize: '13px',
+                      fontWeight: isActive ? 700 : 500,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <IconComp size={18} color={isActive ? '#2563EB' : '#64748B'} />
+                      <span>{item.label}</span>
+                    </div>
+                    {typeof item.badge === 'number' && item.badge > 0 && (
+                      <span
+                        style={{
+                          backgroundColor: '#EF4444',
+                          color: '#FFFFFF',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '2px 7px',
+                          borderRadius: '10px',
+                        }}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* System Navigation Section */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderTop: '1px solid #E2E8F0', paddingTop: '12px' }}>
+              <div style={{ fontSize: '10px', fontWeight: 700, color: '#94A3B8', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: '4px' }}>
+                SYSTEM
+              </div>
+              {systemNavItems.map((item) => {
+                const isActive = activeScreen === item.id;
+                const IconComp = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    data-screen={item.id}
+                    onClick={() => {
+                      setActiveScreen(item.id);
+                      setIsMobileNavOpen(false);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      width: '100%',
+                      minHeight: '48px',
+                      padding: '0 12px',
+                      borderRadius: '6px',
+                      backgroundColor: isActive ? '#EFF6FF' : 'transparent',
+                      border: 'none',
+                      borderLeft: isActive ? '3px solid #2563EB' : '3px solid transparent',
+                      color: isActive ? '#2563EB' : '#334155',
+                      fontSize: '13px',
+                      fontWeight: isActive ? 700 : 500,
+                      cursor: 'pointer',
+                      gap: '12px',
+                      textAlign: 'left',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    <IconComp size={18} color={isActive ? '#2563EB' : '#64748B'} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+
+              {/* Status Badges in Drawer */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    backgroundColor: isConnected ? '#ECFDF5' : '#FEF3C7',
+                    border: `1px solid ${isConnected ? '#A7F3D0' : '#FDE68A'}`,
+                  }}
+                >
+                  <div style={{ width: '8px', height: '8px', borderRadius: '4px', backgroundColor: isConnected ? '#16A34A' : '#D97706' }} />
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: isConnected ? '#065F46' : '#92400E' }}>
+                    {isConnected ? 'System Online' : 'Connecting to Gateway'}
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    backgroundColor: mqttConnectionStatus === 'CONNECTED' ? '#EFF6FF' : '#F1F5F9',
+                    border: `1px solid ${mqttConnectionStatus === 'CONNECTED' ? '#BFDBFE' : '#CBD5E1'}`,
+                  }}
+                >
+                  <Radio size={14} color={mqttConnectionStatus === 'CONNECTED' ? '#2563EB' : '#64748B'} />
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: mqttConnectionStatus === 'CONNECTED' ? '#1E40AF' : '#475569' }}>
+                    {mqttConnectionStatus === 'CONNECTED' ? 'SCADA & MQTT Live' : 'MQTT Standby'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 3. User Profile & Sign Out Footer */}
+          <div
+            style={{
+              padding: '14px 16px',
+              borderTop: '1px solid #E2E8F0',
+              backgroundColor: '#F8FAFC',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              flexShrink: 0,
+            }}
+          >
+            {currentUser && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    backgroundColor: '#2563EB',
+                    color: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    flexShrink: 0,
+                  }}
+                >
+                  {currentUser.username.substring(0, 2).toUpperCase()}
+                </div>
+                <div style={{ overflow: 'hidden' }}>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {currentUser.full_name || currentUser.username}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#64748B' }}>
+                    {isAdmin ? 'System Administrator' : 'Station Operator'}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => {
+                setIsMobileNavOpen(false);
+                logout();
+              }}
+              className="touch-target-44"
+              style={{
+                width: '100%',
+                minHeight: '44px',
+                borderRadius: '6px',
+                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#EF4444',
+                fontSize: '12px',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+              }}
+            >
+              <LogOut size={15} />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   );
 };

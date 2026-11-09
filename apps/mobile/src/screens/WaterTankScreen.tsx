@@ -451,7 +451,7 @@ export const WaterTankScreen: React.FC = () => {
           </div>
         ) : viewMode === 'grid' ? (
           /* Grid View */
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: '14px' }}>
             {filteredTanks.map((tank) => {
               const hasData = tank.hasTelemetry && tank.levelPercent != null;
               const level = tank.levelPercent ?? null;
