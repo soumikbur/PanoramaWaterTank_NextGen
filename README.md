@@ -1,148 +1,374 @@
-# Panorama Water Tank Monitor — NextGen Architecture
+<div align="center">
 
-> **Complete Industrial SCADA & HMI Rebuild for Railway Coach Water Monitoring**
+<img src="assets/branding/panorama_logo.png" alt="Panorama Water Tank Monitor Logo" width="140" />
 
-This repository contains the Next-Generation rebuild of the **Panorama Water Tank Monitor**, migrating completely away from legacy Qt 6.8, QML, and proprietary Ubidots cloud dependencies to an independent, modern, containerized stack:
+# PANORAMA WATER TANK MONITOR
+### Industrial Railway Water Tank Monitoring and SCADA Management Platform
 
-- **Frontend**: React Native (TypeScript) cross-platform HMI with industrial light SCADA theme, dynamic 60 FPS fluid physics, 4-tier colored rank indicators, and LTTB historical trend charts.
-- **Backend**: Python + FastAPI asynchronous framework with WebSockets, Pydantic v2 schemas, and Paho-MQTT worker.
-- **Database**: PostgreSQL 16 with SQLAlchemy 2.x async ORM and Alembic declarative migrations.
-- **Message Broker**: Authenticated Mosquitto / HiveMQ MQTT over TLS 1.2+ (Port 8883).
+[![CI Verification](https://github.com/soumikbur/PanoramaWaterTank_NextGen/actions/workflows/ci.yml/badge.svg)](https://github.com/soumikbur/PanoramaWaterTank_NextGen/actions/workflows/ci.yml)
+[![Pages Deployment](https://github.com/soumikbur/PanoramaWaterTank_NextGen/actions/workflows/backend-ci.yml/badge.svg)](https://soumikbur.github.io/PanoramaWaterTank_NextGen/)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%20%7C%203.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React 18](https://img.shields.io/badge/React-18.3-61DAFB?logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.4-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![MQTT](https://img.shields.io/badge/MQTT-3.1.1%20%7C%205.0-660066?logo=eclipsemosquitto&logoColor=white)](https://mqtt.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Electron](https://img.shields.io/badge/Electron-30-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
+<p align="center">
+  <strong>Next-Generation Supervisory Control and Data Acquisition (SCADA) System for Long-Distance Passenger Rolling Stock</strong><br/>
+  Continuous Hydrostatic Pressure Measurement • Multi-Coach Fleet Ingestion • Sub-Second MQTT Telemetry • Responsive Mobile & Desktop HMI
+</p>
+
+[Live Web HMI Demo](https://soumikbur.github.io/PanoramaWaterTank_NextGen/) • [Architecture Specification](docs/architecture/SYSTEM_ARCHITECTURE.md) • [API Documentation](docs/api/API_DOCUMENTATION.md) • [Security Policy](SECURITY.md)
+
+</div>
 
 ---
 
-## 1. Project Directory Structure
+## 1. Visual Showcase
+
+The Panorama Water Tank Monitor features an industrial-grade human-machine interface (HMI) with high visual clarity, fluid SVG water dynamics, and full responsiveness across desktop supervisory workstations and handheld mobile maintenance tablets.
+
+### Desktop Supervisory Workstations (1920 × 1080 / 1366 × 768)
+
+<div align="center">
+
+| Primary SCADA Operations Console | Regional Fleet Consist Management |
+|:---:|:---:|
+| [![Primary SCADA Operations Console](assets/screenshots/desktop/01_dashboard_1920x1080.png)](assets/screenshots/desktop/01_dashboard_1920x1080.png) | [![Regional Fleet Management](assets/screenshots/desktop/05_train_fleet_management.png)](assets/screenshots/desktop/05_train_fleet_management.png) |
+| *Fluid physics, 4-tier capacity ranks, active train summary & 5 KPI metrics* | *Northern, Southern, Eastern, and Western railway zone allocation* |
+
+| Multi-Tank Fleet Monitoring Matrix | SCADA Hardware Mapping Matrix |
+|:---:|:---:|
+| [![Multi-Tank Monitoring Matrix](assets/screenshots/desktop/04_all_tanks_monitoring.png)](assets/screenshots/desktop/04_all_tanks_monitoring.png) | [![Hardware Mapping Matrix](assets/screenshots/desktop/06_device_mapping_scada.png)](assets/screenshots/desktop/06_device_mapping_scada.png) |
+| *Simultaneous fill-level tracking across all rake rakes and coach tanks* | *8-column SCADA device registry, auto-discovery & signal diagnostics* |
+
+| Corridor GPS Tracking & Refill Facilities | LTTB Historical Trend Analytics |
+|:---:|:---:|
+| [![Corridor GPS Tracking](assets/screenshots/desktop/07_gps_corridor_location.png)](assets/screenshots/desktop/07_gps_corridor_location.png) | [![LTTB Historical Trend Analytics](assets/screenshots/desktop/09_historical_telemetry.png)](assets/screenshots/desktop/09_historical_telemetry.png) |
+| *Howrah–Asansol railway transit corridor with en-route refill verification* | *12h, 24h, 7d downsampled curves preserving operational peaks & troughs* |
+
+| SCADA Alarm Management Console | Operational Report Generation |
+|:---:|:---:|
+| [![Alarm Management Console](assets/screenshots/desktop/08_alerts_management.png)](assets/screenshots/desktop/08_alerts_management.png) | [![Operational Report Generation](assets/screenshots/desktop/10_reports_analytics.png)](assets/screenshots/desktop/10_reports_analytics.png) |
+| *Critical low water triggers, sensor fault isolation, operator acknowledgment* | *Multi-parameter filtering with RFC 4180 sanitized CSV export* |
+
+</div>
+
+### Mobile Handheld Maintenance Console (Responsive Breakpoints: 390 × 844 & 430 × 932)
+
+<div align="center">
+
+| Mobile Dashboard | Slide-in Navigation Drawer | Mobile Train Fleet |
+|:---:|:---:|:---:|
+| [![Mobile Dashboard](assets/screenshots/mobile/01_mobile_dashboard_390x844.png)](assets/screenshots/mobile/01_mobile_dashboard_390x844.png) | [![Mobile Drawer](assets/screenshots/mobile/03_mobile_navigation_drawer.png)](assets/screenshots/mobile/03_mobile_navigation_drawer.png) | [![Mobile Train Management](assets/screenshots/mobile/04_mobile_train_management.png)](assets/screenshots/mobile/04_mobile_train_management.png) |
+| *Compact 2-column KPI summary, 44px tap targets* | *Blur backdrop, instant route switching* | *Touch-optimized fleet selector cards* |
+
+| Mobile Tank Monitoring | Mobile SCADA Alerts | Mobile Corridor Location |
+|:---:|:---:|:---:|
+| [![Mobile Tank Matrix](assets/screenshots/mobile/06_mobile_all_tanks.png)](assets/screenshots/mobile/06_mobile_all_tanks.png) | [![Mobile Alerts](assets/screenshots/mobile/08_mobile_alerts.png)](assets/screenshots/mobile/08_mobile_alerts.png) | [![Mobile Location](assets/screenshots/mobile/11_mobile_location.png)](assets/screenshots/mobile/11_mobile_location.png) |
+| *Fluid auto-fit cards, zero horizontal scroll* | *2×2 metric grid, operator acknowledgment* | *GPS waypoint coordinates & refill status* |
+
+</div>
+
+> Detailed documentation and full-resolution uncompressed previews are available in the [Screenshot Catalog](assets/screenshots/README.md).
+
+---
+
+## 2. Project Overview
+
+### 2.1 Operational Context
+Passenger rail networks operate rakes traversing thousands of kilometres across diverse climatic regions. Ensuring uninterrupted water supply in passenger coaches (restrooms, wash basins, and catering cars) is critical for passenger hygiene, operational reliability, and turnaround punctuality. 
+
+Manual stick or sight-glass inspection during brief station halts is error-prone, hazardous, and incapable of detecting mid-transit leaks or consumption anomalies. The **Panorama Water Tank Monitor (WLI)** automates rolling stock water management by continuously sampling hydrostatic pressure transducers mounted in coach water reservoirs, computing real-time water volume, detecting rate-of-consumption anomalies, and broadcasting telemetry to divisional control centers over LTE and MQTT.
+
+### 2.2 Hierarchical Data Relationship Model
+The system organizes rolling stock assets according to operational railway hierarchies:
 
 ```
+[Railway Zone] (e.g. Eastern Railway)
+      │
+      └── [Train Fleet / Rake] (e.g. Train 225256 - Express Fleet)
+            │
+            └── [Passenger Coach] (e.g. Coach B4 - AC 3-Tier)
+                  │
+                  ├── [Hardware Device] (e.g. UID: 0023004D4B42501120353332)
+                  │     ├── Transducer 1: Hydrostatic Current Loop (4–20 mA)
+                  │     ├── Environmental: BME280 Temperature/Humidity/Pressure
+                  │     └── Modem: Quectel EC200U LTE Cat-1 + GNSS
+                  │
+                  ├── [Tank 1 - Arrival End] (50.0 cm Height, 20.0 L Capacity)
+                  └── [Tank 2 - Departure End] (50.0 cm Height, 20.0 L Capacity)
+```
+
+---
+
+## 3. Key Features
+
+- **Real-Time SCADA Dashboard:** Dynamic fluid SVG visualization with dual sine-wave slosh physics rendered at 60 FPS.
+- **Genuine Online/Offline Tracking:** Strict 4-point verification engine (`tankStatusService`) confirming device mapping, telemetry receipt, $\le 120$s timeout freshness, and active carrier links. Invariant $\text{Total Tanks} = \text{Online} + \text{Offline}$ verified.
+- **Fleet & Consist Management:** Multi-train hierarchy covering Northern, Southern, Eastern, and Western railway divisions with full coach and dual-tank drilling.
+- **Hardware Auto-Discovery & Mapping:** 8-column SCADA mapping console tracking edge hardware UIDs, firmware versions, battery voltages, and MAC addresses.
+- **Multi-Condition SCADA Alarms:** Threshold detection for Critical Low ($\le 10\%$), Warning Low ($\le 20\%$), Overflow ($\ge 100\%$), and Transducer Circuit Faults (< 0.25V / out-of-range).
+- **LTTB Time-Series Downsampling:** Largest-Triangle-Three-Buckets algorithm compresses 1,000 dense telemetry points to ~100 points in < 4.5ms without peak/valley distortion.
+- **RFC 4180 CSV Data Export:** Historical telemetry export with automated formula injection neutralization (`=`, `+`, `-`, `@` escaping).
+- **Corridor GPS Tracking:** Real-time train tracking along the Howrah–Asansol mainline corridor with verified station refill facilities.
+- **Enterprise RBAC & Session Revocation:** Four-tier access hierarchy (`ADMIN`, `EMPLOYEE`, `OPERATOR`, `VIEWER`) with database-backed `token_version` invalidation on logout.
+- **Dual Runtime Support:** Standard web browser SPA delivery and native desktop execution via supervised Electron 30 with process tree management.
+
+---
+
+## 4. Technology Stack
+
+| Architectural Layer | Technology | Version | Purpose |
+|---|---|:---:|---|
+| **Frontend Framework** | React (React Native Web) | `18.3.1` | Cross-platform UI components with native-like ergonomics |
+| **Language (Frontend)** | TypeScript | `5.4.5` | Type safety and strict data model contracts |
+| **Styling & Theme** | CSS3 Custom Properties | Modern | Dynamic rem scaling (`--app-scale`) and SCADA tokens |
+| **Frontend Bundler** | esbuild | `0.21.5` | Standalone sub-second production asset compilation |
+| **Desktop Shell** | Electron | `30.0.0` | Native desktop wrapper with context isolation & sandbox |
+| **Backend Framework** | FastAPI (Python) | `0.110.0+` | Asynchronous REST endpoints, lifespans, and WebSockets |
+| **Language (Backend)** | Python | `3.11 / 3.12` | Core daemon runtime and scientific calculations |
+| **ORM & Persistence** | SQLAlchemy | `2.0.28+` | Type-safe asynchronous database access layer |
+| **Database Engines** | PostgreSQL / SQLite | `16 / 3.x` | Relational storage (`asyncpg` for prod, `aiosqlite` for dev) |
+| **Schema Migrations** | Alembic | `1.13.1+` | Version-controlled declarative database schema migrations |
+| **Message Broker** | Eclipse Mosquitto / HiveMQ | `2.0+ / 4.x` | Industrial MQTT telemetry pub/sub over TCP & WSS |
+| **MQTT Client** | Paho MQTT (JS & Python) | `2.2.0` | Bidirectional edge-to-cloud messaging with QoS 1 |
+| **Downsampling Engine** | LTTB Algorithm | Custom | High-fidelity time-series decimation for charts |
+| **Automated Testing** | Pytest & AsyncIO | `9.2.0` | Comprehensive 58-test backend verification suite |
+
+---
+
+## 5. Architectural Topology
+
+```mermaid
+flowchart TD
+    subgraph ROLLING_STOCK ["Railway Coach Edge Hardware"]
+        Sensor[Hydrostatic Sensor<br/>4-20mA Current Loop]
+        ESP32[ESP32-S3 Microcontroller<br/>FreeRTOS / 12-bit ADC]
+        LTE[Quectel EC200U LTE Cat-1<br/>Cellular Modem]
+        Sensor -->|Analog Pressure Signal| ESP32
+        ESP32 -->|UART AT Commands| LTE
+    end
+
+    subgraph TELEMETRY_NETWORK ["Telemetry Ingestion & Message Broker"]
+        Broker[MQTT Message Broker<br/>Port 8883 TLS / 8884 WSS]
+        LTE -->|Cellular MQTT Publish| Broker
+    end
+
+    subgraph SCADA_BACKEND ["FastAPI SCADA Daemon Services"]
+        Worker[MQTT Background Worker]
+        Calc[Volume & Math Calculator]
+        Alarm[SCADA Alarm Evaluator]
+        WS[WebSocket Hub]
+        API[FastAPI REST API v1]
+        DB[(PostgreSQL 16 / SQLite<br/>WAL Mode Storage)]
+
+        Broker -->|Subscribe: panorama/telemetry/+| Worker
+        Worker --> Calc
+        Calc --> Alarm
+        Alarm --> DB
+        Alarm --> WS
+        API --> DB
+    end
+
+    subgraph HMI_CONSOLE ["Operator Human-Machine Interfaces"]
+        DesktopHMI[Desktop SCADA Console<br/>1920x1080 / 1366x768]
+        MobileHMI[Mobile SCADA HMI<br/>Android / iOS Viewports]
+        Electron[Electron Native Shell<br/>Supervised Daemon]
+
+        WS -.->|Sub-Second Push| DesktopHMI
+        WS -.->|Live Push| MobileHMI
+        API <---> DesktopHMI
+        API <---> MobileHMI
+        API <---> Electron
+    end
+```
+
+---
+
+## 6. Repository Structure
+
+```text
 PanoramaWaterTank_NextGen/
-├── docker-compose.yml              # Local PostgreSQL 16 & Mosquitto container orchestration
-├── config/
-│   ├── .env.example                # Canonical environment variable template
-│   ├── mosquitto.conf              # Mosquitto MQTT broker configuration
-│   └── topic_schema.json           # JSON Schema for MQTT telemetry payloads
-├── docs/                           # Architectural, protocol & verification specifications
-│   ├── ARCHITECTURE.md             # High-level architecture, failure recovery & Mermaid diagrams
-│   ├── DATABASE_SCHEMA.md          # PostgreSQL tables, indexes, constraints & ER diagram
-│   ├── MQTT_PROTOCOL.md            # MQTT topic hierarchy, JSON schema, EC200U AT commands
-│   ├── API_REFERENCE.md            # OpenAPI REST endpoints and WebSocket protocol reference
-│   ├── SECURITY.md                 # RBAC, TLS cipher suites, and hardening guide
-│   ├── MIGRATION_PLAN.md           # Transition strategy, firmware flashing, and cutover
-│   ├── TEST_PLAN.md                # Verification test pyramid and test case specifications
-│   ├── RUNBOOK.md                  # Deployment, simulation, and operational procedures
-│   ├── LEGACY_FEATURE_INVENTORY.md # Complete audit of legacy C++ and QML features
-│   ├── LEGACY_UI_AUDIT.md          # Visual tokens, typography, and component blueprints
-│   └── FEATURE_PARITY_MATRIX.md    # 26-item audited parity matrix (100% Tested)
-├── backend/                        # Python / FastAPI backend application
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── alembic.ini
-│   ├── pytest.ini
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                     # Continuous Integration & multi-environment test suite
+│       └── backend-ci.yml             # GitHub Pages automated deployment pipeline
+├── apps/
+│   └── mobile/                        # React 18 / React Native Web HMI Application
+│       ├── electron/                  # Electron 30 desktop shell & process supervisor
+│       │   ├── main.cjs               # Native window lifecycle & daemon supervision
+│       │   └── preload.cjs            # Context-isolated secure preload bridge
+│       ├── scripts/                   # Build, dev, preview, and test automation scripts
+│       └── src/
+│           ├── api/client.ts          # REST API client with JWT & demo interceptors
+│           ├── components/            # UI components (Header, Sidebar, Modals, Tank SVG)
+│           ├── screens/               # SCADA operational views (Dashboard, Tanks, Trains)
+│           ├── services/              # tankStatusService, mqttService, deviceRegistry
+│           ├── state/AppContext.tsx   # Centralized global telemetry and consist state
+│           └── theme/ScadaTheme.ts    # Industrial styling tokens and color hierarchy
+├── assets/
+│   ├── branding/                      # Vector & high-res project icons and logos
+│   └── screenshots/                   # Authentic desktop & mobile application captures
+│       ├── desktop/                   # 1920x1080 and 1366x768 supervisory captures
+│       ├── mobile/                    # 390x844 and 430x932 handheld responsive captures
+│       └── README.md                  # Comprehensive screenshot index and descriptions
+├── backend/
 │   ├── app/
-│   │   ├── main.py                 # FastAPI application entrypoint & lifespan
-│   │   ├── core/                   # Config, database engine, bcrypt security
-│   │   ├── models/                 # SQLAlchemy 2.0 async ORM entities
-│   │   ├── schemas/                # Pydantic v2 request/response & MQTT validation
-│   │   ├── services/               # VolumeCalculator, AlarmService, LTTBDownsampler
-│   │   ├── repositories/           # Async database CRUD operations
-│   │   ├── mqtt/                   # Secure MQTT client & TelemetryParser
-│   │   ├── websocket/              # Real-time WebSocket connection manager
-│   │   └── api/v1/                 # REST routers (Auth, Devices, Tanks, Telemetry, Alarms, etc.)
-│   ├── migrations/                 # Alembic migration scripts
-│   ├── scripts/
-│   │   └── simulate_telemetry.py   # Railway edge telemetry simulator (Train 12002, Coach B4)
-│   └── tests/                      # 26 automated unit & integration tests (100% passing)
-└── apps/mobile/                    # React Native / Web HMI frontend
-    ├── package.json
-    ├── tsconfig.json
-    ├── public/index.html
-    └── src/
-        ├── App.tsx                 # Root application shell
-        ├── theme/                  # Design system tokens (colors, typography, radii, spacing)
-        ├── types/                  # TypeScript definitions for tanks, devices, alarms
-        ├── api/client.ts           # REST API client
-        ├── services/websocket.ts   # Auto-reconnecting WebSocket client
-        ├── state/AppContext.tsx    # Global telemetry and alarm state store
-        ├── components/
-        │   ├── common/             # Header, Sidebar, Footer, BaseCard, StatusBadge, InfoRow
-        │   ├── dashboard/          # RankIndicator (4-tier color bar), SummaryGrid (5 KPI cards)
-        │   ├── tank/               # TankVisualization (Cylindrical vessel with animated dual sine waves)
-        │   └── charts/             # LevelTrendCard (12h, 24h, 7d LTTB downsampled curves)
-        └── screens/                # Dashboard, WaterTank, Devices, Alerts, History, Settings
+│   │   ├── api/v1/                    # REST route controllers (auth, tanks, trains, alarms)
+│   │   ├── core/                      # Config, async database engine, bcrypt security
+│   │   ├── models/                    # SQLAlchemy 2.0 ORM entity declarations
+│   │   ├── mqtt/                      # Paho MQTT ingestion worker and telemetry parser
+│   │   ├── repositories/              # Parameterized database access operations
+│   │   ├── schemas/                   # Pydantic v2 validation contracts
+│   │   ├── services/                  # VolumeCalculator, AlarmService, LTTBDownsampler
+│   │   └── websocket/                 # Live WebSocket connection manager
+│   ├── migrations/                    # Alembic schema versioning scripts
+│   ├── requirements.txt               # Locked Python runtime dependencies
+│   └── tests/                         # Automated test suite (58 tests, 100% passing)
+├── config/
+│   ├── .env.example                   # Environment variable template with documentation
+│   └── mosquitto.conf                 # Local Mosquitto broker configuration
+├── docs/                              # Technical specifications and architectural audits
+│   ├── architecture/                  # System topology, data flows, database, MQTT specs
+│   ├── development/                   # Workstation setup, frontend, backend, and DB guides
+│   ├── api/                           # REST & WebSocket endpoint documentation
+│   ├── hardware/                      # Microcontroller BOM & FreeRTOS firmware guide
+│   └── security/                      # Vulnerability disclosure policy & production checklist
+├── PROJECT_SECURITY_AUDIT/            # 20 Master Enterprise Security Audit Reports
+├── .editorconfig                      # Universal IDE indentation & whitespace rules
+├── .gitattributes                     # Line-ending normalization (LF for code, CRLF for bats)
+├── .gitignore                         # Strict exclusion of secrets, DBs, and build artifacts
+├── CHANGELOG.md                       # Version history adhering to Keep a Changelog
+├── CONTRIBUTING.md                    # Developer guidelines, branching, and PR standards
+├── LICENSE                            # Apache License 2.0
+├── package.json                       # Monorepo scripts and esbuild dependencies
+└── README.md                          # Master developer documentation
 ```
 
 ---
 
-## 2. Mathematical Parity & Calculation Formulas
+## 7. Developer Quickstart & Installation
 
-The fluid calculation engine in `backend/app/services/calculator.py` matches the legacy C++ `VolumeCalculator` with exact numerical precision:
+This project is a modular industrial engineering platform requiring configured runtime environments. It is not distributed as a preconfigured one-click binary.
 
-1. **Vessel Geometry**:
-   $$\text{Area } A = \pi \cdot r^2 = 0.04 \text{ m}^2$$
-   $$r = \sqrt{\frac{A}{\pi}} \approx 0.112838 \text{ m} \quad (11.28 \text{ cm})$$
-   $$H_{\max} = \frac{V_{\max}}{A \cdot 1000} = \frac{20.0 \text{ L}}{0.04 \cdot 1000} = 0.50 \text{ m} \quad (50.0 \text{ cm})$$
+### 7.1 Prerequisites
+- **Node.js:** `>= 20.0.0`
+- **npm:** `>= 10.0.0`
+- **Python:** `>= 3.11.0` (with `venv` and `pip`)
+- **Git:** `>= 2.40.0`
 
-2. **Real-Time Level & Volume**:
-   $$h(t) = H_{\max} \cdot \left(\frac{\text{Level}\%(t)}{100}\right) = 0.50 \cdot \left(\frac{\text{Level}\%}{100}\right)$$
-   $$V(t) = A \cdot h(t) \cdot 1000 \quad \text{[Liters]}$$
+### 7.2 Installation Steps
 
-3. **4-Tier Capacity Ranks**:
-   - **LOW**: $0\% \le \text{Level} < 25\%$ (Red `#E53935`)
-   - **MODERATE**: $25\% \le \text{Level} < 50\%$ (Orange `#FB8C00`)
-   - **GOOD**: $50\% \le \text{Level} < 75\%$ (Yellow `#FDD835`)
-   - **HIGH**: $75\% \le \text{Level} \le 100\%$ (Green `#43A047`)
+```bash
+# 1. Clone repository
+git clone https://github.com/soumikbur/PanoramaWaterTank_NextGen.git
+cd PanoramaWaterTank_NextGen
 
-4. **Alarm Boundaries**:
-   - **Critical Low**: Level $< 10.0\%$ ($< 5.0\text{ cm}$)
-   - **Warning Low**: $10.0\% \le \text{Level} < 20.0\%$ ($5.0\text{ cm} \le h < 10.0\text{ cm}$)
-   - **Normal Level**: $20.0\% \le \text{Level} < 100.0\%$
-   - **Overflow Condition**: Level $\ge 100.0\%$ (Unclamped metric preserved)
-   - **Sensor Fault**: ADC raw $< 100$, voltage $< 0.25\text{V}$, or $wlvl = \text{false}$
+# 2. Install frontend workspace dependencies
+npm ci
+
+# 3. Configure environment variables (Placeholders only)
+cp config/.env.example backend/.env
+
+# 4. Set up backend Python virtual environment
+cd backend
+python -m venv .venv
+
+# Activate virtual environment
+# Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+# Linux / macOS:
+source .venv/bin/activate
+
+# Install backend dependencies
+pip install -r requirements.txt
+cd ..
+```
+
+### 7.3 Running the Stack Locally
+
+```bash
+# Terminal 1: Launch FastAPI SCADA Daemon (Port 8000)
+cd backend
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+
+# Terminal 2: Launch Frontend Development Server (Port 3000 / 3001)
+npm run dev
+
+# Or launch zero-cache static preview server:
+npm run preview
+```
+
+### 7.4 Running Automated Verification
+
+```bash
+# Frontend production compilation check (< 250ms)
+npm run build
+
+# Backend verification test suite (58 unit & integration tests)
+cd backend
+pytest tests/ -v
+```
 
 ---
 
-## 3. Quickstart & Deployment
+## 8. Configuration Reference
 
-### Step 1: Start Infrastructure (PostgreSQL & Mosquitto)
-```powershell
-docker-compose up -d
-```
+All backend and edge parameters are managed via environment variables. Copy `config/.env.example` to `backend/.env` and configure accordingly:
 
-### Step 2: Start Backend
-```powershell
-cd backend
-.\venv\Scripts\Activate.ps1
-alembic upgrade head
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-```
-- Interactive Swagger UI: `http://localhost:8000/docs`
-- Health Check: `http://localhost:8000/api/v1/health`
+```ini
+# Runtime Configuration
+ENV=development
+DEBUG=true
+APP_NAME="Panorama Water Tank Monitor"
+APP_VERSION="2.0.0"
 
-### Step 3: Run Automated Test Suite
-```powershell
-cd backend
-.\venv\Scripts\python -m pytest -v
-```
-*(Result: 26 passed in 1.24s)*
+# Cryptographic Keys (Generate with: openssl rand -hex 32)
+SECRET_KEY=CHANGE_ME_GENERATE_RANDOM_SECRET_KEY
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=480
 
-### Step 4: Run Telemetry Edge Simulator
-```powershell
-cd backend
-.\venv\Scripts\python scripts\simulate_telemetry.py --train 12002 --coach B4 --interval 3
-```
+# Database Connection (SQLite WAL for dev, PostgreSQL for production)
+DATABASE_URL=sqlite+aiosqlite:///./panorama_dev.db
 
-### Step 5: Start Frontend HMI
-```powershell
-cd apps/mobile
-npm start
+# MQTT Message Broker
+MQTT_BROKER_HOST=broker.hivemq.com
+MQTT_BROKER_PORT=1883
+MQTT_TLS_PORT=8883
+MQTT_USE_TLS=false
+MQTT_TELEMETRY_TOPIC_FILTER=panorama/telemetry/+
+MQTT_COMMAND_TOPIC_PREFIX=panorama/commands/
+
+# CORS Allowed Origins (JSON Array)
+CORS_ORIGINS=["http://localhost:3000","http://localhost:8000","http://127.0.0.1:3001","https://soumikbur.github.io"]
 ```
-The SCADA HMI interface opens in the browser at `http://localhost:3000`.
 
 ---
 
-## 4. Zero Ubidots Verification
+## 9. Security & Enterprise Compliance Notice
 
-The NextGen platform is completely independent of Ubidots:
-- Zero Ubidots API tokens, URLs, or client libraries in runtime source code.
-- Direct authenticated MQTT over TLS 1.2+ replaces all third-party cloud polling.
-- Authoritative persistence stored directly in PostgreSQL 16.
+This repository contains developer-oriented source code, engineering specifications, and demonstration interfaces. 
 
+- **No Embedded Production Secrets:** Version control strictly excludes real operational passwords, private API keys, production certificates, and database dumps.
+- **Audited Security Controls:** The codebase has undergone comprehensive static and dynamic security auditing covering OWASP Top 10, OWASP ASVS v4.0.3, and OWASP API Top 10. All verified defects (including path traversal, CORS wildcarding, and CSV formula injection) have been remediated in code (see [`PROJECT_SECURITY_AUDIT/`](PROJECT_SECURITY_AUDIT)).
+- **Independent Acceptance Notice:** Deployment on live passenger rolling stock requires independent third-party safety assessment, physical network isolation via private cellular APN, dedicated private mTLS broker infrastructure, and formal written authorization from the railway corporation's accredited security authority.
+
+---
+
+## 10. License
+
+This project is licensed under the **Apache License, Version 2.0**. See the [LICENSE](LICENSE) file for full terms and conditions.
+
+```
+Copyright 2026 Panorama Systems / Soumik Ghosh
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+```
