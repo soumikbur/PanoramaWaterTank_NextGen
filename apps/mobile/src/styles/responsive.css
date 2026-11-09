@@ -572,4 +572,299 @@ html, body, #root, .app-layout {
   }
 }
 
+/* ========================================================================= */
+/* MAP-FIRST LOCATION SCREEN RESPONSIVE SCADA ARCHITECTURE                  */
+/* ========================================================================= */
+
+.location-map-wrapper {
+  background-color: var(--color-surface, #FFFFFF);
+  border: 1px solid var(--color-border, #E2E8F0);
+  border-radius: 12px;
+  position: relative;
+  width: 100%;
+  flex-shrink: 0;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  transition: height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1;
+}
+
+/* Height across viewports */
+@media (max-width: 767px) {
+  .location-map-wrapper {
+    height: clamp(480px, 70dvh, 760px) !important;
+    min-height: clamp(440px, 65dvh, 720px) !important;
+    border-radius: 10px;
+  }
+  .location-map-wrapper.is-expanded {
+    height: 85dvh !important;
+    min-height: 85dvh !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .location-map-wrapper {
+    height: clamp(520px, 58vh, 680px) !important;
+    min-height: 500px !important;
+  }
+  .location-map-wrapper.is-expanded {
+    height: 780px !important;
+    min-height: 780px !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .location-map-wrapper {
+    height: clamp(520px, 60vh, 720px) !important;
+    min-height: 520px !important;
+  }
+  .location-map-wrapper.is-expanded {
+    height: 820px !important;
+    min-height: 820px !important;
+  }
+}
+
+.location-map-wrapper.is-fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+  border: none !important;
+  border-radius: 0 !important;
+  z-index: 99999 !important;
+  box-shadow: none !important;
+}
+
+/* Floating Action Button (FAB) specifications: >= 44x44px touch target */
+.location-fab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 10px;
+  background-color: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid #CBD5E1;
+  color: #1E293B;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.14);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  padding: 0;
+}
+
+.location-fab-btn:hover {
+  background-color: #F8FAFC;
+  border-color: #94A3B8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+
+.location-fab-btn:active {
+  transform: translateY(1px);
+  background-color: #F1F5F9;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.location-fab-btn.active {
+  background-color: #EFF6FF;
+  border-color: #3B82F6;
+  color: #1D4ED8;
+}
+
+/* Bottom-Right Floating Stack */
+.location-fab-stack {
+  position: absolute;
+  bottom: 16px;
+  right: 14px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 767px) {
+  .location-fab-stack {
+    bottom: 14px;
+    right: 12px;
+    gap: 7px;
+  }
+}
+
+/* Top-Left Floating Controls */
+.location-top-left-controls {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 767px) {
+  .location-top-left-controls {
+    top: 12px;
+    left: 12px;
+    gap: 6px;
+  }
+}
+
+/* Next Refill Floating Pill on Mobile */
+.map-next-refill-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  height: 36px;
+  background-color: rgba(240, 249, 255, 0.96);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid #BAE6FD;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.12);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0369A1;
+  white-space: nowrap;
+}
+
+@media (max-width: 360px) {
+  .map-next-refill-pill {
+    display: none !important;
+  }
+}
+
+/* Top-Right Floating Controls */
+.location-top-right-controls {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 767px) {
+  .location-top-right-controls {
+    top: 12px;
+    right: 12px;
+  }
+}
+
+/* Floating Layers Popover */
+.location-layers-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  background-color: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid #CBD5E1;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 210px;
+  z-index: 1010;
+}
+
+.location-layers-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #1E293B;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.12s ease;
+  width: 100%;
+}
+
+.location-layers-item:hover {
+  background-color: #F1F5F9;
+  border-color: #E2E8F0;
+}
+
+.location-layers-item.active {
+  background-color: #EFF6FF;
+  border-color: #BFDBFE;
+  color: #1D4ED8;
+}
+
+/* Desktop vs Mobile Map Toolbar Adaptivity */
+@media (min-width: 1024px) {
+  .location-desktop-toolbar {
+    display: flex !important;
+  }
+  .location-mobile-layers-toggle {
+    display: none !important;
+  }
+  .location-desktop-legend {
+    display: flex !important;
+  }
+  .location-mobile-legend {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  .location-desktop-toolbar {
+    display: none !important;
+  }
+  .location-mobile-layers-toggle {
+    display: flex !important;
+  }
+  .location-desktop-legend {
+    display: none !important;
+  }
+  .location-mobile-legend {
+    display: flex !important;
+  }
+}
+
+/* Refill Facilities Switcher: Cards on Mobile, Table on Desktop */
+@media (max-width: 767px) {
+  .location-corridor-table-desktop {
+    display: none !important;
+  }
+  .location-corridor-cards-mobile {
+    display: flex !important;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+  }
+}
+
+@media (min-width: 768px) {
+  .location-corridor-table-desktop {
+    display: block !important;
+  }
+  .location-corridor-cards-mobile {
+    display: none !important;
+  }
+}
+
+
 

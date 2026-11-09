@@ -103,6 +103,40 @@ export const LocationScreen: React.FC = () => {
   const [tileMode, setTileMode] = useState<'street' | 'satellite'>('street');
   const [tileError, setTileError] = useState<boolean>(false);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
+  const [isLayersOpen, setIsLayersOpen] = useState<boolean>(false);
+  const [isGpsDetailsOpen, setIsGpsDetailsOpen] = useState<boolean>(false);
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 1024;
+    }
+    return false;
+  });
+
+  const layersMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close layers menu on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (layersMenuRef.current && !layersMenuRef.current.contains(e.target as Node)) {
+        setIsLayersOpen(false);
+      }
+    };
+    if (isLayersOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [isLayersOpen]);
+
+  // Window resize listener for responsive layout switching
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window !== 'undefined') {
+        setIsMobileViewport(window.innerWidth < 1024);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const mapWrapperRef = useRef<HTMLDivElement>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -642,7 +676,7 @@ export const LocationScreen: React.FC = () => {
       clearTimeout(t2);
       clearTimeout(t3);
     };
-  }, [sidebarCollapsed, isMapExpanded, isFullscreen]);
+  }, [sidebarCollapsed, isMapExpanded, isFullscreen, isMobileViewport]);
 
   // Actions
   const handleCenterTrain = () => {
@@ -810,25 +844,11 @@ export const LocationScreen: React.FC = () => {
       <div
         ref={mapWrapperRef}
         id="location-map-wrapper"
+        className={`location-map-wrapper ${isMapExpanded ? 'is-expanded' : ''} ${isFullscreen ? 'is-fullscreen' : ''}`}
         style={{
-          backgroundColor: colors.surface,
           border: isFullscreen ? 'none' : `1px solid ${colors.border}`,
           borderRadius: isFullscreen ? '0px' : `${metrics.cardRadius}px`,
-          position: isFullscreen ? 'fixed' : 'relative',
-          top: isFullscreen ? 0 : 'auto',
-          left: isFullscreen ? 0 : 'auto',
-          right: isFullscreen ? 0 : 'auto',
-          bottom: isFullscreen ? 0 : 'auto',
-          width: isFullscreen ? '100vw' : '100%',
-          height: isFullscreen ? '100vh' : (isMapExpanded ? '780px' : 'clamp(340px, 50vh, 520px)'),
-          minHeight: isFullscreen ? '100vh' : (isMapExpanded ? '780px' : 'clamp(320px, 45vh, 520px)'),
-          flexShrink: 0,
-          zIndex: isFullscreen ? 99999 : 1,
-          overflow: 'hidden',
           boxShadow: isFullscreen ? 'none' : colors.shadowSubtle,
-          display: 'flex',
-          flexDirection: 'column',
-          transition: isFullscreen ? 'none' : 'height 0.25s ease-in-out',
         }}
       >
         {/* Geographic Map Container */}
@@ -845,407 +865,676 @@ export const LocationScreen: React.FC = () => {
             backgroundColor: tileMode === 'satellite' ? '#0B132B' : '#E2E8F0',
           }}
         >
-          {/* Upper-Left Information Banner: Next Refill Facility */}
-          {nextRefillFacility && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '14px',
-                left: '14px',
-                zIndex: 1000,
-                backgroundColor: 'rgba(255, 255, 255, 0.96)',
-                backdropFilter: 'blur(6px)',
-                border: `1px solid ${colors.border}`,
-                borderRadius: '8px',
-                padding: '10px 14px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '4px',
-                maxWidth: '340px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Droplets size={14} color="#0284C7" />
-                  <span style={{ fontSize: '10px', fontWeight: 800, color: '#0369A1', letterSpacing: '0.4px' }}>
-                    NEXT REFILL FACILITY
+          {/* MOBILE VIEWPORT FLOATING CONTROLS (< 1024px) */}
+          {isMobileViewport && (
+            <>
+              {/* Mobile Top-Left Controls: Layers FAB, Compact GPS Pill, Next Refill */}
+              <div
+                className="location-top-left-controls"
+                style={{
+                  position: 'absolute',
+                  top: '12px',
+                  left: '12px',
+                  zIndex: 1000,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                {/* Layers FAB Menu */}
+                <div style={{ position: 'relative' }} ref={layersMenuRef}>
+                  <button
+                    id="map-layers-toggle-btn"
+                    className={`location-fab-btn ${isLayersOpen ? 'active' : ''}`}
+                    onClick={() => setIsLayersOpen(!isLayersOpen)}
+                    title="Map Layers & Views"
+                    aria-label="Map Layers"
+                  >
+                    <Layers size={18} color={isLayersOpen ? '#1D4ED8' : '#2563EB'} />
+                  </button>
+
+                  {/* Layers Popover Menu */}
+                  {isLayersOpen && (
+                    <div className="location-layers-popover">
+                      <div style={{ fontSize: '10px', fontWeight: 800, color: '#64748B', padding: '4px 8px', letterSpacing: '0.5px' }}>
+                        MAP LAYERS & VIEWS
+                      </div>
+                      <button
+                        id="map-satellite-btn"
+                        className={`location-layers-item ${tileMode === 'satellite' ? 'active' : ''}`}
+                        onClick={() => {
+                          const nextMode = tileMode === 'street' ? 'satellite' : 'street';
+                          setTileMode(nextMode);
+                          setFeedbackToast(`Switched map layer to ${nextMode === 'satellite' ? 'Esri Satellite Imagery' : 'OpenStreetMap Standard Cartography'}`);
+                          setIsLayersOpen(false);
+                        }}
+                      >
+                        <Layers size={15} color="#7C3AED" />
+                        <span>{tileMode === 'satellite' ? 'Street Cartography' : 'Satellite Imagery'}</span>
+                      </button>
+
+                      <button
+                        id="map-fitcorridor-btn"
+                        className="location-layers-item"
+                        onClick={() => {
+                          handleFitCorridor();
+                          setIsLayersOpen(false);
+                        }}
+                      >
+                        <Navigation size={15} color="#0D9488" />
+                        <span>Fit Railway Corridor</span>
+                      </button>
+
+                      <button
+                        id="map-worldview-btn"
+                        className="location-layers-item"
+                        onClick={() => {
+                          handleWorldView();
+                          setIsLayersOpen(false);
+                        }}
+                      >
+                        <Globe size={15} color="#2563EB" />
+                        <span>Global World View</span>
+                      </button>
+
+                      <button
+                        id="map-googlemaps-btn"
+                        className="location-layers-item"
+                        onClick={() => {
+                          handleOpenGoogleMaps();
+                          setIsLayersOpen(false);
+                        }}
+                      >
+                        <ExternalLink size={15} color="#0284C7" />
+                        <span>Google Maps Live</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Compact GPS Status Pill */}
+                <div
+                  id="map-gps-pill"
+                  onClick={() => setIsGpsDetailsOpen(!isGpsDetailsOpen)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 10px',
+                    height: '36px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+                    backdropFilter: 'blur(8px)',
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: '20px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    color: colors.textPrimary,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: !hasGps
+                        ? '#94A3B8'
+                        : activeTrainLoc?.is_simulated
+                        ? '#0284C7'
+                        : isStale
+                        ? '#D97706'
+                        : '#16A34A',
+                      boxShadow: hasGps && !isStale ? (activeTrainLoc?.is_simulated ? '0 0 6px rgba(2, 132, 199, 0.6)' : '0 0 6px rgba(22, 163, 74, 0.6)') : 'none',
+                    }}
+                  />
+                  <span>
+                    {!hasGps
+                      ? 'No GPS'
+                      : activeTrainLoc?.is_simulated
+                      ? 'Route Demo'
+                      : isStale
+                      ? 'Stale GPS'
+                      : `GPS Fix (${activeTrainLoc?.satellites || 9} Sat)`}
                   </span>
                 </div>
-                <span
+
+                {/* Next Refill Indicator Pill on Mobile */}
+                {nextRefillFacility && (
+                  <div
+                    className="map-next-refill-pill"
+                    onClick={() => handleLocateStation(nextRefillFacility)}
+                    title={`Next Refill: ${nextRefillFacility.name} (${hasGps ? nextRefillFacility.distanceKm.toFixed(1) + ' km' : '—'})`}
+                  >
+                    <Droplets size={13} color="#0284C7" />
+                    <span>Next: {nextRefillFacility.code}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Mobile Top-Right: Fullscreen FAB */}
+              <div
+                className="location-top-right-controls"
+                style={{
+                  position: 'absolute',
+                  top: '12px',
+                  right: '12px',
+                  zIndex: 1000,
+                }}
+              >
+                <button
+                  id="map-fullscreen-btn"
+                  className={`location-fab-btn ${isFullscreen ? 'active' : ''}`}
+                  onClick={handleToggleFullscreen}
+                  title={isFullscreen ? 'Exit Fullscreen View (Esc)' : 'Expand to Fullscreen View'}
+                  aria-label="Fullscreen"
+                >
+                  {isFullscreen ? <Minimize2 size={18} color="#2563EB" /> : <Maximize2 size={18} color="#1E293B" />}
+                </button>
+              </div>
+
+              {/* Mobile Bottom-Right: Floating SCADA Navigation Stack */}
+              <div className="location-fab-stack" id="map-toolbar">
+                <button
+                  id="map-expand-btn"
+                  className={`location-fab-btn ${isMapExpanded ? 'active' : ''}`}
+                  onClick={handleToggleExpand}
+                  title={isMapExpanded ? 'Restore Normal Map Size' : 'Enlarge Map in Layout'}
+                  aria-label="Expand Map"
+                >
+                  {isMapExpanded ? <Shrink size={18} color="#2563EB" /> : <Expand size={18} color="#1E293B" />}
+                </button>
+
+                <button
+                  id="map-centertrain-btn"
+                  className="location-fab-btn"
+                  onClick={handleCenterTrain}
+                  title="Center on Live Train"
+                  aria-label="Center Train"
+                >
+                  <Crosshair size={18} color="#2563EB" />
+                </button>
+
+                <button
+                  id="map-currentloc-btn"
+                  className="location-fab-btn"
+                  onClick={handleCurrentLocation}
+                  title="Current Device Geolocation"
+                  aria-label="Current Location"
+                >
+                  <Navigation size={18} color="#0284C7" />
+                </button>
+
+                <button
+                  id="map-zoomin-btn"
+                  className="location-fab-btn"
+                  onClick={handleZoomIn}
+                  title="Zoom In"
+                  aria-label="Zoom In"
+                >
+                  <Plus size={18} color="#1E293B" />
+                </button>
+
+                <button
+                  id="map-zoomout-btn"
+                  className="location-fab-btn"
+                  onClick={handleZoomOut}
+                  title="Zoom Out"
+                  aria-label="Zoom Out"
+                >
+                  <Minus size={18} color="#1E293B" />
+                </button>
+              </div>
+
+              {/* GPS Telemetry Details Card Popup */}
+              {isGpsDetailsOpen && (
+                <div
                   style={{
-                    fontSize: '9px',
-                    fontWeight: 700,
-                    backgroundColor: '#E0F2FE',
-                    color: '#0284C7',
-                    padding: '1px 5px',
-                    borderRadius: '4px',
+                    position: 'absolute',
+                    top: '56px',
+                    left: '12px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+                    backdropFilter: 'blur(12px)',
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: '10px',
+                    padding: '12px 14px',
+                    boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
+                    zIndex: 1010,
+                    fontSize: '11px',
+                    color: colors.textSecondary,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    maxWidth: 'calc(100vw - 40px)',
                   }}
                 >
-                  {nextRefillFacility.code}
-                </span>
-              </div>
-
-              <div style={{ fontSize: '13px', fontWeight: 700, color: colors.textPrimary }}>
-                {nextRefillFacility.name}
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', color: colors.textSecondary }}>
-                <span>
-                  Distance:{' '}
-                  <strong style={{ color: '#0284C7' }}>
-                    {hasGps ? `${nextRefillFacility.distanceKm.toFixed(1)} km` : '—'}
-                  </strong>
-                </span>
-                <span>&bull;</span>
-                <span>
-                  Capacity: <strong>{nextRefillFacility.water_capacity_liters > 0 ? nextRefillFacility.water_capacity_liters.toLocaleString() + ' L' : '—'}</strong>
-                </span>
-                <span>&bull;</span>
-                <span style={{ color: '#16A34A', fontWeight: 600 }}>{nextRefillFacility.operational_status}</span>
-              </div>
-            </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong style={{ color: colors.textPrimary, fontSize: '12px' }}>GNSS Telemetry</strong>
+                    <button onClick={() => setIsGpsDetailsOpen(false)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: '2px' }}>
+                      <X size={14} color="#64748B" />
+                    </button>
+                  </div>
+                  <div>Coordinates: <strong>{hasGps && activeTrainLoc?.current_latitude ? `${activeTrainLoc.current_latitude.toFixed(4)}° N, ${activeTrainLoc.current_longitude?.toFixed(4)}° E` : 'Unavailable'}</strong></div>
+                  <div>Speed: <strong>{activeTrainLoc?.current_speed_kmh ? `${activeTrainLoc.current_speed_kmh.toFixed(1)} km/h` : '—'}</strong></div>
+                  <div>Satellites: <strong>{activeTrainLoc?.satellites || 9} tracked</strong></div>
+                  <div>Source: <strong>Coach {activeTrainLoc?.coach_number || 'C1'}</strong></div>
+                  <div>Mode: <strong>{activeTrainLoc?.is_simulated ? 'Route Demo (Simulated)' : 'Live GNSS Hardware'}</strong></div>
+                </div>
+              )}
+            </>
           )}
 
-          {/* Upper-Center GPS Status Indicator */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '14px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 1000,
-              backgroundColor: 'rgba(255, 255, 255, 0.96)',
-              backdropFilter: 'blur(6px)',
-              border: `1px solid ${colors.border}`,
-              borderRadius: '20px',
-              padding: '6px 14px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}
-          >
-            <div
-              style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: !hasGps
-                  ? '#94A3B8'
-                  : activeTrainLoc?.is_simulated
-                  ? '#0284C7'
-                  : isStale
-                  ? '#D97706'
-                  : '#16A34A',
-                boxShadow: hasGps && !isStale ? (activeTrainLoc?.is_simulated ? '0 0 8px rgba(2, 132, 199, 0.6)' : '0 0 8px rgba(22, 163, 74, 0.6)') : 'none',
-              }}
-            />
-            <span style={{ fontSize: '11px', fontWeight: 700, color: colors.textPrimary, whiteSpace: 'nowrap' }}>
-              {!hasGps
-                ? 'GPS UNAVAILABLE'
-                : activeTrainLoc?.is_simulated
-                ? 'ROUTE DEMO (SIMULATED)'
-                : isStale
-                ? 'GNSS DATA STALE'
-                : `GPS FIX AVAILABLE (${activeTrainLoc?.satellites || 9} Satellites)`}
-            </span>
-            {hasGps && activeTrainLoc?.current_latitude != null && (
-              <span style={{ fontSize: '10px', color: colors.textMuted, borderLeft: '1px solid #CBD5E1', paddingLeft: '8px' }}>
-                {activeTrainLoc.current_latitude.toFixed(4)}° N, {activeTrainLoc.current_longitude?.toFixed(4)}° E &bull; Source: Coach {activeTrainLoc?.coach_number || 'C1'}
-              </span>
-            )}
-          </div>
-
-          {/* Upper-Right Map Toolbar */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '14px',
-              right: '14px',
-              zIndex: 1000,
-              display: 'flex',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              maxWidth: 'calc(100vw - 28px)',
-              gap: '6px',
-              backgroundColor: 'rgba(255, 255, 255, 0.96)',
-              backdropFilter: 'blur(6px)',
-              padding: '5px',
-              borderRadius: '8px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-              border: `1px solid ${colors.border}`,
-            }}
-          >
-            {/* 1. Expand Map Control */}
-            <button
-              id="map-expand-btn"
-              onClick={handleToggleExpand}
-              title={isMapExpanded ? 'Restore Normal Map Size' : 'Enlarge Map in Layout'}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '6px 11px',
-                borderRadius: '6px',
-                border: `1px solid ${isMapExpanded ? colors.primaryBorder : colors.borderStrong}`,
-                backgroundColor: isMapExpanded ? colors.primarySurface : '#FFFFFF',
-                color: isMapExpanded ? colors.primary : colors.textPrimary,
-                fontSize: '11px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              {isMapExpanded ? <Shrink size={13} /> : <Expand size={13} />}
-              <span>{isMapExpanded ? 'Normal View' : 'Expand Map'}</span>
-            </button>
-
-            {/* 2. Fullscreen Control */}
-            <button
-              id="map-fullscreen-btn"
-              onClick={handleToggleFullscreen}
-              title={isFullscreen ? 'Exit Fullscreen View (Esc)' : 'Expand to Fullscreen View'}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '6px 11px',
-                borderRadius: '6px',
-                border: isFullscreen ? '1px solid #1D4ED8' : `1px solid ${colors.borderStrong}`,
-                backgroundColor: isFullscreen ? '#2563EB' : '#FFFFFF',
-                color: isFullscreen ? '#FFFFFF' : colors.textPrimary,
-                fontSize: '11px',
-                fontWeight: isFullscreen ? 700 : 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-                boxShadow: isFullscreen ? '0 2px 8px rgba(37, 99, 235, 0.4)' : 'none',
-              }}
-            >
-              {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-              <span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
-              {isFullscreen && (
-                <span
+          {/* DESKTOP VIEWPORT CONTROLS (>= 1024px) */}
+          {!isMobileViewport && (
+            <>
+              {/* Upper-Left Information Banner: Next Refill Facility */}
+              {nextRefillFacility && (
+                <div
                   style={{
-                    fontSize: '9px',
-                    fontWeight: 500,
-                    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-                    padding: '1px 5px',
-                    borderRadius: '3px',
-                    marginLeft: '2px',
+                    position: 'absolute',
+                    top: '14px',
+                    left: '14px',
+                    zIndex: 1000,
+                    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+                    backdropFilter: 'blur(6px)',
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: '8px',
+                    padding: '10px 14px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    maxWidth: '340px',
                   }}
                 >
-                  Esc
-                </span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Droplets size={14} color="#0284C7" />
+                      <span style={{ fontSize: '10px', fontWeight: 800, color: '#0369A1', letterSpacing: '0.4px' }}>
+                        NEXT REFILL FACILITY
+                      </span>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        backgroundColor: '#E0F2FE',
+                        color: '#0284C7',
+                        padding: '1px 5px',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      {nextRefillFacility.code}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: colors.textPrimary }}>
+                    {nextRefillFacility.name}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px', color: colors.textSecondary }}>
+                    <span>
+                      Distance:{' '}
+                      <strong style={{ color: '#0284C7' }}>
+                        {hasGps ? `${nextRefillFacility.distanceKm.toFixed(1)} km` : '—'}
+                      </strong>
+                    </span>
+                    <span>&bull;</span>
+                    <span>
+                      Capacity: <strong>{nextRefillFacility.water_capacity_liters > 0 ? nextRefillFacility.water_capacity_liters.toLocaleString() + ' L' : '—'}</strong>
+                    </span>
+                    <span>&bull;</span>
+                    <span style={{ color: '#16A34A', fontWeight: 600 }}>{nextRefillFacility.operational_status}</span>
+                  </div>
+                </div>
               )}
-            </button>
 
-            {/* Toolbar Divider */}
-            <div style={{ width: '1px', height: '18px', backgroundColor: colors.borderStrong, margin: '0 2px' }} />
+              {/* Upper-Center GPS Status Indicator */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '14px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  zIndex: 1000,
+                  backgroundColor: 'rgba(255, 255, 255, 0.96)',
+                  backdropFilter: 'blur(6px)',
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: '20px',
+                  padding: '6px 14px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <div
+                  style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: !hasGps
+                      ? '#94A3B8'
+                      : activeTrainLoc?.is_simulated
+                      ? '#0284C7'
+                      : isStale
+                      ? '#D97706'
+                      : '#16A34A',
+                    boxShadow: hasGps && !isStale ? (activeTrainLoc?.is_simulated ? '0 0 8px rgba(2, 132, 199, 0.6)' : '0 0 8px rgba(22, 163, 74, 0.6)') : 'none',
+                  }}
+                />
+                <span style={{ fontSize: '11px', fontWeight: 700, color: colors.textPrimary, whiteSpace: 'nowrap' }}>
+                  {!hasGps
+                    ? 'GPS UNAVAILABLE'
+                    : activeTrainLoc?.is_simulated
+                    ? 'ROUTE DEMO (SIMULATED)'
+                    : isStale
+                    ? 'GNSS DATA STALE'
+                    : `GPS FIX AVAILABLE (${activeTrainLoc?.satellites || 9} Satellites)`}
+                </span>
+                {hasGps && activeTrainLoc?.current_latitude != null && (
+                  <span style={{ fontSize: '10px', color: colors.textMuted, borderLeft: '1px solid #CBD5E1', paddingLeft: '8px' }}>
+                    {activeTrainLoc.current_latitude.toFixed(4)}° N, {activeTrainLoc.current_longitude?.toFixed(4)}° E &bull; Source: Coach {activeTrainLoc?.coach_number || 'C1'}
+                  </span>
+                )}
+              </div>
 
-            {/* 3. Google Maps Live */}
-            <button
-              id="map-googlemaps-btn"
-              onClick={handleOpenGoogleMaps}
-              title="Open Route in Google Maps Live View"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '6px 10px',
-                borderRadius: '6px',
-                border: `1px solid ${colors.borderStrong}`,
-                backgroundColor: '#FFFFFF',
-                color: colors.textPrimary,
-                fontSize: '11px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <ExternalLink size={13} color="#0284C7" />
-              <span>Google Maps Live</span>
-            </button>
+              {/* Upper-Right Desktop Map Toolbar */}
+              <div
+                id="map-toolbar"
+                className="location-desktop-toolbar"
+                style={{
+                  position: 'absolute',
+                  top: '14px',
+                  right: '14px',
+                  zIndex: 1000,
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  maxWidth: 'calc(100vw - 28px)',
+                  gap: '6px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.96)',
+                  backdropFilter: 'blur(6px)',
+                  padding: '5px',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                  border: `1px solid ${colors.border}`,
+                }}
+              >
+                {/* 1. Expand Map Control */}
+                <button
+                  id="map-expand-btn"
+                  onClick={handleToggleExpand}
+                  title={isMapExpanded ? 'Restore Normal Map Size' : 'Enlarge Map in Layout'}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '6px 11px',
+                    borderRadius: '6px',
+                    border: `1px solid ${isMapExpanded ? colors.primaryBorder : colors.borderStrong}`,
+                    backgroundColor: isMapExpanded ? colors.primarySurface : '#FFFFFF',
+                    color: isMapExpanded ? colors.primary : colors.textPrimary,
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {isMapExpanded ? <Shrink size={13} /> : <Expand size={13} />}
+                  <span>{isMapExpanded ? 'Normal View' : 'Expand Map'}</span>
+                </button>
 
-            {/* 3. Satellite */}
-            <button
-              onClick={() => {
-                const nextMode = tileMode === 'street' ? 'satellite' : 'street';
-                setTileMode(nextMode);
-                setFeedbackToast(`Switched map layer to ${nextMode === 'satellite' ? 'Esri Satellite Imagery' : 'OpenStreetMap Standard Cartography'}`);
-              }}
-              id="map-satellite-btn"
-              title="Toggle Satellite Imagery"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '6px 10px',
-                borderRadius: '6px',
-                border: `1px solid ${tileMode === 'satellite' ? '#7C3AED' : colors.borderStrong}`,
-                backgroundColor: tileMode === 'satellite' ? '#EDE9FE' : '#FFFFFF',
-                color: tileMode === 'satellite' ? '#6D28D9' : colors.textPrimary,
-                fontSize: '11px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <Layers size={13} />
-              <span>{tileMode === 'satellite' ? 'Street' : 'Satellite'}</span>
-            </button>
+                {/* 2. Fullscreen Control */}
+                <button
+                  id="map-fullscreen-btn"
+                  onClick={handleToggleFullscreen}
+                  title={isFullscreen ? 'Exit Fullscreen View (Esc)' : 'Expand to Fullscreen View'}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '6px 11px',
+                    borderRadius: '6px',
+                    border: isFullscreen ? '1px solid #1D4ED8' : `1px solid ${colors.borderStrong}`,
+                    backgroundColor: isFullscreen ? '#2563EB' : '#FFFFFF',
+                    color: isFullscreen ? '#FFFFFF' : colors.textPrimary,
+                    fontSize: '11px',
+                    fontWeight: isFullscreen ? 700 : 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    boxShadow: isFullscreen ? '0 2px 8px rgba(37, 99, 235, 0.4)' : 'none',
+                  }}
+                >
+                  {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+                  <span>{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+                  {isFullscreen && (
+                    <span
+                      style={{
+                        fontSize: '9px',
+                        fontWeight: 500,
+                        backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                        padding: '1px 5px',
+                        borderRadius: '3px',
+                        marginLeft: '2px',
+                      }}
+                    >
+                      Esc
+                    </span>
+                  )}
+                </button>
 
-            {/* 4. Current Location */}
-            <button
-              onClick={handleCurrentLocation}
-              id="map-currentloc-btn"
-              title="Center on Physical GPS Telemetry"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '6px 10px',
-                borderRadius: '6px',
-                border: `1px solid ${colors.borderStrong}`,
-                backgroundColor: '#FFFFFF',
-                color: colors.textPrimary,
-                fontSize: '11px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <Navigation size={13} color="#0284C7" />
-              <span>Current Location</span>
-            </button>
+                {/* Toolbar Divider */}
+                <div style={{ width: '1px', height: '18px', backgroundColor: colors.borderStrong, margin: '0 2px' }} />
 
-            {/* 5. Center Train */}
-            <button
-              onClick={handleCenterTrain}
-              id="map-centertrain-btn"
-              title="Center on Selected Train"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '6px 10px',
-                borderRadius: '6px',
-                border: `1px solid ${colors.borderStrong}`,
-                backgroundColor: '#FFFFFF',
-                color: colors.textPrimary,
-                fontSize: '11px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              <Crosshair size={13} color="#2563EB" />
-              <span>Center Train</span>
-            </button>
+                {/* 3. Google Maps Live */}
+                <button
+                  id="map-googlemaps-btn"
+                  onClick={handleOpenGoogleMaps}
+                  title="Open Route in Google Maps Live View"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: `1px solid ${colors.borderStrong}`,
+                    backgroundColor: '#FFFFFF',
+                    color: colors.textPrimary,
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <ExternalLink size={13} color="#0284C7" />
+                  <span>Google Maps Live</span>
+                </button>
 
-            {/* 5. World View */}
-            <button
-              id="map-worldview-btn"
-              onClick={handleWorldView}
-              title="Display Entire World View"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '6px 10px',
-                borderRadius: '6px',
-                border: `1px solid ${colors.borderStrong}`,
-                backgroundColor: '#FFFFFF',
-                color: colors.textPrimary,
-                fontSize: '11px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <Globe size={13} color="#2563EB" />
-              <span>World View</span>
-            </button>
+                {/* 4. Satellite */}
+                <button
+                  onClick={() => {
+                    const nextMode = tileMode === 'street' ? 'satellite' : 'street';
+                    setTileMode(nextMode);
+                    setFeedbackToast(`Switched map layer to ${nextMode === 'satellite' ? 'Esri Satellite Imagery' : 'OpenStreetMap Standard Cartography'}`);
+                  }}
+                  id="map-satellite-btn"
+                  title="Toggle Satellite Imagery"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: `1px solid ${tileMode === 'satellite' ? '#7C3AED' : colors.borderStrong}`,
+                    backgroundColor: tileMode === 'satellite' ? '#EDE9FE' : '#FFFFFF',
+                    color: tileMode === 'satellite' ? '#6D28D9' : colors.textPrimary,
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Layers size={13} />
+                  <span>{tileMode === 'satellite' ? 'Street' : 'Satellite'}</span>
+                </button>
 
-            {/* 6. Fit Corridor */}
-            <button
-              id="map-fitcorridor-btn"
-              onClick={handleFitCorridor}
-              title="Fit Viewport to Eastern Railway Corridor"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '6px 10px',
-                borderRadius: '6px',
-                border: `1px solid ${colors.borderStrong}`,
-                backgroundColor: '#FFFFFF',
-                color: colors.textPrimary,
-                fontSize: '11px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <Navigation size={13} color="#0D9488" />
-              <span>Fit Corridor</span>
-            </button>
+                {/* 5. Current Location */}
+                <button
+                  onClick={handleCurrentLocation}
+                  id="map-currentloc-btn"
+                  title="Center on Physical GPS Telemetry"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: `1px solid ${colors.borderStrong}`,
+                    backgroundColor: '#FFFFFF',
+                    color: colors.textPrimary,
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Navigation size={13} color="#0284C7" />
+                  <span>Current Location</span>
+                </button>
 
-            {/* 9. Zoom In */}
-            <button
-              id="map-zoomin-btn"
-              onClick={handleZoomIn}
-              title="Zoom In"
-              aria-label="Zoom In"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '28px',
-                height: '28px',
-                borderRadius: '6px',
-                border: `1px solid ${colors.borderStrong}`,
-                backgroundColor: '#FFFFFF',
-                color: colors.textPrimary,
-                cursor: 'pointer',
-              }}
-            >
-              <Plus size={14} />
-            </button>
+                {/* 6. Center Train */}
+                <button
+                  onClick={handleCenterTrain}
+                  id="map-centertrain-btn"
+                  title="Center on Selected Train"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: `1px solid ${colors.borderStrong}`,
+                    backgroundColor: '#FFFFFF',
+                    color: colors.textPrimary,
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Crosshair size={13} color="#2563EB" />
+                  <span>Center Train</span>
+                </button>
 
-            {/* 10. Zoom Out */}
-            <button
-              id="map-zoomout-btn"
-              onClick={handleZoomOut}
-              title="Zoom Out"
-              aria-label="Zoom Out"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '28px',
-                height: '28px',
-                borderRadius: '6px',
-                border: `1px solid ${colors.borderStrong}`,
-                backgroundColor: '#FFFFFF',
-                color: colors.textPrimary,
-                cursor: 'pointer',
-              }}
-            >
-              <Minus size={14} />
-            </button>
-          </div>
+                {/* 7. World View */}
+                <button
+                  id="map-worldview-btn"
+                  onClick={handleWorldView}
+                  title="Display Entire World View"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: `1px solid ${colors.borderStrong}`,
+                    backgroundColor: '#FFFFFF',
+                    color: colors.textPrimary,
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <Globe size={13} color="#2563EB" />
+                  <span>World View</span>
+                </button>
+
+                {/* 8. Fit Corridor */}
+                <button
+                  id="map-fitcorridor-btn"
+                  onClick={handleFitCorridor}
+                  title="Fit Viewport to Eastern Railway Corridor"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: `1px solid ${colors.borderStrong}`,
+                    backgroundColor: '#FFFFFF',
+                    color: colors.textPrimary,
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <Navigation size={13} color="#0D9488" />
+                  <span>Fit Corridor</span>
+                </button>
+
+                {/* 9. Zoom In */}
+                <button
+                  id="map-zoomin-btn"
+                  onClick={handleZoomIn}
+                  title="Zoom In"
+                  aria-label="Zoom In"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '6px',
+                    border: `1px solid ${colors.borderStrong}`,
+                    backgroundColor: '#FFFFFF',
+                    color: colors.textPrimary,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Plus size={14} />
+                </button>
+
+                {/* 10. Zoom Out */}
+                <button
+                  id="map-zoomout-btn"
+                  onClick={handleZoomOut}
+                  title="Zoom Out"
+                  aria-label="Zoom Out"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '6px',
+                    border: `1px solid ${colors.borderStrong}`,
+                    backgroundColor: '#FFFFFF',
+                    color: colors.textPrimary,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Minus size={14} />
+                </button>
+              </div>
+            </>
+          )}
 
           {/* Contextual Detail Card Overlay (when entity is selected) */}
           {selectedEntity && (
             <div
               style={{
                 position: 'absolute',
-                bottom: '44px',
+                bottom: isMobileViewport ? '14px' : '44px',
                 right: '14px',
+                left: isMobileViewport ? '14px' : 'auto',
+                maxWidth: isMobileViewport ? 'calc(100% - 28px)' : '340px',
+                width: isMobileViewport ? 'auto' : '320px',
                 zIndex: 1000,
-                width: '320px',
                 backgroundColor: 'rgba(255, 255, 255, 0.98)',
                 backdropFilter: 'blur(8px)',
-                borderRadius: '8px',
+                borderRadius: '10px',
                 border: `1px solid ${colors.primaryBorder}`,
-                boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
                 padding: '14px',
                 display: 'flex',
                 flexDirection: 'column',
@@ -1270,10 +1559,11 @@ export const LocationScreen: React.FC = () => {
                     background: 'transparent',
                     cursor: 'pointer',
                     color: colors.textMuted,
-                    padding: '2px',
+                    padding: '4px',
                   }}
+                  aria-label="Close station details"
                 >
-                  <X size={15} />
+                  <X size={16} />
                 </button>
               </div>
 
@@ -1309,51 +1599,87 @@ export const LocationScreen: React.FC = () => {
           )}
         </div>
 
-        {/* Map Legend (Section 5.D) */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '8px 14px',
-            backgroundColor: colors.surfaceAlt,
-            borderTop: `1px solid ${colors.border}`,
-            fontSize: '11px',
-            color: colors.textSecondary,
-            flexWrap: 'wrap',
-            gap: '8px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ width: 9, height: 9, borderRadius: '50%', backgroundColor: '#2563EB', display: 'inline-block' }} />
+        {/* Map Legend */}
+        {isMobileViewport ? (
+          /* Mobile Compact Legend Strip */
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-around',
+              padding: '8px 12px',
+              backgroundColor: colors.surfaceAlt,
+              borderTop: `1px solid ${colors.border}`,
+              fontSize: '11px',
+              color: colors.textSecondary,
+              flexWrap: 'wrap',
+              gap: '6px',
+            }}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#2563EB', display: 'inline-block' }} />
               <span>Live Train</span>
             </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ width: 9, height: 9, borderRadius: '50%', backgroundColor: '#0284C7', display: 'inline-block' }} />
-              <span>Water Refill Facility</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#0284C7', display: 'inline-block' }} />
+              <span>Refill Hub</span>
             </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #64748B', backgroundColor: '#FFFFFF', display: 'inline-block' }} />
-              <span>Railway Station</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', border: '2px solid #64748B', backgroundColor: '#FFFFFF', display: 'inline-block' }} />
+              <span>Station</span>
             </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ width: 9, height: 9, borderRadius: '2px', backgroundColor: '#7C3AED', display: 'inline-block' }} />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <span style={{ width: 8, height: 8, borderRadius: '2px', backgroundColor: '#7C3AED', display: 'inline-block' }} />
               <span>Destination</span>
             </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ color: tileMode === 'satellite' ? '#38BDF8' : '#1D4ED8', fontWeight: 700 }}>— — —</span>
-              <span>Railway Track Corridor Axis</span>
-            </span>
           </div>
+        ) : (
+          /* Desktop Rich Legend Bar */
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '8px 14px',
+              backgroundColor: colors.surfaceAlt,
+              borderTop: `1px solid ${colors.border}`,
+              fontSize: '11px',
+              color: colors.textSecondary,
+              flexWrap: 'wrap',
+              gap: '8px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ width: 9, height: 9, borderRadius: '50%', backgroundColor: '#2563EB', display: 'inline-block' }} />
+                <span>Live Train</span>
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ width: 9, height: 9, borderRadius: '50%', backgroundColor: '#0284C7', display: 'inline-block' }} />
+                <span>Water Refill Facility</span>
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #64748B', backgroundColor: '#FFFFFF', display: 'inline-block' }} />
+                <span>Railway Station</span>
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ width: 9, height: 9, borderRadius: '2px', backgroundColor: '#7C3AED', display: 'inline-block' }} />
+                <span>Destination</span>
+              </span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ color: tileMode === 'satellite' ? '#38BDF8' : '#1D4ED8', fontWeight: 700 }}>— — —</span>
+                <span>Railway Track Corridor Axis</span>
+              </span>
+            </div>
 
-          <div style={{ color: colors.textMuted }}>
-            {tileMode === 'satellite' ? 'Imagery © Esri World Imagery' : 'Cartography © OpenStreetMap contributors'}
+            <div style={{ color: colors.textMuted }}>
+              {tileMode === 'satellite' ? 'Imagery © Esri World Imagery' : 'Cartography © OpenStreetMap contributors'}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* 2. Route Corridor and Refill Facilities Table (Directly Beneath Map, Section 5.E) */}
+      {/* 2. Route Corridor and Refill Facilities Table / Cards (Beneath Map) */}
       <div
         style={{
           backgroundColor: colors.surface,
@@ -1374,6 +1700,8 @@ export const LocationScreen: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '8px',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1382,7 +1710,7 @@ export const LocationScreen: React.FC = () => {
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '11px', color: colors.textMuted }}>
               Howrah (HWH) to Asansol (ASN) • 7 Stations • 4 Verified Water Refill Hubs
             </span>
@@ -1404,206 +1732,321 @@ export const LocationScreen: React.FC = () => {
               }}
             >
               {isCorridorExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-              <span>{isCorridorExpanded ? 'Collapse Route Corridor' : 'Expand Route Corridor'}</span>
+              <span>{isCorridorExpanded ? 'Collapse' : 'Expand'}</span>
             </button>
           </div>
         </div>
 
-        {/* Scrollable Table Content */}
+        {/* Scrollable Content: Cards on Mobile, Table on Desktop */}
         <div
           style={{
-            maxHeight: isCorridorExpanded ? '520px' : '260px',
+            maxHeight: isCorridorExpanded ? '600px' : (isMobileViewport ? '420px' : '260px'),
             overflowY: 'auto',
             overflowX: 'auto',
             transition: 'max-height 0.22s ease-out',
           }}
         >
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              fontSize: '11px',
-              fontFamily: typography.fontFamily,
-              textAlign: 'left',
-            }}
-          >
-            <thead>
-              <tr
-                style={{
-                  backgroundColor: colors.surfaceAlt,
-                  color: colors.textMuted,
-                  borderBottom: `1px solid ${colors.border}`,
-                  fontSize: '10px',
-                  fontWeight: 700,
-                }}
-              >
-                <th style={{ padding: '8px 14px', width: '35px' }}>#</th>
-                <th style={{ padding: '8px 12px', width: '60px' }}>CODE</th>
-                <th style={{ padding: '8px 14px' }}>STATION NAME</th>
-                <th style={{ padding: '8px 14px' }}>WATER REFILL CAPABILITY</th>
-                <th style={{ padding: '8px 14px', width: '90px' }}>DISTANCE</th>
-                <th style={{ padding: '8px 14px', width: '90px' }}>ESTIMATED ARRIVAL</th>
-                <th style={{ padding: '8px 14px', width: '130px' }}>VERIFIED CAPACITY</th>
-                <th style={{ padding: '8px 14px', width: '110px' }}>FACILITY STATUS</th>
-                <th style={{ padding: '8px 14px', width: '70px', textAlign: 'center' }}>ACTION</th>
-              </tr>
-            </thead>
-            <tbody>
-              {enrichedStations.map((st, index) => {
+          {/* A. MOBILE RESPONSIVE CARDS VIEW */}
+          {isMobileViewport && (
+            <div className="location-corridor-cards-mobile" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px' }}>
+              {enrichedStations.map((st) => {
                 const isSelected = selectedStationCode === st.code;
                 const isDestination = st.is_destination || st.code === 'ASN';
                 const isRefill = st.water_refill_available && !isDestination;
 
                 return (
-                  <tr
+                  <div
                     key={st.code}
                     onClick={() => handleLocateStation(st)}
                     style={{
-                      borderBottom: `1px solid ${colors.borderSubtle}`,
-                      backgroundColor: isSelected
-                        ? colors.primarySurface
-                        : index % 2 === 0
-                        ? '#FFFFFF'
-                        : colors.surfaceHighlight,
+                      backgroundColor: isSelected ? colors.primarySurface : '#FFFFFF',
+                      border: `1px solid ${isSelected ? colors.primary : colors.border}`,
+                      borderRadius: '10px',
+                      padding: '12px 14px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
                       cursor: 'pointer',
-                      transition: 'background-color 0.15s ease',
+                      boxShadow: isSelected ? '0 4px 12px rgba(37,99,235,0.15)' : '0 1px 3px rgba(0,0,0,0.04)',
+                      transition: 'all 0.15s ease',
                     }}
                   >
-                    {/* 1. Serial Number (#) */}
-                    <td style={{ padding: '9px 14px', color: colors.textMuted, fontWeight: 600 }}>
-                      {st.route_order + 1}
-                    </td>
-
-                    {/* 2. Station Code */}
-                    <td style={{ padding: '9px 12px' }}>
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          fontWeight: 700,
-                          fontSize: '10px',
-                          backgroundColor: isDestination
-                            ? '#EDE9FE'
-                            : isRefill
-                            ? '#E0F2FE'
-                            : '#F1F5F9',
-                          color: isDestination ? '#6D28D9' : isRefill ? '#0284C7' : '#475569',
-                          border: `1px solid ${
-                            isDestination ? '#DDD6FE' : isRefill ? '#BAE6FD' : '#E2E8F0'
-                          }`,
-                        }}
-                      >
-                        {st.code}
-                      </span>
-                    </td>
-
-                    {/* 3. Station Name */}
-                    <td
-                      style={{
-                        padding: '9px 14px',
-                        fontWeight: isSelected ? 700 : 600,
-                        color: isSelected ? colors.primary : colors.textPrimary,
-                        fontSize: '12px',
-                      }}
-                    >
-                      {st.name}
-                    </td>
-
-                    {/* 4. Water Refill Capability */}
-                    <td style={{ padding: '9px 14px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {/* Card Top: Code, Name, Badges, Locate */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                         <span
                           style={{
-                            width: '7px',
-                            height: '7px',
-                            borderRadius: '50%',
-                            backgroundColor: isDestination ? '#7C3AED' : isRefill ? '#0284C7' : '#94A3B8',
-                          }}
-                        />
-                        <span
-                          style={{
-                            fontWeight: isRefill || isDestination ? 600 : 400,
-                            color: isDestination ? '#6D28D9' : isRefill ? '#0369A1' : colors.textMuted,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                            fontWeight: 800,
+                            fontSize: '11px',
+                            backgroundColor: isDestination ? '#EDE9FE' : isRefill ? '#E0F2FE' : '#F1F5F9',
+                            color: isDestination ? '#6D28D9' : isRefill ? '#0284C7' : '#475569',
+                            border: `1px solid ${isDestination ? '#DDD6FE' : isRefill ? '#BAE6FD' : '#E2E8F0'}`,
                           }}
                         >
-                          {isDestination
-                            ? 'Terminal • Refill Hub'
-                            : isRefill
-                            ? 'Water Refill Available'
-                            : 'No Refill Facility'}
+                          {st.code}
                         </span>
-                      </div>
-                    </td>
-
-                    {/* 5. Distance */}
-                    <td style={{ padding: '9px 14px', fontWeight: 700, color: '#0284C7' }}>
-                      {hasGps && st.distanceKm > 0 ? `${st.distanceKm.toFixed(1)} km` : '—'}
-                    </td>
-
-                    {/* 6. Estimated Arrival */}
-                    <td style={{ padding: '9px 14px', fontWeight: 600, color: colors.textPrimary }}>
-                      {st.etaString}
-                    </td>
-
-                    {/* 7. Verified Capacity */}
-                    <td style={{ padding: '9px 14px', color: colors.textPrimary }}>
-                      {st.water_capacity_liters > 0
-                        ? `${st.water_capacity_liters.toLocaleString()} L`
-                        : '—'}
-                    </td>
-
-                    {/* 8. Facility Status */}
-                    <td style={{ padding: '9px 14px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <span
-                          style={{
-                            width: '6px',
-                            height: '6px',
-                            borderRadius: '50%',
-                            backgroundColor:
-                              st.operational_status === 'Operational' ? '#16A34A' : '#94A3B8',
-                          }}
-                        />
-                        <span
-                          style={{
-                            color:
-                              st.operational_status === 'Operational' ? '#16A34A' : colors.textMuted,
-                            fontWeight: 600,
-                          }}
-                        >
-                          {st.operational_status}
+                        <span style={{ fontSize: '13px', fontWeight: 700, color: isSelected ? colors.primary : colors.textPrimary }}>
+                          {st.name}
                         </span>
+                        {st.is_source && (
+                          <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px', backgroundColor: '#FEF3C7', color: '#92400E' }}>
+                            Origin
+                          </span>
+                        )}
+                        {isDestination && (
+                          <span style={{ fontSize: '9px', fontWeight: 700, padding: '1px 5px', borderRadius: '3px', backgroundColor: '#EDE9FE', color: '#6D28D9' }}>
+                            Destination
+                          </span>
+                        )}
                       </div>
-                    </td>
 
-                    {/* 9. Action (Map Navigation) */}
-                    <td style={{ padding: '9px 14px', textAlign: 'center' }}>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleLocateStation(st);
                         }}
                         style={{
-                          backgroundColor: isSelected ? colors.primary : colors.surfaceAlt,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '5px 10px',
+                          borderRadius: '6px',
+                          backgroundColor: isSelected ? colors.primary : '#F1F5F9',
                           color: isSelected ? '#FFFFFF' : colors.textPrimary,
                           border: `1px solid ${isSelected ? colors.primary : colors.borderStrong}`,
-                          borderRadius: '4px',
-                          padding: '3px 8px',
-                          fontSize: '10px',
-                          fontWeight: 700,
+                          fontSize: '11px',
+                          fontWeight: 600,
                           cursor: 'pointer',
-                          transition: 'all 0.15s ease',
                         }}
                       >
-                        Map
+                        <MapPin size={12} />
+                        <span>Locate</span>
                       </button>
-                    </td>
-                  </tr>
+                    </div>
+
+                    {/* Card Bottom: Refill capability, distance, ETA */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', fontSize: '11px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <Droplets size={13} color={isRefill ? '#0284C7' : isDestination ? '#7C3AED' : '#94A3B8'} />
+                        <span style={{ fontWeight: 600, color: isRefill ? '#0369A1' : isDestination ? '#6D28D9' : colors.textMuted }}>
+                          {isDestination
+                            ? 'Terminal • Refill Hub'
+                            : isRefill
+                            ? `Refill Available (${st.water_capacity_liters > 0 ? (st.water_capacity_liters / 1000).toFixed(0) + 'k L' : 'Yes'})`
+                            : 'Standard Stoppage'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: colors.textSecondary }}>
+                        <span>
+                          Dist: <strong style={{ color: '#0284C7' }}>{hasGps && st.distanceKm > 0 ? `${st.distanceKm.toFixed(1)} km` : '—'}</strong>
+                        </span>
+                        <span>&bull;</span>
+                        <span>
+                          ETA: <strong style={{ color: colors.textPrimary }}>{st.etaString}</strong>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 );
               })}
-            </tbody>
-          </table>
+            </div>
+          )}
+
+          {/* B. DESKTOP TABULAR VIEW */}
+          <div className="location-corridor-table-desktop" style={{ display: isMobileViewport ? 'none' : 'block' }}>
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: '11px',
+                fontFamily: typography.fontFamily,
+                textAlign: 'left',
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    backgroundColor: colors.surfaceAlt,
+                    color: colors.textMuted,
+                    borderBottom: `1px solid ${colors.border}`,
+                    fontSize: '10px',
+                    fontWeight: 700,
+                  }}
+                >
+                  <th style={{ padding: '8px 14px', width: '35px' }}>#</th>
+                  <th style={{ padding: '8px 12px', width: '60px' }}>CODE</th>
+                  <th style={{ padding: '8px 14px' }}>STATION NAME</th>
+                  <th style={{ padding: '8px 14px' }}>WATER REFILL CAPABILITY</th>
+                  <th style={{ padding: '8px 14px', width: '90px' }}>DISTANCE</th>
+                  <th style={{ padding: '8px 14px', width: '90px' }}>ESTIMATED ARRIVAL</th>
+                  <th style={{ padding: '8px 14px', width: '130px' }}>VERIFIED CAPACITY</th>
+                  <th style={{ padding: '8px 14px', width: '110px' }}>FACILITY STATUS</th>
+                  <th style={{ padding: '8px 14px', width: '70px', textAlign: 'center' }}>ACTION</th>
+                </tr>
+              </thead>
+              <tbody>
+                {enrichedStations.map((st, index) => {
+                  const isSelected = selectedStationCode === st.code;
+                  const isDestination = st.is_destination || st.code === 'ASN';
+                  const isRefill = st.water_refill_available && !isDestination;
+
+                  return (
+                    <tr
+                      key={st.code}
+                      onClick={() => handleLocateStation(st)}
+                      style={{
+                        borderBottom: `1px solid ${colors.borderSubtle}`,
+                        backgroundColor: isSelected
+                          ? colors.primarySurface
+                          : index % 2 === 0
+                          ? '#FFFFFF'
+                          : colors.surfaceHighlight,
+                        cursor: 'pointer',
+                        transition: 'background-color 0.15s ease',
+                      }}
+                    >
+                      {/* 1. Serial Number (#) */}
+                      <td style={{ padding: '9px 14px', color: colors.textMuted, fontWeight: 600 }}>
+                        {st.route_order + 1}
+                      </td>
+
+                      {/* 2. Station Code */}
+                      <td style={{ padding: '9px 12px' }}>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontWeight: 700,
+                            fontSize: '10px',
+                            backgroundColor: isDestination
+                              ? '#EDE9FE'
+                              : isRefill
+                              ? '#E0F2FE'
+                              : '#F1F5F9',
+                            color: isDestination ? '#6D28D9' : isRefill ? '#0284C7' : '#475569',
+                            border: `1px solid ${
+                              isDestination ? '#DDD6FE' : isRefill ? '#BAE6FD' : '#E2E8F0'
+                            }`,
+                          }}
+                        >
+                          {st.code}
+                        </span>
+                      </td>
+
+                      {/* 3. Station Name */}
+                      <td
+                        style={{
+                          padding: '9px 14px',
+                          fontWeight: isSelected ? 700 : 600,
+                          color: isSelected ? colors.primary : colors.textPrimary,
+                          fontSize: '12px',
+                        }}
+                      >
+                        {st.name}
+                      </td>
+
+                      {/* 4. Water Refill Capability */}
+                      <td style={{ padding: '9px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span
+                            style={{
+                              width: '7px',
+                              height: '7px',
+                              borderRadius: '50%',
+                              backgroundColor: isDestination ? '#7C3AED' : isRefill ? '#0284C7' : '#94A3B8',
+                            }}
+                          />
+                          <span
+                            style={{
+                              fontWeight: isRefill || isDestination ? 600 : 400,
+                              color: isDestination ? '#6D28D9' : isRefill ? '#0369A1' : colors.textMuted,
+                            }}
+                          >
+                            {isDestination
+                              ? 'Terminal • Refill Hub'
+                              : isRefill
+                              ? 'Water Refill Available'
+                              : 'No Refill Facility'}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* 5. Distance */}
+                      <td style={{ padding: '9px 14px', fontWeight: 700, color: '#0284C7' }}>
+                        {hasGps && st.distanceKm > 0 ? `${st.distanceKm.toFixed(1)} km` : '—'}
+                      </td>
+
+                      {/* 6. Estimated Arrival */}
+                      <td style={{ padding: '9px 14px', fontWeight: 600, color: colors.textPrimary }}>
+                        {st.etaString}
+                      </td>
+
+                      {/* 7. Verified Capacity */}
+                      <td style={{ padding: '9px 14px', color: colors.textPrimary }}>
+                        {st.water_capacity_liters > 0
+                          ? `${st.water_capacity_liters.toLocaleString()} L`
+                          : '—'}
+                      </td>
+
+                      {/* 8. Facility Status */}
+                      <td style={{ padding: '9px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <span
+                            style={{
+                              width: '6px',
+                              height: '6px',
+                              borderRadius: '50%',
+                              backgroundColor:
+                                st.operational_status === 'Operational' ? '#16A34A' : '#94A3B8',
+                            }}
+                          />
+                          <span
+                            style={{
+                              color:
+                                st.operational_status === 'Operational' ? '#16A34A' : colors.textMuted,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {st.operational_status}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* 9. Action (Map Navigation) */}
+                      <td style={{ padding: '9px 14px', textAlign: 'center' }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleLocateStation(st);
+                          }}
+                          style={{
+                            backgroundColor: isSelected ? colors.primary : colors.surfaceAlt,
+                            color: isSelected ? '#FFFFFF' : colors.textPrimary,
+                            border: `1px solid ${isSelected ? colors.primary : colors.borderStrong}`,
+                            borderRadius: '4px',
+                            padding: '3px 8px',
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          Map
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
