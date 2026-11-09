@@ -171,6 +171,25 @@ export const Header: React.FC = () => {
     subtitle: 'Railway IoT Water Monitoring Platform',
   };
 
+  // Dedicated clean section titles for mobile viewport header
+  const mobileSectionTitles: Record<ScreenName, string> = {
+    login: 'Sign In',
+    dashboard: 'Dashboard',
+    trains: 'Train Management',
+    coaches: 'Coach Management',
+    'coach-details': 'Coach Details',
+    watertank: 'All Tanks',
+    devices: 'Devices',
+    location: 'Location',
+    monitoring: 'Monitoring',
+    alerts: 'Alerts',
+    history: 'History',
+    reports: 'Reports',
+    settings: 'Settings',
+    users: 'Users',
+    logs: 'Logs',
+  };
+
   const isConnected = connectionStatus === 'CONNECTED';
   const isReconnecting = connectionStatus === 'RECONNECTING';
   const isAdmin = currentUser?.role === 'ADMIN';
@@ -935,8 +954,18 @@ export const Header: React.FC = () => {
         ) : (
           /* Normal Mobile Header Mode */
           <>
-            {/* Left: Hamburger + Logo */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            {/* Left & Center: [Hamburger] -> [Panorama Logo] -> [Current Section Name] */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                flex: 1,
+                minWidth: 0,
+                overflow: 'hidden',
+              }}
+            >
+              {/* 1. Hamburger Menu Button */}
               <button
                 type="button"
                 onClick={toggleMobileNav}
@@ -945,69 +974,72 @@ export const Header: React.FC = () => {
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  padding: '8px',
+                  padding: '6px',
                   borderRadius: '6px',
                   cursor: 'pointer',
                   color: '#0F172A',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  flexShrink: 0,
                 }}
               >
                 <Menu size={22} />
               </button>
 
+              {/* 2. Panorama Logo Icon (Image only, no text branding on mobile) */}
               <div
                 onClick={() => {
                   setActiveScreen('dashboard');
                   AppRouter.navigate('dashboard');
                 }}
+                title="Panorama SCADA - Dashboard"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
                   cursor: 'pointer',
+                  flexShrink: 0,
                 }}
               >
                 <img
                   src={panoramaLogoIcon}
                   alt="Panorama"
-                  style={{ width: '24px', height: '24px', objectFit: 'contain', borderRadius: '4px' }}
+                  style={{
+                    width: '26px',
+                    height: '26px',
+                    objectFit: 'contain',
+                    borderRadius: '4px',
+                    display: 'block',
+                  }}
                 />
-                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.1' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 800, color: '#0F172A', letterSpacing: '0.2px' }}>
-                    PANORAMA
-                  </span>
-                  <span style={{ fontSize: '9px', fontWeight: 700, color: '#2563EB', letterSpacing: '0.4px' }}>
-                    TANK MONITOR
-                  </span>
-                </div>
               </div>
-            </div>
 
-            {/* Center: Truncated Title */}
-            <div
-              style={{
-                flex: 1,
-                minWidth: 0,
-                textAlign: 'center',
-                padding: '0 4px',
-                overflow: 'hidden',
-              }}
-            >
-              <span
+              {/* 3. Current Dynamic Section Name */}
+              <div
                 style={{
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  color: '#1E293B',
-                  whiteSpace: 'nowrap',
+                  flex: 1,
+                  minWidth: 0,
                   overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  display: 'block',
                 }}
               >
-                {currentInfo.title}
-              </span>
+                <span
+                  data-testid="mobile-header-section-name"
+                  style={{
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    color: '#0F172A',
+                    fontFamily: typography.fontFamily,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    display: 'block',
+                    letterSpacing: '-0.2px',
+                    lineHeight: '20px',
+                  }}
+                >
+                  {mobileSectionTitles[activeScreen] || currentInfo.title}
+                </span>
+              </div>
             </div>
 
             {/* Right: Quick actions (Search, Connection, Alerts) */}
