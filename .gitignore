@@ -5,7 +5,9 @@ apps/mobile/dist/
 
 # Python & Backend runtime
 venv/
+.venv/
 backend/venv/
+backend/.venv/
 backend/__pycache__/
 **/__pycache__/
 *.py[cod]
@@ -64,5 +66,9 @@ audit_screenshots/
 .DS_Store
 Thumbs.db
 
-
-.vercel
+# Local test profiles and scrapers
+.chrome-test-profile/
+LIVE_WEBSITE_SCREENSHOTS/
+MOBILE_TEST_SCREENSHOTS/
+apps/mobile/screenshots/
+scripts/test_live_website_chrome.cjs

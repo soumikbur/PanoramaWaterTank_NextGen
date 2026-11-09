@@ -167,14 +167,15 @@ async function build() {
   fs.writeFileSync(path.join(distDir, '404.html'), notFoundContent, 'utf8');
 
   // Sync to root dist if different
-  const rootDist = path.resolve(__dirname, '../../dist');
+  const projectRoot = path.resolve(__dirname, '../../..');
+  const rootDist = path.join(projectRoot, 'dist');
   if (path.resolve(distDir) !== rootDist) {
     fs.mkdirSync(rootDist, { recursive: true });
     fs.cpSync(distDir, rootDist, { recursive: true, force: true });
   }
 
   // Sync to backend static directory
-  const backendStatic = path.resolve(__dirname, '../../backend/static');
+  const backendStatic = path.join(projectRoot, 'backend', 'static');
   fs.mkdirSync(backendStatic, { recursive: true });
   fs.cpSync(distDir, backendStatic, { recursive: true, force: true });
 

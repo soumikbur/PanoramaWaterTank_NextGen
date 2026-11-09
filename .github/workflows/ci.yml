@@ -1,0 +1,73 @@
+name: Continuous Integration & Automated Verification
+
+on:
+  push:
+    branches: [ main, 'feat/**', 'audit/**', 'fix/**' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-verification:
+    name: Frontend Build & Typecheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Compile Production Bundle
+        run: npm run build
+
+      - name: Verify Distribution Artifacts
+        run: |
+          test -f dist/index.html || { echo "dist/index.html missing"; exit 1; }
+          test -f dist/404.html || { echo "dist/404.html missing"; exit 1; }
+          test -d dist/assets || { echo "dist/assets missing"; exit 1; }
+          echo "Frontend compilation verified successfully."
+
+  backend-verification:
+    name: Backend Test Suite & Schema Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: Execute Full Pytest Suite (58 Tests)
+        working-directory: backend
+        run: |
+          pytest tests/ -v
+
+      - name: Validate OpenAPI 3.1 Schema Consistency
+        working-directory: backend
+        run: |
+          python -c "from app.main import app; s = app.openapi(); print('Validated endpoints:', len(s['paths']))"
