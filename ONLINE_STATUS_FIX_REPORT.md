@@ -197,3 +197,4 @@ The application now adheres strictly to genuine SCADA telemetry verification sta
 3. If telemetry stops or broker disconnects, the system automatically marks the tanks **Offline** with the exact failure reason.
 4. Unmapped tanks are never marked online.
 5. The invariant $\text{Total Tanks} = \text{Online Tanks} + \text{Offline Tanks}$ holds across all screens.
+
