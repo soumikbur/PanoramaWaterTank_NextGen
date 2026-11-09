@@ -28,7 +28,17 @@ import {
 type FilterTab = 'ALL' | 'DISCOVERED' | 'REGISTERED' | 'ENGAGED' | 'AVAILABLE' | 'OFFLINE';
 
 export const DeviceMappingScreen: React.FC = () => {
-  const { managedDevices, liveTelemetry, mqttBrokerStatus, setActiveScreen, setSelectedTrainNumber, setSelectedCoachNumber } = useApp();
+  const {
+    managedDevices,
+    liveTelemetry,
+    mqttBrokerStatus,
+    setActiveScreen,
+    setSelectedTrainNumber,
+    setSelectedCoachNumber,
+    telemetryTimeoutSeconds,
+    setTelemetryTimeoutSeconds,
+    consistMetrics,
+  } = useApp();
 
   const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -53,13 +63,18 @@ export const DeviceMappingScreen: React.FC = () => {
   const [manualCoach, setManualCoach] = useState('');
   const [manualModel, setManualModel] = useState('WLI EC200U-CN');
 
+  const now = Date.now();
+  const timeoutMs = (telemetryTimeoutSeconds || 120) * 1000;
+  const isDevOnline = (dev: ManagedDevice) =>
+    Boolean(dev.lastSeenTimestamp && now - dev.lastSeenTimestamp <= timeoutMs);
+
   // Metrics calculation
   const totalCount = managedDevices.length;
   const discoveredCount = managedDevices.filter((d) => d.registrationStatus === 'DISCOVERED').length;
   const registeredCount = managedDevices.filter((d) => d.registrationStatus === 'REGISTERED').length;
   const engagedCount = managedDevices.filter((d) => d.assignmentStatus === 'ENGAGED').length;
   const availableCount = managedDevices.filter((d) => d.assignmentStatus === 'AVAILABLE' && d.registrationStatus === 'REGISTERED').length;
-  const offlineCount = managedDevices.filter((d) => !d.isOnline).length;
+  const offlineCount = managedDevices.filter((d) => !isDevOnline(d)).length;
 
   // Filtered devices list
   const filteredDevices = useMemo(() => {
@@ -69,7 +84,7 @@ export const DeviceMappingScreen: React.FC = () => {
       if (activeTab === 'REGISTERED' && dev.registrationStatus !== 'REGISTERED') return false;
       if (activeTab === 'ENGAGED' && dev.assignmentStatus !== 'ENGAGED') return false;
       if (activeTab === 'AVAILABLE' && (dev.assignmentStatus !== 'AVAILABLE' || dev.registrationStatus !== 'REGISTERED')) return false;
-      if (activeTab === 'OFFLINE' && dev.isOnline) return false;
+      if (activeTab === 'OFFLINE' && isDevOnline(dev)) return false;
 
       // Search query
       if (searchQuery.trim()) {
@@ -318,7 +333,43 @@ export const DeviceMappingScreen: React.FC = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              backgroundColor: '#FFFFFF',
+              borderRadius: '6px',
+              border: '1px solid #E2E8F0',
+              fontSize: '12px',
+              color: '#334155',
+            }}
+          >
+            <Clock size={14} color="#2563EB" />
+            <span>Timeout:</span>
+            <select
+              value={telemetryTimeoutSeconds}
+              onChange={(e) => setTelemetryTimeoutSeconds(Number(e.target.value))}
+              style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: '#2563EB',
+                border: 'none',
+                backgroundColor: 'transparent',
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              <option value={30}>30s</option>
+              <option value={60}>60s</option>
+              <option value={120}>120s (Default)</option>
+              <option value={180}>180s</option>
+              <option value={300}>300s (5m)</option>
+            </select>
+          </div>
+
           <div
             style={{
               display: 'flex',
@@ -423,9 +474,17 @@ export const DeviceMappingScreen: React.FC = () => {
         </div>
 
         <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '14px 16px' }}>
-          <div style={{ fontSize: '11px', color: '#DC2626', fontWeight: 600, textTransform: 'uppercase' }}>Offline</div>
+          <div style={{ fontSize: '11px', color: '#DC2626', fontWeight: 600, textTransform: 'uppercase' }}>Offline Nodes</div>
           <div style={{ fontSize: '24px', fontWeight: 800, color: '#DC2626', marginTop: '4px' }}>{offlineCount}</div>
-          <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>No telemetry {'>'} 90s</div>
+          <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>No telemetry {'>'} {telemetryTimeoutSeconds}s</div>
+        </div>
+
+        <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '14px 16px' }}>
+          <div style={{ fontSize: '11px', color: '#2563EB', fontWeight: 600, textTransform: 'uppercase' }}>Consist Tanks</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: consistMetrics.onlineTanks > 0 ? '#16A34A' : '#0F172A', marginTop: '4px' }}>
+            {consistMetrics.onlineTanks} / {consistMetrics.totalTanks}
+          </div>
+          <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>{consistMetrics.offlineTanks} offline ({consistMetrics.unmappedTanks} unmapped)</div>
         </div>
       </div>
 
@@ -818,7 +877,7 @@ export const DeviceMappingScreen: React.FC = () => {
                       {/* Column 8: Last Seen */}
                       <td style={{ padding: '12px 14px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          {dev.isOnline && (
+                          {isDevOnline(dev) && (
                             <span
                               style={{
                                 width: '6px',

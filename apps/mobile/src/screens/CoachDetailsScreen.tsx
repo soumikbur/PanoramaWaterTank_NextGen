@@ -35,6 +35,8 @@ export const CoachDetailsScreen: React.FC = () => {
     connectionStatus,
     refreshData,
     liveTelemetry,
+    mqttConnectionStatus,
+    telemetryTimeoutSeconds,
   } = useApp();
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -80,9 +82,25 @@ export const CoachDetailsScreen: React.FC = () => {
     );
   }, [managedDevices, devices, coachNum, trainNum]);
 
-  const hasLiveTelemetry = Boolean(liveTelemetry && (liveTelemetry.chno.toUpperCase() === coachNum || coachNum === 'CR123456'));
-  const deviceId = (hasLiveTelemetry && liveTelemetry?.uid) || matchingDevice?.uid || (hasLiveTelemetry ? '0023004D4B42501120353332' : `DEV-${coachNum}`);
-  const isOnline = hasLiveTelemetry && liveTelemetry ? !liveTelemetry.isStale : (matchingDevice?.isOnline ?? false);
+  const timeoutMs = (telemetryTimeoutSeconds || 120) * 1000;
+  const now = Date.now();
+  const isMqttConnected = mqttConnectionStatus !== 'DISCONNECTED' && connectionStatus !== 'DISCONNECTED';
+
+  const hasLiveTelemetry = Boolean(
+    liveTelemetry &&
+    isMqttConnected &&
+    !liveTelemetry.isStale &&
+    liveTelemetry.chno.toUpperCase() === coachNum
+  );
+
+  const isMatchingDeviceFresh = Boolean(
+    matchingDevice &&
+    matchingDevice.lastSeenTimestamp &&
+    now - matchingDevice.lastSeenTimestamp <= timeoutMs
+  );
+
+  const isOnline = Boolean(isMqttConnected && (hasLiveTelemetry || (matchingDevice?.isOnline && isMatchingDeviceFresh)));
+  const deviceId = (hasLiveTelemetry && liveTelemetry?.uid) || matchingDevice?.uid || 'Not Mapped';
   const batteryPercent = hasLiveTelemetry && liveTelemetry ? liveTelemetry.bat : (matchingDevice?.batteryPercent ?? null);
   const isBatteryLow = batteryPercent != null && batteryPercent < 40;
 
@@ -516,7 +534,7 @@ export const CoachDetailsScreen: React.FC = () => {
                 color: isOnline ? '#16A34A' : '#DC2626',
               }}
             >
-              {isOnline ? 'Online (Active)' : 'Offline (Standby)'}
+              {isOnline ? 'Online (Active)' : (!matchingDevice && !hasLiveTelemetry ? 'Offline (Unmapped)' : 'Offline (Standby)')}
             </div>
           </div>
         </div>

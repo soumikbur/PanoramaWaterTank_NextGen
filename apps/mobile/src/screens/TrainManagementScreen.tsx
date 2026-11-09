@@ -13,7 +13,52 @@ export const TrainManagementScreen: React.FC = () => {
     setSelectedTrainNumber,
     currentUser,
     searchQuery,
+    managedDevices,
+    liveTelemetry,
+    mqttConnectionStatus,
+    telemetryTimeoutSeconds,
   } = useApp();
+
+  const isTrainOnline = (trainNumber: string): boolean => {
+    const clean = trainNumber.trim().toLowerCase();
+    const liveMatch =
+      liveTelemetry &&
+      mqttConnectionStatus !== 'DISCONNECTED' &&
+      !liveTelemetry.isStale &&
+      liveTelemetry.trno?.trim().toLowerCase() === clean;
+    if (liveMatch) return true;
+    const timeoutMs = (telemetryTimeoutSeconds || 120) * 1000;
+    const now = Date.now();
+    return managedDevices.some(
+      (d) =>
+        d.assignmentStatus === 'ENGAGED' &&
+        d.trainNumber?.trim().toLowerCase() === clean &&
+        d.lastSeenTimestamp &&
+        now - d.lastSeenTimestamp <= timeoutMs
+    );
+  };
+
+  const isCoachOnline = (trainNumber: string, coachNumber: string): boolean => {
+    const cleanTrain = trainNumber.trim().toLowerCase();
+    const cleanCoach = coachNumber.trim().toLowerCase();
+    const liveMatch =
+      liveTelemetry &&
+      mqttConnectionStatus !== 'DISCONNECTED' &&
+      !liveTelemetry.isStale &&
+      liveTelemetry.trno?.trim().toLowerCase() === cleanTrain &&
+      liveTelemetry.chno?.trim().toLowerCase() === cleanCoach;
+    if (liveMatch) return true;
+    const timeoutMs = (telemetryTimeoutSeconds || 120) * 1000;
+    const now = Date.now();
+    return managedDevices.some(
+      (d) =>
+        d.assignmentStatus === 'ENGAGED' &&
+        d.trainNumber?.trim().toLowerCase() === cleanTrain &&
+        d.coachNumber?.trim().toLowerCase() === cleanCoach &&
+        d.lastSeenTimestamp &&
+        now - d.lastSeenTimestamp <= timeoutMs
+    );
+  };
 
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   const [selectedTrain, setSelectedTrain] = useState<TrainConsist | null>(null);
@@ -479,8 +524,8 @@ export const TrainManagementScreen: React.FC = () => {
                       }}
                     >
                       <span style={{ color: '#64748B' }}>Online Trains:</span>
-                      <strong style={{ color: r.onlineTrains > 0 ? '#16A34A' : '#64748B' }}>
-                        {r.onlineTrains}
+                      <strong style={{ color: r.trains.filter((t) => isTrainOnline(t.train_number)).length > 0 ? '#16A34A' : '#64748B' }}>
+                        {r.trains.filter((t) => isTrainOnline(t.train_number)).length}
                       </strong>
                     </div>
                   </div>
@@ -588,7 +633,7 @@ export const TrainManagementScreen: React.FC = () => {
             )}
 
             {activeRegionObj?.trains.map((train) => {
-              const isOnline = train.is_online;
+              const isOnline = isTrainOnline(train.train_number);
               return (
                 <div
                   key={train.train_number}
@@ -716,8 +761,8 @@ export const TrainManagementScreen: React.FC = () => {
                 <span>Tanks: <strong>{selectedTrain.tanks_count}</strong></span>
                 <span>
                   Status:{' '}
-                  <strong style={{ color: selectedTrain.online_status ? '#16A34A' : '#64748B' }}>
-                    {selectedTrain.online_status ? 'Consist Online' : 'Consist Offline'}
+                  <strong style={{ color: isTrainOnline(selectedTrain.train_number) ? '#16A34A' : '#64748B' }}>
+                    {isTrainOnline(selectedTrain.train_number) ? 'Consist Online' : 'Consist Offline'}
                   </strong>
                 </span>
               </div>
@@ -861,19 +906,24 @@ export const TrainManagementScreen: React.FC = () => {
                       <ArrowRight size={10} />
                     </button>
 
-                    <span
-                      style={{
-                        backgroundColor: coach.is_online ? '#ECFDF5' : '#F1F5F9',
-                        color: coach.is_online ? '#16A34A' : '#64748B',
-                        border: `1px solid ${coach.is_online ? '#DCFCE7' : '#E2E8F0'}`,
-                        borderRadius: '10px',
-                        padding: '2px 8px',
-                        fontSize: '10px',
-                        fontWeight: 700,
-                      }}
-                    >
-                      {coach.is_online ? 'DEVICE ONLINE' : 'DEVICE OFFLINE'}
-                    </span>
+                    {(() => {
+                      const coachOnline = isCoachOnline(selectedTrain.train_number, coach.coach_number);
+                      return (
+                        <span
+                          style={{
+                            backgroundColor: coachOnline ? '#ECFDF5' : '#F1F5F9',
+                            color: coachOnline ? '#16A34A' : '#64748B',
+                            border: `1px solid ${coachOnline ? '#DCFCE7' : '#E2E8F0'}`,
+                            borderRadius: '10px',
+                            padding: '2px 8px',
+                            fontSize: '10px',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {coachOnline ? 'DEVICE ONLINE' : 'DEVICE OFFLINE'}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
 

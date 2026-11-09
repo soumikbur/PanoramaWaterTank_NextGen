@@ -2,7 +2,7 @@
  * Global Application Context and State Management.
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import {
   TankLiveStatus,
   Device,
@@ -19,6 +19,14 @@ import { mqttService } from '../services/mqttService';
 import { DisplayPreferencesService, ScalePreset } from '../services/displayPreferencesService';
 import { AppRouter } from '../services/router';
 import { deviceRegistry, ManagedDevice } from '../services/deviceRegistry';
+import {
+  computeConsistData,
+  getTelemetryTimeoutSeconds,
+  setTelemetryTimeoutSeconds,
+  ConsistMetrics,
+  ConsistCoachItem,
+  ConsistTankItem,
+} from '../services/tankStatusService';
 
 export type ScreenName =
   | 'login'
@@ -82,6 +90,11 @@ interface AppContextType {
   acknowledgeAlarm: (alarmId: string, comment?: string) => Promise<void>;
   login: (u: string, p: string) => Promise<void>;
   logout: () => void;
+  consistMetrics: ConsistMetrics;
+  consistCoaches: ConsistCoachItem[];
+  consistTanks: ConsistTankItem[];
+  telemetryTimeoutSeconds: number;
+  setTelemetryTimeoutSeconds: (seconds: number) => void;
 }
 
 const defaultStats: AlarmStats = {
@@ -145,6 +158,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [selectedStationCode, setSelectedStationCode] = useState<string | null>(null);
   const [regions, setRegions] = useState<RegionSummary[]>([]);
+
+  const [telemetryTimeoutSec, setTelemetryTimeoutSec] = useState<number>(() => getTelemetryTimeoutSeconds());
+  const [telemetryTick, setTelemetryTick] = useState<number>(0);
+
+  useEffect(() => {
+    // 1-second ticker to re-evaluate telemetry timeout dynamically
+    const interval = setInterval(() => {
+      setTelemetryTick((t) => (t + 1) % 1000000);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleSetTelemetryTimeout = (seconds: number) => {
+    setTelemetryTimeoutSeconds(seconds);
+    setTelemetryTimeoutSec(seconds);
+  };
+
+  const consistData = useMemo(() => {
+    return computeConsistData({
+      trainNumber: selectedTrainNumber || '225256',
+      totalCoaches: 24,
+      managedDevices,
+      liveTelemetry,
+      mqttStatus: mqttConnectionStatus,
+      timeoutSeconds: telemetryTimeoutSec,
+      now: Date.now(),
+    });
+  }, [selectedTrainNumber, managedDevices, liveTelemetry, mqttConnectionStatus, telemetryTimeoutSec, telemetryTick]);
 
   // Global Display Scaling preferences (delegated to DisplayPreferencesService)
   const [displayScale, setDisplayScaleState] = useState<string>(() => {
@@ -742,7 +783,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isAuthenticated,
         authLoading,
         liveTank,
-        tanks,
+        tanks: consistData.tanks,
         devices,
         managedDevices,
         activeAlarms,
@@ -781,6 +822,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         acknowledgeAlarm,
         login,
         logout,
+        consistMetrics: consistData.metrics,
+        consistCoaches: consistData.coaches,
+        consistTanks: consistData.tanks,
+        telemetryTimeoutSeconds: telemetryTimeoutSec,
+        setTelemetryTimeoutSeconds: handleSetTelemetryTimeout,
       }}
     >
       {children}

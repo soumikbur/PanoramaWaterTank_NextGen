@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 
 export const WaterTankScreen: React.FC = () => {
-  const { tanks, liveTank, managedDevices, connectionStatus, refreshData, selectedTankId: contextTankId, setSelectedTankId: setContextTankId, setActiveScreen } = useApp();
+  const { tanks, liveTank, managedDevices, connectionStatus, refreshData, selectedTankId: contextTankId, setSelectedTankId: setContextTankId, setActiveScreen, consistTanks } = useApp();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'ONLINE' | 'OFFLINE' | 'LOW_LEVEL'>('ALL');
@@ -38,109 +38,13 @@ export const WaterTankScreen: React.FC = () => {
     }
   }, [contextTankId]);
 
-  // Aggregate tanks from active stream, persistent devices, and Qt baseline reference
+  // Use consist tanks directly as verified single source of truth (48 configured tanks)
   const allTanks: TankLiveStatus[] = useMemo(() => {
-    const list: TankLiveStatus[] = [];
-    if (tanks && tanks.length > 0) {
-      list.push(...tanks);
+    if (consistTanks && consistTanks.length > 0) {
+      return consistTanks;
     }
-
-    // Add tanks for managed devices if not already represented
-    if (managedDevices && managedDevices.length > 0) {
-      managedDevices.forEach((dev) => {
-        const train = dev.trainNumber || dev.payloadTrno || '225256';
-        const coach = dev.coachNumber || dev.payloadChno || 'CR123456';
-        const tank1Id = `${dev.uid}-arrival`;
-        const tank2Id = `${dev.uid}-departure`;
-
-        if (!list.some((t) => t.tankId === tank1Id || (t.deviceUid === dev.uid && t.tankIndex === 1))) {
-          list.push({
-            tankId: tank1Id,
-            tankName: 'Arrival Side (Tank 1)',
-            tankIndex: 1,
-            deviceUid: dev.uid,
-            deviceId: dev.uid,
-            trainNumber: train,
-            coachNumber: coach,
-            levelPercent: dev.tank1Level,
-            rawLevelPercent: dev.tank1Level,
-            volumeLiters: dev.tank1Level != null ? Number(((dev.tank1Level / 100) * 500).toFixed(1)) : null,
-            heightCm: dev.tank1HeightCm,
-            capacityLiters: 500,
-            maxHeightCm: 150.0,
-            crossSectionalAreaM2: 0.33,
-            rank: dev.tank1Level && dev.tank1Level > 70 ? 'GOOD' : dev.tank1Level && dev.tank1Level > 30 ? 'MODERATE' : 'LOW',
-            alarmStatus: !dev.valve1Normal ? 'VALVE_ALERT' : dev.tank1Level != null && dev.tank1Level < 10 ? 'CRITICAL_LOW' : 'NORMAL',
-            batteryVoltage: dev.batteryVoltage,
-            isOnline: dev.isOnline,
-            hasTelemetry: dev.tank1Level != null,
-            isStale: !dev.isOnline,
-            lastUpdate: dev.lastSeen,
-            latitude: dev.latitude,
-            longitude: dev.longitude,
-          });
-        }
-
-        if (!list.some((t) => t.tankId === tank2Id || (t.deviceUid === dev.uid && t.tankIndex === 2))) {
-          list.push({
-            tankId: tank2Id,
-            tankName: 'Departure Side (Tank 2)',
-            tankIndex: 2,
-            deviceUid: dev.uid,
-            deviceId: dev.uid,
-            trainNumber: train,
-            coachNumber: coach,
-            levelPercent: dev.tank2Level,
-            rawLevelPercent: dev.tank2Level,
-            volumeLiters: dev.tank2Level != null ? Number(((dev.tank2Level / 100) * 500).toFixed(1)) : null,
-            heightCm: dev.tank2HeightCm,
-            capacityLiters: 500,
-            maxHeightCm: 150.0,
-            crossSectionalAreaM2: 0.33,
-            rank: dev.tank2Level && dev.tank2Level > 70 ? 'GOOD' : dev.tank2Level && dev.tank2Level > 30 ? 'MODERATE' : 'LOW',
-            alarmStatus: !dev.valve2Normal ? 'VALVE_ALERT' : dev.tank2Level != null && dev.tank2Level < 10 ? 'CRITICAL_LOW' : 'NORMAL',
-            batteryVoltage: dev.batteryVoltage,
-            isOnline: dev.isOnline,
-            hasTelemetry: dev.tank2Level != null,
-            isStale: !dev.isOnline,
-            lastUpdate: dev.lastSeen,
-            latitude: dev.latitude,
-            longitude: dev.longitude,
-          });
-        }
-      });
-    }
-
-    if (list.length > 0) return list;
-    if (liveTank) return [liveTank];
-    return [
-      {
-        tankId: 'tank-12301-S1-1',
-        tankName: 'Toilet Front',
-        tankIndex: 1,
-        deviceUid: 'DEV-12301-S1',
-        deviceId: 'DEV-12301-S1',
-        trainNumber: '12301',
-        coachNumber: 'S1',
-        levelPercent: null,
-        rawLevelPercent: null,
-        volumeLiters: null,
-        heightCm: null,
-        capacityLiters: 20.0,
-        maxHeightCm: 50.0,
-        crossSectionalAreaM2: 0.04,
-        rank: 'MODERATE',
-        alarmStatus: 'NORMAL',
-        batteryVoltage: null,
-        isOnline: false,
-        hasTelemetry: false,
-        isStale: true,
-        lastUpdate: null,
-        latitude: null,
-        longitude: null,
-      },
-    ];
-  }, [tanks, managedDevices, liveTank]);
+    return tanks;
+  }, [consistTanks, tanks]);
 
   // Filter and search logic
   const filteredTanks = useMemo(() => {

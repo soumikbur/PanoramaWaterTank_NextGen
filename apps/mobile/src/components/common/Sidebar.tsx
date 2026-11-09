@@ -53,6 +53,7 @@ export const Sidebar: React.FC = () => {
     currentUser,
     logout,
     liveTelemetry,
+    consistMetrics,
   } = useApp();
 
   useEffect(() => {
@@ -96,10 +97,10 @@ export const Sidebar: React.FC = () => {
 
   const onlineDevicesCount = devices.filter((d) => d.isOnline ?? d.is_online).length;
   const offlineDevicesCount = devices.length - onlineDevicesCount;
-  const totalCoachesCount = 24;
-  const totalTanksCount = totalCoachesCount * 2;
-  const onlineTanksCount = onlineDevicesCount > 0 ? totalTanksCount : 48;
-  const offlineTanksCount = 0;
+  const totalCoachesCount = consistMetrics.totalCoaches;
+  const totalTanksCount = consistMetrics.totalTanks;
+  const onlineTanksCount = consistMetrics.onlineTanks;
+  const offlineTanksCount = consistMetrics.offlineTanks;
   const totalAlertsCount = activeAlarms.length;
 
   const isCollapsed = sidebarMode === 'collapsed' || sidebarMode === 'iconOnly' || sidebarCollapsed;
@@ -213,7 +214,7 @@ export const Sidebar: React.FC = () => {
               {/* Coaches */}
               <div>
                 <div style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', lineHeight: '18px' }}>
-                  {liveTelemetry ? 1 : (!selectedTrainNumber || selectedTrainNumber === '12301' ? 1 : totalCoachesCount)}
+                  {totalCoachesCount}
                 </div>
                 <div style={{ fontSize: '10px', fontWeight: 500, color: '#64748B' }}>
                   Coaches
@@ -223,7 +224,7 @@ export const Sidebar: React.FC = () => {
               {/* Tanks */}
               <div>
                 <div style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A', lineHeight: '18px' }}>
-                  {liveTelemetry ? 2 : (!selectedTrainNumber || selectedTrainNumber === '12301' ? 1 : totalTanksCount)}
+                  {totalTanksCount}
                 </div>
                 <div style={{ fontSize: '10px', fontWeight: 500, color: '#64748B' }}>
                   Tanks
@@ -232,8 +233,8 @@ export const Sidebar: React.FC = () => {
 
               {/* Online */}
               <div>
-                <div style={{ fontSize: '15px', fontWeight: 800, color: '#16A34A', lineHeight: '18px' }}>
-                  {liveTelemetry ? 1 : (!selectedTrainNumber || selectedTrainNumber === '12301' ? 1 : onlineTanksCount)}
+                <div style={{ fontSize: '15px', fontWeight: 800, color: onlineTanksCount > 0 ? '#16A34A' : '#64748B', lineHeight: '18px' }}>
+                  {onlineTanksCount}
                 </div>
                 <div style={{ fontSize: '10px', fontWeight: 500, color: '#64748B' }}>
                   Online
@@ -242,8 +243,8 @@ export const Sidebar: React.FC = () => {
 
               {/* Offline */}
               <div>
-                <div style={{ fontSize: '15px', fontWeight: 800, color: liveTelemetry ? '#DC2626' : '#64748B', lineHeight: '18px' }}>
-                  {liveTelemetry ? 1 : (!selectedTrainNumber || selectedTrainNumber === '12301' ? 0 : offlineTanksCount)}
+                <div style={{ fontSize: '15px', fontWeight: 800, color: offlineTanksCount > 0 ? '#DC2626' : '#64748B', lineHeight: '18px' }}>
+                  {offlineTanksCount}
                 </div>
                 <div style={{ fontSize: '10px', fontWeight: 500, color: '#64748B' }}>
                   Offline
@@ -719,28 +720,36 @@ export const Sidebar: React.FC = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', paddingTop: '4px' }}>
                 <div style={{ backgroundColor: '#FFFFFF', padding: '8px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
                   <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
-                    {liveTelemetry ? 1 : totalCoachesCount}
+                    {totalCoachesCount}
                   </div>
                   <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>Coaches</div>
                 </div>
                 <div style={{ backgroundColor: '#FFFFFF', padding: '8px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
                   <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A' }}>
-                    {liveTelemetry ? 2 : totalTanksCount}
+                    {totalTanksCount}
                   </div>
                   <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>Tanks</div>
                 </div>
                 <div style={{ backgroundColor: '#FFFFFF', padding: '8px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
-                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#16A34A' }}>
-                    {liveTelemetry ? 2 : onlineTanksCount}
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: onlineTanksCount > 0 ? '#16A34A' : '#64748B' }}>
+                    {onlineTanksCount}
                   </div>
                   <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>Online</div>
                 </div>
                 <div style={{ backgroundColor: '#FFFFFF', padding: '8px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
-                  <div style={{ fontSize: '16px', fontWeight: 800, color: totalAlertsCount > 0 ? '#DC2626' : '#64748B' }}>
-                    {totalAlertsCount}
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: offlineTanksCount > 0 ? '#DC2626' : '#64748B' }}>
+                    {offlineTanksCount}
                   </div>
-                  <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>Alerts</div>
+                  <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>Offline</div>
                 </div>
+              </div>
+
+              {/* Alerts Row */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 2px 0 2px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748B' }}>Active Alerts</span>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: totalAlertsCount > 0 ? '#DC2626' : '#16A34A' }}>
+                  {totalAlertsCount} Alerts
+                </span>
               </div>
             </div>
 

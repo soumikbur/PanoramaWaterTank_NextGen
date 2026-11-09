@@ -65,6 +65,8 @@ export const EmployeeDashboard: React.FC = () => {
     activeAlarms,
     liveTelemetry,
     mqttConnectionStatus,
+    consistMetrics,
+    consistCoaches,
   } = useApp();
 
   const { dashboard } = useDisplayPreferences();
@@ -215,56 +217,21 @@ export const EmployeeDashboard: React.FC = () => {
     };
   }, [liveTelemetry, selectedTrainNumber, backendTrains, selectedRegion]);
 
-  // Generate 24 coaches for current train
+  // Generate 24 coaches for current train using centralized consist status
   const coaches24: DashboardCoach[] = useMemo(() => {
-    const list: DashboardCoach[] = [];
-    const coachTypes = ['Passenger', 'AC Chair Car', 'AC 3-Tier', 'AC 2-Tier', 'Sleeper Class', 'Executive'];
-
-    // Calculate real tank level percentages using formula: (Current Height / Max Height 150cm) * 100
-    const liveArrivalPct = liveTelemetry && typeof liveTelemetry.cm1 === 'number'
-      ? Number(((liveTelemetry.cm1 / 150.0) * 100).toFixed(1))
-      : null;
-    const liveDeparturePct = liveTelemetry && typeof liveTelemetry.cm2 === 'number'
-      ? Number(((liveTelemetry.cm2 / 150.0) * 100).toFixed(1))
-      : null;
-
-    for (let i = 1; i <= 24; i++) {
-      const cNum = i === 1 && liveTelemetry ? liveTelemetry.chno : `C${i}`;
-      const typeIndex = (i - 1) % coachTypes.length;
-
-      const isLiveHardwareCoach = liveTelemetry && (cNum === liveTelemetry.chno || (i === 1 && activeCoachNum === liveTelemetry.chno));
-
-      if (isLiveHardwareCoach && liveTelemetry) {
-        list.push({
-          coachNumber: liveTelemetry.chno,
-          coachType: 'AC 2-Tier',
-          deviceId: liveTelemetry.uid,
-          deviceStatus: !liveTelemetry.isStale ? 'Online' : 'Offline',
-          batteryPercent: liveTelemetry.bat,
-          arrivalLevel: liveArrivalPct,
-          arrivalHeightCm: liveTelemetry.cm1,
-          departureLevel: liveDeparturePct,
-          departureHeightCm: liveTelemetry.cm2,
-          hasTelemetry: true,
-        });
-      } else {
-        // Coach without active hardware telemetry: explicit unconfigured state
-        list.push({
-          coachNumber: cNum,
-          coachType: coachTypes[typeIndex],
-          deviceId: 'Not Mapped',
-          deviceStatus: 'Offline',
-          batteryPercent: null,
-          arrivalLevel: null,
-          arrivalHeightCm: null,
-          departureLevel: null,
-          departureHeightCm: null,
-          hasTelemetry: false,
-        });
-      }
-    }
-    return list;
-  }, [currentTrain.trainNumber, liveTelemetry, activeCoachNum]);
+    return consistCoaches.map((c) => ({
+      coachNumber: c.coachNumber,
+      coachType: c.coachType,
+      deviceId: c.deviceUid || 'Not Mapped',
+      deviceStatus: c.isOnline ? 'Online' : 'Offline',
+      batteryPercent: c.batteryPercent,
+      arrivalLevel: c.arrivalLevel,
+      arrivalHeightCm: c.arrivalHeightCm,
+      departureLevel: c.departureLevel,
+      departureHeightCm: c.departureHeightCm,
+      hasTelemetry: c.hasTelemetry,
+    }));
+  }, [consistCoaches]);
 
   // Selected coach data
   const selectedCoach = useMemo(() => {
@@ -521,7 +488,7 @@ export const EmployeeDashboard: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontWeight: 600, color: 'var(--color-text-secondary, #64748B)' }}>UID:</span>
             <code style={{ fontSize: '10px', color: '#475569', backgroundColor: '#F1F5F9', padding: '1px 5px', borderRadius: '3px' }}>
-              {liveTelemetry?.uid || selectedCoach.deviceId || '0023004D4B42501120353332'}
+              {selectedCoach.deviceId}
             </code>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -675,20 +642,34 @@ export const EmployeeDashboard: React.FC = () => {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ color: '#64748B' }}>Total Coaches</span>
-              <strong style={{ color: '#0F172A', fontSize: '12px' }}>24 Coaches</strong>
+              <strong style={{ color: '#0F172A', fontSize: '12px' }}>{consistMetrics.totalCoaches} Coaches</strong>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ color: '#64748B' }}>Total Reservoirs</span>
-              <strong style={{ color: '#0F172A', fontSize: '12px' }}>48 Tanks</strong>
+              <strong style={{ color: '#0F172A', fontSize: '12px' }}>{consistMetrics.totalTanks} Tanks</strong>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ color: '#64748B' }}>Online Tanks</span>
-              <strong style={{ color: '#16A34A', fontSize: '12px' }}>48 Online</strong>
+              <strong style={{ color: consistMetrics.onlineTanks > 0 ? '#16A34A' : '#64748B', fontSize: '12px' }}>
+                {consistMetrics.onlineTanks} Online
+              </strong>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: '#64748B' }}>Offline Tanks</span>
+              <strong style={{ color: consistMetrics.offlineTanks > 0 ? '#DC2626' : '#64748B', fontSize: '12px' }}>
+                {consistMetrics.offlineTanks} Offline
+              </strong>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ color: '#64748B' }}>Active Alerts</span>
               <strong style={{ color: activeAlarms.length > 0 ? '#DC2626' : '#16A34A', fontSize: '12px' }}>
                 {activeAlarms.length} Alerts
+              </strong>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: '#64748B' }}>Telemetry Timeout</span>
+              <strong style={{ color: '#2563EB', fontSize: '12px' }}>
+                {consistMetrics.timeoutSeconds}s
               </strong>
             </div>
           </div>
@@ -719,7 +700,7 @@ export const EmployeeDashboard: React.FC = () => {
             <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column' }}>
               <span style={{ color: '#64748B' }}>Hardware Sensor UID</span>
               <code style={{ fontSize: '10px', color: '#475569', backgroundColor: '#F1F5F9', padding: '3px 6px', borderRadius: '4px', wordBreak: 'break-all' }}>
-                {liveTelemetry?.uid || selectedCoach.deviceId || '0023004D4B42501120353332'}
+                {selectedCoach.deviceId}
               </code>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -2518,11 +2499,13 @@ export const EmployeeDashboard: React.FC = () => {
           <div style={{ padding: '10px 12px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
             <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Fleet Nodes</div>
             <div style={{ fontSize: '16px', fontWeight: 800, color: '#0F172A', margin: '2px 0' }}>
-              {devices.length > 0 ? `${devices.filter(d => d.isOnline).length} / ${devices.length}` : '1 / 1 Online'}
+              {consistMetrics.onlineCoaches} / {consistMetrics.totalCoaches} Online
             </div>
             <div style={{ fontSize: '10px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
               <span>Link: RS-485 / LTE</span>
-              <span style={{ color: '#15803D', fontWeight: 700 }}>Nominal</span>
+              <span style={{ color: consistMetrics.onlineCoaches > 0 ? '#15803D' : '#64748B', fontWeight: 700 }}>
+                {consistMetrics.onlineCoaches > 0 ? 'Nominal' : 'Standby'}
+              </span>
             </div>
           </div>
 

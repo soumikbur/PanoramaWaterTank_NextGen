@@ -545,7 +545,7 @@ export class ApiClient {
         configuredTrains: 2,
         coaches: 48,
         tanks: 96,
-        onlineTrains: 2,
+        onlineTrains: 0,
         status: 'All Normal',
         trains: [
           {
@@ -554,8 +554,8 @@ export class ApiClient {
             type: 'Superfast / Rajdhani',
             coaches_count: 24,
             tanks_count: 48,
-            is_online: true,
-            status: 'Operational',
+            is_online: false,
+            status: 'Standby',
             active_alarms: 0,
             region: 'EAST',
           },
@@ -565,8 +565,8 @@ export class ApiClient {
             type: 'Special Express',
             coaches_count: 24,
             tanks_count: 48,
-            is_online: true,
-            status: 'Operational',
+            is_online: false,
+            status: 'Standby',
             active_alarms: 0,
             region: 'EAST',
           },
@@ -663,7 +663,7 @@ export class ApiClient {
       return {
         coach_number: cNum,
         device_uid: pos === 1 ? '0023004D4B42501120353332' : `DEV-${trainNumber}-${cNum}`,
-        is_online: true,
+        is_online: false,
         hardware_version: 'v2.2.0',
         tanks: [
           {
@@ -671,8 +671,8 @@ export class ApiClient {
             tank_index: 1,
             name: 'Arrival Side (Tank 1)',
             capacity_liters: 500,
-            current_level_percent: 80.5,
-            current_volume_liters: 402.7,
+            current_level_percent: 0.0,
+            current_volume_liters: 0.0,
             status: 'NORMAL' as const,
           },
           {
@@ -682,7 +682,7 @@ export class ApiClient {
             capacity_liters: 500,
             current_level_percent: 0.0,
             current_volume_liters: 0.0,
-            status: 'WARNING' as const,
+            status: 'NORMAL' as const,
           },
         ],
       };
@@ -693,7 +693,7 @@ export class ApiClient {
       region: 'EAST',
       coaches_count: 24,
       tanks_count: 48,
-      online_status: true,
+      online_status: false,
       active_alarms_count: 0,
       coaches,
     };
