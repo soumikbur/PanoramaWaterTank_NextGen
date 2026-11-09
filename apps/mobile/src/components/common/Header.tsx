@@ -87,6 +87,7 @@ export const Header: React.FC = () => {
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const profileContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const mobileInputRef = useRef<HTMLInputElement>(null);
 
   // Outside click listener to dismiss search panel and profile menu
   useEffect(() => {
@@ -432,11 +433,16 @@ export const Header: React.FC = () => {
     setHasSearched(false);
     setIsOpen(false);
     setSelectedIndex(-1);
-    inputRef.current?.focus();
+    if (isMobileSearchOpen) {
+      mobileInputRef.current?.focus();
+    } else {
+      inputRef.current?.focus();
+    }
   };
 
   const handleSearchSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isSearching || !searchQuery.trim()) return;
     executeSearch();
   };
 
@@ -887,67 +893,125 @@ export const Header: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 flex: 1,
+                minWidth: 0,
+                gap: '6px',
                 position: 'relative',
               }}
             >
-              <span
+              {/* Input Wrapper with left magnifying glass & right clear button */}
+              <div
                 style={{
-                  position: 'absolute',
-                  left: '10px',
-                  color: '#64748B',
+                  position: 'relative',
+                  flex: 1,
+                  minWidth: 0,
                   display: 'flex',
                   alignItems: 'center',
-                  pointerEvents: 'none',
                 }}
               >
-                <Search size={15} />
-              </span>
-              <input
-                type="text"
-                autoFocus
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setSelectedIndex(-1);
-                  if (!e.target.value.trim()) {
-                    setIsOpen(false);
-                    setResults([]);
-                    setHasSearched(false);
-                  }
-                }}
-                onKeyDown={handleKeyDown}
-                placeholder="Search fleet, coaches, tanks..."
-                style={{
-                  width: '100%',
-                  height: '38px',
-                  paddingLeft: '32px',
-                  paddingRight: searchQuery ? '32px' : '10px',
-                  backgroundColor: '#F8FAFC',
-                  border: '1px solid #CBD5E1',
-                  borderRadius: '6px',
-                  fontSize: '13px',
-                  color: '#0F172A',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                }}
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={handleClear}
+                <span
                   style={{
                     position: 'absolute',
-                    right: '8px',
-                    border: 'none',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    color: '#94A3B8',
-                    padding: '4px',
+                    left: '10px',
+                    color: '#64748B',
+                    display: 'flex',
+                    alignItems: 'center',
+                    pointerEvents: 'none',
+                    zIndex: 2,
                   }}
                 >
-                  <X size={14} />
-                </button>
-              )}
+                  <Search size={15} />
+                </span>
+                <input
+                  ref={mobileInputRef}
+                  type="search"
+                  enterKeyHint="search"
+                  autoFocus
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setSelectedIndex(-1);
+                    if (!e.target.value.trim()) {
+                      setIsOpen(false);
+                      setResults([]);
+                      setHasSearched(false);
+                    }
+                  }}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Search fleet, coaches, tanks..."
+                  style={{
+                    width: '100%',
+                    height: '38px',
+                    paddingLeft: '32px',
+                    paddingRight: searchQuery ? '30px' : '10px',
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    color: '#0F172A',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                    WebkitAppearance: 'none',
+                  }}
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={handleClear}
+                    aria-label="Clear search input"
+                    style={{
+                      position: 'absolute',
+                      right: '6px',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      color: '#94A3B8',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      zIndex: 2,
+                    }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* Dedicated On-Screen Search / Enter Button */}
+              <button
+                type="submit"
+                data-testid="mobile-search-submit-btn"
+                disabled={isSearching || !searchQuery.trim()}
+                aria-label="Execute search"
+                title={searchQuery.trim() ? 'Search fleet, coaches, tanks' : 'Enter a query to search'}
+                className="touch-target-44"
+                style={{
+                  height: '38px',
+                  minWidth: '40px',
+                  padding: '0 10px',
+                  backgroundColor: !searchQuery.trim() || isSearching ? '#E2E8F0' : '#2563EB',
+                  color: !searchQuery.trim() || isSearching ? '#94A3B8' : '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: !searchQuery.trim() || isSearching ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.15s ease',
+                  flexShrink: 0,
+                  boxShadow: !searchQuery.trim() || isSearching ? 'none' : '0 1px 2px rgba(37, 99, 235, 0.2)',
+                }}
+              >
+                {isSearching ? (
+                  <Loader2 size={16} className="spin" />
+                ) : (
+                  <Search size={16} strokeWidth={2.2} />
+                )}
+              </button>
             </form>
             {renderSearchResultsPanel(true)}
           </div>
