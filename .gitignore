@@ -72,3 +72,5 @@ LIVE_WEBSITE_SCREENSHOTS/
 MOBILE_TEST_SCREENSHOTS/
 apps/mobile/screenshots/
 scripts/test_live_website_chrome.cjs
+
+graphify-out/*.svg

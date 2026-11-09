@@ -1,0 +1,555 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2100 1450" width="100%" height="100%" style="background-color: #090d16; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+
+<defs>
+  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#161f30" stroke-width="1" stroke-opacity="0.6"/>
+  </pattern>
+  
+  <filter id="card-shadow" x="-5%" y="-5%" width="110%" height="115%">
+    <feDropShadow dx="0" dy="6" stdDeviation="5" flood-color="#000000" flood-opacity="0.5"/>
+  </filter>
+
+  <marker id="arrow-emerald" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+    <polygon points="0 0, 8 3, 0 6" fill="#10b981" />
+  </marker>
+  <marker id="arrow-cyan" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+    <polygon points="0 0, 8 3, 0 6" fill="#06b6d4" />
+  </marker>
+  <marker id="arrow-sky" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+    <polygon points="0 0, 8 3, 0 6" fill="#38bdf8" />
+  </marker>
+  <marker id="arrow-purple" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+    <polygon points="0 0, 8 3, 0 6" fill="#a855f7" />
+  </marker>
+  <marker id="arrow-amber" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+    <polygon points="0 0, 8 3, 0 6" fill="#f59e0b" />
+  </marker>
+  <marker id="arrow-pink" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+    <polygon points="0 0, 8 3, 0 6" fill="#ec4899" />
+  </marker>
+</defs>
+
+<rect width="100%" height="100%" fill="#090d16" />
+<rect width="100%" height="100%" fill="url(#grid)" />
+
+
+<g transform="translate(60, 35)">
+  <text x="0" y="32" font-size="28" font-weight="700" fill="#f8fafc" letter-spacing="-0.5px">Panorama Water Tank Monitor — SCADA System Architecture</text>
+  <text x="0" y="58" font-size="14" fill="#94a3b8">Knowledge Graph &amp; Architecture Intelligence · Graphify AST Model · 6,274 Nodes · 10,818 Relational Edges · Commit 70ee9c6b3a4d760c12e25f64104b2ec124a03ae2</text>
+  
+  <g transform="translate(1380, 10)">
+    <rect x="0" y="0" width="100" height="26" rx="4" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <text x="50" y="17" font-size="11" font-weight="600" fill="#38bdf8" text-anchor="middle">React 18 HMI</text>
+    
+    <rect x="110" y="0" width="100" height="26" rx="4" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <text x="160" y="17" font-size="11" font-weight="600" fill="#10b981" text-anchor="middle">FastAPI Core</text>
+
+    <rect x="220" y="0" width="100" height="26" rx="4" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <text x="270" y="17" font-size="11" font-weight="600" fill="#06b6d4" text-anchor="middle">MQTT / 4G LTE</text>
+
+    <rect x="330" y="0" width="105" height="26" rx="4" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <text x="382" y="17" font-size="11" font-weight="600" fill="#a855f7" text-anchor="middle">SQLite WAL DB</text>
+
+    <rect x="445" y="0" width="100" height="26" rx="4" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <text x="495" y="17" font-size="11" font-weight="600" fill="#ec4899" text-anchor="middle">Electron 30</text>
+  </g>
+  <line x1="0" y1="78" x2="1980" y2="78" stroke="#1e293b" stroke-width="1.5" />
+</g>
+
+
+<g id="layer_1">
+  <rect x="60" y="130" width="600" height="395" rx="10" fill="rgba(16, 185, 129, 0.06)" stroke="#059669" stroke-width="1.5" stroke-dasharray="6,4" />
+  <rect x="60" y="130" width="600" height="34" rx="10" fill="#059669" fill-opacity="0.25" />
+  <circle cx="85" cy="147" r="6" fill="#10b981" />
+  <text x="100" y="152" font-size="13" font-weight="700" fill="#10b981" letter-spacing="0.5px">1. SENSOR TRANSDUCER & EMBEDDED FIRMWARE LAYER</text>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="80" y="180" width="560" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="80" y="180" width="4" height="95" rx="2" fill="#10b981" />
+    <text x="98" y="204" font-size="15" font-weight="600" fill="#f3f4f6">4-20mA Hydrostatic Sensor</text>
+    <rect x="480" y="190" width="145" height="20" rx="4" fill="#10b981" fill-opacity="0.15" stroke="#10b981" stroke-opacity="0.3" stroke-width="1" />
+    <text x="553" y="204" font-size="10" font-weight="600" fill="#10b981" text-anchor="middle">Transducer Hardware</text>
+    <text x="98" y="228" font-size="12" fill="#9ca3af">Hydrostatic pressure probe submerged in coach water tank. Measures 0-200cm water...</text>
+    <text x="98" y="256" font-size="11" font-family="monospace" fill="#64748b">📁 docs/hardware/HARDWARE_OVERVIEW.md</text>
+    <rect x="535" y="243" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="580" y="256" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">8 AST nodes</text>
+  </g>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="80" y="292" width="560" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="80" y="292" width="4" height="95" rx="2" fill="#10b981" />
+    <text x="98" y="316" font-size="15" font-weight="600" fill="#f3f4f6">ESP32-S3 Microcontroller & FreeRTOS</text>
+    <rect x="480" y="302" width="145" height="20" rx="4" fill="#10b981" fill-opacity="0.15" stroke="#10b981" stroke-opacity="0.3" stroke-width="1" />
+    <text x="553" y="316" font-size="10" font-weight="600" fill="#10b981" text-anchor="middle">Firmware Core</text>
+    <text x="98" y="340" font-size="12" fill="#9ca3af">Dual-core Xtensa LX7 MCU running FreeRTOS tasks: ADC differential sampling, movi...</text>
+    <text x="98" y="368" font-size="11" font-family="monospace" fill="#64748b">📁 src/main.cpp</text>
+    <rect x="535" y="355" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="580" y="368" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">56 AST nodes</text>
+  </g>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="80" y="404" width="560" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="80" y="404" width="4" height="95" rx="2" fill="#10b981" />
+    <text x="98" y="428" font-size="15" font-weight="600" fill="#f3f4f6">Quectel EC200U 4G LTE Modem</text>
+    <rect x="480" y="414" width="145" height="20" rx="4" fill="#10b981" fill-opacity="0.15" stroke="#10b981" stroke-opacity="0.3" stroke-width="1" />
+    <text x="553" y="428" font-size="10" font-weight="600" fill="#10b981" text-anchor="middle">Cellular Uplink</text>
+    <text x="98" y="452" font-size="12" fill="#9ca3af">Cellular IoT module executing UART AT commands (AT+QMTPUB) with auto-reconnectio...</text>
+    <text x="98" y="480" font-size="11" font-family="monospace" fill="#64748b">📁 src/telemetry/MqttService.cpp</text>
+    <rect x="535" y="467" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="580" y="480" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">32 AST nodes</text>
+  </g>
+
+</g>
+
+<g id="layer_2">
+  <rect x="60" y="550" width="600" height="395" rx="10" fill="rgba(6, 182, 212, 0.06)" stroke="#0891b2" stroke-width="1.5" stroke-dasharray="6,4" />
+  <rect x="60" y="550" width="600" height="34" rx="10" fill="#0891b2" fill-opacity="0.25" />
+  <circle cx="85" cy="567" r="6" fill="#06b6d4" />
+  <text x="100" y="572" font-size="13" font-weight="700" fill="#06b6d4" letter-spacing="0.5px">2. INDUSTRIAL REAL-TIME COMMUNICATION & INGESTION LAYER</text>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="80" y="600" width="560" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="80" y="600" width="4" height="95" rx="2" fill="#06b6d4" />
+    <text x="98" y="624" font-size="15" font-weight="600" fill="#f3f4f6">Industrial MQTT Message Broker</text>
+    <rect x="480" y="610" width="145" height="20" rx="4" fill="#06b6d4" fill-opacity="0.15" stroke="#06b6d4" stroke-opacity="0.3" stroke-width="1" />
+    <text x="553" y="624" font-size="10" font-weight="600" fill="#06b6d4" text-anchor="middle">EMQX / Mosquitto</text>
+    <text x="98" y="648" font-size="12" fill="#9ca3af">Standard MQTT broker handling telemetry ingest on 'panorama/{train_id}/telemetry...</text>
+    <text x="98" y="676" font-size="11" font-family="monospace" fill="#64748b">📁 docs/architecture/MQTT_ARCHITECTURE.md</text>
+    <rect x="535" y="663" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="580" y="676" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">48 AST nodes</text>
+  </g>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="80" y="712" width="560" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="80" y="712" width="4" height="95" rx="2" fill="#06b6d4" />
+    <text x="98" y="736" font-size="15" font-weight="600" fill="#f3f4f6">Backend MQTT Telemetry Ingestion Worker</text>
+    <rect x="480" y="722" width="145" height="20" rx="4" fill="#06b6d4" fill-opacity="0.15" stroke="#06b6d4" stroke-opacity="0.3" stroke-width="1" />
+    <text x="553" y="736" font-size="10" font-weight="600" fill="#06b6d4" text-anchor="middle">asyncio Daemon</text>
+    <text x="98" y="760" font-size="12" fill="#9ca3af">Asynchronous Paho client subscribing to raw telemetry, validating payload schema...</text>
+    <text x="98" y="788" font-size="11" font-family="monospace" fill="#64748b">📁 backend/app/mqtt/client.py</text>
+    <rect x="535" y="775" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="580" y="788" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">27 AST nodes</text>
+  </g>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="80" y="824" width="560" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="80" y="824" width="4" height="95" rx="2" fill="#06b6d4" />
+    <text x="98" y="848" font-size="15" font-weight="600" fill="#f3f4f6">WebSocket Real-Time Broadcast Service</text>
+    <rect x="480" y="834" width="145" height="20" rx="4" fill="#06b6d4" fill-opacity="0.15" stroke="#06b6d4" stroke-opacity="0.3" stroke-width="1" />
+    <text x="553" y="848" font-size="10" font-weight="600" fill="#06b6d4" text-anchor="middle">FastAPI WS Gateway</text>
+    <text x="98" y="872" font-size="12" fill="#9ca3af">Maintains low-latency full-duplex socket connections (/ws/telemetry) to active S...</text>
+    <text x="98" y="900" font-size="11" font-family="monospace" fill="#64748b">📁 backend/app/api/v1/websocket.py</text>
+    <rect x="535" y="887" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="580" y="900" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">19 AST nodes</text>
+  </g>
+
+</g>
+
+<g id="layer_3">
+  <rect x="740" y="130" width="620" height="505" rx="10" fill="rgba(56, 189, 248, 0.06)" stroke="#0284c7" stroke-width="1.5" />
+  <rect x="740" y="130" width="620" height="34" rx="10" fill="#0284c7" fill-opacity="0.25" />
+  <circle cx="765" cy="147" r="6" fill="#38bdf8" />
+  <text x="780" y="152" font-size="13" font-weight="700" fill="#38bdf8" letter-spacing="0.5px">3. BACKEND APPLICATION & MICRO-SERVICES LAYER</text>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="760" y="180" width="580" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="760" y="180" width="4" height="95" rx="2" fill="#38bdf8" />
+    <text x="778" y="204" font-size="15" font-weight="600" fill="#f3f4f6">FastAPI SCADA Application Core</text>
+    <rect x="1180" y="190" width="145" height="20" rx="4" fill="#38bdf8" fill-opacity="0.15" stroke="#38bdf8" stroke-opacity="0.3" stroke-width="1" />
+    <text x="1253" y="204" font-size="10" font-weight="600" fill="#38bdf8" text-anchor="middle">Asynchronous Core</text>
+    <text x="778" y="228" font-size="12" fill="#9ca3af">Python 3.12 ASGI engine providing path traversal sanitization, regex CORS origin prot...</text>
+    <text x="778" y="256" font-size="11" font-family="monospace" fill="#64748b">📁 backend/app/main.py</text>
+    <rect x="1235" y="243" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="1280" y="256" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">78 AST nodes</text>
+  </g>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="760" y="292" width="580" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="760" y="292" width="4" height="95" rx="2" fill="#38bdf8" />
+    <text x="778" y="316" font-size="15" font-weight="600" fill="#f3f4f6">Authentication & RBAC Security Router</text>
+    <rect x="1180" y="302" width="145" height="20" rx="4" fill="#38bdf8" fill-opacity="0.15" stroke="#38bdf8" stroke-opacity="0.3" stroke-width="1" />
+    <text x="1253" y="316" font-size="10" font-weight="600" fill="#38bdf8" text-anchor="middle">OAuth2 / JWT</text>
+    <text x="778" y="340" font-size="12" fill="#9ca3af">Role-Based Access Control (Admin, Engineer, Operator). Enforces password hashing (bcr...</text>
+    <text x="778" y="368" font-size="11" font-family="monospace" fill="#64748b">📁 backend/app/api/v1/auth.py</text>
+    <rect x="1235" y="355" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="1280" y="368" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">95 AST nodes</text>
+  </g>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="760" y="404" width="580" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="760" y="404" width="4" height="95" rx="2" fill="#38bdf8" />
+    <text x="778" y="428" font-size="15" font-weight="600" fill="#f3f4f6">Train, Coach & Tank Fleet Management</text>
+    <rect x="1180" y="414" width="145" height="20" rx="4" fill="#38bdf8" fill-opacity="0.15" stroke="#38bdf8" stroke-opacity="0.3" stroke-width="1" />
+    <text x="1253" y="428" font-size="10" font-weight="600" fill="#38bdf8" text-anchor="middle">Consist Service</text>
+    <text x="778" y="452" font-size="12" fill="#9ca3af">SCADA consist management for 24-coach / 48-tank train configurations, coach mapping, ...</text>
+    <text x="778" y="480" font-size="11" font-family="monospace" fill="#64748b">📁 backend/app/api/v1/trains.py</text>
+    <rect x="1235" y="467" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="1280" y="480" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">105 AST nodes</text>
+  </g>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="760" y="516" width="580" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="760" y="516" width="4" height="95" rx="2" fill="#38bdf8" />
+    <text x="778" y="540" font-size="15" font-weight="600" fill="#f3f4f6">Telemetry Evaluation & Alarm Engine</text>
+    <rect x="1180" y="526" width="145" height="20" rx="4" fill="#38bdf8" fill-opacity="0.15" stroke="#38bdf8" stroke-opacity="0.3" stroke-width="1" />
+    <text x="1253" y="540" font-size="10" font-weight="600" fill="#38bdf8" text-anchor="middle">Supervisory Alarms</text>
+    <text x="778" y="564" font-size="12" fill="#9ca3af">Real-time 4-state level classification (Critically Low, Low, Normal, Full) and alarm ...</text>
+    <text x="778" y="592" font-size="11" font-family="monospace" fill="#64748b">📁 backend/app/api/v1/telemetry.py</text>
+    <rect x="1235" y="579" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="1280" y="592" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">84 AST nodes</text>
+  </g>
+
+</g>
+
+<g id="layer_4">
+  <rect x="740" y="660" width="620" height="395" rx="10" fill="rgba(168, 85, 247, 0.06)" stroke="#7e22ce" stroke-width="1.5" />
+  <rect x="740" y="660" width="620" height="34" rx="10" fill="#7e22ce" fill-opacity="0.25" />
+  <circle cx="765" cy="677" r="6" fill="#a855f7" />
+  <text x="780" y="682" font-size="13" font-weight="700" fill="#a855f7" letter-spacing="0.5px">4. DATA PERSISTENCE & REPOSITORY LAYER</text>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="760" y="710" width="580" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="760" y="710" width="4" height="95" rx="2" fill="#a855f7" />
+    <text x="778" y="734" font-size="15" font-weight="600" fill="#f3f4f6">Database Engine (SQLite WAL / PostgreSQL)</text>
+    <rect x="1180" y="720" width="145" height="20" rx="4" fill="#a855f7" fill-opacity="0.15" stroke="#a855f7" stroke-opacity="0.3" stroke-width="1" />
+    <text x="1253" y="734" font-size="10" font-weight="600" fill="#a855f7" text-anchor="middle">Async SQLAlchemy 2.0</text>
+    <text x="778" y="758" font-size="12" fill="#9ca3af">Async connection pool with Write-Ahead Logging (WAL) mode for 500+ writes/sec concurr...</text>
+    <text x="778" y="786" font-size="11" font-family="monospace" fill="#64748b">📁 backend/app/database.py</text>
+    <rect x="1235" y="773" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="1280" y="786" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">34 AST nodes</text>
+  </g>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="760" y="822" width="580" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="760" y="822" width="4" height="95" rx="2" fill="#a855f7" />
+    <text x="778" y="846" font-size="15" font-weight="600" fill="#f3f4f6">Clean Data Repositories</text>
+    <rect x="1180" y="832" width="145" height="20" rx="4" fill="#a855f7" fill-opacity="0.15" stroke="#a855f7" stroke-opacity="0.3" stroke-width="1" />
+    <text x="1253" y="846" font-size="10" font-weight="600" fill="#a855f7" text-anchor="middle">Repository Pattern</text>
+    <text x="778" y="870" font-size="12" fill="#9ca3af">Abstracted queries for tank states, historical aggregations, time-bucket downsampling...</text>
+    <text x="778" y="898" font-size="11" font-family="monospace" fill="#64748b">📁 backend/app/repositories/tank_repo.py</text>
+    <rect x="1235" y="885" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="1280" y="898" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">91 AST nodes</text>
+  </g>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="760" y="934" width="580" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="760" y="934" width="4" height="95" rx="2" fill="#a855f7" />
+    <text x="778" y="958" font-size="15" font-weight="600" fill="#f3f4f6">Relational Data Models & Schemas</text>
+    <rect x="1180" y="944" width="145" height="20" rx="4" fill="#a855f7" fill-opacity="0.15" stroke="#a855f7" stroke-opacity="0.3" stroke-width="1" />
+    <text x="1253" y="958" font-size="10" font-weight="600" fill="#a855f7" text-anchor="middle">Pydantic v2 & ORM</text>
+    <text x="778" y="982" font-size="12" fill="#9ca3af">Entities: Train, Coach, Tank, DeviceMapping, TelemetryRecord, AlarmEvent, AuditLog, a...</text>
+    <text x="778" y="1010" font-size="11" font-family="monospace" fill="#64748b">📁 backend/app/models/*.py</text>
+    <rect x="1235" y="997" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="1280" y="1010" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">96 AST nodes</text>
+  </g>
+
+</g>
+
+<g id="layer_5">
+  <rect x="1420" y="130" width="620" height="505" rx="10" fill="rgba(245, 158, 11, 0.06)" stroke="#d97706" stroke-width="1.5" />
+  <rect x="1420" y="130" width="620" height="34" rx="10" fill="#d97706" fill-opacity="0.25" />
+  <circle cx="1445" cy="147" r="6" fill="#f59e0b" />
+  <text x="1460" y="152" font-size="13" font-weight="700" fill="#f59e0b" letter-spacing="0.5px">5. OPERATOR SCADA HMI LAYER (REACT 18 / REACT NATIVE WEB)</text>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="1440" y="180" width="580" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="1440" y="180" width="4" height="95" rx="2" fill="#f59e0b" />
+    <text x="1458" y="204" font-size="15" font-weight="600" fill="#f3f4f6">SCADA State & Context Engine</text>
+    <rect x="1860" y="190" width="145" height="20" rx="4" fill="#f59e0b" fill-opacity="0.15" stroke="#f59e0b" stroke-opacity="0.3" stroke-width="1" />
+    <text x="1933" y="204" font-size="10" font-weight="600" fill="#f59e0b" text-anchor="middle">State Management</text>
+    <text x="1458" y="228" font-size="12" fill="#9ca3af">Global telemetry state store, active train context, dynamic device status engine, and...</text>
+    <text x="1458" y="256" font-size="11" font-family="monospace" fill="#64748b">📁 apps/mobile/src/context/AppContext.tsx</text>
+    <rect x="1915" y="243" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="1960" y="256" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">48 AST nodes</text>
+  </g>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="1440" y="292" width="580" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="1440" y="292" width="4" height="95" rx="2" fill="#f59e0b" />
+    <text x="1458" y="316" font-size="15" font-weight="600" fill="#f3f4f6">Hybrid REST & WSS Communication Service</text>
+    <rect x="1860" y="302" width="145" height="20" rx="4" fill="#f59e0b" fill-opacity="0.15" stroke="#f59e0b" stroke-opacity="0.3" stroke-width="1" />
+    <text x="1933" y="316" font-size="10" font-weight="600" fill="#f59e0b" text-anchor="middle">Network Clients</text>
+    <text x="1458" y="340" font-size="12" fill="#9ca3af">Dual-channel transport: JWT-authenticated REST client for CRUD + direct WebSocket MQT...</text>
+    <text x="1458" y="368" font-size="11" font-family="monospace" fill="#64748b">📁 apps/mobile/src/api/client.ts</text>
+    <rect x="1915" y="355" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="1960" y="368" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">62 AST nodes</text>
+  </g>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="1440" y="404" width="580" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="1440" y="404" width="4" height="95" rx="2" fill="#f59e0b" />
+    <text x="1458" y="428" font-size="15" font-weight="600" fill="#f3f4f6">Responsive SCADA Views & Dashboards</text>
+    <rect x="1860" y="414" width="145" height="20" rx="4" fill="#f59e0b" fill-opacity="0.15" stroke="#f59e0b" stroke-opacity="0.3" stroke-width="1" />
+    <text x="1933" y="428" font-size="10" font-weight="600" fill="#f59e0b" text-anchor="middle">UI Screens</text>
+    <text x="1458" y="452" font-size="12" fill="#9ca3af">Employee Dashboard, Train Consist Manager, Water Tank Grid, Live Tank Diagnostics, Al...</text>
+    <text x="1458" y="480" font-size="11" font-family="monospace" fill="#64748b">📁 apps/mobile/src/screens/*.tsx</text>
+    <rect x="1915" y="467" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="1960" y="480" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">114 AST nodes</text>
+  </g>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="1440" y="516" width="580" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="1440" y="516" width="4" height="95" rx="2" fill="#f59e0b" />
+    <text x="1458" y="540" font-size="15" font-weight="600" fill="#f3f4f6">Adaptive Layout & Navigation Shell</text>
+    <rect x="1860" y="526" width="145" height="20" rx="4" fill="#f59e0b" fill-opacity="0.15" stroke="#f59e0b" stroke-opacity="0.3" stroke-width="1" />
+    <text x="1933" y="540" font-size="10" font-weight="600" fill="#f59e0b" text-anchor="middle">Fluid UI Shell</text>
+    <text x="1458" y="564" font-size="12" fill="#9ca3af">Unified interface adapting seamlessly across 1920x1080 supervisory desktop displays a...</text>
+    <text x="1458" y="592" font-size="11" font-family="monospace" fill="#64748b">📁 apps/mobile/src/components/AppLayout.tsx</text>
+    <rect x="1915" y="579" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="1960" y="592" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">59 AST nodes</text>
+  </g>
+
+</g>
+
+<g id="layer_6">
+  <rect x="1420" y="660" width="620" height="280" rx="10" fill="rgba(236, 72, 153, 0.06)" stroke="#db2777" stroke-width="1.5" />
+  <rect x="1420" y="660" width="620" height="34" rx="10" fill="#db2777" fill-opacity="0.25" />
+  <circle cx="1445" cy="677" r="6" fill="#ec4899" />
+  <text x="1460" y="682" font-size="13" font-weight="700" fill="#ec4899" letter-spacing="0.5px">6. DESKTOP SUPERVISOR CONTAINER (ELECTRON 30)</text>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="1440" y="710" width="580" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="1440" y="710" width="4" height="95" rx="2" fill="#ec4899" />
+    <text x="1458" y="734" font-size="15" font-weight="600" fill="#f3f4f6">Electron Desktop Process Supervisor</text>
+    <rect x="1860" y="720" width="145" height="20" rx="4" fill="#ec4899" fill-opacity="0.15" stroke="#ec4899" stroke-opacity="0.3" stroke-width="1" />
+    <text x="1933" y="734" font-size="10" font-weight="600" fill="#ec4899" text-anchor="middle">Native Shell</text>
+    <text x="1458" y="758" font-size="12" fill="#9ca3af">Chromium 124 container managing native window state, hardware acceleration, and spawn...</text>
+    <text x="1458" y="786" font-size="11" font-family="monospace" fill="#64748b">📁 apps/mobile/electron/main.cjs</text>
+    <rect x="1915" y="773" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="1960" y="786" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">26 AST nodes</text>
+  </g>
+
+
+  <g filter="url(#card-shadow)">
+    <rect x="1440" y="822" width="580" height="95" rx="8" fill="#111827" stroke="#1f2937" stroke-width="1.2" />
+    <rect x="1440" y="822" width="4" height="95" rx="2" fill="#ec4899" />
+    <text x="1458" y="846" font-size="15" font-weight="600" fill="#f3f4f6">Sandboxed Secure IPC Bridge</text>
+    <rect x="1860" y="832" width="145" height="20" rx="4" fill="#ec4899" fill-opacity="0.15" stroke="#ec4899" stroke-opacity="0.3" stroke-width="1" />
+    <text x="1933" y="846" font-size="10" font-weight="600" fill="#ec4899" text-anchor="middle">Context Isolation</text>
+    <text x="1458" y="870" font-size="12" fill="#9ca3af">Context-isolated IPC bridge exposing safe desktop OS hooks (system info, app quit, th...</text>
+    <text x="1458" y="898" font-size="11" font-family="monospace" fill="#64748b">📁 apps/mobile/electron/preload.cjs</text>
+    <rect x="1915" y="885" width="90" height="18" rx="3" fill="#1e293b" />
+    <text x="1960" y="898" font-size="10" font-family="monospace" fill="#38bdf8" text-anchor="middle">12 AST nodes</text>
+  </g>
+
+</g>
+<g id="connectors">
+
+  <path d="M 360.0 275 L 360.0 292" fill="none" stroke="#10b981" stroke-width="2" stroke-dasharray="none" marker-end="url(#arrow-emerald)" opacity="0.85" />
+  
+  <g transform="translate(360, 283)">
+    <rect x="-65" y="-10" width="130" height="20" rx="10" fill="#0b1120" stroke="#10b981" stroke-width="1" />
+    <text x="0" y="4" font-size="10" font-weight="600" fill="#10b981" text-anchor="middle">4-20mA Current Loop</text>
+  </g>
+
+
+  <path d="M 360.0 387 L 360.0 404" fill="none" stroke="#10b981" stroke-width="2" stroke-dasharray="none" marker-end="url(#arrow-emerald)" opacity="0.85" />
+  
+  <g transform="translate(360, 395)">
+    <rect x="-65" y="-10" width="130" height="20" rx="10" fill="#0b1120" stroke="#10b981" stroke-width="1" />
+    <text x="0" y="4" font-size="10" font-weight="600" fill="#10b981" text-anchor="middle">UART AT+QMTPUB</text>
+  </g>
+
+
+  <path d="M 360.0 499 L 360.0 600" fill="none" stroke="#06b6d4" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#arrow-cyan)" opacity="0.85" />
+  
+  <g transform="translate(360, 560)">
+    <rect x="-65" y="-10" width="130" height="20" rx="10" fill="#0b1120" stroke="#06b6d4" stroke-width="1" />
+    <text x="0" y="4" font-size="10" font-weight="600" fill="#06b6d4" text-anchor="middle">4G LTE MQTT (1883)</text>
+  </g>
+
+
+  <path d="M 640 647.5 C 640 703.5, 80 703.5, 80 759.5" fill="none" stroke="#06b6d4" stroke-width="2" stroke-dasharray="none" marker-end="url(#arrow-cyan)" opacity="0.85" />
+  
+  <g transform="translate(690, 645)">
+    <rect x="-65" y="-10" width="130" height="20" rx="10" fill="#0b1120" stroke="#06b6d4" stroke-width="1" />
+    <text x="0" y="4" font-size="10" font-weight="600" fill="#06b6d4" text-anchor="middle">panorama/+/telemetry</text>
+  </g>
+
+
+  <path d="M 640 695 C 720 785, 1360 477, 1440 387" fill="none" stroke="#06b6d4" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#arrow-cyan)" opacity="0.85" />
+  
+  <g transform="translate(1040, 760)">
+    <rect x="-65" y="-10" width="130" height="20" rx="10" fill="#0b1120" stroke="#06b6d4" stroke-width="1" />
+    <text x="0" y="4" font-size="10" font-weight="600" fill="#06b6d4" text-anchor="middle">WSS Bridge (Port 8083)</text>
+  </g>
+
+
+  <path d="M 1050.0 275 L 1050.0 292" fill="none" stroke="#38bdf8" stroke-width="2" stroke-dasharray="none" marker-end="url(#arrow-sky)" opacity="0.85" />
+  
+  <g transform="translate(1050, 283)">
+    <rect x="-65" y="-10" width="130" height="20" rx="10" fill="#0b1120" stroke="#38bdf8" stroke-width="1" />
+    <text x="0" y="4" font-size="10" font-weight="600" fill="#38bdf8" text-anchor="middle">RBAC Verification</text>
+  </g>
+
+
+  <path d="M 1340 227.5 C 1375 227.5, 1375 451.5, 1340 451.5" fill="none" stroke="#38bdf8" stroke-width="2" stroke-dasharray="none" marker-end="url(#arrow-sky)" opacity="0.85" />
+  
+  <g transform="translate(1365, 350)">
+    <rect x="-65" y="-10" width="130" height="20" rx="10" fill="#0b1120" stroke="#38bdf8" stroke-width="1" />
+    <text x="0" y="4" font-size="10" font-weight="600" fill="#38bdf8" text-anchor="middle">Fleet Dispatch</text>
+  </g>
+
+
+  <path d="M 360.0 807 C 360.0 661.5, 1050.0 661.5, 1050.0 516" fill="none" stroke="#38bdf8" stroke-width="2" stroke-dasharray="none" marker-end="url(#arrow-sky)" opacity="0.85" />
+  
+  <g transform="translate(1050, 475)">
+    <rect x="-65" y="-10" width="130" height="20" rx="10" fill="#0b1120" stroke="#38bdf8" stroke-width="1" />
+    <text x="0" y="4" font-size="10" font-weight="600" fill="#38bdf8" text-anchor="middle">Ingest Telemetry</text>
+  </g>
+
+
+  <path d="M 1050.0 611 L 1050.0 822" fill="none" stroke="#a855f7" stroke-width="2" stroke-dasharray="none" marker-end="url(#arrow-purple)" opacity="0.85" />
+  
+  <g transform="translate(1050, 675)">
+    <rect x="-65" y="-10" width="130" height="20" rx="10" fill="#0b1120" stroke="#a855f7" stroke-width="1" />
+    <text x="0" y="4" font-size="10" font-weight="600" fill="#a855f7" text-anchor="middle">Save Records</text>
+  </g>
+
+
+  <path d="M 1050.0 917 L 1050.0 710" fill="none" stroke="#a855f7" stroke-width="2" stroke-dasharray="none" marker-end="url(#arrow-purple)" opacity="0.85" />
+  
+  <g transform="translate(1050, 795)">
+    <rect x="-65" y="-10" width="130" height="20" rx="10" fill="#0b1120" stroke="#a855f7" stroke-width="1" />
+    <text x="0" y="4" font-size="10" font-weight="600" fill="#a855f7" text-anchor="middle">Async WAL Transactions</text>
+  </g>
+
+
+  <path d="M 1440 339.5 C 1440 283.5, 1340 283.5, 1340 227.5" fill="none" stroke="#38bdf8" stroke-width="2" stroke-dasharray="none" marker-end="url(#arrow-sky)" opacity="0.85" />
+  
+  <g transform="translate(1390, 230)">
+    <rect x="-65" y="-10" width="130" height="20" rx="10" fill="#0b1120" stroke="#38bdf8" stroke-width="1" />
+    <text x="0" y="4" font-size="10" font-weight="600" fill="#38bdf8" text-anchor="middle">REST /api/v1 (JWT)</text>
+  </g>
+
+
+  <path d="M 1730.0 292 L 1730.0 275" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="none" marker-end="url(#arrow-amber)" opacity="0.85" />
+  
+  <g transform="translate(1730, 283)">
+    <rect x="-65" y="-10" width="130" height="20" rx="10" fill="#0b1120" stroke="#f59e0b" stroke-width="1" />
+    <text x="0" y="4" font-size="10" font-weight="600" fill="#f59e0b" text-anchor="middle">Live Stream</text>
+  </g>
+
+
+  <path d="M 2020 227.5 C 2055 227.5, 2055 451.5, 2020 451.5" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="none" marker-end="url(#arrow-amber)" opacity="0.85" />
+  
+  <g transform="translate(2045, 350)">
+    <rect x="-65" y="-10" width="130" height="20" rx="10" fill="#0b1120" stroke="#f59e0b" stroke-width="1" />
+    <text x="0" y="4" font-size="10" font-weight="600" fill="#f59e0b" text-anchor="middle">State Dispatch</text>
+  </g>
+
+
+  <path d="M 1730.0 516 L 1730.0 499" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="none" marker-end="url(#arrow-amber)" opacity="0.85" />
+  
+  <g transform="translate(1730, 505)">
+    <rect x="-65" y="-10" width="130" height="20" rx="10" fill="#0b1120" stroke="#f59e0b" stroke-width="1" />
+    <text x="0" y="4" font-size="10" font-weight="600" fill="#f59e0b" text-anchor="middle">Adaptive Shell</text>
+  </g>
+
+
+  <path d="M 1440 757.5 C 1400 757.5, 1380 275, 1340 275" fill="none" stroke="#ec4899" stroke-width="2" stroke-dasharray="none" marker-end="url(#arrow-pink)" opacity="0.85" />
+  
+  <g transform="translate(1390, 580)">
+    <rect x="-65" y="-10" width="130" height="20" rx="10" fill="#0b1120" stroke="#ec4899" stroke-width="1" />
+    <text x="0" y="4" font-size="10" font-weight="600" fill="#ec4899" text-anchor="middle">Spawn Python Daemon</text>
+  </g>
+
+
+  <path d="M 1730.0 805 L 1730.0 822" fill="none" stroke="#ec4899" stroke-width="2" stroke-dasharray="none" marker-end="url(#arrow-pink)" opacity="0.85" />
+  
+  <g transform="translate(1730, 815)">
+    <rect x="-65" y="-10" width="130" height="20" rx="10" fill="#0b1120" stroke="#ec4899" stroke-width="1" />
+    <text x="0" y="4" font-size="10" font-weight="600" fill="#ec4899" text-anchor="middle">Context Bridge</text>
+  </g>
+
+</g>
+
+<g id="system_metrics_legend" transform="translate(60, 1070)">
+  <rect x="0" y="0" width="1980" height="330" rx="12" fill="#0f172a" stroke="#1e293b" stroke-width="1.5" />
+  
+  <text x="25" y="32" font-size="16" font-weight="700" fill="#f8fafc">System Communication Matrix &amp; Telemetry Pipeline Protocols</text>
+  <line x1="25" y1="46" x2="1955" y2="46" stroke="#1e293b" stroke-width="1" />
+  
+  <g transform="translate(25, 68)">
+    <text x="0" y="0" font-size="13" font-weight="700" fill="#10b981">1. Field Hydrostatic Telemetry Pipeline</text>
+    <text x="0" y="24" font-size="12" fill="#94a3b8">• 4-20mA pressure transducer samples hydrostatic liquid column every 1.0s</text>
+    <text x="0" y="44" font-size="12" fill="#94a3b8">• FreeRTOS moving-average filter suppresses sloshing &amp; mechanical vibration</text>
+    <text x="0" y="64" font-size="12" fill="#94a3b8">• Quectel EC200U transmits MQTT payload via cellular 4G LTE AT+QMTPUB</text>
+    <text x="0" y="84" font-size="12" fill="#94a3b8">• Topic namespace: <tspan font-family="monospace" fill="#38bdf8">panorama/&#123;train_id&#125;/telemetry</tspan> with QoS 1 persistence</text>
+    <text x="0" y="104" font-size="12" fill="#94a3b8">• 48Ah LiFePO4 battery budget supports up to 6 months unpowered transit</text>
+  </g>
+
+  <g transform="translate(680, 68)">
+    <text x="0" y="0" font-size="13" font-weight="700" fill="#38bdf8">2. Backend Ingestion &amp; 4-State Analysis</text>
+    <text x="0" y="24" font-size="12" fill="#94a3b8">• Async MQTT daemon ingests messages and validates schema against Pydantic v2</text>
+    <text x="0" y="44" font-size="12" fill="#94a3b8">• Automated 60-second telemetry timeout engine updates online/offline state</text>
+    <text x="0" y="64" font-size="12" fill="#94a3b8">• 4-State Level Engine evaluates Critically Low (&lt;10%), Low, Normal &amp; Full</text>
+    <text x="0" y="84" font-size="12" fill="#94a3b8">• SQLite WAL connection pool handles concurrent writes without thread lock</text>
+    <text x="0" y="104" font-size="12" fill="#94a3b8">• FastAPI REST endpoints expose JWT-secured train, coach and tank fleet data</text>
+  </g>
+
+  <g transform="translate(1360, 68)">
+    <text x="0" y="0" font-size="13" font-weight="700" fill="#f59e0b">3. SCADA Supervisory Presentation</text>
+    <text x="0" y="24" font-size="12" fill="#94a3b8">• Direct WebSocket MQTT client streams real-time telemetry into React Context</text>
+    <text x="0" y="44" font-size="12" fill="#94a3b8">• Pure status service (<tspan font-family="monospace" fill="#a855f7">tankStatusService.ts</tspan>) computes online tank counters</text>
+    <text x="0" y="64" font-size="12" fill="#94a3b8">• Responsive UI token system adapts fluidly to mobile (390px) and desktop (1080p)</text>
+    <text x="0" y="84" font-size="12" fill="#94a3b8">• Electron 30 runtime isolates renderer and supervises local Python daemon</text>
+    <text x="0" y="104" font-size="12" fill="#94a3b8">• Static HTML/JS deployable to edge CDN (GitHub Pages) with remote WSS</text>
+  </g>
+
+  <g transform="translate(25, 215)">
+    <rect x="0" y="0" width="1930" height="85" rx="8" fill="#131e36" stroke="#253556" stroke-width="1" />
+    <g transform="translate(40, 25)">
+      <text x="0" y="20" font-size="24" font-weight="700" fill="#38bdf8">6,274</text>
+      <text x="0" y="42" font-size="11" fill="#94a3b8">Graphify AST Nodes</text>
+    </g>
+    <g transform="translate(280, 25)">
+      <text x="0" y="20" font-size="24" font-weight="700" fill="#10b981">10,818</text>
+      <text x="0" y="42" font-size="11" fill="#94a3b8">Relational Edges</text>
+    </g>
+    <g transform="translate(520, 25)">
+      <text x="0" y="20" font-size="24" font-weight="700" fill="#06b6d4">450</text>
+      <text x="0" y="42" font-size="11" fill="#94a3b8">Extracted Communities</text>
+    </g>
+    <g transform="translate(760, 25)">
+      <text x="0" y="20" font-size="24" font-weight="700" fill="#a855f7">58 / 58</text>
+      <text x="0" y="42" font-size="11" fill="#94a3b8">Pytest Tests Passing</text>
+    </g>
+    <g transform="translate(1000, 25)">
+      <text x="0" y="20" font-size="24" font-weight="700" fill="#f59e0b">24 / 48</text>
+      <text x="0" y="42" font-size="11" fill="#94a3b8">Coaches / Tanks Fleet</text>
+    </g>
+    <g transform="translate(1240, 25)">
+      <text x="0" y="20" font-size="24" font-weight="700" fill="#ec4899">0 Cycles</text>
+      <text x="0" y="42" font-size="11" fill="#94a3b8">Import Cleanliness</text>
+    </g>
+    <g transform="translate(1480, 25)">
+      <text x="0" y="20" font-size="24" font-weight="700" fill="#f8fafc">60s</text>
+      <text x="0" y="42" font-size="11" fill="#94a3b8">Watchdog Timeout</text>
+    </g>
+    <g transform="translate(1680, 25)">
+      <text x="0" y="20" font-size="24" font-weight="700" fill="#10b981">Apache 2.0</text>
+      <text x="0" y="42" font-size="11" fill="#94a3b8">Open Source License</text>
+    </g>
+  </g>
+</g>
+
+</svg>

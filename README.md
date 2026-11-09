@@ -143,6 +143,31 @@ The system organizes rolling stock assets according to operational railway hiera
 
 ## 5. Architectural Topology
 
+### System Architecture – Graphify Visualization
+
+The project architecture has been systematically extracted and modeled using **Graphify**, generating a persistent knowledge graph of **6,274 nodes and 10,818 relational edges** directly from AST and dependency extraction across 450 communities.
+
+[![Panorama Water Tank Monitor — Graphify System Architecture](docs/architecture/graphify-architecture.png)](docs/architecture/graphify-architecture.svg)  
+*Figure: SCADA System Architecture generated via Graphify knowledge graph extraction. Click the image to view the full-resolution vector [SVG format](docs/architecture/graphify-architecture.svg) or inspect the raw graph metadata in [graphify-architecture.json](docs/architecture/graphify-architecture.json).*
+
+#### Architectural Layers Breakdown
+1. **Sensor Transducer & Embedded Firmware Layer:** Submersible 4–20 mA hydrostatic pressure probes deliver analog water-level readings to an ESP32-S3 microcontroller running FreeRTOS. Moving-average digital filters suppress rolling stock vibrations and sloshing effects. Telemetry packets are framed and dispatched over UART AT commands to an industrial Quectel EC200U 4G LTE modem.
+2. **Industrial Real-Time Communication & Ingestion Layer:** The cellular modem publishes to an industrial MQTT broker (EMQX / Eclipse Mosquitto) on topic `panorama/{train_id}/telemetry` (QoS 1). An asynchronous backend daemon (`client.py`) ingests and validates messages with Pydantic v2 schemas while an active WebSocket service (`/ws/telemetry`) fans out live telemetry.
+3. **Backend Application & Microservices Layer:** Python 3.12 / FastAPI ASGI daemon enforcing path-traversal sanitation, CORS regex protection, OAuth2/JWT authentication, RBAC authorization, train consist management, and 4-state alarm evaluations.
+4. **Data Persistence & Repository Layer:** Async SQLAlchemy 2.0 connection pool operating on SQLite in Write-Ahead Logging (WAL) mode (or PostgreSQL 16 in enterprise clusters). Clean data repositories abstract consist mutations and historical downsampling.
+5. **Operator SCADA HMI Layer (React 18 / React Native Web):** Mobile-first responsive frontend featuring centralized state management (`AppContext.tsx`), dynamic online/offline detection (`tankStatusService.ts`), fluid 60 FPS SVG sloshing physics, and multi-train telemetry dashboards.
+6. **Desktop Supervisor Container (Electron 30):** Secure native desktop container executing with context isolation and sandbox enabled, managing window states and supervising the local FastAPI daemon lifecycle.
+
+#### Telemetry Data Flow
+1. **Transducer Sampling:** Hydrostatic sensor samples water column height every 1.0s.
+2. **Cellular Uplink:** ESP32-S3 queues telemetry to the EC200U modem and publishes via LTE to `panorama/{train_id}/telemetry`.
+3. **Ingestion & Watchdogs:** Backend async worker ingests payload, validates schema, and updates rolling 60-second dead-man watchdogs.
+4. **Storage & Downsampling:** Records are committed to SQLite WAL; LTTB decimation prepares multi-hour trends for operator review.
+5. **HMI Streaming:** Live telemetry arrives in the browser/electron console via WSS or WebSocket MQTT, updating online counters and SVG tank gauges in real time.
+
+For full architectural specifications, data models, and protocols, refer to [docs/architecture/README.md](docs/architecture/README.md).
+
+#### Topology Diagram
 ```mermaid
 flowchart TD
     subgraph ROLLING_STOCK ["Railway Coach Edge Hardware"]

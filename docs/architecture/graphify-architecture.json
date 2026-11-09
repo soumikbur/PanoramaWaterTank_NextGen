@@ -1,0 +1,274 @@
+{
+  "title": "Panorama Water Tank Monitor \u2014 SCADA System Architecture",
+  "subtitle": "Graphify Knowledge Graph & Architecture Intelligence",
+  "commit": "70ee9c6b3a4d760c12e25f64104b2ec124a03ae2",
+  "metrics": {
+    "nodes": 6274,
+    "edges": 10818,
+    "communities": 450,
+    "tests": "58 / 58",
+    "coaches_tanks": "24 / 48",
+    "import_cycles": 0,
+    "watchdog_timeout_sec": 60,
+    "license": "Apache 2.0"
+  },
+  "layers": [
+    {
+      "id": "physical_firmware",
+      "name": "1. SENSOR TRANSDUCER & EMBEDDED FIRMWARE LAYER",
+      "color": "#10b981",
+      "bg": "rgba(16, 185, 129, 0.06)",
+      "border": "#059669",
+      "components": [
+        {
+          "id": "comp_sensor",
+          "title": "4-20mA Hydrostatic Sensor",
+          "badge": "Transducer Hardware",
+          "files": [
+            "docs/hardware/HARDWARE_OVERVIEW.md"
+          ],
+          "desc": "Hydrostatic pressure probe submerged in coach water tank. Measures 0-200cm water column height with \u00b10.5% FS accuracy.",
+          "nodes_count": 8
+        },
+        {
+          "id": "comp_esp32",
+          "title": "ESP32-S3 Microcontroller & FreeRTOS",
+          "badge": "Firmware Core",
+          "files": [
+            "src/main.cpp",
+            "docs/hardware/FIRMWARE_INTEGRATION.md"
+          ],
+          "desc": "Dual-core Xtensa LX7 MCU running FreeRTOS tasks: ADC differential sampling, moving-average filter, and power management.",
+          "nodes_count": 56
+        },
+        {
+          "id": "comp_modem",
+          "title": "Quectel EC200U 4G LTE Modem",
+          "badge": "Cellular Uplink",
+          "files": [
+            "src/telemetry/MqttService.cpp",
+            "docs/hardware/HARDWARE_OVERVIEW.md"
+          ],
+          "desc": "Cellular IoT module executing UART AT commands (AT+QMTPUB) with auto-reconnection and exponential backoff retry.",
+          "nodes_count": 32
+        }
+      ]
+    },
+    {
+      "id": "iot_ingestion",
+      "name": "2. INDUSTRIAL REAL-TIME COMMUNICATION & INGESTION LAYER",
+      "color": "#06b6d4",
+      "bg": "rgba(6, 182, 212, 0.06)",
+      "border": "#0891b2",
+      "components": [
+        {
+          "id": "comp_broker",
+          "title": "Industrial MQTT Message Broker",
+          "badge": "EMQX / Mosquitto",
+          "files": [
+            "docs/architecture/MQTT_ARCHITECTURE.md",
+            "src/mqtt/MqttConfig.h"
+          ],
+          "desc": "Standard MQTT broker handling telemetry ingest on 'panorama/{train_id}/telemetry' and WebSocket bridging on port 8083.",
+          "nodes_count": 48
+        },
+        {
+          "id": "comp_backend_mqtt",
+          "title": "Backend MQTT Telemetry Ingestion Worker",
+          "badge": "asyncio Daemon",
+          "files": [
+            "backend/app/mqtt/client.py"
+          ],
+          "desc": "Asynchronous Paho client subscribing to raw telemetry, validating payload schema, and triggering 60s dead-man watchdogs.",
+          "nodes_count": 27
+        },
+        {
+          "id": "comp_ws_service",
+          "title": "WebSocket Real-Time Broadcast Service",
+          "badge": "FastAPI WS Gateway",
+          "files": [
+            "backend/app/api/v1/websocket.py"
+          ],
+          "desc": "Maintains low-latency full-duplex socket connections (/ws/telemetry) to active SCADA supervisory client consoles.",
+          "nodes_count": 19
+        }
+      ]
+    },
+    {
+      "id": "backend_services",
+      "name": "3. BACKEND APPLICATION & MICRO-SERVICES LAYER",
+      "color": "#38bdf8",
+      "bg": "rgba(56, 189, 248, 0.06)",
+      "border": "#0284c7",
+      "components": [
+        {
+          "id": "comp_fastapi",
+          "title": "FastAPI SCADA Application Core",
+          "badge": "Asynchronous Core",
+          "files": [
+            "backend/app/main.py",
+            "backend/app/core/config.py"
+          ],
+          "desc": "Python 3.12 ASGI engine providing path traversal sanitization, regex CORS origin protection, and security headers.",
+          "nodes_count": 78
+        },
+        {
+          "id": "comp_auth",
+          "title": "Authentication & RBAC Security Router",
+          "badge": "OAuth2 / JWT",
+          "files": [
+            "backend/app/api/v1/auth.py",
+            "backend/app/api/v1/users.py"
+          ],
+          "desc": "Role-Based Access Control (Admin, Engineer, Operator). Enforces password hashing (bcrypt), token rotation, and audit logs.",
+          "nodes_count": 95
+        },
+        {
+          "id": "comp_train_service",
+          "title": "Train, Coach & Tank Fleet Management",
+          "badge": "Consist Service",
+          "files": [
+            "backend/app/api/v1/trains.py",
+            "backend/app/api/v1/tanks.py"
+          ],
+          "desc": "SCADA consist management for 24-coach / 48-tank train configurations, coach mapping, and hardware UID binding.",
+          "nodes_count": 105
+        },
+        {
+          "id": "comp_alarm_service",
+          "title": "Telemetry Evaluation & Alarm Engine",
+          "badge": "Supervisory Alarms",
+          "files": [
+            "backend/app/api/v1/telemetry.py",
+            "backend/app/api/v1/alarms.py"
+          ],
+          "desc": "Real-time 4-state level classification (Critically Low, Low, Normal, Full) and alarm acknowledgement lifecycle.",
+          "nodes_count": 84
+        }
+      ]
+    },
+    {
+      "id": "data_persistence",
+      "name": "4. DATA PERSISTENCE & REPOSITORY LAYER",
+      "color": "#a855f7",
+      "bg": "rgba(168, 85, 247, 0.06)",
+      "border": "#7e22ce",
+      "components": [
+        {
+          "id": "comp_db_engine",
+          "title": "Database Engine (SQLite WAL / PostgreSQL)",
+          "badge": "Async SQLAlchemy 2.0",
+          "files": [
+            "backend/app/database.py",
+            "backend/migrations/env.py"
+          ],
+          "desc": "Async connection pool with Write-Ahead Logging (WAL) mode for 500+ writes/sec concurrency without locking contention.",
+          "nodes_count": 34
+        },
+        {
+          "id": "comp_repositories",
+          "title": "Clean Data Repositories",
+          "badge": "Repository Pattern",
+          "files": [
+            "backend/app/repositories/tank_repo.py",
+            "backend/app/repositories/alarm_repo.py"
+          ],
+          "desc": "Abstracted queries for tank states, historical aggregations, time-bucket downsampling, and transactional rollbacks.",
+          "nodes_count": 91
+        },
+        {
+          "id": "comp_db_models",
+          "title": "Relational Data Models & Schemas",
+          "badge": "Pydantic v2 & ORM",
+          "files": [
+            "backend/app/models/*.py",
+            "backend/app/schemas/*.py"
+          ],
+          "desc": "Entities: Train, Coach, Tank, DeviceMapping, TelemetryRecord, AlarmEvent, AuditLog, and User.",
+          "nodes_count": 96
+        }
+      ]
+    },
+    {
+      "id": "frontend_hmi",
+      "name": "5. OPERATOR SCADA HMI LAYER (REACT 18 / REACT NATIVE WEB)",
+      "color": "#f59e0b",
+      "bg": "rgba(245, 158, 11, 0.06)",
+      "border": "#d97706",
+      "components": [
+        {
+          "id": "comp_app_context",
+          "title": "SCADA State & Context Engine",
+          "badge": "State Management",
+          "files": [
+            "apps/mobile/src/context/AppContext.tsx",
+            "apps/mobile/src/services/tankStatusService.ts"
+          ],
+          "desc": "Global telemetry state store, active train context, dynamic device status engine, and 60s timeout tracking.",
+          "nodes_count": 48
+        },
+        {
+          "id": "comp_client_comm",
+          "title": "Hybrid REST & WSS Communication Service",
+          "badge": "Network Clients",
+          "files": [
+            "apps/mobile/src/api/client.ts",
+            "apps/mobile/src/services/MqttService.ts"
+          ],
+          "desc": "Dual-channel transport: JWT-authenticated REST client for CRUD + direct WebSocket MQTT client for real-time live telemetry.",
+          "nodes_count": 62
+        },
+        {
+          "id": "comp_scada_screens",
+          "title": "Responsive SCADA Views & Dashboards",
+          "badge": "UI Screens",
+          "files": [
+            "apps/mobile/src/screens/*.tsx"
+          ],
+          "desc": "Employee Dashboard, Train Consist Manager, Water Tank Grid, Live Tank Diagnostics, Alarms, Trends & History.",
+          "nodes_count": 114
+        },
+        {
+          "id": "comp_responsive_layout",
+          "title": "Adaptive Layout & Navigation Shell",
+          "badge": "Fluid UI Shell",
+          "files": [
+            "apps/mobile/src/components/AppLayout.tsx",
+            "apps/mobile/src/components/Sidebar.tsx"
+          ],
+          "desc": "Unified interface adapting seamlessly across 1920x1080 supervisory desktop displays and 390x844 mobile handhelds.",
+          "nodes_count": 59
+        }
+      ]
+    },
+    {
+      "id": "desktop_container",
+      "name": "6. DESKTOP SUPERVISOR CONTAINER (ELECTRON 30)",
+      "color": "#ec4899",
+      "bg": "rgba(236, 72, 153, 0.06)",
+      "border": "#db2777",
+      "components": [
+        {
+          "id": "comp_electron_main",
+          "title": "Electron Desktop Process Supervisor",
+          "badge": "Native Shell",
+          "files": [
+            "apps/mobile/electron/main.cjs"
+          ],
+          "desc": "Chromium 124 container managing native window state, hardware acceleration, and spawning the FastAPI backend daemon.",
+          "nodes_count": 26
+        },
+        {
+          "id": "comp_electron_preload",
+          "title": "Sandboxed Secure IPC Bridge",
+          "badge": "Context Isolation",
+          "files": [
+            "apps/mobile/electron/preload.cjs"
+          ],
+          "desc": "Context-isolated IPC bridge exposing safe desktop OS hooks (system info, app quit, theme sync) without nodeIntegration.",
+          "nodes_count": 12
+        }
+      ]
+    }
+  ]
+}
