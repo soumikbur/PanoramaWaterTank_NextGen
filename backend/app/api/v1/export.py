@@ -2,7 +2,7 @@
 import csv
 import io
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +13,16 @@ from app.repositories.device_repo import DeviceRepository
 from app.repositories.telemetry_repo import TelemetryRepository
 
 router = APIRouter(prefix="/export", tags=["Export"])
+
+
+def sanitize_csv_cell(value: Any) -> str:
+    """Neutralize potential CSV formula injection in cell values."""
+    if value is None:
+        return ""
+    s = str(value)
+    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return f"'{s}"
+    return s
 
 
 @router.get("/csv")
@@ -75,9 +85,9 @@ async def export_history_csv(
     for r in readings:
         writer.writerow([
             r.timestamp.isoformat() if r.timestamp else "",
-            device.train_number if device else "12002",
-            device.coach_number if device else "B4",
-            device.uid if device else "",
+            sanitize_csv_cell(device.train_number if device else "12002"),
+            sanitize_csv_cell(device.coach_number if device else "B4"),
+            sanitize_csv_cell(device.uid if device else ""),
             f"{r.level_percent:.1f}" if r.level_percent is not None else "",
             f"{r.volume_liters:.1f}" if r.volume_liters is not None else "",
             f"{r.height_cm:.1f}" if r.height_cm is not None else "",

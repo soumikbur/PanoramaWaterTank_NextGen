@@ -52,11 +52,14 @@ function getBackendExecutable() {
     return { type: 'exe', path: localDistExe };
   }
 
-  // 3. Fallback to venv Python
+  // 3. Fallback to .venv or venv Python
+  const dotVenvPython = path.resolve(__dirname, '..', '..', '..', 'backend', '.venv', 'Scripts', 'python.exe');
   const venvPython = path.resolve(__dirname, '..', '..', '..', 'backend', 'venv', 'Scripts', 'python.exe');
   const runnerScript = path.resolve(__dirname, '..', '..', '..', 'backend', 'run_server.py');
-  if (fs.existsSync(venvPython) && fs.existsSync(runnerScript)) {
-    return { type: 'python', python: venvPython, script: runnerScript };
+
+  const pyExe = fs.existsSync(dotVenvPython) ? dotVenvPython : (fs.existsSync(venvPython) ? venvPython : null);
+  if (pyExe && fs.existsSync(runnerScript)) {
+    return { type: 'python', python: pyExe, script: runnerScript };
   }
 
   return null;

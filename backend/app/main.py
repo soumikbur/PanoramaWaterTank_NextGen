@@ -65,12 +65,12 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Configuration
+# CORS Configuration (Restricted strictly to local loopback and verified production domains)
 _explicit_origins = [o for o in settings.CORS_ORIGINS if o != "*"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_explicit_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.github\.io$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://soumikbur\.github\.io$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -91,11 +91,11 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com data:; "
         "img-src 'self' data: https:; "
-        "connect-src 'self' ws: wss: https: http:;"
+        "connect-src 'self' ws: wss: https://broker.hivemq.com:8884 https://industrial.api.ubidots.com;"
     )
     return response
 
@@ -164,9 +164,20 @@ async def spa_fallback(full_path: str):
     ):
         return JSONResponse(status_code=404, content={"detail": "Not Found"})
 
-    candidate = os.path.join(_static_dir, full_path)
-    if os.path.isfile(candidate):
-        return FileResponse(candidate)
+    # Defensive path traversal and hidden file mitigation
+    clean_path = os.path.normpath(full_path).lstrip("/\\")
+    candidate = os.path.realpath(os.path.join(_static_dir, clean_path))
+    static_real = os.path.realpath(_static_dir)
+
+    try:
+        common = os.path.commonpath([static_real, candidate])
+    except ValueError:
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
+
+    if common == static_real and os.path.isfile(candidate):
+        base_name = os.path.basename(candidate)
+        if not base_name.startswith("."):
+            return FileResponse(candidate)
 
     index_file = os.path.join(_static_dir, "index.html")
     if os.path.exists(index_file):

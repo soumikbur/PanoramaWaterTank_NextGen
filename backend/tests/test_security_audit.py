@@ -353,3 +353,73 @@ async def test_document_upload_validation():
         }
         res = await client.post("/api/v1/auth/register", json=valid_pdf_payload)
         assert res.status_code in (201, 400)  # 201 created or 400 if username exists from previous run
+
+
+@pytest.mark.asyncio
+async def test_path_traversal_mitigation():
+    """Verify that path traversal attempts via SPA fallback are safely blocked."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Attempt to traverse to backend .env
+        resp = await client.get("/../../.env")
+        assert resp.status_code in (404, 200)
+        # If 200, must be the HTML index shell, NEVER raw .env secrets
+        if resp.status_code == 200:
+            assert "<!DOCTYPE html>" in resp.text
+            assert "SECRET_KEY" not in resp.text
+
+        # 2. Attempt to read sqlite database directly
+        resp_db = await client.get("/../panorama_dev.db")
+        assert resp_db.status_code in (404, 200)
+        if resp_db.status_code == 200:
+            assert "<!DOCTYPE html>" in resp_db.text
+            assert "SQLite format" not in resp_db.text
+
+
+@pytest.mark.asyncio
+async def test_cors_tenant_isolation():
+    """Verify that arbitrary GitHub Pages tenants cannot execute credentialed cross-origin requests."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Untrusted GitHub Pages tenant should not be reflected in Access-Control-Allow-Origin
+        resp = await client.options(
+            "/api/v1/health",
+            headers={
+                "Origin": "https://malicious-tenant.github.io",
+                "Access-Control-Request-Method": "GET"
+            }
+        )
+        assert resp.headers.get("access-control-allow-origin") != "https://malicious-tenant.github.io"
+
+        # Legitimate configured repository origin is allowed
+        resp_legit = await client.options(
+            "/api/v1/health",
+            headers={
+                "Origin": "https://soumikbur.github.io",
+                "Access-Control-Request-Method": "GET"
+            }
+        )
+        assert resp_legit.headers.get("access-control-allow-origin") == "https://soumikbur.github.io"
+
+
+@pytest.mark.asyncio
+async def test_csp_hardening():
+    """Verify that Content Security Policy does not allow unsafe-eval."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/api/v1/health")
+        csp = resp.headers.get("content-security-policy", "")
+        assert "'unsafe-eval'" not in csp
+        assert "default-src 'self'" in csp
+
+
+@pytest.mark.asyncio
+async def test_csv_formula_injection_defense():
+    """Verify that export CSV neutralizes dangerous formula injection characters."""
+    from app.api.v1.export import sanitize_csv_cell
+    assert sanitize_csv_cell("=cmd|' /C calc'!A0").startswith("'=")
+    assert sanitize_csv_cell("+12345").startswith("'+")
+    assert sanitize_csv_cell("-999").startswith("'-")
+    assert sanitize_csv_cell("@SUM(A1:A10)").startswith("'@")
+    assert sanitize_csv_cell("Normal Text") == "Normal Text"
+

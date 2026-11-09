@@ -75,7 +75,7 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:8081",
         "http://localhost:8000",
-        "*"
+        "https://soumikbur.github.io"
     ]
 
     model_config = SettingsConfigDict(
