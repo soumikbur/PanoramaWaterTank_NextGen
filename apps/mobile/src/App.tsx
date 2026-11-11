@@ -7,6 +7,7 @@ import { Footer } from './components/common/Footer';
 import { DisplayPreferencesProvider } from './context/DisplayPreferencesContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { AlertToastBanner } from './components/common/AlertToastBanner';
 import { ShieldAlert } from 'lucide-react';
 
 // Screens
@@ -129,7 +130,7 @@ const MainContent: React.FC = () => {
 };
 
 const AppShell: React.FC = () => {
-  const { isAuthenticated, authLoading, activeScreen, currentUser } = useApp();
+  const { isAuthenticated, authLoading, activeScreen, currentUser, alertToast, dismissAlertToast } = useApp();
 
   if (authLoading) {
     return (
@@ -170,6 +171,7 @@ const AppShell: React.FC = () => {
   return (
     <DisplayPreferencesProvider activeUsername={currentUser?.username}>
       <AppLayout>
+        <AlertToastBanner toast={alertToast} onDismiss={dismissAlertToast} />
         <Header />
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           <Sidebar />

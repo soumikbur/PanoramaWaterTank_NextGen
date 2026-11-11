@@ -4,6 +4,7 @@
 #include "HistoryExporter.h"
 
 #include <QDateTime>
+#include <QDebug>
 #include <algorithm>
 #include <cmath>
 
@@ -58,9 +59,18 @@ void TankModel::setConnectionState(const QString &state)
     if (m_connectionState == state) {
         return;
     }
+    const QString prevState = m_connectionState;
     m_connectionState = state;
     emit connectionStateChanged();
     emit telemetryHealthStateChanged();
+
+    const QString nowStr = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    const QString name = m_tankName.isEmpty() ? QStringLiteral("Tank") : m_tankName;
+    if (state == QStringLiteral("Offline") || state == QStringLiteral("Disconnected")) {
+        qWarning().noquote() << QStringLiteral("[%1] [WARNING] [DEVICE_OFFLINE] - Device communication offline for %2").arg(nowStr, name);
+    } else if (state == QStringLiteral("Connected") && (prevState == QStringLiteral("Offline") || prevState == QStringLiteral("Disconnected"))) {
+        qInfo().noquote() << QStringLiteral("[%1] [NORMAL] [DEVICE_ONLINE] - Device communication restored for %2").arg(nowStr, name);
+    }
 }
 
 void TankModel::recalculateGeometry()
@@ -345,8 +355,17 @@ void TankModel::applyReading(bool hasHeight, double heightMeters, bool hasVolume
     }
 
     if (!sensorStatus.isEmpty() && sensorStatus != m_sensorStatus) {
+        const QString prevSensor = m_sensorStatus;
         m_sensorStatus = sensorStatus;
         emit sensorStatusChanged();
+
+        const QString nowStr = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+        const QString name = m_tankName.isEmpty() ? QStringLiteral("Tank") : m_tankName;
+        if (sensorStatus == QStringLiteral("Disconnected") || sensorStatus == QStringLiteral("Fault")) {
+            qCritical().noquote() << QStringLiteral("[%1] [CRITICAL] [SENSOR_FAULT] - Sensor fault / probe disconnected for %2 (%3)").arg(nowStr, name, sensorStatus);
+        } else if (sensorStatus == QStringLiteral("Connected") && (prevSensor == QStringLiteral("Disconnected") || prevSensor == QStringLiteral("Fault"))) {
+            qInfo().noquote() << QStringLiteral("[%1] [NORMAL] [SENSOR_RECOVERED] - Sensor connectivity restored for %2").arg(nowStr, name);
+        }
     }
 
     if (!m_hasValidData) {
@@ -398,8 +417,17 @@ void TankModel::applyAuthoritativeReading(double waterLevelCm, double levelPerce
     }
 
     if (!sensorStatus.isEmpty() && sensorStatus != m_sensorStatus) {
+        const QString prevSensor = m_sensorStatus;
         m_sensorStatus = sensorStatus;
         emit sensorStatusChanged();
+
+        const QString nowStr = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+        const QString name = m_tankName.isEmpty() ? QStringLiteral("Tank") : m_tankName;
+        if (sensorStatus == QStringLiteral("Disconnected") || sensorStatus == QStringLiteral("Fault")) {
+            qCritical().noquote() << QStringLiteral("[%1] [CRITICAL] [SENSOR_FAULT] - Sensor fault / probe disconnected for %2 (%3)").arg(nowStr, name, sensorStatus);
+        } else if (sensorStatus == QStringLiteral("Connected") && (prevSensor == QStringLiteral("Disconnected") || prevSensor == QStringLiteral("Fault"))) {
+            qInfo().noquote() << QStringLiteral("[%1] [NORMAL] [SENSOR_RECOVERED] - Sensor connectivity restored for %2").arg(nowStr, name);
+        }
     }
 
     if (m_measurementState != measurementState) {
@@ -915,6 +943,8 @@ void TankModel::processAlarmTransition(const QString &newState, double level)
     // Actual state transition
     QString oldState = m_currentAlarmState;
     m_currentAlarmState = newState;
+    const QString nowStr = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
+    const QString name = m_tankName.isEmpty() ? QStringLiteral("Tank") : m_tankName;
 
     if (newState == QStringLiteral("NORMAL")) {
         removeActiveWaterLevelAlert();
@@ -925,6 +955,8 @@ void TankModel::processAlarmTransition(const QString &newState, double level)
             QStringLiteral(">= %1%").arg(m_warningThresholdPercent, 0, 'f', 1),
             QStringLiteral("Resolved")
         );
+        qInfo().noquote() << QStringLiteral("[%1] [NORMAL] [WATER_LEVEL_RECOVERED] - Water level nominal (Level: %2% >= %3%) for %4")
+            .arg(nowStr).arg(level, 0, 'f', 1).arg(m_warningThresholdPercent, 0, 'f', 1).arg(name);
     } else if (newState == QStringLiteral("WARNING")) {
         updateActiveAlert(QStringLiteral("WARNING"), level, true);
         recordAlarmHistoryEvent(
@@ -934,6 +966,8 @@ void TankModel::processAlarmTransition(const QString &newState, double level)
             QStringLiteral("< %1%").arg(m_warningThresholdPercent, 0, 'f', 1),
             QStringLiteral("Active")
         );
+        qWarning().noquote() << QStringLiteral("[%1] [WARNING] [WATER_LEVEL_WARNING] - Water level low warning (Level: %2% < %3%) for %4")
+            .arg(nowStr).arg(level, 0, 'f', 1).arg(m_warningThresholdPercent, 0, 'f', 1).arg(name);
     } else if (newState == QStringLiteral("CRITICAL")) {
         updateActiveAlert(QStringLiteral("CRITICAL"), level, true);
         recordAlarmHistoryEvent(
@@ -943,6 +977,8 @@ void TankModel::processAlarmTransition(const QString &newState, double level)
             QStringLiteral("< %1%").arg(m_criticalThresholdPercent, 0, 'f', 1),
             QStringLiteral("Active")
         );
+        qCritical().noquote() << QStringLiteral("[%1] [CRITICAL] [WATER_LEVEL_CRITICAL] - Water level critically low (Level: %2% < %3%) for %4")
+            .arg(nowStr).arg(level, 0, 'f', 1).arg(m_criticalThresholdPercent, 0, 'f', 1).arg(name);
     } else if (newState == QStringLiteral("HIGH")) {
         updateActiveAlert(QStringLiteral("HIGH"), level, true);
         recordAlarmHistoryEvent(
@@ -952,6 +988,8 @@ void TankModel::processAlarmTransition(const QString &newState, double level)
             QStringLiteral("> %1%").arg(m_highThresholdPercent, 0, 'f', 1),
             QStringLiteral("Active")
         );
+        qWarning().noquote() << QStringLiteral("[%1] [WARNING] [OVERFLOW_WARNING] - Water level overflow (Level: %2% > %3%) for %4")
+            .arg(nowStr).arg(level, 0, 'f', 1).arg(m_highThresholdPercent, 0, 'f', 1).arg(name);
     }
 
     updateAlertCounts();

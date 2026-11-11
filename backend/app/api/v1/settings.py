@@ -45,10 +45,17 @@ DEFAULT_CONFIG: Dict[str, Dict[str, Any]] = {
     "sensor.filter_constant_sec": {"category": "CALIBRATION", "value": 1.0, "desc": "Low-Pass Damping Time Constant (s)"},
     "sensor.invert": {"category": "CALIBRATION", "value": False, "desc": "Invert Raw Sensor Reading"},
     
-    # Section D: Alarm Thresholds
+    # Section D: Alarm Thresholds & Categories
     "alarm.warning_percent": {"category": "ALARM", "value": 20.0, "desc": "Low Water Warning Threshold (%)"},
     "alarm.critical_percent": {"category": "ALARM", "value": 10.0, "desc": "Critical Low Water Threshold (%)"},
     "alarm.overflow_percent": {"category": "ALARM", "value": 100.0, "desc": "Tank Overflow Threshold (%)"},
+    "alarm.master_enabled": {"category": "ALARM", "value": True, "desc": "Master Enable/Disable All Alarms"},
+    "alarm.low_water_enabled": {"category": "ALARM", "value": True, "desc": "Low Water Category Enabled"},
+    "alarm.sensor_fault_enabled": {"category": "ALARM", "value": True, "desc": "Sensor Fault Category Enabled"},
+    "alarm.device_offline_enabled": {"category": "ALARM", "value": True, "desc": "Device Offline Category Enabled"},
+    "alarm.modem_failure_enabled": {"category": "ALARM", "value": True, "desc": "Modem Failure Category Enabled"},
+    "alarm.overflow_enabled": {"category": "ALARM", "value": True, "desc": "Overflow Category Enabled"},
+    "alarm.voltage_enabled": {"category": "ALARM", "value": True, "desc": "Voltage Category Enabled"},
 }
 
 
@@ -83,6 +90,13 @@ class UnifiedSettingsPayload(BaseModel):
     alarm_warning_percent: float = 20.0
     alarm_critical_percent: float = 10.0
     alarm_overflow_percent: float = 100.0
+    alarm_master_enabled: bool = True
+    alarm_low_water_enabled: bool = True
+    alarm_sensor_fault_enabled: bool = True
+    alarm_device_offline_enabled: bool = True
+    alarm_modem_failure_enabled: bool = True
+    alarm_overflow_enabled: bool = True
+    alarm_voltage_enabled: bool = True
 
 
 async def _ensure_seeded(repo: SettingsRepository):
@@ -155,6 +169,13 @@ async def get_unified_config(db: AsyncSession = Depends(get_db)):
         alarm_warning_percent=float(await _g("alarm.warning_percent", 20.0)),
         alarm_critical_percent=float(await _g("alarm.critical_percent", 10.0)),
         alarm_overflow_percent=float(await _g("alarm.overflow_percent", 100.0)),
+        alarm_master_enabled=bool(await _g("alarm.master_enabled", True)),
+        alarm_low_water_enabled=bool(await _g("alarm.low_water_enabled", True)),
+        alarm_sensor_fault_enabled=bool(await _g("alarm.sensor_fault_enabled", True)),
+        alarm_device_offline_enabled=bool(await _g("alarm.device_offline_enabled", True)),
+        alarm_modem_failure_enabled=bool(await _g("alarm.modem_failure_enabled", True)),
+        alarm_overflow_enabled=bool(await _g("alarm.overflow_enabled", True)),
+        alarm_voltage_enabled=bool(await _g("alarm.voltage_enabled", True)),
     )
 
 
@@ -207,6 +228,13 @@ async def apply_unified_config(
         "alarm.warning_percent": payload.alarm_warning_percent,
         "alarm.critical_percent": payload.alarm_critical_percent,
         "alarm.overflow_percent": payload.alarm_overflow_percent,
+        "alarm.master_enabled": payload.alarm_master_enabled,
+        "alarm.low_water_enabled": payload.alarm_low_water_enabled,
+        "alarm.sensor_fault_enabled": payload.alarm_sensor_fault_enabled,
+        "alarm.device_offline_enabled": payload.alarm_device_offline_enabled,
+        "alarm.modem_failure_enabled": payload.alarm_modem_failure_enabled,
+        "alarm.overflow_enabled": payload.alarm_overflow_enabled,
+        "alarm.voltage_enabled": payload.alarm_voltage_enabled,
     }
 
     for k, v in updates.items():

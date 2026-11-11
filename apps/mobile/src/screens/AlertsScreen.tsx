@@ -3,6 +3,7 @@ import { colors, metrics, typography } from '../theme';
 import { useApp } from '../state/AppContext';
 import { BaseCard } from '../components/common/BaseCard';
 import { ApiClient } from '../api/client';
+import { alertNotificationService } from '../services/alertNotificationService';
 import { CheckCircle2 } from 'lucide-react';
 
 interface AlertItemData {
@@ -45,23 +46,51 @@ export const AlertsScreen: React.FC = () => {
   const isOffline = connectionStatus === 'DISCONNECTED';
   const alarmLevel = liveTank?.alarmStatus || (hasData ? 'Normal' : 'Awaiting Telemetry');
 
-  // Fetch real past alarms from database
+  // Fetch real past alarms from database or local persistent alert history
   useEffect(() => {
     let mounted = true;
     ApiClient.fetchAlarms().then((data) => {
       if (mounted) {
+        if (data && data.length > 0) {
+          setAlertHistory(
+            data.map((a: any) => ({
+              time: new Date(a.triggeredAt || a.triggered_at || Date.now()).toLocaleTimeString(),
+              title: a.alarmType || a.alarm_type || 'System Alert',
+              severity: (a.severity || 'WARNING') as any,
+              value: a.triggerValue != null ? `${a.triggerValue.toFixed(1)}%` : 'N/A',
+              threshold: a.thresholdValue != null ? `${a.thresholdValue.toFixed(1)}%` : 'Nominal',
+              status: a.status === 'RESOLVED' ? 'Resolved' : a.status === 'ACKNOWLEDGED' ? 'Acknowledged' : 'Active',
+            }))
+          );
+        } else {
+          const localHist = alertNotificationService.getHistory();
+          setAlertHistory(
+            localHist.map((h) => ({
+              time: new Date(h.timestamp).toLocaleTimeString(),
+              title: `${h.alertType} (${h.target})`,
+              severity: h.severity as any,
+              value: h.waterLevel != null ? `${h.waterLevel.toFixed(1)}%` : 'N/A',
+              threshold: 'Limit',
+              status: h.status,
+            }))
+          );
+        }
+      }
+    }).catch(() => {
+      if (mounted) {
+        const localHist = alertNotificationService.getHistory();
         setAlertHistory(
-          data.map((a: any) => ({
-            time: new Date(a.triggeredAt || a.triggered_at || Date.now()).toLocaleTimeString(),
-            title: a.alarmType || a.alarm_type || 'System Alert',
-            severity: (a.severity || 'WARNING') as any,
-            value: a.triggerValue != null ? `${a.triggerValue.toFixed(1)}%` : 'N/A',
-            threshold: a.thresholdValue != null ? `${a.thresholdValue.toFixed(1)}%` : 'Nominal',
-            status: a.status === 'RESOLVED' ? 'Resolved' : a.status === 'ACKNOWLEDGED' ? 'Acknowledged' : 'Active',
+          localHist.map((h) => ({
+            time: new Date(h.timestamp).toLocaleTimeString(),
+            title: `${h.alertType} (${h.target})`,
+            severity: h.severity as any,
+            value: h.waterLevel != null ? `${h.waterLevel.toFixed(1)}%` : 'N/A',
+            threshold: 'Limit',
+            status: h.status,
           }))
         );
       }
-    }).catch(() => {});
+    });
     return () => {
       mounted = false;
     };

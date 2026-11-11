@@ -953,6 +953,12 @@ export class ApiClient {
     });
   }
 
+  static async clearAlarmHistory(): Promise<{ cleared: number; message: string }> {
+    return this.request<{ cleared: number; message: string }>('/alarms/clear', {
+      method: 'POST',
+    });
+  }
+
   // System Health
   static async fetchHealth(): Promise<{
     status: string;

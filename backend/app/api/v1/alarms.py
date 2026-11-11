@@ -96,3 +96,18 @@ async def get_alarm_stats(db: AsyncSession = Depends(get_db)):
         resolvedToday=len(resolved)
     )
 
+
+@router.post("/clear")
+async def clear_alarms(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Clear alarm history and active/resolved alarms (Authenticated Users)."""
+    from sqlalchemy import delete
+    from app.models.alarm import AlarmHistory
+    await db.execute(delete(AlarmHistory))
+    res = await db.execute(delete(Alarm))
+    await db.commit()
+    return {"cleared": res.rowcount or 0, "message": "Alarm history cleared successfully"}
+
+

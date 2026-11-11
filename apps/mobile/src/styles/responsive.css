@@ -876,5 +876,38 @@ html, body, #root, .app-layout {
   }
 }
 
+/* ========================================================================= */
+/* Settings Screen & Admin Configuration Mobile Optimization                  */
+/* ========================================================================= */
+@media (max-width: 767px) {
+  #section-1-general input,
+  #section-1-general select,
+  #section-2-appearance input,
+  #section-2-appearance select,
+  #section-3-device input,
+  #section-3-device select,
+  #section-4-network input,
+  #section-4-network select,
+  #section-5-map input,
+  #section-5-map select,
+  #section-6-notifications input,
+  #section-6-notifications select,
+  #section-7-user input,
+  #section-7-user select {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    min-height: 40px !important;
+  }
+
+  .settings-section-pills {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .settings-section-pills::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+
 
 

@@ -27,6 +27,12 @@ import {
   ConsistCoachItem,
   ConsistTankItem,
 } from '../services/tankStatusService';
+import {
+  alertNotificationService,
+  AlertToast,
+  AlertHistoryEntry,
+  AlertConfig,
+} from '../services/alertNotificationService';
 
 export type ScreenName =
   | 'login'
@@ -95,6 +101,12 @@ interface AppContextType {
   consistTanks: ConsistTankItem[];
   telemetryTimeoutSeconds: number;
   setTelemetryTimeoutSeconds: (seconds: number) => void;
+  alertToast: AlertToast | null;
+  dismissAlertToast: () => void;
+  alertHistory: AlertHistoryEntry[];
+  alertConfig: AlertConfig;
+  updateAlertConfig: (cfg: Partial<AlertConfig>) => void;
+  clearAlertHistory: () => Promise<void>;
 }
 
 const defaultStats: AlarmStats = {
@@ -161,6 +173,47 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const [telemetryTimeoutSec, setTelemetryTimeoutSec] = useState<number>(() => getTelemetryTimeoutSeconds());
   const [telemetryTick, setTelemetryTick] = useState<number>(0);
+
+  const [alertToast, setAlertToast] = useState<AlertToast | null>(null);
+  const [alertHistory, setAlertHistory] = useState<AlertHistoryEntry[]>(() => alertNotificationService.getHistory());
+  const [alertConfig, setAlertConfigState] = useState<AlertConfig>(() => alertNotificationService.getConfig());
+
+  useEffect(() => {
+    const unsub = alertNotificationService.onToast((toast) => {
+      setAlertToast(toast);
+      setAlertHistory(alertNotificationService.getHistory());
+    });
+    return unsub;
+  }, []);
+
+  const dismissAlertToast = () => {
+    setAlertToast(null);
+  };
+
+  useEffect(() => {
+    if (!alertToast || !alertToast.autoDismissMs) return;
+    const timer = setTimeout(() => {
+      setAlertToast((curr) => (curr?.id === alertToast.id ? null : curr));
+    }, alertToast.autoDismissMs);
+    return () => clearTimeout(timer);
+  }, [alertToast]);
+
+  const updateAlertConfig = (cfg: Partial<AlertConfig>) => {
+    const updated = alertNotificationService.setConfig(cfg);
+    setAlertConfigState(updated);
+  };
+
+  const clearAlertHistory = async () => {
+    alertNotificationService.clearHistory();
+    setAlertHistory([]);
+    try {
+      await ApiClient.clearAlarmHistory();
+    } catch {
+      // offline/mock fallback
+    }
+    setActiveAlarms([]);
+    setAlarmStats(defaultStats);
+  };
 
   useEffect(() => {
     // 1-second ticker to re-evaluate telemetry timeout dynamically
@@ -567,6 +620,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setLiveTank(arrivalTank);
       setTanks([arrivalTank, departureTank]);
 
+      // Deduplicated real-time alert evaluation and dispatch
+      alertNotificationService.evaluateWaterLevel({
+        tankId: arrivalTank.tankId,
+        coachNumber: activeChno,
+        levelPercent: arrivalLevelPct,
+        isOnline: arrivalTank.isOnline,
+      });
+      alertNotificationService.evaluateWaterLevel({
+        tankId: departureTank.tankId,
+        coachNumber: activeChno,
+        levelPercent: departureLevelPct,
+        isOnline: departureTank.isOnline,
+      });
+      alertNotificationService.evaluateDeviceConnectivity({
+        deviceId: telemetry.uid,
+        coachNumber: activeChno,
+        isOnline: !telemetry.isStale,
+      });
+      alertNotificationService.evaluateSensorHealth({
+        sensorId: `s1-${telemetry.uid}`,
+        coachNumber: activeChno,
+        isValid: !!telemetry.wlv1,
+        sensorName: 'Arrival Sensor 1',
+      });
+      alertNotificationService.evaluateSensorHealth({
+        sensorId: `s2-${telemetry.uid}`,
+        coachNumber: activeChno,
+        isValid: !!telemetry.wlv2,
+        sensorName: 'Departure Sensor 2',
+      });
+      alertNotificationService.evaluateModemStatus({
+        deviceId: telemetry.uid,
+        coachNumber: activeChno,
+        modemOk: !telemetry.isStale,
+      });
+
       // Dynamic real alarms evaluated from telemetry
       const dynamicAlarms: AlarmItem[] = [];
       if (!telemetry.wlv1) {
@@ -827,6 +916,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         consistTanks: consistData.tanks,
         telemetryTimeoutSeconds: telemetryTimeoutSec,
         setTelemetryTimeoutSeconds: handleSetTelemetryTimeout,
+        alertToast,
+        dismissAlertToast,
+        alertHistory,
+        alertConfig,
+        updateAlertConfig,
+        clearAlertHistory,
       }}
     >
       {children}

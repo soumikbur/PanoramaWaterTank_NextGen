@@ -26,6 +26,9 @@ import {
   Navigation,
   Volume2,
   Globe,
+  Trash2,
+  Power,
+  Check,
 } from 'lucide-react';
 
 import { DisplaySettingsPanel } from '../components/settings/DisplaySettingsPanel';
@@ -38,6 +41,10 @@ export const SettingsScreen: React.FC = () => {
     connectionStatus,
     selectedTrainNumber,
     setSelectedTrainNumber,
+    alertConfig,
+    updateAlertConfig,
+    alertHistory,
+    clearAlertHistory,
   } = useApp();
 
   const {
@@ -164,9 +171,38 @@ export const SettingsScreen: React.FC = () => {
   const [alarmWarning, setAlarmWarning] = useState(20.0);
   const [alarmCritical, setAlarmCritical] = useState(10.0);
   const [alarmOverflow, setAlarmOverflow] = useState(100.0);
+  const [alarmMasterEnabled, setAlarmMasterEnabled] = useState(alertConfig?.masterEnabled ?? true);
+  const [alarmLowWaterEnabled, setAlarmLowWaterEnabled] = useState(alertConfig?.lowWaterEnabled ?? true);
+  const [alarmSensorFaultEnabled, setAlarmSensorFaultEnabled] = useState(alertConfig?.sensorFaultEnabled ?? true);
+  const [alarmDeviceOfflineEnabled, setAlarmDeviceOfflineEnabled] = useState(alertConfig?.deviceOfflineEnabled ?? true);
+  const [alarmModemFailureEnabled, setAlarmModemFailureEnabled] = useState(alertConfig?.modemFailureEnabled ?? true);
+  const [alarmOverflowEnabled, setAlarmOverflowEnabled] = useState(alertConfig?.overflowEnabled ?? true);
+  const [alarmVoltageEnabled, setAlarmVoltageEnabled] = useState(alertConfig?.voltageEnabled ?? true);
   const [chimeEnabled, setChimeEnabled] = useState(true);
   const [emergencySms, setEmergencySms] = useState(false);
   const [autoAckTransients, setAutoAckTransients] = useState(true);
+  const [isClearAlertHistoryModalOpen, setIsClearAlertHistoryModalOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : true));
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (alertConfig) {
+      setAlarmMasterEnabled(alertConfig.masterEnabled);
+      setAlarmLowWaterEnabled(alertConfig.lowWaterEnabled);
+      setAlarmSensorFaultEnabled(alertConfig.sensorFaultEnabled);
+      setAlarmDeviceOfflineEnabled(alertConfig.deviceOfflineEnabled);
+      setAlarmModemFailureEnabled(alertConfig.modemFailureEnabled);
+      setAlarmOverflowEnabled(alertConfig.overflowEnabled);
+      setAlarmVoltageEnabled(alertConfig.voltageEnabled);
+    }
+  }, [alertConfig]);
 
   // Section 7: User Preferences
   const [defaultStartupScreen, setDefaultStartupScreen] = useState('dashboard');
@@ -212,6 +248,13 @@ export const SettingsScreen: React.FC = () => {
         setAlarmWarning(conf.alarm_warning_percent || 20.0);
         setAlarmCritical(conf.alarm_critical_percent || 10.0);
         setAlarmOverflow(conf.alarm_overflow_percent || 100.0);
+        if ((conf as any).alarm_master_enabled !== undefined) setAlarmMasterEnabled(Boolean((conf as any).alarm_master_enabled));
+        if ((conf as any).alarm_low_water_enabled !== undefined) setAlarmLowWaterEnabled(Boolean((conf as any).alarm_low_water_enabled));
+        if ((conf as any).alarm_sensor_fault_enabled !== undefined) setAlarmSensorFaultEnabled(Boolean((conf as any).alarm_sensor_fault_enabled));
+        if ((conf as any).alarm_device_offline_enabled !== undefined) setAlarmDeviceOfflineEnabled(Boolean((conf as any).alarm_device_offline_enabled));
+        if ((conf as any).alarm_modem_failure_enabled !== undefined) setAlarmModemFailureEnabled(Boolean((conf as any).alarm_modem_failure_enabled));
+        if ((conf as any).alarm_overflow_enabled !== undefined) setAlarmOverflowEnabled(Boolean((conf as any).alarm_overflow_enabled));
+        if ((conf as any).alarm_voltage_enabled !== undefined) setAlarmVoltageEnabled(Boolean((conf as any).alarm_voltage_enabled));
         setHasUnsavedChanges(false);
       }
     } catch (e: any) {
@@ -320,9 +363,28 @@ export const SettingsScreen: React.FC = () => {
         alarm_warning_percent: Number(alarmWarning),
         alarm_critical_percent: Number(alarmCritical),
         alarm_overflow_percent: Number(alarmOverflow),
+        alarm_master_enabled: alarmMasterEnabled,
+        alarm_low_water_enabled: alarmLowWaterEnabled,
+        alarm_sensor_fault_enabled: alarmSensorFaultEnabled,
+        alarm_device_offline_enabled: alarmDeviceOfflineEnabled,
+        alarm_modem_failure_enabled: alarmModemFailureEnabled,
+        alarm_overflow_enabled: alarmOverflowEnabled,
+        alarm_voltage_enabled: alarmVoltageEnabled,
       };
 
       await ApiClient.applyUnifiedConfig(payload);
+      updateAlertConfig({
+        masterEnabled: alarmMasterEnabled,
+        criticalThreshold: Number(alarmCritical),
+        warningThreshold: Number(alarmWarning),
+        overflowThreshold: Number(alarmOverflow),
+        lowWaterEnabled: alarmLowWaterEnabled,
+        sensorFaultEnabled: alarmSensorFaultEnabled,
+        deviceOfflineEnabled: alarmDeviceOfflineEnabled,
+        modemFailureEnabled: alarmModemFailureEnabled,
+        overflowEnabled: alarmOverflowEnabled,
+        voltageEnabled: alarmVoltageEnabled,
+      });
       setHasUnsavedChanges(false);
       setActionMessage({
         text: 'Configuration successfully validated and persisted to database & device entity.',
@@ -360,6 +422,23 @@ export const SettingsScreen: React.FC = () => {
     }
   };
 
+  const handleConfirmClearHistory = async () => {
+    try {
+      setLoading(true);
+      await clearAlertHistory();
+      setIsClearAlertHistoryModalOpen(false);
+      setActionMessage({
+        text: 'Alert history cleared successfully.',
+        isError: false,
+      });
+      setTimeout(() => setActionMessage(null), 4000);
+    } catch (e: any) {
+      setActionMessage({ text: `Failed to clear alert history: ${e.message}`, isError: true });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const sections = [
     { id: 'all', title: 'All 7 Sections', icon: Sliders },
     { id: 'general', title: '1. General Settings', icon: Globe },
@@ -386,6 +465,7 @@ export const SettingsScreen: React.FC = () => {
       <div
         style={{
           display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
           gap: '8px',
           borderBottom: `1px solid ${colors.border}`,
           paddingBottom: '12px',
@@ -394,7 +474,8 @@ export const SettingsScreen: React.FC = () => {
         <button
           onClick={() => setAdminTab('system')}
           style={{
-            padding: '8px 16px',
+            padding: '10px 16px',
+            minHeight: '44px',
             borderRadius: '6px',
             border: `1px solid ${colors.primaryBorder}`,
             backgroundColor: colors.primarySurface,
@@ -404,7 +485,9 @@ export const SettingsScreen: React.FC = () => {
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: '6px',
+            width: isMobile ? '100%' : 'auto',
           }}
         >
           <SettingsIcon size={14} />
@@ -413,7 +496,8 @@ export const SettingsScreen: React.FC = () => {
         <button
           onClick={() => setAdminTab('display')}
           style={{
-            padding: '8px 16px',
+            padding: '10px 16px',
+            minHeight: '44px',
             borderRadius: '6px',
             border: `1px solid ${colors.borderStrong}`,
             backgroundColor: colors.surfaceAlt,
@@ -423,30 +507,35 @@ export const SettingsScreen: React.FC = () => {
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: '6px',
+            width: isMobile ? '100%' : 'auto',
           }}
         >
           <Sliders size={14} />
           <span>Display & Interface Preferences</span>
         </button>
       </div>
+
       {/* 1. Top Action & Status Bar */}
       <div
         style={{
           backgroundColor: colors.surface,
           border: `1px solid ${colors.border}`,
           borderRadius: `${metrics.cardRadius}px`,
-          padding: '14px 18px',
+          padding: isMobile ? '12px' : '14px 18px',
           display: 'flex',
-          alignItems: 'center',
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'stretch' : 'center',
           justifyContent: 'space-between',
+          gap: isMobile ? '12px' : '16px',
           boxShadow: colors.shadowSubtle,
         }}
       >
         <div>
           <h2
             style={{
-              fontSize: '18px',
+              fontSize: isMobile ? '16px' : '18px',
               fontWeight: 700,
               color: colors.textPrimary,
               margin: '0 0 2px 0',
@@ -460,7 +549,15 @@ export const SettingsScreen: React.FC = () => {
           </span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '8px',
+            width: isMobile ? '100%' : 'auto',
+          }}
+        >
           {hasUnsavedChanges && (
             <span
               style={{
@@ -468,12 +565,14 @@ export const SettingsScreen: React.FC = () => {
                 fontWeight: 600,
                 color: colors.warning,
                 backgroundColor: colors.warningSurface,
-                padding: '4px 10px',
+                padding: '6px 10px',
                 borderRadius: '6px',
                 border: `1px solid ${colors.warningBorder}`,
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
+                width: isMobile ? '100%' : 'auto',
+                justifyContent: isMobile ? 'center' : 'flex-start',
               }}
             >
               <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: colors.warning }} />
@@ -485,36 +584,44 @@ export const SettingsScreen: React.FC = () => {
             onClick={handleReadFromDevice}
             disabled={loading}
             style={{
+              flex: isMobile ? '1 1 calc(50% - 8px)' : 'none',
+              minHeight: '44px',
               backgroundColor: colors.surfaceAlt,
               border: `1px solid ${colors.borderStrong}`,
               color: colors.textPrimary,
-              padding: '6px 14px',
+              padding: '8px 14px',
               borderRadius: '6px',
               fontSize: '12px',
               fontWeight: 600,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
+              justifyContent: 'center',
               gap: '6px',
             }}
           >
-            <RefreshCw size={13} /> Read From Device
+            <RefreshCw size={13} /> <span>Read Device</span>
           </button>
 
           <button
             onClick={loadConfig}
             style={{
+              flex: isMobile ? '1 1 calc(50% - 8px)' : 'none',
+              minHeight: '44px',
               backgroundColor: colors.surfaceAlt,
               border: `1px solid ${colors.borderStrong}`,
               color: colors.textSecondary,
-              padding: '6px 14px',
+              padding: '8px 14px',
               borderRadius: '6px',
               fontSize: '12px',
               fontWeight: 600,
               cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            Reset Changes
+            Reset
           </button>
 
           <button
@@ -522,15 +629,20 @@ export const SettingsScreen: React.FC = () => {
             disabled={loading || !isAdmin}
             title={!isAdmin ? 'Administrator privileges required to persist hardware changes' : 'Save all settings'}
             style={{
+              flex: isMobile ? '1 1 100%' : 'none',
+              minHeight: '44px',
               backgroundColor: isAdmin ? colors.primary : '#94A3B8',
               border: 'none',
               color: colors.textOnPrimary,
-              padding: '6px 18px',
+              padding: '8px 18px',
               borderRadius: '6px',
               fontSize: '12px',
               fontWeight: 700,
               cursor: isAdmin ? 'pointer' : 'not-allowed',
               boxShadow: '0 1px 2px rgba(37, 99, 235, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
             {loading ? 'Applying...' : 'Apply Configuration'}
@@ -540,14 +652,19 @@ export const SettingsScreen: React.FC = () => {
             <button
               onClick={() => setIsFactoryResetModalOpen(true)}
               style={{
+                flex: isMobile ? '1 1 100%' : 'none',
+                minHeight: '40px',
                 backgroundColor: '#FFF1F2',
                 border: '1px solid #FECDD3',
                 color: '#E11D48',
-                padding: '6px 12px',
+                padding: '8px 12px',
                 borderRadius: '6px',
                 fontSize: '12px',
                 fontWeight: 600,
                 cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
             >
               Factory Reset
@@ -578,6 +695,7 @@ export const SettingsScreen: React.FC = () => {
 
       {/* 2. Navigation Tabs for the 7 Sections */}
       <div
+        className="settings-section-pills"
         style={{
           display: 'flex',
           gap: '6px',
@@ -586,7 +704,10 @@ export const SettingsScreen: React.FC = () => {
           borderRadius: `${metrics.cardRadius}px`,
           padding: '6px',
           overflowX: 'auto',
-          flexWrap: 'wrap',
+          WebkitOverflowScrolling: 'touch',
+          flexWrap: isMobile ? 'nowrap' : 'wrap',
+          boxSizing: 'border-box',
+          width: '100%',
         }}
       >
         {sections.map((sec) => {
@@ -601,6 +722,7 @@ export const SettingsScreen: React.FC = () => {
                 alignItems: 'center',
                 gap: '8px',
                 padding: '8px 14px',
+                minHeight: '44px',
                 borderRadius: '6px',
                 border: 'none',
                 backgroundColor: isActive ? '#EFF6FF' : 'transparent',
@@ -609,6 +731,7 @@ export const SettingsScreen: React.FC = () => {
                 fontWeight: isActive ? 700 : 500,
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
+                flexShrink: 0,
                 transition: 'all 0.15s ease',
               }}
             >
@@ -645,7 +768,7 @@ export const SettingsScreen: React.FC = () => {
             </span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '16px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
                 SCADA Facility & System Name
@@ -940,7 +1063,7 @@ export const SettingsScreen: React.FC = () => {
           </div>
 
           {/* Theme & Contrast Preferences */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '16px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
                 Visual Contrast Mode
@@ -1059,7 +1182,7 @@ export const SettingsScreen: React.FC = () => {
           )}
 
           {/* Device REST Connection */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '14px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
                 Device Host / IP
@@ -1131,7 +1254,7 @@ export const SettingsScreen: React.FC = () => {
           </div>
 
           {/* Tank Geometry */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '14px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
                 Tank Height (cm)
@@ -1217,7 +1340,7 @@ export const SettingsScreen: React.FC = () => {
           </div>
 
           {/* Sensor Calibration */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '14px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
                 Sensor Type
@@ -1369,7 +1492,7 @@ export const SettingsScreen: React.FC = () => {
           )}
 
           {/* MQTT Settings */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '14px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
                 MQTT Broker Host
@@ -1460,7 +1583,7 @@ export const SettingsScreen: React.FC = () => {
               Ubidots Cloud Industrial Gateway
             </h4>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '14px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
                   Cloud API Endpoint
@@ -1575,7 +1698,7 @@ export const SettingsScreen: React.FC = () => {
             </span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '16px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
                 Primary Corridor Definition
@@ -1698,15 +1821,85 @@ export const SettingsScreen: React.FC = () => {
               6. Notifications & Alarm Setpoints
             </h3>
             <span style={{ fontSize: '11px', color: colors.textMuted }}>
-              Industrial water level thresholds: Critical Low, Warning Low, Overflow, and Audio Dispatch.
+              Industrial water level thresholds, master alert engine, category filtering, and telemetry event ledger.
             </span>
           </div>
 
+          {/* Master Enable/Disable All Alerts Toggle */}
+          <div
+            style={{
+              backgroundColor: alarmMasterEnabled ? '#F0FDF4' : '#F8FAFC',
+              border: `1.5px solid ${alarmMasterEnabled ? '#86EFAC' : '#CBD5E1'}`,
+              borderRadius: '8px',
+              padding: '14px',
+              display: 'flex',
+              flexDirection: isMobile ? 'column' : 'row',
+              alignItems: isMobile ? 'flex-start' : 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  backgroundColor: alarmMasterEnabled ? '#DCFCE7' : '#E2E8F0',
+                  color: alarmMasterEnabled ? '#16A34A' : '#64748B',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <Power size={18} />
+              </div>
+              <div>
+                <strong style={{ fontSize: '13px', color: alarmMasterEnabled ? '#15803D' : '#334155' }}>
+                  Master SCADA Alert Engine
+                </strong>
+                <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: alarmMasterEnabled ? '#166534' : '#64748B' }}>
+                  {alarmMasterEnabled
+                    ? 'Active: Real-time telemetry monitoring, audio chimes, and UI banner dispatches enabled.'
+                    : 'Muted: All audio and visual alarm notifications are currently silenced.'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setAlarmMasterEnabled(!alarmMasterEnabled);
+                setHasUnsavedChanges(true);
+              }}
+              disabled={!isAdmin}
+              style={{
+                minHeight: '44px',
+                padding: '8px 18px',
+                borderRadius: '6px',
+                border: 'none',
+                backgroundColor: alarmMasterEnabled ? '#16A34A' : '#64748B',
+                color: '#FFFFFF',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: isAdmin ? 'pointer' : 'not-allowed',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                width: isMobile ? '100%' : 'auto',
+              }}
+            >
+              <Power size={14} />
+              <span>{alarmMasterEnabled ? 'ENABLED (Click to Mute)' : 'MUTED (Click to Enable)'}</span>
+            </button>
+          </div>
+
           {/* Threshold Inputs */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '14px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.critical, marginBottom: '6px' }}>
-                Critical Low Alarm (%)
+                Critical Low Alarm (&lt; 10%)
               </label>
               <input
                 type="number"
@@ -1725,13 +1918,14 @@ export const SettingsScreen: React.FC = () => {
                   borderRadius: '6px',
                   border: `1px solid ${colors.criticalBorder}`,
                   fontSize: '13px',
+                  boxSizing: 'border-box',
                 }}
               />
             </div>
 
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.warning, marginBottom: '6px' }}>
-                Warning Low Alarm (%)
+                Warning Low Alarm (&lt; 20%)
               </label>
               <input
                 type="number"
@@ -1750,13 +1944,14 @@ export const SettingsScreen: React.FC = () => {
                   borderRadius: '6px',
                   border: `1px solid ${colors.warningBorder}`,
                   fontSize: '13px',
+                  boxSizing: 'border-box',
                 }}
               />
             </div>
 
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.primary, marginBottom: '6px' }}>
-                Overflow High Alarm (%)
+                Overflow High Alarm (&ge; 100%)
               </label>
               <input
                 type="number"
@@ -1775,27 +1970,79 @@ export const SettingsScreen: React.FC = () => {
                   borderRadius: '6px',
                   border: `1px solid ${colors.primaryBorder}`,
                   fontSize: '13px',
+                  boxSizing: 'border-box',
                 }}
               />
             </div>
           </div>
 
           {/* Visual Threshold Bar */}
-          <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '14px' }}>
+          <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '14px', boxSizing: 'border-box' }}>
             <span style={{ fontSize: '11px', fontWeight: 700, color: colors.textSecondary }}>
               Visual Threshold Hierarchy:
             </span>
             <div style={{ display: 'flex', height: '14px', borderRadius: '7px', overflow: 'hidden', marginTop: '8px' }}>
-              <div style={{ width: `${alarmCritical}%`, backgroundColor: '#EF4444' }} title={`Critical Low: < ${alarmCritical}%`} />
-              <div style={{ width: `${alarmWarning - alarmCritical}%`, backgroundColor: '#F59E0B' }} title={`Warning Low: ${alarmCritical}% to ${alarmWarning}%`} />
-              <div style={{ width: `${alarmOverflow - alarmWarning}%`, backgroundColor: '#10B981' }} title={`Normal: ${alarmWarning}% to ${alarmOverflow}%`} />
-              <div style={{ width: '10%', backgroundColor: '#3B82F6' }} title={`Overflow: > ${alarmOverflow}%`} />
+              <div style={{ width: `${Math.min(100, Math.max(0, alarmCritical))}%`, backgroundColor: '#EF4444' }} title={`Critical Low: < ${alarmCritical}%`} />
+              <div style={{ width: `${Math.min(100, Math.max(0, alarmWarning - alarmCritical))}%`, backgroundColor: '#F59E0B' }} title={`Warning Low: ${alarmCritical}% to ${alarmWarning}%`} />
+              <div style={{ width: `${Math.min(100, Math.max(0, alarmOverflow - alarmWarning))}%`, backgroundColor: '#10B981' }} title={`Normal: ${alarmWarning}% to ${alarmOverflow}%`} />
+              <div style={{ width: '10%', backgroundColor: '#3B82F6' }} title={`Overflow: >= ${alarmOverflow}%`} />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#64748B', marginTop: '4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#64748B', marginTop: '4px', flexWrap: 'wrap' }}>
               <span>0%</span>
-              <span>Critical: {alarmCritical}%</span>
-              <span>Warning: {alarmWarning}%</span>
-              <span>Overflow: {alarmOverflow}%</span>
+              <span>Critical: &lt;{alarmCritical}%</span>
+              <span>Warning: &lt;{alarmWarning}%</span>
+              <span>Overflow: &ge;{alarmOverflow}%</span>
+            </div>
+          </div>
+
+          {/* Monitored Alert Categories Grid */}
+          <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '14px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 700, color: colors.textPrimary, display: 'block', marginBottom: '8px' }}>
+              Monitored Alert Categories:
+            </span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '10px' }}>
+              {[
+                { key: 'lowWater', label: 'Low Water Level Alert', desc: 'Trigger on <10% (Critical) and <20% (Warning)', checked: alarmLowWaterEnabled, set: setAlarmLowWaterEnabled },
+                { key: 'sensorFault', label: 'Sensor Fault & Disconnect', desc: 'Trigger on invalid ADC reading or unseated probe', checked: alarmSensorFaultEnabled, set: setAlarmSensorFaultEnabled },
+                { key: 'deviceOffline', label: 'Device Offline Detection', desc: 'Trigger on missing telemetry heartbeats', checked: alarmDeviceOfflineEnabled, set: setAlarmDeviceOfflineEnabled },
+                { key: 'modemFailure', label: 'Modem & Cellular Failure', desc: 'Trigger on carrier network disconnect', checked: alarmModemFailureEnabled, set: setAlarmModemFailureEnabled },
+                { key: 'overflow', label: 'Tank Overflow Protection', desc: 'Trigger when fill level reaches >=100%', checked: alarmOverflowEnabled, set: setAlarmOverflowEnabled },
+                { key: 'voltage', label: 'Low Voltage & Power Bus', desc: 'Trigger when battery < 40% or bus < 10.5V', checked: alarmVoltageEnabled, set: setAlarmVoltageEnabled },
+              ].map((cat) => (
+                <label
+                  key={cat.key}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    backgroundColor: cat.checked ? '#F0F9FF' : '#F8FAFC',
+                    border: `1px solid ${cat.checked ? '#BAE6FD' : '#E2E8F0'}`,
+                    cursor: isAdmin ? 'pointer' : 'default',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    disabled={!isAdmin}
+                    checked={cat.checked}
+                    onChange={(e) => {
+                      cat.set(e.target.checked);
+                      setHasUnsavedChanges(true);
+                    }}
+                    style={{ width: 18, height: 18, marginTop: '2px', accentColor: colors.primary }}
+                  />
+                  <div>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: cat.checked ? '#0369A1' : colors.textPrimary, display: 'block' }}>
+                      {cat.label}
+                    </span>
+                    <span style={{ fontSize: '10px', color: colors.textMuted }}>
+                      {cat.desc}
+                    </span>
+                  </div>
+                </label>
+              ))}
             </div>
           </div>
 
@@ -1806,7 +2053,10 @@ export const SettingsScreen: React.FC = () => {
                 type="checkbox"
                 id="chime-checkbox"
                 checked={chimeEnabled}
-                onChange={(e) => setChimeEnabled(e.target.checked)}
+                onChange={(e) => {
+                  setChimeEnabled(e.target.checked);
+                  setHasUnsavedChanges(true);
+                }}
                 style={{ width: 16, height: 16, accentColor: colors.primary }}
               />
               <label htmlFor="chime-checkbox" style={{ fontSize: '12px', fontWeight: 600, color: colors.textPrimary, cursor: 'pointer' }}>
@@ -1819,7 +2069,10 @@ export const SettingsScreen: React.FC = () => {
                 type="checkbox"
                 id="sms-checkbox"
                 checked={emergencySms}
-                onChange={(e) => setEmergencySms(e.target.checked)}
+                onChange={(e) => {
+                  setEmergencySms(e.target.checked);
+                  setHasUnsavedChanges(true);
+                }}
                 style={{ width: 16, height: 16, accentColor: colors.primary }}
               />
               <label htmlFor="sms-checkbox" style={{ fontSize: '12px', fontWeight: 600, color: colors.textPrimary, cursor: 'pointer' }}>
@@ -1832,13 +2085,175 @@ export const SettingsScreen: React.FC = () => {
                 type="checkbox"
                 id="auto-ack-checkbox"
                 checked={autoAckTransients}
-                onChange={(e) => setAutoAckTransients(e.target.checked)}
+                onChange={(e) => {
+                  setAutoAckTransients(e.target.checked);
+                  setHasUnsavedChanges(true);
+                }}
                 style={{ width: 16, height: 16, accentColor: colors.primary }}
               />
               <label htmlFor="auto-ack-checkbox" style={{ fontSize: '12px', fontWeight: 600, color: colors.textPrimary, cursor: 'pointer' }}>
                 Auto-acknowledge transient sensor sloshing spikes once level returns to nominal
               </label>
             </div>
+          </div>
+
+          {/* Real-Time Telemetry Alert History Viewer */}
+          <div
+            style={{
+              borderTop: '1px solid #E2E8F0',
+              paddingTop: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: isMobile ? 'column' : 'row',
+                alignItems: isMobile ? 'flex-start' : 'center',
+                justifyContent: 'space-between',
+                gap: '8px',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: colors.textPrimary }}>
+                    Real-Time Telemetry Alert History
+                  </h4>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      backgroundColor: '#F1F5F9',
+                      color: '#475569',
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                    }}
+                  >
+                    {alertHistory.length} Recorded Events
+                  </span>
+                </div>
+                <span style={{ fontSize: '11px', color: colors.textMuted }}>
+                  Authoritative telemetry audit trail across fleet coaches and physical edge devices.
+                </span>
+              </div>
+
+              <button
+                onClick={() => setIsClearAlertHistoryModalOpen(true)}
+                disabled={!isAdmin || alertHistory.length === 0}
+                style={{
+                  minHeight: '44px',
+                  padding: '8px 14px',
+                  borderRadius: '6px',
+                  border: `1px solid ${alertHistory.length === 0 ? '#E2E8F0' : '#FECDD3'}`,
+                  backgroundColor: alertHistory.length === 0 ? '#F8FAFC' : '#FFF1F2',
+                  color: alertHistory.length === 0 ? '#94A3B8' : '#E11D48',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: (isAdmin && alertHistory.length > 0) ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  width: isMobile ? '100%' : 'auto',
+                }}
+              >
+                <Trash2 size={13} />
+                <span>Clear Alert History</span>
+              </button>
+            </div>
+
+            {/* Alert History Items */}
+            {alertHistory.length === 0 ? (
+              <div
+                style={{
+                  padding: '24px',
+                  backgroundColor: '#F8FAFC',
+                  borderRadius: '8px',
+                  border: '1px dashed #CBD5E1',
+                  textAlign: 'center',
+                  color: '#64748B',
+                  fontSize: '12px',
+                }}
+              >
+                <CheckCircle2 size={24} color="#10B981" style={{ margin: '0 auto 6px auto', display: 'block' }} />
+                <span>No alert events recorded. All telemetry channels operating nominally.</span>
+              </div>
+            ) : (
+              <div
+                style={{
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  borderRadius: '8px',
+                  border: '1px solid #E2E8F0',
+                  boxSizing: 'border-box',
+                }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {alertHistory.map((item, idx) => {
+                    const isCrit = item.severity === 'CRITICAL';
+                    const isWarn = item.severity === 'WARNING';
+                    const badgeBg = isCrit ? '#FEF2F2' : isWarn ? '#FFFBEB' : '#ECFDF5';
+                    const badgeColor = isCrit ? '#DC2626' : isWarn ? '#D97706' : '#16A34A';
+                    const badgeBorder = isCrit ? '#FECACA' : isWarn ? '#FDE68A' : '#A7F3D0';
+
+                    return (
+                      <div
+                        key={item.id || idx}
+                        style={{
+                          padding: '10px 12px',
+                          borderBottom: idx === alertHistory.length - 1 ? 'none' : '1px solid #F1F5F9',
+                          backgroundColor: idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC',
+                          display: 'flex',
+                          flexDirection: isMobile ? 'column' : 'row',
+                          alignItems: isMobile ? 'flex-start' : 'center',
+                          justifyContent: 'space-between',
+                          gap: '6px',
+                          fontSize: '12px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              backgroundColor: badgeBg,
+                              color: badgeColor,
+                              border: `1px solid ${badgeBorder}`,
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                            }}
+                          >
+                            {item.severity}
+                          </span>
+                          <span style={{ fontWeight: 600, color: colors.textPrimary }}>
+                            {item.alertType.replace(/_/g, ' ')}
+                          </span>
+                          <span style={{ color: colors.textMuted, fontSize: '11px' }}>
+                            • {item.target}
+                          </span>
+                          {item.waterLevel != null && (
+                            <span style={{ fontWeight: 600, color: badgeColor, fontSize: '11px' }}>
+                              ({item.waterLevel.toFixed(1)}%)
+                            </span>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: isMobile ? '100%' : 'auto', justifyContent: isMobile ? 'space-between' : 'flex-end' }}>
+                          <span style={{ fontSize: '11px', color: '#64748B' }}>
+                            {item.description}
+                          </span>
+                          <span style={{ fontSize: '10px', color: '#94A3B8', whiteSpace: 'nowrap' }}>
+                            {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1877,7 +2292,7 @@ export const SettingsScreen: React.FC = () => {
               borderRadius: '8px',
               padding: '16px',
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
               gap: '14px',
             }}
           >
@@ -1922,7 +2337,7 @@ export const SettingsScreen: React.FC = () => {
           </div>
 
           {/* Startup & Feedback Preferences */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '16px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
                 Default Startup Landing Screen
@@ -1968,8 +2383,10 @@ export const SettingsScreen: React.FC = () => {
                 paddingTop: '16px',
                 marginTop: '10px',
                 display: 'flex',
-                alignItems: 'center',
+                flexDirection: isMobile ? 'column' : 'row',
+                alignItems: isMobile ? 'flex-start' : 'center',
                 justifyContent: 'space-between',
+                gap: '12px',
               }}
             >
               <div>
@@ -1982,6 +2399,7 @@ export const SettingsScreen: React.FC = () => {
               <button
                 onClick={() => setIsFactoryResetModalOpen(true)}
                 style={{
+                  minHeight: '44px',
                   backgroundColor: '#E11D48',
                   border: 'none',
                   color: '#FFFFFF',
@@ -1990,12 +2408,120 @@ export const SettingsScreen: React.FC = () => {
                   fontSize: '12px',
                   fontWeight: 700,
                   cursor: 'pointer',
+                  width: isMobile ? '100%' : 'auto',
                 }}
               >
                 Perform Factory Reset
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Clear Alert History Modal */}
+      {isClearAlertHistoryModalOpen && (
+        <div
+          className="modal-backdrop"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            boxSizing: 'border-box',
+          }}
+        >
+          <div
+            className="modal-dialog"
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '12px',
+              padding: isMobile ? '16px' : '24px',
+              width: '460px',
+              maxWidth: 'calc(100vw - 32px)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px',
+              boxSizing: 'border-box',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  backgroundColor: '#FFE4E6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <Trash2 size={20} color="#E11D48" />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0F172A' }}>
+                  Clear Alert History
+                </h3>
+                <span style={{ fontSize: '11px', color: '#64748B' }}>
+                  Irreversible action. Purges local cache and database history.
+                </span>
+              </div>
+            </div>
+
+            <p style={{ margin: 0, fontSize: '13px', color: '#334155', lineHeight: 1.5 }}>
+              Are you sure you want to permanently clear all recorded alert history events? This will reset the alert history ledger across desktop and mobile consoles.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column-reverse' : 'row', justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>
+              <button
+                onClick={() => setIsClearAlertHistoryModalOpen(false)}
+                style={{
+                  padding: '8px 16px',
+                  minHeight: '44px',
+                  borderRadius: '6px',
+                  border: '1px solid #CBD5E1',
+                  backgroundColor: '#FFFFFF',
+                  color: '#334155',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  width: isMobile ? '100%' : 'auto',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmClearHistory}
+                disabled={loading}
+                style={{
+                  padding: '8px 18px',
+                  minHeight: '44px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  backgroundColor: '#E11D48',
+                  color: '#FFFFFF',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  width: isMobile ? '100%' : 'auto',
+                }}
+              >
+                {loading ? 'Clearing...' : 'Yes, Clear Alert History'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -2009,12 +2535,16 @@ export const SettingsScreen: React.FC = () => {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
             backdropFilter: 'blur(4px)',
-            zIndex: 10000,
+            zIndex: 99999,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            padding: '16px',
+            boxSizing: 'border-box',
           }}
         >
           <div
@@ -2022,13 +2552,14 @@ export const SettingsScreen: React.FC = () => {
             style={{
               backgroundColor: '#FFFFFF',
               borderRadius: '12px',
-              padding: '24px',
+              padding: isMobile ? '16px' : '24px',
               width: '460px',
-              maxWidth: '90%',
+              maxWidth: 'calc(100vw - 32px)',
               boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
               display: 'flex',
               flexDirection: 'column',
               gap: '14px',
+              boxSizing: 'border-box',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -2041,6 +2572,7 @@ export const SettingsScreen: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  flexShrink: 0,
                 }}
               >
                 <AlertTriangle size={20} color="#E11D48" />
@@ -2059,11 +2591,12 @@ export const SettingsScreen: React.FC = () => {
               Are you sure you want to reset all parameters to default factory specifications? This will reset the tank capacity to <strong>20.0 Liters</strong>, height to <strong>50.0 cm</strong>, and threshold alarms to standard setpoints.
             </p>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column-reverse' : 'row', justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>
               <button
                 onClick={() => setIsFactoryResetModalOpen(false)}
                 style={{
                   padding: '8px 16px',
+                  minHeight: '44px',
                   borderRadius: '6px',
                   border: '1px solid #CBD5E1',
                   backgroundColor: '#FFFFFF',
@@ -2071,6 +2604,7 @@ export const SettingsScreen: React.FC = () => {
                   fontSize: '12px',
                   fontWeight: 600,
                   cursor: 'pointer',
+                  width: isMobile ? '100%' : 'auto',
                 }}
               >
                 Cancel
@@ -2080,6 +2614,7 @@ export const SettingsScreen: React.FC = () => {
                 disabled={loading}
                 style={{
                   padding: '8px 18px',
+                  minHeight: '44px',
                   borderRadius: '6px',
                   border: 'none',
                   backgroundColor: '#E11D48',
@@ -2087,6 +2622,7 @@ export const SettingsScreen: React.FC = () => {
                   fontSize: '12px',
                   fontWeight: 700,
                   cursor: 'pointer',
+                  width: isMobile ? '100%' : 'auto',
                 }}
               >
                 {loading ? 'Resetting...' : 'Yes, Restore Baseline'}
