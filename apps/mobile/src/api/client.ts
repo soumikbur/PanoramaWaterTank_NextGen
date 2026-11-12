@@ -20,13 +20,30 @@ import {
 import { TrainLookupResult, TrainCreatePayload } from '../types/train';
 import { deviceRegistry } from '../services/deviceRegistry';
 
-const API_BASE =
-  (typeof process !== 'undefined' && (process.env?.API_URL || process.env?.REACT_APP_API_URL || process.env?.VITE_API_URL)) ||
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL) ||
-  (typeof window !== 'undefined' && window.location?.origin ? `${window.location.origin}/api/v1` : 'http://127.0.0.1:8000/api/v1');
+function resolveApiBase(): string | null {
+  const configured =
+    (typeof process !== 'undefined' && (process.env?.API_URL || process.env?.REACT_APP_API_URL || process.env?.VITE_API_URL)) ||
+    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL);
+  if (configured && String(configured).trim()) {
+    return String(configured).trim().replace(/\/+$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    // GitHub Pages serves only static assets; never route API calls to *.github.io
+    if ((window.location.hostname || '').endsWith('.github.io')) {
+      return null;
+    }
+    return `${window.location.origin}/api/v1`;
+  }
+  return 'http://127.0.0.1:8000/api/v1';
+}
+
+const API_BASE = resolveApiBase();
 
 export class ApiClient {
   private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    if (!API_BASE) {
+      throw new Error('External FastAPI backend URL is not configured (set VITE_API_URL). GitHub Pages hosts static frontend assets only.');
+    }
     const url = `${API_BASE}${endpoint}`;
     const token = localStorage.getItem('panorama_token');
     const headers: Record<string, string> = {
@@ -204,7 +221,7 @@ export class ApiClient {
 
   static logout(): void {
     const token = localStorage.getItem('panorama_token');
-    if (token) {
+    if (token && API_BASE) {
       try {
         fetch(`${API_BASE}/auth/logout`, {
           method: 'POST',
@@ -1049,6 +1066,7 @@ export class ApiClient {
   }
 
   static getExportCsvUrl(tankId?: string, range: string = '24h'): string {
+    if (!API_BASE) return '';
     const params = new URLSearchParams({ range });
     if (tankId) params.append('tank_id', tankId);
     return `${API_BASE}/export/csv?${params.toString()}`;

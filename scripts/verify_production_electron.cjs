@@ -7,7 +7,7 @@ if (!fs.existsSync(SCREENSHOT_DIR)) {
   fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
 }
 
-const targetUrl = 'https://panorama-water-tank-next-gen.vercel.app';
+const targetUrl = 'https://soumikbur.github.io/PanoramaWaterTank_NextGen/';
 
 app.whenReady().then(async () => {
   console.log(`[*] Connecting Electron to live production: ${targetUrl}`);

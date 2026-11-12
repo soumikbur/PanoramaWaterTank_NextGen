@@ -7,10 +7,21 @@
 
 import { LiveTelemetryPayload } from '../types';
 
-const API_BASE =
-  (typeof process !== 'undefined' && (process.env?.API_URL || process.env?.REACT_APP_API_URL || process.env?.VITE_API_URL)) ||
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL) ||
-  (typeof window !== 'undefined' && window.location?.origin ? `${window.location.origin}/api/v1` : 'http://127.0.0.1:8000/api/v1');
+function resolveRegistryApiBase(): string | null {
+  const configured =
+    (typeof process !== 'undefined' && (process.env?.API_URL || process.env?.REACT_APP_API_URL || process.env?.VITE_API_URL)) ||
+    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL);
+  if (configured && String(configured).trim()) {
+    return String(configured).trim().replace(/\/+$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    if ((window.location.hostname || '').endsWith('.github.io')) return null;
+    return `${window.location.origin}/api/v1`;
+  }
+  return 'http://127.0.0.1:8000/api/v1';
+}
+
+const API_BASE = resolveRegistryApiBase();
 
 export type DeviceRegistrationStatus = 'DISCOVERED' | 'REGISTERED';
 export type DeviceAssignmentStatus = 'ENGAGED' | 'AVAILABLE';
@@ -285,25 +296,26 @@ class DeviceRegistryService {
     this.saveToStorage();
     this.notify();
 
-    // Async REST sync attempt (fail-safe for static hosting)
-    const token = typeof window !== 'undefined' ? localStorage.getItem('panorama_token') : null;
-    fetch(`${API_BASE}/devices`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({
-        uid: registered.uid,
-        name: registered.name,
-        train_number: registered.trainNumber || '',
-        coach_number: registered.coachNumber || '',
-        hardware_version: registered.hardwareModel,
-      }),
-    }).catch((err) => {
-      // Expected on static GitHub Pages
-      console.info('[DeviceRegistry] Offline/Static mode: backend sync skipped:', err?.message || err);
-    });
+    // Async REST sync attempt when a backend origin is configured
+    if (API_BASE) {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('panorama_token') : null;
+      fetch(`${API_BASE}/devices`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          uid: registered.uid,
+          name: registered.name,
+          train_number: registered.trainNumber || '',
+          coach_number: registered.coachNumber || '',
+          hardware_version: registered.hardwareModel,
+        }),
+      }).catch((err) => {
+        console.info('[DeviceRegistry] Backend sync skipped:', err?.message || err);
+      });
+    }
 
     return registered;
   }
@@ -336,18 +348,20 @@ class DeviceRegistryService {
     this.saveToStorage();
     this.notify();
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('panorama_token') : null;
-    fetch(`${API_BASE}/devices/${uid}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({
-        trainNumber: '',
-        coachNumber: '',
-      }),
-    }).catch(() => {});
+    if (API_BASE) {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('panorama_token') : null;
+      fetch(`${API_BASE}/devices/${uid}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          trainNumber: '',
+          coachNumber: '',
+        }),
+      }).catch(() => {});
+    }
 
     return unassigned;
   }

@@ -7,14 +7,15 @@ type WebSocketStatus = 'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED';
 type EventCallback = (data: any) => void;
 type StatusCallback = (status: WebSocketStatus) => void;
 
-function getWsUrl(): string {
-  if (typeof process !== 'undefined' && (process.env?.WS_URL || process.env?.REACT_APP_WS_URL || process.env?.VITE_WS_URL)) {
-    return process.env.WS_URL || process.env.REACT_APP_WS_URL || process.env.VITE_WS_URL!;
-  }
-  if (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_WS_URL) {
-    return (import.meta as any).env.VITE_WS_URL;
+function getWsUrl(): string | null {
+  const configured =
+    (typeof process !== 'undefined' && (process.env?.WS_URL || process.env?.REACT_APP_WS_URL || process.env?.VITE_WS_URL)) ||
+    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_WS_URL);
+  if (configured && String(configured).trim()) {
+    return String(configured).trim();
   }
   if (typeof window !== 'undefined' && window.location?.host) {
+    if ((window.location.hostname || '').endsWith('.github.io')) return null;
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${proto}//${window.location.host}/api/v1/ws/live`;
   }
@@ -43,6 +44,10 @@ export class WebSocketService {
   }
 
   connect(): void {
+    if (!WS_URL) {
+      this.setStatus('DISCONNECTED');
+      return;
+    }
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       return;
     }

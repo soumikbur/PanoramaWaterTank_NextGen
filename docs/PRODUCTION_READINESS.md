@@ -2,7 +2,7 @@
 
 **Project:** Panorama Water Tank Monitor – NextGen  
 **Version:** 2.0.0  
-**Target Environments:** Vercel (Frontend Web SPA) + FastAPI Railway/Cloud VM (Backend API & MQTT Broker)  
+**Target Environments:** GitHub Pages (Frontend Web SPA) + FastAPI Railway/Cloud VM (Backend API & MQTT Broker)  
 **Date of Audit & Sign-Off:** 05 November 2026  
 **Overall Readiness Verdict:** **APPROVED FOR PRODUCTION**  
 
@@ -56,7 +56,7 @@ MQTT_TELEMETRY_TOPIC="panorama/telemetry/+"
 
 # --- CORS Allowed Origins ---
 # Explicitly set production frontend domains (comma-separated or json)
-CORS_ORIGINS=["https://panorama-water-tank-next-gen.vercel.app"]
+CORS_ORIGINS=["https://soumikbur.github.io"]
 ```
 
 ---

@@ -11,7 +11,7 @@ _BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 
 # In serverless environments (e.g. AWS Lambda), the deployment root is read-only.
 # Direct SQLite database writes to the writable /tmp directory if running in serverless mode.
-if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or os.environ.get("LAMBDA_TASK_ROOT"):
+if os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or os.environ.get("LAMBDA_TASK_ROOT"):
     _tmp_dir = Path(tempfile.gettempdir())
     _target_db = _tmp_dir / "panorama_dev.db"
     _seed_db = _BACKEND_DIR / "panorama_dev.db"

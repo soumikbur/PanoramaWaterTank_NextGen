@@ -15,7 +15,7 @@ The Panorama Water Tank Monitor NextGen employs a decoupled micro-architecture:
 ### 2.1 Repository Setup & CI Workflow
 Frontend deployment is automated exclusively via GitHub Actions:
 - **Hosting Platform**: GitHub Pages (`https://<username>.github.io/<repo>/`)
-- **Workflow**: `.github/workflows/ci.yml` builds and deploys artifacts to the `gh-pages` branch.
+- **Workflow**: `.github/workflows/backend-ci.yml` builds `./dist` and deploys it to GitHub Pages on push to `main`.
 - **Build Output**: `dist/` (contains `index.html` and assets).
 
 ### 2.2 Build Pipeline
@@ -49,7 +49,7 @@ Frontend deployment is automated exclusively via GitHub Actions:
 | `ALGORITHM` | No | `HS256` | JWT signing algorithm. |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | No | `1440` (24 hours) | Token lifespan. |
 | `DATABASE_URL` | **Yes** | `postgresql+asyncpg://scada_usr:pwd@db.internal:5432/panorama` | Async connection string. |
-| `CORS_ORIGINS` | **Yes** | `https://panorama-water-tank-next-gen.vercel.app,http://localhost:3000` | Allowed origins. |
+| `CORS_ORIGINS` | **Yes** | `https://soumikbur.github.io,http://localhost:3000` | Allowed origins. |
 | `MQTT_BROKER_HOST` | No | `broker.railways.gov` | Cellular IoT ingestion broker. |
 | `MQTT_BROKER_PORT` | No | `8883` | MQTTS TLS port. |
 

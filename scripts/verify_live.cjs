@@ -15,41 +15,32 @@ function check(url, options = {}) {
   });
 }
 
+const BASE_URL = 'https://soumikbur.github.io/PanoramaWaterTank_NextGen';
+
 async function main() {
-  console.log('[*] Checking live production deployment...');
-  
+  console.log('[*] Checking live GitHub Pages deployment...');
+
   // 1. Root URL
-  const root = await check('https://panorama-water-tank-next-gen.vercel.app/');
+  const root = await check(`${BASE_URL}/`);
   console.log('1. Root URL Status:', root.statusCode);
   console.log('   Content-Type:', root.headers['content-type']);
   console.log('   Has <div id="root"></div>:', root.body.includes('id="root"'));
-  console.log('   Has index.js script:', root.body.includes('/assets/index.js'));
+  console.log('   Has index.js script:', root.body.includes('./assets/index.js'));
 
   // 2. Static Asset JS
-  const js = await check('https://panorama-water-tank-next-gen.vercel.app/assets/index.js');
+  const js = await check(`${BASE_URL}/assets/index.js`);
   console.log('2. Asset /assets/index.js Status:', js.statusCode, 'Length:', js.body.length);
 
   // 3. Static Asset CSS
-  const css = await check('https://panorama-water-tank-next-gen.vercel.app/assets/index.css');
+  const css = await check(`${BASE_URL}/assets/index.css`);
   console.log('3. Asset /assets/index.css Status:', css.statusCode, 'Length:', css.body.length);
 
-  // 4. SPA Subroutes
-  for (const route of ['/trains', '/devices', '/location', '/settings']) {
-    const sub = await check(`https://panorama-water-tank-next-gen.vercel.app${route}`);
-    console.log(`4. SPA Route ${route} Status:`, sub.statusCode, 'Has #root:', sub.body.includes('id="root"'));
-  }
+  // 4. Service Worker & SPA 404 Fallback
+  const sw = await check(`${BASE_URL}/sw.js`);
+  console.log('4. Asset /sw.js Status:', sw.statusCode, 'Length:', sw.body.length);
 
-  // 5. API Health
-  const health = await check('https://panorama-water-tank-next-gen.vercel.app/api/v1/health');
-  console.log('5. API Health Status:', health.statusCode, 'Body:', health.body.slice(0, 150));
-
-  // 6. API Live Tank
-  const tank = await check('https://panorama-water-tank-next-gen.vercel.app/api/v1/tanks/live');
-  console.log('6. API Live Tank Status:', tank.statusCode, 'Body:', tank.body.slice(0, 150));
-
-  // 7. Docs Swagger
-  const docs = await check('https://panorama-water-tank-next-gen.vercel.app/docs');
-  console.log('7. Swagger UI /docs Status:', docs.statusCode, 'Has Swagger:', docs.body.includes('swagger-ui'));
+  const fallback = await check(`${BASE_URL}/404.html`);
+  console.log('5. SPA Fallback /404.html Status:', fallback.statusCode, 'Has pathSegmentsToKeep:', fallback.body.includes('pathSegmentsToKeep'));
 }
 
 main().catch(console.error);

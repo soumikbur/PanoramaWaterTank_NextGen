@@ -25,6 +25,8 @@ async function build() {
   const enableTestLogin = process.env.VITE_ENABLE_TEST_LOGIN !== undefined
     ? process.env.VITE_ENABLE_TEST_LOGIN.trim().toLowerCase() === 'true'
     : true;
+  const apiUrl = (process.env.VITE_API_URL || '').trim();
+  const wsUrl = (process.env.VITE_WS_URL || '').trim();
   console.log(`[BUILD] Bundling application with esbuild (test shortcuts: ${enableTestLogin})...`);
   const start = Date.now();
 
@@ -42,6 +44,10 @@ async function build() {
       'process.env.NODE_ENV': '"production"',
       'process.env.VITE_ENABLE_TEST_LOGIN': enableTestLogin ? '"true"' : '"false"',
       'import.meta.env.VITE_ENABLE_TEST_LOGIN': enableTestLogin ? '"true"' : '"false"',
+      'process.env.VITE_API_URL': JSON.stringify(apiUrl),
+      'import.meta.env.VITE_API_URL': JSON.stringify(apiUrl),
+      'process.env.VITE_WS_URL': JSON.stringify(wsUrl),
+      'import.meta.env.VITE_WS_URL': JSON.stringify(wsUrl),
     },
     loader: {
       '.css': 'css',
