@@ -5,12 +5,14 @@
  */
 import {
   CoachConsist,
+  CoachFormInput,
   RegionSummary,
   TankLiveStatus,
   TrainConsist,
   TrainCreatePayload,
   TrainOverviewItem,
 } from '../types';
+import { deviceRegistry } from './deviceRegistry';
 
 export const FLEET_STORAGE_KEY = 'panorama_static_fleet_v2';
 const LEGACY_FLEET_KEY = 'panorama_static_fleet_v1';
@@ -284,6 +286,245 @@ export const localFleetStore = {
     const clean = (trainNumber || '').trim();
     const state = readState();
     return state.trains[clean]?.consist ?? null;
+  },
+
+  addCoach(trainNumber: string, input: CoachFormInput): { success: boolean; coach: CoachConsist } {
+    const num = (trainNumber || '').trim();
+    const state = readState();
+    const record = state.trains[num];
+    if (!record) {
+      throw new Error(`Train ${num} not found.`);
+    }
+
+    const cNum = (input.coach_number || '').trim().toUpperCase();
+    if (!cNum) {
+      throw new Error('Coach identifier is required (e.g. C1, B1, S1).');
+    }
+
+    if (record.consist.coaches.some((c) => c.coach_number.toUpperCase() === cNum)) {
+      const err: any = new Error(`Coach ${cNum} already exists on Train ${num}.`);
+      err.status = 409;
+      throw err;
+    }
+
+    const devUid = (input.device_uid || '').trim() || `PANORAMA-${num}-${cNum}`;
+    const t1Cap = Number(input.tank_1_capacity) > 0 ? Number(input.tank_1_capacity) : 500;
+    const t2Cap = Number(input.tank_2_capacity) > 0 ? Number(input.tank_2_capacity) : 500;
+    const t1Name = (input.tank_1_name || '').trim() || 'Arrival Side (Tank 1)';
+    const t2Name = (input.tank_2_name || '').trim() || 'Departure Side (Tank 2)';
+    const cat = (input.coach_category || input.coach_type || '').trim() || 'General';
+
+    const newCoach: CoachConsist = {
+      coach_number: cNum,
+      coach_category: cat,
+      coach_type: input.coach_type || cat,
+      coach_name: (input.coach_name || '').trim() || `Coach ${cNum}`,
+      device_uid: devUid,
+      is_online: false,
+      hardware_version: 'Standard WLI Node',
+      tanks: [
+        {
+          id: `tank-${num}-${cNum}-1`,
+          tank_index: 1,
+          name: t1Name,
+          capacity_liters: t1Cap,
+          current_level_percent: 0.0,
+          current_volume_liters: 0.0,
+          status: 'NORMAL',
+        },
+        {
+          id: `tank-${num}-${cNum}-2`,
+          tank_index: 2,
+          name: t2Name,
+          capacity_liters: t2Cap,
+          current_level_percent: 0.0,
+          current_volume_liters: 0.0,
+          status: 'NORMAL',
+        },
+      ],
+    };
+
+    record.consist.coaches.push(newCoach);
+    record.consist.coaches_count = record.consist.coaches.length;
+    record.consist.tanks_count = record.consist.coaches.length * 2;
+    record.train.coaches_count = record.consist.coaches.length;
+    record.train.tanks_count = record.consist.coaches.length * 2;
+
+    if (input.device_uid && input.device_uid.trim()) {
+      deviceRegistry.assignDevice(devUid, num, cNum);
+    }
+
+    writeState(state);
+    return { success: true, coach: newCoach };
+  },
+
+  updateCoach(trainNumber: string, coachNumber: string, input: CoachFormInput): { success: boolean; coach: CoachConsist } {
+    const num = (trainNumber || '').trim();
+    const cNum = (coachNumber || '').trim().toUpperCase();
+    const state = readState();
+    const record = state.trains[num];
+    if (!record) {
+      throw new Error(`Train ${num} not found.`);
+    }
+
+    const coach = record.consist.coaches.find((c) => c.coach_number.toUpperCase() === cNum);
+    if (!coach) {
+      throw new Error(`Coach ${cNum} not found on Train ${num}.`);
+    }
+
+    if (input.coach_category !== undefined) {
+      coach.coach_category = (input.coach_category || '').trim() || coach.coach_category;
+    }
+    if (input.coach_type !== undefined) {
+      coach.coach_type = (input.coach_type || '').trim() || coach.coach_type;
+    }
+    if (input.coach_name !== undefined) {
+      coach.coach_name = (input.coach_name || '').trim() || coach.coach_name;
+    }
+
+    const t1Cap = Number(input.tank_1_capacity) > 0 ? Number(input.tank_1_capacity) : null;
+    const t2Cap = Number(input.tank_2_capacity) > 0 ? Number(input.tank_2_capacity) : null;
+    const t1Name = (input.tank_1_name || '').trim();
+    const t2Name = (input.tank_2_name || '').trim();
+
+    coach.tanks.forEach((t) => {
+      if (t.tank_index === 1) {
+        if (t1Name) t.name = t1Name;
+        if (t1Cap) t.capacity_liters = t1Cap;
+      } else if (t.tank_index === 2) {
+        if (t2Name) t.name = t2Name;
+        if (t2Cap) t.capacity_liters = t2Cap;
+      }
+    });
+
+    if (input.device_uid !== undefined) {
+      const newDev = (input.device_uid || '').trim();
+      const oldDev = coach.device_uid;
+      if (newDev && newDev !== oldDev) {
+        deviceRegistry.unassignDevice(oldDev);
+        deviceRegistry.assignDevice(newDev, num, cNum);
+        coach.device_uid = newDev;
+      } else if (!newDev && oldDev) {
+        deviceRegistry.unassignDevice(oldDev);
+        coach.device_uid = `PANORAMA-${num}-${cNum}`;
+      }
+    }
+
+    writeState(state);
+    return { success: true, coach };
+  },
+
+  renameCoach(trainNumber: string, oldCoachNumber: string, newCoachNumber: string): { success: boolean; oldCoachNumber: string; newCoachNumber: string } {
+    const num = (trainNumber || '').trim();
+    const oldC = (oldCoachNumber || '').trim().toUpperCase();
+    const newC = (newCoachNumber || '').trim().toUpperCase();
+
+    if (!newC) {
+      throw new Error('New coach identifier cannot be empty.');
+    }
+    if (oldC === newC) {
+      return { success: true, oldCoachNumber: oldC, newCoachNumber: newC };
+    }
+
+    const state = readState();
+    const record = state.trains[num];
+    if (!record) {
+      throw new Error(`Train ${num} not found.`);
+    }
+
+    if (record.consist.coaches.some((c) => c.coach_number.toUpperCase() === newC)) {
+      const err: any = new Error(`Coach ${newC} already exists on Train ${num}.`);
+      err.status = 409;
+      throw err;
+    }
+
+    const coach = record.consist.coaches.find((c) => c.coach_number.toUpperCase() === oldC);
+    if (!coach) {
+      throw new Error(`Coach ${oldC} not found on Train ${num}.`);
+    }
+
+    coach.coach_number = newC;
+    coach.coach_name = coach.coach_name?.replace(oldC, newC) || `Coach ${newC}`;
+    coach.tanks.forEach((t) => {
+      t.id = `tank-${num}-${newC}-${t.tank_index}`;
+    });
+
+    // Update mapped device in deviceRegistry if assigned
+    if (coach.device_uid) {
+      const dev = deviceRegistry.getDeviceByUid(coach.device_uid);
+      if (dev && dev.trainNumber === num) {
+        deviceRegistry.assignDevice(coach.device_uid, num, newC);
+      }
+    }
+
+    writeState(state);
+    return { success: true, oldCoachNumber: oldC, newCoachNumber: newC };
+  },
+
+  deleteCoach(trainNumber: string, coachNumber: string): { success: boolean; message: string; coachNumber: string } {
+    const num = (trainNumber || '').trim();
+    const cNum = (coachNumber || '').trim().toUpperCase();
+    const state = readState();
+    const record = state.trains[num];
+    if (!record) {
+      throw new Error(`Train ${num} not found.`);
+    }
+
+    const coachIdx = record.consist.coaches.findIndex((c) => c.coach_number.toUpperCase() === cNum);
+    if (coachIdx === -1) {
+      throw new Error(`Coach ${cNum} not found on Train ${num}.`);
+    }
+
+    const [deletedCoach] = record.consist.coaches.splice(coachIdx, 1);
+    record.consist.coaches_count = record.consist.coaches.length;
+    record.consist.tanks_count = record.consist.coaches.length * 2;
+    record.train.coaches_count = record.consist.coaches.length;
+    record.train.tanks_count = record.consist.coaches.length * 2;
+
+    // Release device to unassigned pool rather than deleting hardware
+    if (deletedCoach.device_uid) {
+      deviceRegistry.unassignDevice(deletedCoach.device_uid);
+    }
+
+    writeState(state);
+    return { success: true, message: `Coach ${cNum} deleted successfully from Train ${num}.`, coachNumber: cNum };
+  },
+
+  reorderCoaches(trainNumber: string, coachNumbers: string[]): { success: boolean; coaches: CoachConsist[] } {
+    const num = (trainNumber || '').trim();
+    const state = readState();
+    const record = state.trains[num];
+    if (!record) {
+      throw new Error(`Train ${num} not found.`);
+    }
+
+    const coachMap = new Map<string, CoachConsist>();
+    record.consist.coaches.forEach((c) => coachMap.set(c.coach_number.toUpperCase(), c));
+
+    const reordered: CoachConsist[] = [];
+    const seen = new Set<string>();
+
+    coachNumbers.forEach((cn) => {
+      const clean = cn.trim().toUpperCase();
+      const c = coachMap.get(clean);
+      if (c && !seen.has(clean)) {
+        reordered.push(c);
+        seen.add(clean);
+      }
+    });
+
+    // Add any remaining coaches not in list
+    record.consist.coaches.forEach((c) => {
+      const clean = c.coach_number.toUpperCase();
+      if (!seen.has(clean)) {
+        reordered.push(c);
+        seen.add(clean);
+      }
+    });
+
+    record.consist.coaches = reordered;
+    writeState(state);
+    return { success: true, coaches: reordered };
   },
 
   listAllTanks(): TankLiveStatus[] {

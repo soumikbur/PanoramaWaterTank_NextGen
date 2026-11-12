@@ -14,7 +14,8 @@ import {
   MqttConnectionStatus,
   MqttGpsFix,
   TrainOverviewItem,
-  TrainConsist
+  TrainConsist,
+  CoachFormInput
 } from '../types';
 import { ApiClient } from '../api/client';
 import { wsService } from '../services/websocket';
@@ -123,6 +124,11 @@ interface AppContextType {
   clearAlertHistory: () => Promise<void>;
   notificationPermission: BrowserNotificationPermission;
   requestNotificationPermission: () => Promise<BrowserNotificationPermission>;
+  addCoach: (trainNumber: string, data: CoachFormInput) => Promise<any>;
+  updateCoach: (trainNumber: string, coachNumber: string, data: CoachFormInput) => Promise<any>;
+  renameCoach: (trainNumber: string, oldCoachNumber: string, newCoachNumber: string) => Promise<any>;
+  deleteCoach: (trainNumber: string, coachNumber: string) => Promise<any>;
+  reorderCoaches: (trainNumber: string, coachNumbers: string[]) => Promise<any>;
 }
 
 const defaultStats: AlarmStats = {
@@ -1217,6 +1223,64 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     AppRouter.navigate('login');
   };
 
+  const handleAddCoach = async (trainNumber: string, data: CoachFormInput) => {
+    const res = await ApiClient.addCoach(trainNumber, data);
+    await refreshRegions();
+    if (selectedTrainNumber.trim() === trainNumber.trim()) {
+      const updated = await ApiClient.fetchTrainConsist(trainNumber.trim()).catch(() => null);
+      if (updated) setActiveConsist(updated);
+    }
+    return res;
+  };
+
+  const handleUpdateCoach = async (trainNumber: string, coachNumber: string, data: CoachFormInput) => {
+    const res = await ApiClient.updateCoach(trainNumber, coachNumber, data);
+    await refreshRegions();
+    if (selectedTrainNumber.trim() === trainNumber.trim()) {
+      const updated = await ApiClient.fetchTrainConsist(trainNumber.trim()).catch(() => null);
+      if (updated) setActiveConsist(updated);
+    }
+    return res;
+  };
+
+  const handleRenameCoach = async (trainNumber: string, oldCoachNumber: string, newCoachNumber: string) => {
+    const res = await ApiClient.renameCoach(trainNumber, oldCoachNumber, newCoachNumber);
+    await refreshRegions();
+    if (selectedCoachNumber.toUpperCase() === oldCoachNumber.trim().toUpperCase()) {
+      setSelectedCoachNumber(newCoachNumber.trim().toUpperCase());
+    }
+    if (selectedTrainNumber.trim() === trainNumber.trim()) {
+      const updated = await ApiClient.fetchTrainConsist(trainNumber.trim()).catch(() => null);
+      if (updated) setActiveConsist(updated);
+    }
+    return res;
+  };
+
+  const handleDeleteCoach = async (trainNumber: string, coachNumber: string) => {
+    const res = await ApiClient.deleteCoach(trainNumber, coachNumber);
+    await refreshRegions();
+    if (selectedTrainNumber.trim() === trainNumber.trim()) {
+      const updated = await ApiClient.fetchTrainConsist(trainNumber.trim()).catch(() => null);
+      if (updated) {
+        setActiveConsist(updated);
+        if (selectedCoachNumber.toUpperCase() === coachNumber.trim().toUpperCase()) {
+          const nextCoach = updated.coaches[0]?.coach_number || '';
+          setSelectedCoachNumber(nextCoach);
+        }
+      }
+    }
+    return res;
+  };
+
+  const handleReorderCoaches = async (trainNumber: string, coachNumbers: string[]) => {
+    const res = await ApiClient.reorderCoaches(trainNumber, coachNumbers);
+    if (selectedTrainNumber.trim() === trainNumber.trim()) {
+      const updated = await ApiClient.fetchTrainConsist(trainNumber.trim()).catch(() => null);
+      if (updated) setActiveConsist(updated);
+    }
+    return res;
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1282,6 +1346,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         clearAlertHistory,
         notificationPermission,
         requestNotificationPermission,
+        addCoach: handleAddCoach,
+        updateCoach: handleUpdateCoach,
+        renameCoach: handleRenameCoach,
+        deleteCoach: handleDeleteCoach,
+        reorderCoaches: handleReorderCoaches,
       }}
     >
       {children}

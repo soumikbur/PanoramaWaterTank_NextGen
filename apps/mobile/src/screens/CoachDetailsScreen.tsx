@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../state/AppContext';
 import { CoachDualTankCard } from '../components/tank/CoachDualTankCard';
 import { CoachMiniMap } from '../components/location/CoachMiniMap';
+import { ManageCoachModal } from '../components/coach/ManageCoachModal';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -20,6 +21,7 @@ import {
   AlertCircle,
   Radio,
   CheckCircle2,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 export const CoachDetailsScreen: React.FC = () => {
@@ -37,11 +39,13 @@ export const CoachDetailsScreen: React.FC = () => {
     refreshData,
     liveTelemetry,
     configuredTrains,
+    activeConsist,
     mqttConnectionStatus,
     telemetryTimeoutSeconds,
   } = useApp();
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isManageCoachOpen, setIsManageCoachOpen] = useState<boolean>(false);
   const trainNum = (selectedTrainNumber || configuredTrains[0]?.train_number || '').trim();
   const coachNum = (selectedCoachNumber || '').toUpperCase();
 
@@ -119,9 +123,23 @@ export const CoachDetailsScreen: React.FC = () => {
   const departureHeight = hasLiveTelemetry && liveTelemetry ? liveTelemetry.cm2 : (departurePercent != null ? (departurePercent / 100) * 150.0 : null);
   const departureVolume = departurePercent != null ? (departurePercent / 100) * 500.0 : null;
 
+  const availableCoaches = useMemo(() => {
+    if (activeConsist?.train_number === trainNum && activeConsist.coaches?.length) {
+      return activeConsist.coaches.map((c) => c.coach_number);
+    }
+    return ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'C9', 'C10', 'C11', 'C12'];
+  }, [activeConsist, trainNum]);
+
+  const currentCoachIdx = availableCoaches.findIndex((c) => c.toUpperCase() === coachNum.toUpperCase());
+  const canPrev = currentCoachIdx > 0;
+  const canNext = currentCoachIdx !== -1 && currentCoachIdx < availableCoaches.length - 1;
+
   const handleStepCoach = (dir: 'prev' | 'next') => {
-    const nextIdx = dir === 'prev' ? Math.max(1, coachIndex - 1) : Math.min(24, coachIndex + 1);
-    setSelectedCoachNumber(`C${nextIdx}`);
+    if (dir === 'prev' && canPrev) {
+      setSelectedCoachNumber(availableCoaches[currentCoachIdx - 1]);
+    } else if (dir === 'next' && canNext) {
+      setSelectedCoachNumber(availableCoaches[currentCoachIdx + 1]);
+    }
   };
 
   const handleRefresh = async () => {
@@ -282,6 +300,28 @@ export const CoachDetailsScreen: React.FC = () => {
             <span>Consist</span>
           </button>
 
+          <button
+            onClick={() => setIsManageCoachOpen(true)}
+            title="Manage Coaches & Consist"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '5px 10px',
+              backgroundColor: '#EFF6FF',
+              border: '1px solid #BFDBFE',
+              borderRadius: '6px',
+              color: '#2563EB',
+              fontSize: '11px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.12s ease',
+            }}
+          >
+            <SlidersHorizontal size={13} />
+            <span>Manage Coach</span>
+          </button>
+
           <div style={{ height: '20px', width: '1px', backgroundColor: '#E2E8F0' }} />
 
           <div>
@@ -313,19 +353,19 @@ export const CoachDetailsScreen: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <button
             onClick={() => handleStepCoach('prev')}
-            disabled={coachIndex <= 1}
+            disabled={!canPrev}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '3px',
               padding: '5px 9px',
-              backgroundColor: coachIndex <= 1 ? '#F1F5F9' : '#FFFFFF',
+              backgroundColor: !canPrev ? '#F1F5F9' : '#FFFFFF',
               border: '1px solid #CBD5E1',
               borderRadius: '6px',
-              color: coachIndex <= 1 ? '#94A3B8' : '#0F172A',
+              color: !canPrev ? '#94A3B8' : '#0F172A',
               fontSize: '11px',
               fontWeight: 600,
-              cursor: coachIndex <= 1 ? 'not-allowed' : 'pointer',
+              cursor: !canPrev ? 'not-allowed' : 'pointer',
             }}
           >
             <ChevronLeft size={13} />
@@ -333,24 +373,24 @@ export const CoachDetailsScreen: React.FC = () => {
           </button>
 
           <span style={{ fontSize: '11px', fontWeight: 700, color: '#2563EB', padding: '0 4px', whiteSpace: 'nowrap' }}>
-            {coachNum} / C24
+            {coachNum} / {availableCoaches.length > 0 ? `${availableCoaches.length} Coaches` : 'C24'}
           </span>
 
           <button
             onClick={() => handleStepCoach('next')}
-            disabled={coachIndex >= 24}
+            disabled={!canNext}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '3px',
               padding: '5px 9px',
-              backgroundColor: coachIndex >= 24 ? '#F1F5F9' : '#FFFFFF',
+              backgroundColor: !canNext ? '#F1F5F9' : '#FFFFFF',
               border: '1px solid #CBD5E1',
               borderRadius: '6px',
-              color: coachIndex >= 24 ? '#94A3B8' : '#0F172A',
+              color: !canNext ? '#94A3B8' : '#0F172A',
               fontSize: '11px',
               fontWeight: 600,
-              cursor: coachIndex >= 24 ? 'not-allowed' : 'pointer',
+              cursor: !canNext ? 'not-allowed' : 'pointer',
             }}
           >
             <span>Next</span>
@@ -733,6 +773,13 @@ export const CoachDetailsScreen: React.FC = () => {
           <span>Back to Dashboard</span>
         </button>
       </div>
+
+      {/* Manage Coach Modal */}
+      <ManageCoachModal
+        isOpen={isManageCoachOpen}
+        onClose={() => setIsManageCoachOpen(false)}
+        trainNumber={trainNum}
+      />
     </div>
   );
 };

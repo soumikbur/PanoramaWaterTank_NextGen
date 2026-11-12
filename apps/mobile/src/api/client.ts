@@ -15,7 +15,9 @@ import {
   TrainConsist,
   UserProfile,
   EmployeeRegistrationPayload,
-  TrainLocation
+  TrainLocation,
+  CoachFormInput,
+  CoachConsist
 } from '../types';
 import { TrainLookupResult, TrainCreatePayload } from '../types/train';
 import { deviceRegistry } from '../services/deviceRegistry';
@@ -663,6 +665,75 @@ export class ApiClient {
           method: 'DELETE',
         });
     deviceRegistry.detachTrain(trainNumber);
+    this.notifyCrossTabFleetSync();
+    return res;
+  }
+
+  // Coach and Consist Management
+  static async addCoach(trainNumber: string, data: CoachFormInput): Promise<any> {
+    const cleanTrain = (trainNumber || '').trim();
+    if (!cleanTrain) throw new Error('Train number is required.');
+    const res = !API_BASE
+      ? localFleetStore.addCoach(cleanTrain, data)
+      : await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches`, {
+          method: 'POST',
+          body: JSON.stringify(data),
+        });
+    this.notifyCrossTabFleetSync();
+    return res;
+  }
+
+  static async updateCoach(trainNumber: string, coachNumber: string, data: CoachFormInput): Promise<any> {
+    const cleanTrain = (trainNumber || '').trim();
+    const cleanCoach = (coachNumber || '').trim();
+    if (!cleanTrain || !cleanCoach) throw new Error('Train number and Coach number are required.');
+    const res = !API_BASE
+      ? localFleetStore.updateCoach(cleanTrain, cleanCoach, data)
+      : await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(cleanCoach)}`, {
+          method: 'PUT',
+          body: JSON.stringify(data),
+        });
+    this.notifyCrossTabFleetSync();
+    return res;
+  }
+
+  static async renameCoach(trainNumber: string, oldCoachNumber: string, newCoachNumber: string): Promise<any> {
+    const cleanTrain = (trainNumber || '').trim();
+    const oldCoach = (oldCoachNumber || '').trim();
+    const newCoach = (newCoachNumber || '').trim().toUpperCase();
+    if (!cleanTrain || !oldCoach || !newCoach) throw new Error('Train number, old coach number, and new coach number are required.');
+    const res = !API_BASE
+      ? localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach)
+      : await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(oldCoach)}/rename`, {
+          method: 'PUT',
+          body: JSON.stringify({ new_coach_number: newCoach }),
+        });
+    this.notifyCrossTabFleetSync();
+    return res;
+  }
+
+  static async deleteCoach(trainNumber: string, coachNumber: string): Promise<any> {
+    const cleanTrain = (trainNumber || '').trim();
+    const cleanCoach = (coachNumber || '').trim();
+    if (!cleanTrain || !cleanCoach) throw new Error('Train number and coach number are required.');
+    const res = !API_BASE
+      ? localFleetStore.deleteCoach(cleanTrain, cleanCoach)
+      : await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(cleanCoach)}`, {
+          method: 'DELETE',
+        });
+    this.notifyCrossTabFleetSync();
+    return res;
+  }
+
+  static async reorderCoaches(trainNumber: string, coachNumbers: string[]): Promise<any> {
+    const cleanTrain = (trainNumber || '').trim();
+    if (!cleanTrain) throw new Error('Train number is required.');
+    const res = !API_BASE
+      ? localFleetStore.reorderCoaches(cleanTrain, coachNumbers)
+      : await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/reorder`, {
+          method: 'PUT',
+          body: JSON.stringify({ coach_numbers: coachNumbers }),
+        });
     this.notifyCrossTabFleetSync();
     return res;
   }

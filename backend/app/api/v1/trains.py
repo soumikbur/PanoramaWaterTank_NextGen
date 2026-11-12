@@ -709,3 +709,458 @@ async def delete_train(
         "resolved_alarms": resolved_alarms,
     }
 
+
+class CoachAddRequest(BaseModel):
+    coach_number: str
+    coach_name: Optional[str] = None
+    coach_category: Optional[str] = "AC 3-Tier"
+    coach_type: Optional[str] = None
+    tank_1_name: Optional[str] = "Arrival Side (Tank 1)"
+    tank_2_name: Optional[str] = "Departure Side (Tank 2)"
+    tank_1_capacity: Optional[float] = 500.0
+    tank_2_capacity: Optional[float] = 500.0
+    tank_height_cm: Optional[float] = 150.0
+    device_uid: Optional[str] = None
+
+
+class CoachUpdateRequest(BaseModel):
+    coach_name: Optional[str] = None
+    coach_category: Optional[str] = None
+    coach_type: Optional[str] = None
+    tank_1_name: Optional[str] = None
+    tank_2_name: Optional[str] = None
+    tank_1_capacity: Optional[float] = None
+    tank_2_capacity: Optional[float] = None
+    tank_height_cm: Optional[float] = None
+    device_uid: Optional[str] = None
+
+
+class CoachRenameRequest(BaseModel):
+    new_coach_number: str
+
+
+class CoachReorderRequest(BaseModel):
+    coach_numbers: List[str]
+
+
+@router.post("/{train_number}/coaches", status_code=201)
+async def add_coach_to_train(
+    train_number: str,
+    data: CoachAddRequest,
+    request: Request,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a new coach to an existing train consist (Admin Only)."""
+    tr_clean = train_number.strip()
+    c_clean = data.coach_number.strip().upper()
+    if not c_clean:
+        raise HTTPException(status_code=400, detail="Coach identifier is required.")
+
+    # Check train exists
+    db_train = (
+        await db.execute(select(Train).where(Train.train_number == tr_clean))
+    ).scalar_one_or_none()
+    if not db_train and tr_clean not in TRAIN_METADATA:
+        raise HTTPException(status_code=404, detail=f"Train {tr_clean} not found.")
+
+    # Check coach collision
+    existing_dev = (
+        await db.execute(
+            select(Device).where(
+                Device.train_number == tr_clean,
+                Device.coach_number == c_clean,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing_dev:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Coach {c_clean} is already configured on Train {tr_clean}.",
+        )
+
+    device_repo = DeviceRepository(db)
+    tank_repo = TankRepository(db)
+    uid = (data.device_uid or "").strip() or f"PANORAMA-{tr_clean}-{c_clean}"
+
+    device = await device_repo.get_by_uid(uid)
+    if not device:
+        device = await device_repo.create_or_update(
+            uid=uid,
+            train_number=tr_clean,
+            coach_number=c_clean,
+            name=f"Train {tr_clean} Coach {c_clean}",
+        )
+    else:
+        device.train_number = tr_clean
+        device.coach_number = c_clean
+        device.updated_at = utc_now()
+
+    # Configure Dual Tanks
+    t1 = await tank_repo.get_by_device_and_index(device.id, 1)
+    if not t1:
+        t1 = await tank_repo.create(
+            device_id=device.id,
+            tank_index=1,
+            name=data.tank_1_name or "Arrival Side (Tank 1)",
+            capacity_liters=data.tank_1_capacity or 500.0,
+            max_height_cm=data.tank_height_cm or 150.0,
+        )
+    else:
+        t1.name = data.tank_1_name or t1.name
+        t1.capacity_liters = data.tank_1_capacity or t1.capacity_liters
+        t1.max_height_cm = data.tank_height_cm or t1.max_height_cm
+
+    t2 = await tank_repo.get_by_device_and_index(device.id, 2)
+    if not t2:
+        t2 = await tank_repo.create(
+            device_id=device.id,
+            tank_index=2,
+            name=data.tank_2_name or "Departure Side (Tank 2)",
+            capacity_liters=data.tank_2_capacity or 500.0,
+            max_height_cm=data.tank_height_cm or 150.0,
+        )
+    else:
+        t2.name = data.tank_2_name or t2.name
+        t2.capacity_liters = data.tank_2_capacity or t2.capacity_liters
+        t2.max_height_cm = data.tank_height_cm or t2.max_height_cm
+
+    # Update Train official composition JSON if present
+    if db_train:
+        comp = _safe_json_loads(db_train.coach_configuration_json, [])
+        if not any(c.get("coach_number", "").upper() == c_clean for c in comp):
+            comp.append({
+                "position": len(comp) + 1,
+                "coach_number": c_clean,
+                "coach_category": data.coach_category or "Coach",
+                "coach_type": data.coach_type or data.coach_category or "Coach",
+            })
+            db_train.coach_configuration_json = json.dumps(comp)
+            db_train.total_coaches = len(comp)
+
+    client_ip = request.client.host if request.client else "unknown"
+    db.add(
+        AuditEvent(
+            user_id=admin.id,
+            action="ADD_COACH",
+            target_type="COACH",
+            target_id=f"{tr_clean}:{c_clean}",
+            details=json.dumps({"device_uid": uid, "added_by": admin.username}),
+            ip_address=client_ip,
+        )
+    )
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"Coach {c_clean} added to Train {tr_clean} successfully.",
+        "coach_number": c_clean,
+        "device_uid": uid,
+    }
+
+
+@router.put("/{train_number}/coaches/reorder")
+async def reorder_coaches(
+    train_number: str,
+    data: CoachReorderRequest,
+    request: Request,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reorder coach sequence within train consist (Admin Only)."""
+    tr_clean = train_number.strip()
+    db_train = (
+        await db.execute(select(Train).where(Train.train_number == tr_clean))
+    ).scalar_one_or_none()
+
+    if db_train:
+        comp = _safe_json_loads(db_train.coach_configuration_json, [])
+        comp_map = {c.get("coach_number", "").upper(): c for c in comp}
+        reordered = []
+        seen = set()
+        for num in data.coach_numbers:
+            clean_num = num.strip().upper()
+            if clean_num in comp_map and clean_num not in seen:
+                reordered.append(comp_map[clean_num])
+                seen.add(clean_num)
+        for c in comp:
+            clean_num = c.get("coach_number", "").upper()
+            if clean_num not in seen:
+                reordered.append(c)
+                seen.add(clean_num)
+        for idx, c in enumerate(reordered, 1):
+            c["position"] = idx
+        db_train.coach_configuration_json = json.dumps(reordered)
+
+    client_ip = request.client.host if request.client else "unknown"
+    db.add(
+        AuditEvent(
+            user_id=admin.id,
+            action="REORDER_COACHES",
+            target_type="TRAIN",
+            target_id=tr_clean,
+            details=json.dumps({"reordered_by": admin.username}),
+            ip_address=client_ip,
+        )
+    )
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"Coaches reordered successfully for Train {tr_clean}.",
+        "coach_numbers": data.coach_numbers,
+    }
+
+
+@router.put("/{train_number}/coaches/{coach_number}")
+async def update_coach_details(
+    train_number: str,
+    coach_number: str,
+    data: CoachUpdateRequest,
+    request: Request,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update coach specifications and tank parameters (Admin Only)."""
+    tr_clean = train_number.strip()
+    c_clean = coach_number.strip().upper()
+
+    dev = (
+        await db.execute(
+            select(Device).where(
+                Device.train_number == tr_clean,
+                Device.coach_number == c_clean,
+            )
+        )
+    ).scalar_one_or_none()
+
+    if not dev:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Coach {c_clean} not found on Train {tr_clean}.",
+        )
+
+    tank_repo = TankRepository(db)
+    t1 = await tank_repo.get_by_device_and_index(dev.id, 1)
+    if t1:
+        if data.tank_1_name:
+            t1.name = data.tank_1_name.strip()
+        if data.tank_1_capacity and data.tank_1_capacity > 0:
+            t1.capacity_liters = data.tank_1_capacity
+        if data.tank_height_cm and data.tank_height_cm > 0:
+            t1.max_height_cm = data.tank_height_cm
+
+    t2 = await tank_repo.get_by_device_and_index(dev.id, 2)
+    if t2:
+        if data.tank_2_name:
+            t2.name = data.tank_2_name.strip()
+        if data.tank_2_capacity and data.tank_2_capacity > 0:
+            t2.capacity_liters = data.tank_2_capacity
+        if data.tank_height_cm and data.tank_height_cm > 0:
+            t2.max_height_cm = data.tank_height_cm
+
+    # Handle device reassignment if requested
+    if data.device_uid and data.device_uid.strip() and data.device_uid.strip() != dev.uid:
+        new_uid = data.device_uid.strip()
+        new_dev = (
+            await db.execute(select(Device).where(Device.uid == new_uid))
+        ).scalar_one_or_none()
+        if new_dev:
+            # Unassign old device
+            dev.train_number = "UNASSIGNED"
+            dev.coach_number = "UNASSIGNED"
+            # Assign new device
+            new_dev.train_number = tr_clean
+            new_dev.coach_number = c_clean
+            new_dev.updated_at = utc_now()
+
+    client_ip = request.client.host if request.client else "unknown"
+    db.add(
+        AuditEvent(
+            user_id=admin.id,
+            action="UPDATE_COACH",
+            target_type="COACH",
+            target_id=f"{tr_clean}:{c_clean}",
+            details=json.dumps({"updated_by": admin.username}),
+            ip_address=client_ip,
+        )
+    )
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"Coach {c_clean} updated successfully.",
+        "coach_number": c_clean,
+    }
+
+
+@router.put("/{train_number}/coaches/{coach_number}/rename")
+async def rename_coach(
+    train_number: str,
+    coach_number: str,
+    data: CoachRenameRequest,
+    request: Request,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Rename a coach in the consist while preserving telemetry and hardware bindings (Admin Only)."""
+    tr_clean = train_number.strip()
+    old_c = coach_number.strip().upper()
+    new_c = data.new_coach_number.strip().upper()
+
+    if not new_c:
+        raise HTTPException(status_code=400, detail="New coach identifier is required.")
+
+    if old_c == new_c:
+        return {"success": True, "old_coach_number": old_c, "new_coach_number": new_c}
+
+    # Verify new coach number does not conflict
+    conflict = (
+        await db.execute(
+            select(Device).where(
+                Device.train_number == tr_clean,
+                Device.coach_number == new_c,
+            )
+        )
+    ).scalar_one_or_none()
+    if conflict:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Coach {new_c} already exists on Train {tr_clean}.",
+        )
+
+    dev = (
+        await db.execute(
+            select(Device).where(
+                Device.train_number == tr_clean,
+                Device.coach_number == old_c,
+            )
+        )
+    ).scalar_one_or_none()
+    if not dev:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Coach {old_c} not found on Train {tr_clean}.",
+        )
+
+    dev.coach_number = new_c
+    dev.updated_at = utc_now()
+
+    # Update Train configuration JSON if present
+    db_train = (
+        await db.execute(select(Train).where(Train.train_number == tr_clean))
+    ).scalar_one_or_none()
+    if db_train:
+        comp = _safe_json_loads(db_train.coach_configuration_json, [])
+        for item in comp:
+            if item.get("coach_number", "").upper() == old_c:
+                item["coach_number"] = new_c
+        db_train.coach_configuration_json = json.dumps(comp)
+
+    client_ip = request.client.host if request.client else "unknown"
+    db.add(
+        AuditEvent(
+            user_id=admin.id,
+            action="RENAME_COACH",
+            target_type="COACH",
+            target_id=f"{tr_clean}:{old_c}->{new_c}",
+            details=json.dumps({"renamed_by": admin.username}),
+            ip_address=client_ip,
+        )
+    )
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"Coach {old_c} renamed to {new_c} successfully.",
+        "old_coach_number": old_c,
+        "new_coach_number": new_c,
+    }
+
+
+@router.delete("/{train_number}/coaches/{coach_number}")
+async def delete_coach(
+    train_number: str,
+    coach_number: str,
+    request: Request,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a coach from the train, releasing device to unassigned pool without destroying telemetry (Admin Only)."""
+    tr_clean = train_number.strip()
+    c_clean = coach_number.strip().upper()
+
+    dev = (
+        await db.execute(
+            select(Device).where(
+                Device.train_number == tr_clean,
+                Device.coach_number == c_clean,
+            )
+        )
+    ).scalar_one_or_none()
+
+    now = utc_now()
+    if dev:
+        # Resolve active alarms for this device
+        open_alarms = (
+            await db.execute(
+                select(Alarm).where(
+                    Alarm.device_id == dev.id,
+                    Alarm.status != "RESOLVED",
+                )
+            )
+        ).scalars().all()
+        for alarm in open_alarms:
+            prev_status = alarm.status
+            alarm.status = "RESOLVED"
+            alarm.resolved_at = now
+            db.add(
+                AlarmHistory(
+                    alarm_id=alarm.id,
+                    previous_status=prev_status,
+                    new_status="RESOLVED",
+                    changed_by=admin.id,
+                    comment=f"Coach {c_clean} deleted from Train {tr_clean}",
+                )
+            )
+
+        # Release device to unassigned hardware pool
+        dev.train_number = "UNASSIGNED"
+        dev.coach_number = "UNASSIGNED"
+        dev.is_online = False
+        dev.updated_at = now
+
+    # Update Train configuration JSON if present
+    db_train = (
+        await db.execute(select(Train).where(Train.train_number == tr_clean))
+    ).scalar_one_or_none()
+    if db_train:
+        comp = _safe_json_loads(db_train.coach_configuration_json, [])
+        comp = [c for c in comp if c.get("coach_number", "").upper() != c_clean]
+        # Re-index positions
+        for idx, c in enumerate(comp, 1):
+            c["position"] = idx
+        db_train.coach_configuration_json = json.dumps(comp)
+        db_train.total_coaches = len(comp)
+
+    client_ip = request.client.host if request.client else "unknown"
+    db.add(
+        AuditEvent(
+            user_id=admin.id,
+            action="DELETE_COACH",
+            target_type="COACH",
+            target_id=f"{tr_clean}:{c_clean}",
+            details=json.dumps({"deleted_by": admin.username}),
+            ip_address=client_ip,
+        )
+    )
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"Coach {c_clean} removed from Train {tr_clean} successfully.",
+        "coach_number": c_clean,
+    }
+
+
+

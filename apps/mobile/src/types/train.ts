@@ -137,10 +137,25 @@ export interface TankConsist {
 export interface CoachConsist {
   coach_number: string;
   coach_category?: string | null;
+  coach_type?: string | null;
+  coach_name?: string | null;
   device_uid: string;
   is_online: boolean;
   hardware_version: string;
   tanks: TankConsist[];
+}
+
+export interface CoachFormInput {
+  coach_number: string;
+  coach_name?: string | null;
+  coach_category?: string | null;
+  coach_type?: string | null;
+  tank_1_name?: string | null;
+  tank_2_name?: string | null;
+  tank_1_capacity?: number | null;
+  tank_2_capacity?: number | null;
+  tank_height_cm?: number | null;
+  device_uid?: string | null;
 }
 
 export interface TrainConsist {
