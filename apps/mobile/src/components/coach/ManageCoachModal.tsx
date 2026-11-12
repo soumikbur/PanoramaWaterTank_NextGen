@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../../state/AppContext';
 import { CoachConsist, CoachFormInput } from '../../types';
 import {
@@ -21,6 +22,7 @@ import {
   Lock,
   ArrowRight,
   RefreshCw,
+  Sliders,
 } from 'lucide-react';
 
 interface ManageCoachModalProps {
@@ -388,94 +390,131 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
     onClose();
   };
 
-  return (
+  const modalContent = (
     <div
+      data-testid="manage-coach-overlay"
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 1000,
-        backgroundColor: 'rgba(15, 23, 42, 0.72)',
-        backdropFilter: 'blur(3px)',
+        zIndex: 99999,
+        backgroundColor: 'rgba(15, 23, 42, 0.75)',
+        backdropFilter: 'blur(4px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '16px',
-        overflowY: 'auto',
+        padding: '20px',
+        boxSizing: 'border-box',
       }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="manage-coach-title"
     >
       <div
+        data-testid="manage-coach-container"
         style={{
-          width: '100%',
-          maxWidth: '1060px',
-          maxHeight: '92vh',
+          width: 'min(1200px, 96vw)',
+          maxHeight: 'calc(100vh - 40px)',
           backgroundColor: '#FFFFFF',
           borderRadius: '10px',
           border: '1px solid #CBD5E1',
-          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(15, 23, 42, 0.05)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
         }}
       >
-        {/* Modal Header */}
+        {/* Modal Header (Sticky) */}
         <div
           style={{
-            padding: '14px 18px',
+            padding: '14px 20px',
             backgroundColor: '#0F172A',
             color: '#FFFFFF',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             borderBottom: '1px solid #1E293B',
+            flexShrink: 0,
+            gap: '12px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <div
               style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '6px',
+                width: '36px',
+                height: '36px',
+                borderRadius: '8px',
                 backgroundColor: '#2563EB',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                flexShrink: 0,
               }}
             >
-              <Layers size={18} color="#FFFFFF" />
+              <Layers size={20} color="#FFFFFF" />
             </div>
             <div>
-              <h2
-                id="manage-coach-title"
-                style={{
-                  margin: 0,
-                  fontSize: '15px',
-                  fontWeight: 800,
-                  letterSpacing: '0.3px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <span>Coach Fleet &amp; Consist Management</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <h2
+                  id="manage-coach-title"
+                  style={{
+                    margin: 0,
+                    fontSize: '16px',
+                    fontWeight: 800,
+                    letterSpacing: '0.3px',
+                    color: '#FFFFFF',
+                  }}
+                >
+                  Coach Fleet &amp; Consist Management
+                </h2>
                 <span
                   style={{
-                    fontSize: '10px',
+                    fontSize: '11px',
                     fontWeight: 700,
-                    padding: '2px 7px',
+                    padding: '3px 8px',
                     borderRadius: '4px',
                     backgroundColor: isAdmin ? '#10B981' : '#F59E0B',
                     color: '#FFFFFF',
+                    letterSpacing: '0.4px',
                   }}
                 >
                   {isAdmin ? 'ADMIN CONSOLE' : 'READ-ONLY (EMPLOYEE)'}
                 </span>
-              </h2>
-              <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>
-                Train {effectiveTrainNumber} &bull; {matchedTrain?.name || 'Express Fleet'} &bull;{' '}
-                {rawCoaches.length} Coaches Configured ({rawCoaches.length * 2} Water Tanks)
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '4px', fontSize: '12px' }}>
+                <span style={{ fontWeight: 700, color: '#93C5FD' }}>
+                  Train {effectiveTrainNumber}
+                </span>
+                <span style={{ color: '#64748B' }}>&bull;</span>
+                <span style={{ color: '#E2E8F0', fontWeight: 600 }}>
+                  {matchedTrain?.name || 'Express Fleet'}
+                </span>
+                <span style={{ color: '#64748B' }}>&bull;</span>
+                <span
+                  style={{
+                    backgroundColor: '#1E293B',
+                    color: '#38BDF8',
+                    padding: '1px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    border: '1px solid #334155',
+                  }}
+                >
+                  {rawCoaches.length} Coaches Configured
+                </span>
+                <span
+                  style={{
+                    backgroundColor: '#1E293B',
+                    color: '#2DD4BF',
+                    padding: '1px 8px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    border: '1px solid #334155',
+                  }}
+                >
+                  {rawCoaches.length * 2} Water Tanks
+                </span>
               </div>
             </div>
           </div>
@@ -483,20 +522,23 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
           <button
             onClick={onClose}
             aria-label="Close"
+            title="Close Coach Management Panel"
             style={{
-              padding: '6px',
+              width: '34px',
+              height: '34px',
               borderRadius: '6px',
               backgroundColor: '#1E293B',
               color: '#94A3B8',
-              border: 'none',
+              border: '1px solid #334155',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              transition: 'background-color 0.15s ease',
+              flexShrink: 0,
+              transition: 'background-color 0.15s ease, color 0.15s ease',
             }}
           >
-            <X size={16} />
+            <X size={18} />
           </button>
         </div>
 
@@ -504,18 +546,19 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
         {statusFeedback && (
           <div
             style={{
-              padding: '8px 16px',
+              padding: '10px 20px',
               backgroundColor: statusFeedback.type === 'success' ? '#ECFDF5' : '#FEF2F2',
               borderBottom: `1px solid ${statusFeedback.type === 'success' ? '#A7F3D0' : '#FECACA'}`,
               color: statusFeedback.type === 'success' ? '#065F46' : '#991B1B',
-              fontSize: '12px',
+              fontSize: '12.5px',
               fontWeight: 600,
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
+              flexShrink: 0,
             }}
           >
-            {statusFeedback.type === 'success' ? <CheckCircle2 size={15} /> : <AlertTriangle size={15} />}
+            {statusFeedback.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
             <span>{statusFeedback.message}</span>
           </div>
         )}
@@ -524,18 +567,19 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
         {!isAdmin && (
           <div
             style={{
-              padding: '8px 16px',
+              padding: '10px 20px',
               backgroundColor: '#FFFBEB',
               borderBottom: '1px solid #FDE68A',
               color: '#92400E',
-              fontSize: '11px',
+              fontSize: '12px',
               fontWeight: 600,
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
+              flexShrink: 0,
             }}
           >
-            <Lock size={13} />
+            <Lock size={15} style={{ flexShrink: 0 }} />
             <span>
               <strong>Read-Only Access:</strong> You are logged in with Employee privileges. Administrator authorization
               is required to add, edit, rename, reorder, or delete coaches.
@@ -543,35 +587,38 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
           </div>
         )}
 
-        {/* Toolbar: Search, Filter, Sort, Add Button */}
+        {/* Toolbar: Search, Filter, Sort, Add Button (Sticky) */}
         <div
           style={{
-            padding: '10px 16px',
+            padding: '12px 20px',
             backgroundColor: '#F8FAFC',
             borderBottom: '1px solid #E2E8F0',
             display: 'flex',
             flexWrap: 'wrap',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '10px',
+            gap: '12px',
+            flexShrink: 0,
           }}
         >
           {/* Search & Filter Group */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', flex: 1 }}>
             {/* Search Input */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                gap: '8px',
                 backgroundColor: '#FFFFFF',
                 border: '1px solid #CBD5E1',
                 borderRadius: '6px',
-                padding: '4px 8px',
-                minWidth: '220px',
+                padding: '0 10px',
+                height: '36px',
+                minWidth: '240px',
+                flex: '0 1 280px',
               }}
             >
-              <Search size={14} color="#64748B" />
+              <Search size={16} color="#64748B" />
               <input
                 type="text"
                 placeholder="Search coach, type, device..."
@@ -580,17 +627,19 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                 style={{
                   border: 'none',
                   outline: 'none',
-                  fontSize: '12px',
+                  fontSize: '12.5px',
                   width: '100%',
                   color: '#0F172A',
+                  backgroundColor: 'transparent',
                 }}
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0 }}
+                  title="Clear search"
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex' }}
                 >
-                  <X size={12} color="#94A3B8" />
+                  <X size={14} color="#94A3B8" />
                 </button>
               )}
             </div>
@@ -600,11 +649,12 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
               style={{
-                padding: '5px 8px',
+                height: '36px',
+                padding: '0 10px',
                 backgroundColor: '#FFFFFF',
                 border: '1px solid #CBD5E1',
                 borderRadius: '6px',
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 600,
                 color: '#334155',
                 cursor: 'pointer',
@@ -612,9 +662,9 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
             >
               <option value="ALL">All Categories</option>
               <option value="AC">All AC Coaches</option>
-              <option value="Sleeper">Sleeper Class</option>
-              <option value="Chair Car">Chair Car</option>
-              <option value="General">General / Second</option>
+              <option value="Sleeper">Sleeper Class (SL)</option>
+              <option value="Chair Car">Chair Car (CC / EC)</option>
+              <option value="General">General / Second (GS / 2S)</option>
             </select>
 
             {/* Sort Dropdown */}
@@ -622,11 +672,12 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
               style={{
-                padding: '5px 8px',
+                height: '36px',
+                padding: '0 10px',
                 backgroundColor: '#FFFFFF',
                 border: '1px solid #CBD5E1',
                 borderRadius: '6px',
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 600,
                 color: '#334155',
                 cursor: 'pointer',
@@ -644,62 +695,104 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
             <button
               onClick={handleOpenAdd}
               disabled={!isAdmin}
-              title={isAdmin ? 'Add New Coach' : 'Admin privilege required'}
+              title={isAdmin ? 'Add New Coach to Consist' : 'Administrator authorization required to add coaches'}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '5px',
-                padding: '6px 12px',
+                gap: '6px',
+                height: '36px',
+                padding: '0 14px',
                 backgroundColor: isAdmin ? '#2563EB' : '#94A3B8',
                 color: '#FFFFFF',
                 border: 'none',
                 borderRadius: '6px',
-                fontSize: '11.5px',
+                fontSize: '12px',
                 fontWeight: 700,
                 cursor: isAdmin ? 'pointer' : 'not-allowed',
-                boxShadow: isAdmin ? '0 1px 2px rgba(37, 99, 235, 0.2)' : 'none',
+                boxShadow: isAdmin ? '0 1px 3px rgba(37, 99, 235, 0.25)' : 'none',
                 transition: 'background-color 0.15s ease',
               }}
             >
-              <Plus size={14} />
+              <Plus size={16} />
               <span>Add Coach</span>
             </button>
           </div>
         </div>
 
-        {/* Coaches Table Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 16px 16px' }}>
+        {/* Coaches Table Content (Independently scrollable) */}
+        <div
+          className="coach-table-scroll-container"
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            overflowX: 'auto',
+            padding: '12px 20px 20px 20px',
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
+          <style>{`
+            .coach-table-scroll-container::-webkit-scrollbar {
+              width: 8px;
+              height: 8px;
+            }
+            .coach-table-scroll-container::-webkit-scrollbar-track {
+              background: #F1F5F9;
+              border-radius: 4px;
+            }
+            .coach-table-scroll-container::-webkit-scrollbar-thumb {
+              background: #94A3B8;
+              border-radius: 4px;
+            }
+            .coach-table-scroll-container::-webkit-scrollbar-thumb:hover {
+              background: #64748B;
+            }
+          `}</style>
+
           <table
             style={{
               width: '100%',
+              minWidth: '1100px',
               borderCollapse: 'separate',
-              borderSpacing: '0 6px',
+              borderSpacing: '0 8px',
               textAlign: 'left',
-              fontSize: '12px',
+              fontSize: '12.5px',
             }}
           >
             <thead>
-              <tr style={{ color: '#64748B', fontSize: '11px', fontWeight: 700 }}>
-                <th style={{ padding: '8px 6px', width: '60px' }}>POS</th>
-                <th style={{ padding: '8px 8px' }}>COACH NO.</th>
-                <th style={{ padding: '8px 8px' }}>TYPE / CATEGORY</th>
-                <th style={{ padding: '8px 8px' }}>TANK 1 (ARRIVAL)</th>
-                <th style={{ padding: '8px 8px' }}>TANK 2 (DEPARTURE)</th>
-                <th style={{ padding: '8px 8px' }}>ASSIGNED DEVICE</th>
-                <th style={{ padding: '8px 8px' }}>STATUS</th>
-                <th style={{ padding: '8px 8px', textAlign: 'right' }}>ACTIONS</th>
+              <tr
+                style={{
+                  color: '#475569',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  position: 'sticky',
+                  top: 0,
+                  backgroundColor: '#FFFFFF',
+                  zIndex: 2,
+                }}
+              >
+                <th style={{ padding: '10px 8px', width: '75px', textAlign: 'center' }}>POS</th>
+                <th style={{ padding: '10px 10px', width: '120px' }}>COACH NO.</th>
+                <th style={{ padding: '10px 10px', width: '175px' }}>TYPE / CATEGORY</th>
+                <th style={{ padding: '10px 10px', width: '185px' }}>TANK 1 (ARRIVAL)</th>
+                <th style={{ padding: '10px 10px', width: '185px' }}>TANK 2 (DEPARTURE)</th>
+                <th style={{ padding: '10px 10px', width: '175px' }}>ASSIGNED DEVICE</th>
+                <th style={{ padding: '10px 10px', width: '105px', textAlign: 'center' }}>STATUS</th>
+                <th style={{ padding: '10px 12px', width: '225px', textAlign: 'right' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
               {displayCoaches.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '36px 16px', color: '#64748B' }}>
-                    <div style={{ fontWeight: 700, fontSize: '13px', color: '#334155' }}>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '48px 16px', color: '#64748B' }}>
+                    <div style={{ fontWeight: 700, fontSize: '14px', color: '#334155' }}>
                       No coaches matching the criteria
                     </div>
-                    <div style={{ fontSize: '11px', marginTop: '4px' }}>
+                    <div style={{ fontSize: '12px', marginTop: '6px' }}>
                       {searchQuery
-                        ? `No results for "${searchQuery}". Clear search to view all coaches.`
+                        ? `No results for "${searchQuery}". Clear search or adjust filter to view all coaches.`
                         : 'No coaches configured for this train consist.'}
                     </div>
                   </td>
@@ -710,24 +803,27 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                   const t2 = coach.tanks.find((t) => t.tank_index === 2) || coach.tanks[1];
                   const isSelected = selectedCoachNumber?.toUpperCase() === coach.coach_number.toUpperCase();
 
+                  const t1Pct = Math.round(t1?.current_level_percent ?? 0);
+                  const t2Pct = Math.round(t2?.current_level_percent ?? 0);
+
                   return (
                     <tr
                       key={coach.coach_number}
                       style={{
                         backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
                         border: isSelected ? '1px solid #93C5FD' : '1px solid #E2E8F0',
-                        borderRadius: '6px',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-                        transition: 'background-color 0.12s ease',
+                        borderRadius: '8px',
+                        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+                        transition: 'background-color 0.15s ease',
                       }}
                     >
-                      {/* Position & Reorder */}
-                      <td style={{ padding: '8px 6px', borderTopLeftRadius: '6px', borderBottomLeftRadius: '6px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                      {/* POS (Position & Sequence Reordering) */}
+                      <td style={{ padding: '10px 8px', textAlign: 'center', borderTopLeftRadius: '8px', borderBottomLeftRadius: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                           <span
                             style={{
-                              fontSize: '11px',
-                              fontWeight: 700,
+                              fontSize: '12px',
+                              fontWeight: 800,
                               color: '#64748B',
                               width: '20px',
                               textAlign: 'center',
@@ -735,109 +831,151 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                           >
                             {index + 1}
                           </span>
-                          {isAdmin && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                              <button
-                                onClick={() => handleMovePosition(coach.coach_number, 'UP')}
-                                disabled={index === 0}
-                                title="Move Up"
-                                style={{
-                                  padding: '1px 3px',
-                                  background: 'transparent',
-                                  border: 'none',
-                                  cursor: index === 0 ? 'not-allowed' : 'pointer',
-                                  color: index === 0 ? '#CBD5E1' : '#475569',
-                                }}
-                              >
-                                <ArrowUp size={10} />
-                              </button>
-                              <button
-                                onClick={() => handleMovePosition(coach.coach_number, 'DOWN')}
-                                disabled={index === rawCoaches.length - 1}
-                                title="Move Down"
-                                style={{
-                                  padding: '1px 3px',
-                                  background: 'transparent',
-                                  border: 'none',
-                                  cursor: index === rawCoaches.length - 1 ? 'not-allowed' : 'pointer',
-                                  color: index === rawCoaches.length - 1 ? '#CBD5E1' : '#475569',
-                                }}
-                              >
-                                <ArrowDown size={10} />
-                              </button>
-                            </div>
-                          )}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <button
+                              onClick={() => handleMovePosition(coach.coach_number, 'UP')}
+                              disabled={!isAdmin || index === 0}
+                              title={!isAdmin ? 'Administrator authorization required to reorder' : index === 0 ? 'First coach' : 'Move Up in Consist'}
+                              style={{
+                                width: '24px',
+                                height: '18px',
+                                background: '#F1F5F9',
+                                border: '1px solid #CBD5E1',
+                                borderRadius: '3px',
+                                cursor: !isAdmin || index === 0 ? 'not-allowed' : 'pointer',
+                                color: !isAdmin || index === 0 ? '#CBD5E1' : '#334155',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: 0,
+                              }}
+                            >
+                              <ArrowUp size={11} />
+                            </button>
+                            <button
+                              onClick={() => handleMovePosition(coach.coach_number, 'DOWN')}
+                              disabled={!isAdmin || index === rawCoaches.length - 1}
+                              title={!isAdmin ? 'Administrator authorization required to reorder' : index === rawCoaches.length - 1 ? 'Last coach' : 'Move Down in Consist'}
+                              style={{
+                                width: '24px',
+                                height: '18px',
+                                background: '#F1F5F9',
+                                border: '1px solid #CBD5E1',
+                                borderRadius: '3px',
+                                cursor: !isAdmin || index === rawCoaches.length - 1 ? 'not-allowed' : 'pointer',
+                                color: !isAdmin || index === rawCoaches.length - 1 ? '#CBD5E1' : '#334155',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: 0,
+                              }}
+                            >
+                              <ArrowDown size={11} />
+                            </button>
+                          </div>
                         </div>
                       </td>
 
-                      {/* Coach Number */}
-                      <td style={{ padding: '8px 8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {/* COACH NO. */}
+                      <td style={{ padding: '10px 10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span
                             style={{
-                              padding: '2px 7px',
-                              borderRadius: '4px',
+                              padding: '3px 8px',
+                              borderRadius: '5px',
                               backgroundColor: '#2563EB',
                               color: '#FFFFFF',
                               fontWeight: 800,
-                              fontSize: '11.5px',
+                              fontSize: '12px',
+                              letterSpacing: '0.4px',
                             }}
                           >
                             {coach.coach_number}
                           </span>
                           {coach.coach_name && coach.coach_name !== `Coach ${coach.coach_number}` && (
-                            <span style={{ fontSize: '11px', color: '#475569' }}>{coach.coach_name}</span>
+                            <span style={{ fontSize: '11.5px', color: '#475569', fontWeight: 600 }}>{coach.coach_name}</span>
                           )}
                         </div>
                       </td>
 
-                      {/* Coach Type */}
-                      <td style={{ padding: '8px 8px', color: '#334155', fontWeight: 600 }}>
+                      {/* TYPE / CATEGORY */}
+                      <td style={{ padding: '10px 10px', color: '#1E293B', fontWeight: 600 }}>
                         {coach.coach_category || coach.coach_type || 'AC 3-Tier'}
                       </td>
 
-                      {/* Tank 1 */}
-                      <td style={{ padding: '8px 8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          <Droplets size={12} color="#2563EB" />
-                          <div>
-                            <div style={{ fontWeight: 600, color: '#0F172A', fontSize: '11px' }}>
+                      {/* TANK 1 (ARRIVAL) */}
+                      <td style={{ padding: '10px 10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Droplets size={14} color="#2563EB" style={{ flexShrink: 0 }} />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, color: '#0F172A', fontSize: '11.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {t1?.name || 'Tank 1'}
                             </div>
-                            <div style={{ fontSize: '10px', color: '#64748B' }}>
-                              {t1?.capacity_liters || 500} L &bull; {t1?.current_level_percent ?? 0}%
+                            <div style={{ fontSize: '11px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span>{t1?.capacity_liters || 500} L</span>
+                              <span
+                                style={{
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  padding: '1px 5px',
+                                  borderRadius: '3px',
+                                  backgroundColor: t1Pct > 50 ? '#DCFCE7' : t1Pct > 20 ? '#FEF3C7' : '#FEE2E2',
+                                  color: t1Pct > 50 ? '#15803D' : t1Pct > 20 ? '#B45309' : '#B91C1C',
+                                }}
+                              >
+                                {t1Pct}%
+                              </span>
                             </div>
                           </div>
                         </div>
                       </td>
 
-                      {/* Tank 2 */}
-                      <td style={{ padding: '8px 8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          <Droplets size={12} color="#0D9488" />
-                          <div>
-                            <div style={{ fontWeight: 600, color: '#0F172A', fontSize: '11px' }}>
+                      {/* TANK 2 (DEPARTURE) */}
+                      <td style={{ padding: '10px 10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Droplets size={14} color="#0D9488" style={{ flexShrink: 0 }} />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, color: '#0F172A', fontSize: '11.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {t2?.name || 'Tank 2'}
                             </div>
-                            <div style={{ fontSize: '10px', color: '#64748B' }}>
-                              {t2?.capacity_liters || 500} L &bull; {t2?.current_level_percent ?? 0}%
+                            <div style={{ fontSize: '11px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span>{t2?.capacity_liters || 500} L</span>
+                              <span
+                                style={{
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  padding: '1px 5px',
+                                  borderRadius: '3px',
+                                  backgroundColor: t2Pct > 50 ? '#DCFCE7' : t2Pct > 20 ? '#FEF3C7' : '#FEE2E2',
+                                  color: t2Pct > 50 ? '#15803D' : t2Pct > 20 ? '#B45309' : '#B91C1C',
+                                }}
+                              >
+                                {t2Pct}%
+                              </span>
                             </div>
                           </div>
                         </div>
                       </td>
 
-                      {/* Assigned Device */}
-                      <td style={{ padding: '8px 8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <Cpu size={12} color="#475569" />
+                      {/* ASSIGNED DEVICE (Monospace with Ellipsis and full tooltip) */}
+                      <td style={{ padding: '10px 10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Cpu size={14} color="#64748B" style={{ flexShrink: 0 }} />
                           <span
+                            title={coach.device_uid || 'PANORAMA-AUTO'}
                             style={{
-                              fontFamily: 'monospace',
+                              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
                               fontSize: '11px',
                               backgroundColor: '#F1F5F9',
-                              padding: '2px 5px',
+                              padding: '2px 6px',
                               borderRadius: '4px',
                               color: '#1E293B',
+                              border: '1px solid #E2E8F0',
+                              maxWidth: '140px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              display: 'inline-block',
                             }}
                           >
                             {coach.device_uid || 'PANORAMA-AUTO'}
@@ -845,16 +983,16 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                         </div>
                       </td>
 
-                      {/* Status */}
-                      <td style={{ padding: '8px 8px' }}>
+                      {/* STATUS */}
+                      <td style={{ padding: '10px 10px', textAlign: 'center' }}>
                         <span
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '4px',
-                            padding: '2px 6px',
+                            gap: '5px',
+                            padding: '3px 8px',
                             borderRadius: '4px',
-                            fontSize: '10.5px',
+                            fontSize: '11px',
                             fontWeight: 700,
                             backgroundColor: coach.is_online ? '#DCFCE7' : '#F1F5F9',
                             color: coach.is_online ? '#15803D' : '#64748B',
@@ -862,8 +1000,8 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                         >
                           <span
                             style={{
-                              width: '6px',
-                              height: '6px',
+                              width: '7px',
+                              height: '7px',
                               borderRadius: '50%',
                               backgroundColor: coach.is_online ? '#16A34A' : '#94A3B8',
                             }}
@@ -872,98 +1010,111 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                         </span>
                       </td>
 
-                      {/* Actions */}
+                      {/* ACTIONS */}
                       <td
                         style={{
-                          padding: '8px 8px',
+                          padding: '10px 12px',
                           textAlign: 'right',
-                          borderTopRightRadius: '6px',
-                          borderBottomRightRadius: '6px',
+                          borderTopRightRadius: '8px',
+                          borderBottomRightRadius: '8px',
                         }}
                       >
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          {/* View Details / Select */}
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          {/* 1. View */}
                           <button
                             onClick={() => handleSelectCoach(coach.coach_number)}
                             title="View Coach Details"
                             style={{
-                              padding: '4px 7px',
-                              backgroundColor: isSelected ? '#2563EB' : '#F1F5F9',
-                              color: isSelected ? '#FFFFFF' : '#334155',
+                              height: '32px',
+                              padding: '0 8px',
+                              backgroundColor: isSelected ? '#2563EB' : '#FFFFFF',
+                              color: isSelected ? '#FFFFFF' : '#1E293B',
                               border: '1px solid #CBD5E1',
-                              borderRadius: '4px',
-                              fontSize: '10.5px',
+                              borderRadius: '5px',
+                              fontSize: '11px',
                               fontWeight: 600,
                               cursor: 'pointer',
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '3px',
+                              gap: '4px',
+                              transition: 'all 0.15s ease',
                             }}
                           >
-                            <Eye size={12} />
+                            <Eye size={13} />
                             <span>{isSelected ? 'Viewing' : 'View'}</span>
                           </button>
 
-                          {/* Rename */}
+                          {/* 2. Rename */}
                           <button
                             onClick={() => handleOpenRename(coach)}
                             disabled={!isAdmin}
-                            title={isAdmin ? 'Rename Coach' : 'Admin only'}
+                            title={isAdmin ? 'Rename Coach Identifier' : 'Administrator authorization required to rename'}
                             style={{
-                              padding: '4px 6px',
+                              height: '32px',
+                              padding: '0 8px',
                               backgroundColor: '#FFFFFF',
-                              color: isAdmin ? '#475569' : '#94A3B8',
+                              color: isAdmin ? '#334155' : '#94A3B8',
                               border: '1px solid #CBD5E1',
-                              borderRadius: '4px',
+                              borderRadius: '5px',
                               cursor: isAdmin ? 'pointer' : 'not-allowed',
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '2px',
-                              fontSize: '10.5px',
+                              gap: '4px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              transition: 'all 0.15s ease',
                             }}
                           >
-                            <Edit2 size={11} />
+                            <Edit2 size={12} />
                             <span>Rename</span>
                           </button>
 
-                          {/* Edit Config */}
+                          {/* 3. Edit */}
                           <button
                             onClick={() => handleOpenEdit(coach)}
                             disabled={!isAdmin}
-                            title={isAdmin ? 'Edit Coach Parameters' : 'Admin only'}
+                            title={isAdmin ? 'Edit Coach Parameters & Tank Capacities' : 'Administrator authorization required to edit'}
                             style={{
-                              padding: '4px 6px',
+                              height: '32px',
+                              padding: '0 8px',
                               backgroundColor: '#FFFFFF',
                               color: isAdmin ? '#2563EB' : '#94A3B8',
                               border: '1px solid #CBD5E1',
-                              borderRadius: '4px',
+                              borderRadius: '5px',
                               cursor: isAdmin ? 'pointer' : 'not-allowed',
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '2px',
-                              fontSize: '10.5px',
+                              gap: '4px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              transition: 'all 0.15s ease',
                             }}
                           >
+                            <Sliders size={12} />
                             <span>Edit</span>
                           </button>
 
-                          {/* Delete */}
+                          {/* 4. Delete */}
                           <button
                             onClick={() => handleOpenDelete(coach)}
                             disabled={!isAdmin}
-                            title={isAdmin ? 'Delete Coach' : 'Admin only'}
+                            title={isAdmin ? 'Delete Coach from Consist' : 'Administrator authorization required to delete'}
                             style={{
-                              padding: '4px 6px',
-                              backgroundColor: '#FFFFFF',
+                              height: '32px',
+                              width: '32px',
+                              backgroundColor: '#FEF2F2',
                               color: isAdmin ? '#DC2626' : '#94A3B8',
-                              border: '1px solid #CBD5E1',
-                              borderRadius: '4px',
+                              border: '1px solid #FECACA',
+                              borderRadius: '5px',
                               cursor: isAdmin ? 'pointer' : 'not-allowed',
                               display: 'inline-flex',
                               alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: 0,
+                              transition: 'all 0.15s ease',
                             }}
                           >
-                            <Trash2 size={12} />
+                            <Trash2 size={13} />
                           </button>
                         </div>
                       </td>
@@ -975,35 +1126,52 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
           </table>
         </div>
 
-        {/* Modal Footer */}
+        {/* Modal Footer (Sticky) */}
         <div
           style={{
-            padding: '10px 16px',
+            padding: '12px 20px',
             backgroundColor: '#F8FAFC',
             borderTop: '1px solid #E2E8F0',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            fontSize: '11px',
-            color: '#64748B',
+            fontSize: '12px',
+            color: '#475569',
+            flexShrink: 0,
+            gap: '12px',
+            flexWrap: 'wrap',
           }}
         >
-          <div>
-            Showing {displayCoaches.length} of {rawCoaches.length} coaches &bull; Train {effectiveTrainNumber}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 700, color: '#1E293B' }}>
+              Total Coaches: {rawCoaches.length} ({rawCoaches.length * 2} Water Tanks)
+            </span>
+            <span style={{ color: '#CBD5E1' }}>|</span>
+            <span style={{ color: '#64748B' }}>
+              Showing {displayCoaches.length > 0 ? 1 : 0}–{displayCoaches.length} of {rawCoaches.length} coaches &bull; Train {effectiveTrainNumber}
+            </span>
           </div>
+
           <button
             onClick={onClose}
             style={{
-              padding: '6px 14px',
+              height: '34px',
+              padding: '0 16px',
               backgroundColor: '#FFFFFF',
               border: '1px solid #CBD5E1',
               borderRadius: '6px',
               color: '#334155',
               fontWeight: 600,
+              fontSize: '12px',
               cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+              transition: 'background-color 0.15s ease',
             }}
           >
-            Close Panel
+            <span>Close Panel</span>
           </button>
         </div>
       </div>
@@ -1014,12 +1182,14 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 1100,
+            zIndex: 100000,
             backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(4px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '16px',
+            padding: '20px',
+            boxSizing: 'border-box',
           }}
         >
           <div
@@ -1279,12 +1449,14 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 1100,
+            zIndex: 100000,
             backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(4px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '16px',
+            padding: '20px',
+            boxSizing: 'border-box',
           }}
         >
           <div
@@ -1392,12 +1564,14 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 1100,
+            zIndex: 100000,
             backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(4px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '16px',
+            padding: '20px',
+            boxSizing: 'border-box',
           }}
         >
           <div
@@ -1501,4 +1675,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
       )}
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 };
+

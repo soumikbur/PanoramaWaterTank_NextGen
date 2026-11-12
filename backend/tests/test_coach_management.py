@@ -102,3 +102,4 @@ async def test_coach_management_crud_lifecycle():
 
         # 9. Clean up test train
         await client.delete(f"/api/v1/trains/{test_train}", headers=admin_headers)
+

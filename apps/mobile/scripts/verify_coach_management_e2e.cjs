@@ -530,6 +530,115 @@ function runElectronTest() {
         fs.writeFileSync(shot2Path, shot2.toPNG());
         auditResults.screenshots.push(shot2Path);
 
+        // 2B. Test Modal Positioning & Responsive Dimensions Across 5 Viewports
+        console.log('[E2E] Testing Modal Layout Across 5 Viewports (1920x1080, 1680x1050, 1600x900, 1366x768, 1280x720)...');
+        const viewports = [
+          { width: 1920, height: 1080, name: '1920x1080' },
+          { width: 1680, height: 1050, name: '1680x1050' },
+          { width: 1600, height: 900, name: '1600x900' },
+          { width: 1366, height: 768, name: '1366x768' },
+          { width: 1280, height: 720, name: '1280x720' },
+        ];
+
+        auditResults.viewportMetrics = {};
+
+        for (const vp of viewports) {
+          win.setSize(vp.width, vp.height);
+          await new Promise(r => setTimeout(r, 700));
+
+          const vpMetrics = await win.webContents.executeJavaScript(\`
+            (() => {
+              const overlay = document.querySelector('[data-testid="manage-coach-overlay"]') || document.querySelector('[role="dialog"]');
+              const container = document.querySelector('[data-testid="manage-coach-container"]') || (overlay ? overlay.firstElementChild : null);
+              const header = document.querySelector('#manage-coach-title');
+              const tableScroll = document.querySelector('.coach-table-scroll-container');
+              const table = document.querySelector('table');
+              const rows = Array.from(document.querySelectorAll('tbody tr'));
+              const actionBtns = Array.from(document.querySelectorAll('tbody td:last-child button'));
+              const closeBtns = Array.from(document.querySelectorAll('button')).filter(b => b.textContent && b.textContent.includes('Close Panel'));
+
+              const oRect = overlay ? overlay.getBoundingClientRect() : null;
+              const cRect = container ? container.getBoundingClientRect() : null;
+              const hRect = header ? header.getBoundingClientRect() : null;
+
+              return {
+                viewport: { w: window.innerWidth, h: window.innerHeight },
+                overlayCoversViewport: Boolean(oRect && oRect.top === 0 && oRect.left === 0 && oRect.width >= window.innerWidth - 2 && oRect.height >= window.innerHeight - 2),
+                containerWithinBounds: Boolean(cRect && cRect.top >= 10 && cRect.bottom <= window.innerHeight),
+                containerCenteredHorizontally: Boolean(cRect && Math.abs((window.innerWidth - cRect.width) / 2 - cRect.left) < 5),
+                containerWidth: cRect ? Math.round(cRect.width) : 0,
+                containerHeight: cRect ? Math.round(cRect.height) : 0,
+                headerVisibleAndNotClipped: Boolean(hRect && hRect.top >= 10 && hRect.bottom > hRect.top),
+                tableScrollExists: Boolean(tableScroll),
+                tableMinWidth: table ? table.offsetWidth : 0,
+                rowCount: rows.length,
+                minActionBtnHeight: actionBtns.length ? Math.min(...actionBtns.map(b => b.getBoundingClientRect().height)) : 0,
+                footerCloseBtnVisible: closeBtns.length > 0,
+              };
+            })()
+          \`);
+
+          console.log('[E2E] Viewport ' + vp.name + ' metrics:', vpMetrics);
+          auditResults.viewportMetrics[vp.name] = vpMetrics;
+
+          const vpShot = await win.webContents.capturePage();
+          const vpShotPath = path.join(OUTPUT_DIR, 'manage_coach_responsive_' + vp.name + '.png');
+          fs.writeFileSync(vpShotPath, vpShot.toPNG());
+          auditResults.screenshots.push(vpShotPath);
+        }
+
+        // Return to standard 1440x900 viewport for remaining CRUD tests
+        win.setSize(1440, 900);
+        await new Promise(r => setTimeout(r, 600));
+
+        // 2C. Test Toolbar: Search and Filter Functionality
+        console.log('[E2E] Testing Toolbar Search & Filter...');
+        await win.webContents.executeJavaScript(\`
+          (() => {
+            const setInput = (el, val) => {
+              const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+              setter.call(el, val);
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+            const searchInput = Array.from(document.querySelectorAll('input')).find(i => i.placeholder && i.placeholder.includes('Search coach'));
+            if (searchInput) setInput(searchInput, 'C2');
+          })()
+        \`);
+        await new Promise(r => setTimeout(r, 500));
+
+        const searchCheck = await win.webContents.executeJavaScript(\`
+          (() => {
+            const rows = Array.from(document.querySelectorAll('tbody tr'));
+            return {
+              filteredRowCount: rows.length,
+              containsC2: rows.length === 1 && rows[0].innerText.includes('C2')
+            };
+          })()
+        \`);
+        console.log('[E2E] Search filter check (query="C2"):', searchCheck);
+        auditResults.searchFilterWorks = searchCheck.containsC2;
+
+        const shotSearch = await win.webContents.capturePage();
+        const shotSearchPath = path.join(OUTPUT_DIR, 'manage_coach_toolbar_search_filter.png');
+        fs.writeFileSync(shotSearchPath, shotSearch.toPNG());
+        auditResults.screenshots.push(shotSearchPath);
+
+        // Clear Search
+        await win.webContents.executeJavaScript(\`
+          (() => {
+            const setInput = (el, val) => {
+              const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+              setter.call(el, val);
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+            };
+            const searchInput = Array.from(document.querySelectorAll('input')).find(i => i.placeholder && i.placeholder.includes('Search coach'));
+            if (searchInput) setInput(searchInput, '');
+          })()
+        \`);
+        await new Promise(r => setTimeout(r, 500));
+
         // 3. Open Add Coach Sub-modal
         await win.webContents.executeJavaScript(\`
           (() => {
