@@ -33,6 +33,7 @@ const REGION_OPTIONS = [
 const ERROR_TITLES: Record<TrainLookupErrorCode, string> = {
   INVALID_FORMAT: 'Invalid Format',
   NOT_FOUND: 'Invalid Train Number',
+  NON_EXPRESS_TRAIN: 'Non-Express Train Excluded',
   TIMEOUT: 'Network Timeout',
   RATE_LIMITED: 'Rate Limit Exceeded',
   AUTH_ERROR: 'Invalid API Credentials',
@@ -59,6 +60,7 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
   const [useOfficialConsist, setUseOfficialConsist] = useState(true);
 
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupProgressText, setLookupProgressText] = useState('Verifying train information...');
   const [lookupResult, setLookupResult] = useState<TrainLookupResult | null>(null);
   const [verifiedTrainNumber, setVerifiedTrainNumber] = useState<string | null>(null);
   const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set());
@@ -72,8 +74,8 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
     setDestinationStation('');
     setDestinationCode('');
     setRegion('NORTH');
-    setRailwayZone('NR');
-    setTrainType('Express');
+    setRailwayZone('');
+    setTrainType('');
     setInitialCoach('B1');
     setAutoFilledFields(new Set());
   };
@@ -145,10 +147,14 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
     if (res.railway_zone) {
       setRailwayZone(res.railway_zone);
       filled.add('zone');
+    } else {
+      setRailwayZone('');
     }
     if (res.train_type) {
       setTrainType(res.train_type);
       filled.add('type');
+    } else {
+      setTrainType('');
     }
     if (res.has_official_composition && res.coach_composition.length > 0) {
       setInitialCoach(res.coach_composition[0].coach_number);
@@ -190,10 +196,14 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
     }
 
     setLookupLoading(true);
+    setLookupProgressText('Verifying train information...');
     setSubmitError(null);
     const shouldRefresh = Boolean(lookupResult && lookupResult.train_number === clean);
     try {
-      const { result, stale } = await trainLookupService.lookup(clean, { refresh: shouldRefresh });
+      const { result, stale } = await trainLookupService.lookup(clean, {
+        refresh: shouldRefresh,
+        onProgress: (label) => setLookupProgressText(label),
+      });
       if (stale) return;
       applyLookupData(result);
     } finally {
@@ -296,7 +306,8 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
   const isErrorStatus =
     lookupResult?.status === 'NOT_FOUND' ||
     lookupResult?.status === 'INVALID_FORMAT' ||
-    lookupResult?.status === 'UNAVAILABLE';
+    lookupResult?.status === 'UNAVAILABLE' ||
+    lookupResult?.status === 'UNSUPPORTED_TYPE';
   const isDuplicate = Boolean(lookupResult?.already_exists);
   const canConfirm =
     !submitLoading &&
@@ -311,9 +322,11 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
     lookupResult?.error_code ||
     (lookupResult?.status === 'NOT_FOUND'
       ? 'NOT_FOUND'
-      : lookupResult?.status === 'INVALID_FORMAT'
-        ? 'INVALID_FORMAT'
-        : 'SERVER_UNAVAILABLE');
+      : lookupResult?.status === 'UNSUPPORTED_TYPE'
+        ? 'NON_EXPRESS_TRAIN'
+        : lookupResult?.status === 'INVALID_FORMAT'
+          ? 'INVALID_FORMAT'
+          : 'SERVER_UNAVAILABLE');
   const errorTitle = ERROR_TITLES[errorCode] || 'Verification Failed';
 
   const autoTag = (field: string) =>
@@ -520,7 +533,7 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
               }}
             >
               <Loader2 size={15} className="animate-spin" />
-              Verifying train information...
+              <span>{lookupProgressText}</span>
             </div>
           )}
 
@@ -578,10 +591,34 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
               }}
             >
               <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
-              <div style={{ minWidth: 0 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontWeight: 700 }}>{errorTitle}</div>
                 <div style={{ marginTop: '2px' }}>{lookupResult.message}</div>
               </div>
+              {lookupResult.status === 'UNAVAILABLE' && (
+                <button
+                  type="button"
+                  data-testid="retry-verify-btn"
+                  onClick={() => void handleVerifyClick()}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #F59E0B',
+                    backgroundColor: '#FFFFFF',
+                    color: '#92400E',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  <RefreshCw size={11} />
+                  Retry
+                </button>
+              )}
             </div>
           )}
 
@@ -613,10 +650,14 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
                 data-testid="train-name-input"
                 type="text"
                 required
+                readOnly={isVerified && autoFilledFields.has('name')}
                 placeholder="Populated after clicking Verify"
                 value={trainName}
                 onChange={(e) => setTrainName(e.target.value)}
-                style={inputStyle}
+                style={{
+                  ...inputStyle,
+                  backgroundColor: isVerified && autoFilledFields.has('name') ? '#F8FAFC' : '#FFFFFF',
+                }}
               />
             </div>
 
@@ -627,10 +668,14 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
               <input
                 data-testid="train-type-input"
                 type="text"
+                readOnly={isVerified && autoFilledFields.has('type')}
                 placeholder="Express, Rajdhani, Shatabdi..."
                 value={trainType}
                 onChange={(e) => setTrainType(e.target.value)}
-                style={inputStyle}
+                style={{
+                  ...inputStyle,
+                  backgroundColor: isVerified && autoFilledFields.has('type') ? '#F8FAFC' : '#FFFFFF',
+                }}
               />
             </div>
           </div>
@@ -643,10 +688,14 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
               <input
                 data-testid="train-source-input"
                 type="text"
+                readOnly={isVerified && autoFilledFields.has('source')}
                 placeholder="Starting station"
                 value={sourceStation}
                 onChange={(e) => setSourceStation(e.target.value)}
-                style={inputStyle}
+                style={{
+                  ...inputStyle,
+                  backgroundColor: isVerified && autoFilledFields.has('source') ? '#F8FAFC' : '#FFFFFF',
+                }}
               />
             </div>
 
@@ -657,10 +706,14 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
               <input
                 data-testid="train-destination-input"
                 type="text"
+                readOnly={isVerified && autoFilledFields.has('destination')}
                 placeholder="Final destination"
                 value={destinationStation}
                 onChange={(e) => setDestinationStation(e.target.value)}
-                style={inputStyle}
+                style={{
+                  ...inputStyle,
+                  backgroundColor: isVerified && autoFilledFields.has('destination') ? '#F8FAFC' : '#FFFFFF',
+                }}
               />
             </div>
           </div>
@@ -691,10 +744,14 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
               <input
                 data-testid="train-zone-input"
                 type="text"
-                placeholder="NR / WR / SR / NER"
+                readOnly={isVerified && autoFilledFields.has('zone')}
+                placeholder={isVerified && !autoFilledFields.has('zone') ? 'Optional (not in API)' : 'NR / WR / SR / NER'}
                 value={railwayZone}
                 onChange={(e) => setRailwayZone(e.target.value)}
-                style={inputStyle}
+                style={{
+                  ...inputStyle,
+                  backgroundColor: isVerified && autoFilledFields.has('zone') ? '#F8FAFC' : '#FFFFFF',
+                }}
               />
             </div>
 

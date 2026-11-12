@@ -253,6 +253,27 @@ function buildElectronScript(token, userProfile) {
         assert.strictEqual(invalidatedState.confirmDisabled, true, 'Confirm button must disable when train number edited');
         console.log('[PASS] Verification invalidated upon editing train number.');
 
+        // 4c. Verify 15120 (Banaras Janta Express) & verify no missing fields fabricated
+        await setInputValue(win, '[data-testid="train-number-input"]', '15120');
+        assert.strictEqual(await clickSelector(win, '[data-testid="verify-train-btn"]'), true);
+        await waitForSelector(
+          win,
+          '[data-testid="train-lookup-status"]',
+          'el.innerText.includes("Train successfully verified")'
+        );
+        const info15120 = await win.webContents.executeJavaScript(\`(() => ({
+          name: document.querySelector('[data-testid="train-name-input"]')?.value,
+          src: document.querySelector('[data-testid="train-source-input"]')?.value,
+          dst: document.querySelector('[data-testid="train-destination-input"]')?.value,
+          reg: document.querySelector('[data-testid="train-region-select"]')?.value,
+          type: document.querySelector('[data-testid="train-type-input"]')?.value,
+        }))()\`);
+        assert(info15120.name && info15120.name.toUpperCase().includes('JANTA'), 'Expected Banaras Janta Express for 15120, got ' + info15120.name);
+        assert(info15120.src && info15120.src.includes('DDN'), 'Expected DDN source for 15120, got ' + info15120.src);
+        assert(info15120.dst && (info15120.dst.includes('BNRS') || info15120.dst.includes('BSBS')), 'Expected BNRS/BSBS dest for 15120, got ' + info15120.dst);
+        assert.strictEqual(info15120.reg, 'NORTH', 'Expected NORTH region for DDN origin');
+        console.log('[PASS] Live 15120 verification & auto-population:', JSON.stringify(info15120));
+
         // 5. Verify & Add clean train 12842 -> verify persistence across reload
         await setInputValue(win, '[data-testid="train-number-input"]', '12842');
         assert.strictEqual(await clickSelector(win, '[data-testid="verify-train-btn"]'), true);

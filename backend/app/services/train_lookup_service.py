@@ -2,14 +2,14 @@
 
 Resolution priority:
 1. In-memory TTL cache + SQLite persistent lookup cache (`train_lookup_cache`)
-2. RailRadar API (when `RAILRADAR_API_KEY` is configured)
+2. RailRadar v1 REST API (public endpoint or `RAILRADAR_API_KEY` when configured)
 3. RapidAPI IRCTC API (when `RAPIDAPI_IRCTC_KEY` is configured)
 4. IndianRailAPI v2 (when `INDIANRAIL_API_KEY` is configured)
 5. DataMeet OpenData Indian Railways dataset (`trains.json`, zero API key, cached locally)
 
 Never fabricates missing fields: any field not supplied by the resolved source
-(e.g., running days, intermediate route, or official coach consist) is returned
-as None / empty and listed in `missing_fields`.
+(e.g., railway zone, running days, intermediate route, or official coach consist)
+is returned as None / empty and listed in `missing_fields`.
 """
 from __future__ import annotations
 
@@ -144,6 +144,146 @@ def normalize_train_type(raw_type: Optional[str], train_name: Optional[str] = No
     return "Express"
 
 
+NON_EXPRESS_TOKENS = (
+    "PASSENGER",
+    "PASS",
+    "MEMU",
+    "DEMU",
+    "EMU",
+    "MMTS",
+    "LOCAL",
+    "SUBURBAN",
+    "ORDINARY",
+)
+
+EXPRESS_FAMILY_TOKENS = (
+    "EXPRESS",
+    "MAIL/EXPRESS",
+    "MAIL EXPRESS",
+    "MAIL",
+    "EXP",
+    "SUPERFAST",
+    "SF",
+    "PREMIUM",
+    "RAJDHANI",
+    "RAJ",
+    "SHATABDI",
+    "SHTB",
+    "JAN SHATABDI",
+    "JSHT",
+    "DURONTO",
+    "DRNT",
+    "GARIB RATH",
+    "GR",
+    "VANDE BHARAT",
+    "VB",
+    "HUMSAFAR",
+    "HS",
+    "TEJAS",
+    "TEJ",
+    "SAMPARK KRANTI",
+    "SK",
+    "ANTYODAYA",
+    "ANT",
+    "GATIMAAN",
+    "SUVIDHA",
+    "AMRIT BHARAT",
+    "NAMO BHARAT",
+)
+
+
+def is_express_family_train(
+    raw_type: Optional[str],
+    raw_category: Optional[str],
+    train_name: Optional[str] = None,
+) -> Tuple[bool, str]:
+    """Validate Express-family eligibility using structured metadata before name heuristics."""
+    meta_tokens = [
+        (raw_category or "").strip().upper(),
+        (raw_type or "").strip().upper(),
+    ]
+    for tok in meta_tokens:
+        if not tok:
+            continue
+        if any(re.search(rf"\b{re.escape(bad)}\b", tok) for bad in NON_EXPRESS_TOKENS) and "EXPRESS" not in tok:
+            return False, (raw_type or raw_category or "Passenger").strip()
+        if tok in ("PASSENGER", "MEMU", "DEMU", "EMU", "MMTS", "LOCAL", "SUBURBAN", "PASS"):
+            return False, tok
+    for tok in meta_tokens:
+        if not tok:
+            continue
+        if any(good in tok for good in EXPRESS_FAMILY_TOKENS):
+            return True, (raw_type or raw_category or "Express").strip()
+
+    upper_name = (train_name or "").strip().upper()
+    if upper_name:
+        has_express_kw = any(
+            kw in upper_name
+            for kw in (
+                "EXPRESS",
+                "EXP",
+                "MAIL",
+                "RAJDHANI",
+                "SHATABDI",
+                "DURONTO",
+                "GARIB RATH",
+                "VANDE BHARAT",
+                "HUMSAFAR",
+                "TEJAS",
+                "SUPERFAST",
+                "SAMPARK KRANTI",
+                "ANTYODAYA",
+                "GATIMAAN",
+            )
+        )
+        has_non_express_kw = any(
+            re.search(rf"\b{bad}\b", upper_name) for bad in NON_EXPRESS_TOKENS
+        )
+        if has_non_express_kw and not has_express_kw:
+            return False, (raw_type or "Passenger").strip()
+
+    return True, (raw_type or raw_category or "Express").strip()
+
+
+def infer_region_from_coords(lat: Any, lng: Any) -> Optional[str]:
+    """Derive fleet operational region from verified origin station coordinates when zone is omitted."""
+    try:
+        lat_f = float(lat)
+        lng_f = float(lng)
+    except (TypeError, ValueError):
+        return None
+    if lng_f >= 84.0:
+        return "EAST"
+    if lat_f < 17.5 or (lat_f < 20.0 and lng_f >= 76.5):
+        return "SOUTH"
+    if lng_f < 76.5 and lat_f < 24.5:
+        return "WEST"
+    return "NORTH"
+
+
+def parse_coach_position_string(coach_position: Optional[str]) -> List[CoachCompositionItem]:
+    """Parse hyphen-delimited rake string (e.g. ENG-SLRD-S1-B1-A1-H1) into CoachCompositionItem list."""
+    if not coach_position or not isinstance(coach_position, str):
+        return []
+    coaches: List[CoachCompositionItem] = []
+    pos = 1
+    for raw_token in coach_position.split("-"):
+        label = raw_token.strip().upper()
+        if not label or label in ("LOCO", "L", "ENG"):
+            continue
+        cat, ctype = infer_coach_category(label)
+        coaches.append(
+            CoachCompositionItem(
+                position=pos,
+                coach_number=label,
+                coach_category=cat,
+                coach_type=ctype,
+            )
+        )
+        pos += 1
+    return coaches
+
+
 def infer_coach_category(coach_code: str, raw_type: Optional[str] = None) -> Tuple[str, str]:
     """Map Indian Railways coach code / class token to (category, coach_type)."""
     c = (coach_code or "").strip().upper()
@@ -265,7 +405,8 @@ class TrainLookupResponse(BaseModel):
 
 class ProviderFetchOutcome(BaseModel):
     outcome: str  # verified | not_found | unavailable | mismatched | skipped_no_key
-    error_code: Optional[str] = None  # TIMEOUT | RATE_LIMITED | AUTH_ERROR | INVALID_RESPONSE | SERVER_UNAVAILABLE
+    error_code: Optional[str] = None  # TIMEOUT | RATE_LIMITED | AUTH_ERROR | INVALID_RESPONSE | SERVER_UNAVAILABLE | NON_EXPRESS_TRAIN
+    train_category: Optional[str] = None
     data: Optional[TrainLookupResponse] = None
     detail: Optional[str] = None
 
@@ -346,12 +487,12 @@ def _compute_missing_fields(resp: TrainLookupResponse) -> List[str]:
 
 
 class RailRadarProvider(BaseTrainProvider):
-    """Primary commercial provider: RailRadar v1 REST API."""
+    """Primary live provider: RailRadar v1 REST API (public endpoint + optional API key)."""
 
     name = "RailRadar"
 
     def is_configured(self) -> bool:
-        return bool(settings.RAILRADAR_API_KEY and settings.RAILRADAR_API_KEY.strip())
+        return bool(settings.RAILRADAR_BASE_URL and settings.RAILRADAR_BASE_URL.strip())
 
     async def fetch(
         self,
@@ -360,13 +501,17 @@ class RailRadarProvider(BaseTrainProvider):
         timeout: float,
     ) -> ProviderFetchOutcome:
         if not self.is_configured():
-            return ProviderFetchOutcome(outcome="skipped_no_key", detail="RAILRADAR_API_KEY not set")
+            return ProviderFetchOutcome(outcome="skipped_no_key", detail="RAILRADAR_BASE_URL not configured")
 
-        headers = {
-            "X-Api-Key": settings.RAILRADAR_API_KEY.strip(),
-            "Authorization": f"Bearer {settings.RAILRADAR_API_KEY.strip()}",
+        headers: Dict[str, str] = {
             "Accept": "application/json",
+            "User-Agent": "PanoramaWaterTank/2.0",
         }
+        api_key = (settings.RAILRADAR_API_KEY or "").strip()
+        if api_key:
+            headers["X-Api-Key"] = api_key
+            headers["Authorization"] = f"Bearer {api_key}"
+
         base = settings.RAILRADAR_BASE_URL.rstrip("/")
         info_url = f"{base}/trains/{train_number}"
         coaches_url = f"{base}/trains/{train_number}/coaches"
@@ -398,51 +543,67 @@ class RailRadarProvider(BaseTrainProvider):
         if not isinstance(data, dict):
             return ProviderFetchOutcome(outcome="not_found", detail="Empty train payload")
 
+        train_obj = data.get("train") if isinstance(data.get("train"), dict) else data
         returned_num = str(
-            data.get("trainNumber") or data.get("train_number") or data.get("number") or ""
+            train_obj.get("trainNumber") or train_obj.get("train_number") or train_obj.get("number") or ""
         ).strip()
         if returned_num and returned_num != train_number:
             return ProviderFetchOutcome(
                 outcome="mismatched",
                 detail=f"Requested {train_number}, received {returned_num}",
             )
-        if not (data.get("trainName") or data.get("train_name") or data.get("name")):
+        raw_name = train_obj.get("trainName") or train_obj.get("train_name") or train_obj.get("name")
+        if not raw_name:
             return ProviderFetchOutcome(outcome="not_found", detail="No train name returned")
 
-        name = str(data.get("trainName") or data.get("train_name") or data.get("name")).strip()
-        src_name = data.get("sourceStationName") or data.get("from_station_name") or data.get("source")
-        src_code = data.get("sourceStationCode") or data.get("from_station_code")
-        dst_name = data.get("destinationStationName") or data.get("to_station_name") or data.get("destination")
-        dst_code = data.get("destinationStationCode") or data.get("to_station_code")
-        zone = (data.get("zone") or data.get("railwayZone") or "").strip().upper() or None
-        raw_type = data.get("trainType") or data.get("type")
-        running_days = parse_running_days(data.get("daysOfWeek") or data.get("runningDays"))
+        name = str(raw_name).strip()
+        src_obj = train_obj.get("source") if isinstance(train_obj.get("source"), dict) else {}
+        dst_obj = train_obj.get("destination") if isinstance(train_obj.get("destination"), dict) else {}
+        src_name = train_obj.get("sourceStationName") or train_obj.get("from_station_name") or src_obj.get("name") or (
+            train_obj.get("source") if isinstance(train_obj.get("source"), str) else None
+        )
+        src_code = train_obj.get("sourceStationCode") or train_obj.get("from_station_code") or src_obj.get("code")
+        dst_name = train_obj.get("destinationStationName") or train_obj.get("to_station_name") or dst_obj.get("name") or (
+            train_obj.get("destination") if isinstance(train_obj.get("destination"), str) else None
+        )
+        dst_code = train_obj.get("destinationStationCode") or train_obj.get("to_station_code") or dst_obj.get("code")
+        zone = (train_obj.get("zone") or train_obj.get("railwayZone") or "").strip().upper() or None
+        raw_type = train_obj.get("trainType") or train_obj.get("type")
+        raw_category = train_obj.get("category")
+        running_days = parse_running_days(train_obj.get("daysOfWeek") or train_obj.get("runningDays") or train_obj.get("runDays"))
 
         route: List[RouteStopItem] = []
         raw_halts = data.get("halts") or data.get("route") or []
         if isinstance(raw_halts, list):
             for stop in raw_halts:
-                if isinstance(stop, dict) and (stop.get("stationCode") or stop.get("station_code")):
-                    route.append(
-                        RouteStopItem(
-                            station_code=str(stop.get("stationCode") or stop.get("station_code")),
-                            station_name=str(
-                                stop.get("stationName") or stop.get("station_name") or stop.get("stationCode")
-                            ),
-                            arrival=stop.get("arrival") or stop.get("arrivalTime"),
-                            departure=stop.get("departure") or stop.get("departureTime"),
-                            day=stop.get("day"),
-                        )
+                if not isinstance(stop, dict):
+                    continue
+                if stop.get("isHalt") is False:
+                    continue
+                st_obj = stop.get("station") if isinstance(stop.get("station"), dict) else {}
+                st_code = stop.get("stationCode") or stop.get("station_code") or st_obj.get("code")
+                if not st_code:
+                    continue
+                st_name = stop.get("stationName") or stop.get("station_name") or st_obj.get("name") or st_code
+                route.append(
+                    RouteStopItem(
+                        station_code=str(st_code).strip().upper(),
+                        station_name=str(st_name).strip(),
+                        arrival=stop.get("arrival") or stop.get("arrivalTime"),
+                        departure=stop.get("departure") or stop.get("departureTime"),
+                        day=stop.get("day") or stop.get("arrivalDay") or stop.get("departureDay"),
                     )
+                )
 
         coaches: List[CoachCompositionItem] = []
         if not isinstance(coach_res, BaseException) and coach_res.status_code == 200:
             try:
                 c_payload = coach_res.json()
+                c_data = c_payload.get("data") if isinstance(c_payload, dict) and isinstance(c_payload.get("data"), dict) else {}
                 c_list = (
-                    c_payload.get("data", {}).get("coaches")
-                    if isinstance(c_payload, dict) and isinstance(c_payload.get("data"), dict)
-                    else c_payload.get("coaches") if isinstance(c_payload, dict) else c_payload
+                    c_data.get("rake")
+                    or c_data.get("coaches")
+                    or (c_payload.get("coaches") if isinstance(c_payload, dict) else c_payload)
                 )
                 if isinstance(c_list, list):
                     pos = 1
@@ -450,9 +611,10 @@ class RailRadarProvider(BaseTrainProvider):
                         if not isinstance(item, dict):
                             continue
                         label = str(item.get("coachNumber") or item.get("code") or item.get("label") or "").strip()
-                        if not label or label.upper() in ("LOCO", "L", "ENG"):
+                        cls_type = item.get("class") or item.get("coachClass") or item.get("classType")
+                        if not label or label.upper() in ("LOCO", "L", "ENG") or str(cls_type or "").upper() == "LOCO":
                             continue
-                        cat, ctype = infer_coach_category(label, item.get("class") or item.get("coachClass"))
+                        cat, ctype = infer_coach_category(label, cls_type)
                         coaches.append(
                             CoachCompositionItem(
                                 position=item.get("position") or pos,
@@ -464,6 +626,14 @@ class RailRadarProvider(BaseTrainProvider):
                         pos += 1
             except Exception:
                 pass
+        if not coaches and train_obj.get("coachPosition"):
+            coaches = parse_coach_position_string(train_obj.get("coachPosition"))
+
+        region = (
+            map_zone_to_region(zone)
+            if zone
+            else (infer_region_from_coords(src_obj.get("lat"), src_obj.get("lng")) or "NORTH")
+        )
 
         resp = TrainLookupResponse(
             status="VERIFIED",
@@ -473,7 +643,7 @@ class RailRadarProvider(BaseTrainProvider):
             source_code=str(src_code).strip().upper() if src_code else None,
             destination_station=str(dst_name).strip() if dst_name else None,
             destination_code=str(dst_code).strip().upper() if dst_code else None,
-            region=map_zone_to_region(zone),
+            region=region,
             railway_zone=zone,
             train_type=normalize_train_type(raw_type, name),
             running_days=running_days,
@@ -486,7 +656,11 @@ class RailRadarProvider(BaseTrainProvider):
             message="Train verified successfully.",
         )
         resp.missing_fields = _compute_missing_fields(resp)
-        return ProviderFetchOutcome(outcome="verified", data=resp)
+        return ProviderFetchOutcome(
+            outcome="verified",
+            train_category=str(raw_category).strip() if raw_category else None,
+            data=resp,
+        )
 
 
 class RapidApiIrctcProvider(BaseTrainProvider):
@@ -900,9 +1074,29 @@ class TrainLookupService:
         ]
         self._client_factory = client_factory
         self._mem_cache: Dict[str, Tuple[float, TrainLookupResponse]] = {}
+        self._provider_stats: Dict[str, Dict[str, Any]] = {}
 
     def clear_cache(self) -> None:
         self._mem_cache.clear()
+
+    def get_provider_health(self) -> Dict[str, Dict[str, Any]]:
+        """Return per-provider runtime counters (verified, not_found, failures, avg_latency_ms)."""
+        return {k: dict(v) for k, v in self._provider_stats.items()}
+
+    def _record_stat(self, provider_name: str, outcome: str, latency_ms: float, detail: Optional[str] = None) -> None:
+        stats = self._provider_stats.setdefault(
+            provider_name,
+            {"verified": 0, "not_found": 0, "failures": 0, "last_latency_ms": 0.0, "last_error": None},
+        )
+        stats["last_latency_ms"] = latency_ms
+        if outcome == "verified":
+            stats["verified"] += 1
+            stats["last_error"] = None
+        elif outcome == "not_found":
+            stats["not_found"] += 1
+        elif outcome not in ("skipped_no_key",):
+            stats["failures"] += 1
+            stats["last_error"] = detail or outcome
 
     async def _read_cache(self, train_number: str, db: Optional[AsyncSession]) -> Optional[TrainLookupResponse]:
         now_ts = time.time()
@@ -1004,7 +1198,8 @@ class TrainLookupService:
                 )
 
         attempts: List[ProviderAttempt] = []
-        any_authoritative_not_found = False
+        any_live_not_found = False
+        any_archive_not_found = False
         any_unavailable = False
         last_error_code: Optional[str] = None
         timeout = float(settings.RAILWAY_LOOKUP_TIMEOUT_SECONDS)
@@ -1031,26 +1226,32 @@ class TrainLookupService:
                 try:
                     outcome = await provider.fetch(train_number, client, timeout)
                 except asyncio.TimeoutError:
+                    p_ms = round((time.perf_counter() - p_start) * 1000, 2)
                     attempts.append(
                         ProviderAttempt(
                             provider=provider.name,
                             outcome="timeout",
-                            latency_ms=round((time.perf_counter() - p_start) * 1000, 2),
+                            latency_ms=p_ms,
                             detail=f"Timed out after {timeout}s",
                         )
                     )
+                    self._record_stat(provider.name, "timeout", p_ms, f"Timed out after {timeout}s")
+                    logger.warning("lookup train=%s provider=%s outcome=timeout latency_ms=%.2f", train_number, provider.name, p_ms)
                     any_unavailable = True
                     last_error_code = last_error_code or "TIMEOUT"
                     continue
                 except Exception as exc:
+                    p_ms = round((time.perf_counter() - p_start) * 1000, 2)
                     attempts.append(
                         ProviderAttempt(
                             provider=provider.name,
                             outcome="error",
-                            latency_ms=round((time.perf_counter() - p_start) * 1000, 2),
+                            latency_ms=p_ms,
                             detail=str(exc),
                         )
                     )
+                    self._record_stat(provider.name, "error", p_ms, str(exc))
+                    logger.warning("lookup train=%s provider=%s outcome=error err=%s latency_ms=%.2f", train_number, provider.name, exc, p_ms)
                     any_unavailable = True
                     last_error_code = last_error_code or ("TIMEOUT" if isinstance(exc, httpx.TimeoutException) else "SERVER_UNAVAILABLE")
                     continue
@@ -1064,13 +1265,38 @@ class TrainLookupService:
                         detail=outcome.detail,
                     )
                 )
+                self._record_stat(provider.name, outcome.outcome, p_ms, outcome.detail)
+                logger.info("lookup train=%s provider=%s outcome=%s latency_ms=%.2f", train_number, provider.name, outcome.outcome, p_ms)
 
                 if outcome.outcome == "verified" and outcome.data is not None:
+                    is_express, detected_cat = is_express_family_train(
+                        outcome.data.train_type,
+                        outcome.train_category,
+                        outcome.data.train_name,
+                    )
+                    total_ms = round((time.perf_counter() - t0) * 1000, 2)
+                    if not is_express:
+                        return TrainLookupResponse(
+                            status="UNSUPPORTED_TYPE",
+                            error_code="NON_EXPRESS_TRAIN",
+                            train_number=train_number,
+                            train_name=outcome.data.train_name,
+                            train_type=outcome.data.train_type,
+                            provider=outcome.data.provider,
+                            already_exists=already_exists,
+                            latency_ms=total_ms,
+                            provider_attempts=attempts,
+                            message=(
+                                f"Only Express family trains are supported "
+                                f"(Train {train_number} is {detected_cat}). Passenger, MEMU, DEMU, and suburban trains are excluded."
+                            ),
+                        )
+
                     verified = outcome.data.model_copy(
                         update={
                             "cached": False,
                             "already_exists": already_exists,
-                            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+                            "latency_ms": total_ms,
                             "provider_attempts": attempts,
                         }
                     )
@@ -1078,7 +1304,10 @@ class TrainLookupService:
                     return verified
 
                 if outcome.outcome == "not_found":
-                    any_authoritative_not_found = True
+                    if isinstance(provider, DataMeetOpenProvider):
+                        any_archive_not_found = True
+                    else:
+                        any_live_not_found = True
                 elif outcome.outcome in ("unavailable", "mismatched"):
                     any_unavailable = True
                     if outcome.error_code:
@@ -1087,18 +1316,7 @@ class TrainLookupService:
                         last_error_code = "INVALID_RESPONSE"
 
         total_ms = round((time.perf_counter() - t0) * 1000, 2)
-        if any_authoritative_not_found and not any_unavailable:
-            return TrainLookupResponse(
-                status="NOT_FOUND",
-                error_code="NOT_FOUND",
-                train_number=train_number,
-                already_exists=already_exists,
-                latency_ms=total_ms,
-                provider_attempts=attempts,
-                message="Invalid Train Number. No matching train information was found.",
-            )
-        if any_authoritative_not_found and any_unavailable:
-            # An authoritative dataset returned not_found even while another optional provider failed
+        if any_live_not_found or (any_archive_not_found and not any_unavailable):
             return TrainLookupResponse(
                 status="NOT_FOUND",
                 error_code="NOT_FOUND",

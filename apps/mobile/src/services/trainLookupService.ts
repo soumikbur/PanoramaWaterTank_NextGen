@@ -3,21 +3,31 @@
  *
  * Executes explicit, manual train verification with:
  * - Backend FastAPI lookup (`/trains/lookup/{train_number}`) when an external/local API server is configured
- * - Direct CORS-enabled DataMeet Indian Railways OpenData API (`trains.json` + CDN fallback, zero API keys)
- *   when deployed on static GitHub Pages without an external FastAPI server
- * - Request timeout handling, bounded transient retry, HTTP status & JSON schema validation,
- *   in-flight duplicate request deduplication, and structured failure classification.
+ * - Direct CORS-enabled multi-provider fallback chain when deployed on static GitHub Pages:
+ *   1. RailRadar Public v1 API (`https://railradar.in/api/v1/trains/{train_number}`)
+ *   2. DataMeet Indian Railways OpenData (`trains.json` raw GitHub + jsDelivr CDN fallback)
+ * - Express-family train enforcement, request timeout handling, bounded transient retry,
+ *   in-flight deduplication, and structured failure classification.
  */
 import { ApiClient } from '../api/client';
 import { localFleetStore } from './localFleetStore';
-import { TrainLookupErrorCode, TrainLookupResult } from '../types/train';
+import {
+  CoachCompositionItem,
+  ProviderAttempt,
+  RouteStopItem,
+  TrainLookupErrorCode,
+  TrainLookupResult,
+} from '../types/train';
 
 const CLIENT_CACHE_TTL_MS = 10 * 60 * 1000;
 const DATAMEET_STORAGE_KEY = 'panorama_datameet_index_v1';
 const DATAMEET_STORAGE_TTL_MS = 24 * 60 * 60 * 1000;
 const TRAIN_NUMBER_REGEX = /^\d{4,5}$/;
 const BACKEND_TIMEOUT_MS = 10_000;
+const RAILRADAR_PUBLIC_TIMEOUT_MS = 8_000;
 const DATAMEET_TIMEOUT_MS = 15_000;
+
+const RAILRADAR_PUBLIC_BASE = 'https://railradar.in/api/v1';
 
 const DATAMEET_ENDPOINTS = [
   'https://raw.githubusercontent.com/datameet/railways/master/trains.json',
@@ -151,6 +161,8 @@ function messageForErrorCode(code: TrainLookupErrorCode): string {
       return 'Enter a valid 4- or 5-digit Indian Railways train number.';
     case 'NOT_FOUND':
       return 'Invalid Train Number. No matching train information was found.';
+    case 'NON_EXPRESS_TRAIN':
+      return 'Only Express family trains are supported. Passenger, MEMU, DEMU, and suburban trains are excluded.';
     case 'TIMEOUT':
       return 'Network timeout while contacting railway APIs. Please try verifying again.';
     case 'RATE_LIMITED':
@@ -163,6 +175,164 @@ function messageForErrorCode(code: TrainLookupErrorCode): string {
     default:
       return 'Railway API server is currently unavailable. Please retry later.';
   }
+}
+
+const NON_EXPRESS_TOKENS = [
+  'PASSENGER',
+  'PASS',
+  'MEMU',
+  'DEMU',
+  'EMU',
+  'MMTS',
+  'LOCAL',
+  'SUBURBAN',
+  'ORDINARY',
+];
+
+const EXPRESS_FAMILY_TOKENS = [
+  'EXPRESS',
+  'MAIL/EXPRESS',
+  'MAIL EXPRESS',
+  'MAIL',
+  'EXP',
+  'SUPERFAST',
+  'SF',
+  'PREMIUM',
+  'RAJDHANI',
+  'RAJ',
+  'SHATABDI',
+  'SHTB',
+  'JAN SHATABDI',
+  'JSHT',
+  'DURONTO',
+  'DRNT',
+  'GARIB RATH',
+  'GR',
+  'VANDE BHARAT',
+  'VB',
+  'HUMSAFAR',
+  'HS',
+  'TEJAS',
+  'TEJ',
+  'SAMPARK KRANTI',
+  'SK',
+  'ANTYODAYA',
+  'ANT',
+  'GATIMAAN',
+  'SUVIDHA',
+  'AMRIT BHARAT',
+  'NAMO BHARAT',
+];
+
+function hasWordToken(text: string, token: string): boolean {
+  const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
+}
+
+export function isExpressFamilyTrain(
+  rawType?: string | null,
+  rawCategory?: string | null,
+  trainName?: string | null
+): { allowed: boolean; label: string } {
+  const metaTokens = [(rawCategory || '').trim().toUpperCase(), (rawType || '').trim().toUpperCase()];
+  for (const tok of metaTokens) {
+    if (!tok) continue;
+    if (NON_EXPRESS_TOKENS.some((bad) => hasWordToken(tok, bad)) && !tok.includes('EXPRESS')) {
+      return { allowed: false, label: (rawType || rawCategory || 'Passenger').trim() };
+    }
+    if (['PASSENGER', 'MEMU', 'DEMU', 'EMU', 'MMTS', 'LOCAL', 'SUBURBAN', 'PASS'].includes(tok)) {
+      return { allowed: false, label: tok };
+    }
+  }
+  for (const tok of metaTokens) {
+    if (!tok) continue;
+    if (EXPRESS_FAMILY_TOKENS.some((good) => tok.includes(good))) {
+      return { allowed: true, label: (rawType || rawCategory || 'Express').trim() };
+    }
+  }
+
+  const upperName = (trainName || '').trim().toUpperCase();
+  if (upperName) {
+    const hasExpressKw = [
+      'EXPRESS',
+      'EXP',
+      'MAIL',
+      'RAJDHANI',
+      'SHATABDI',
+      'DURONTO',
+      'GARIB RATH',
+      'VANDE BHARAT',
+      'HUMSAFAR',
+      'TEJAS',
+      'SUPERFAST',
+      'SAMPARK KRANTI',
+      'ANTYODAYA',
+      'GATIMAAN',
+    ].some((kw) => upperName.includes(kw));
+    const hasNonExpressKw = NON_EXPRESS_TOKENS.some((bad) => hasWordToken(upperName, bad));
+    if (hasNonExpressKw && !hasExpressKw) {
+      return { allowed: false, label: (rawType || 'Passenger').trim() };
+    }
+  }
+
+  return { allowed: true, label: (rawType || rawCategory || 'Express').trim() };
+}
+
+function inferRegionFromCoords(lat: any, lng: any): string | null {
+  const latNum = typeof lat === 'number' ? lat : parseFloat(String(lat ?? ''));
+  const lngNum = typeof lng === 'number' ? lng : parseFloat(String(lng ?? ''));
+  if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return null;
+  if (lngNum >= 84.0) return 'EAST';
+  if (latNum < 17.5 || (latNum < 20.0 && lngNum >= 76.5)) return 'SOUTH';
+  if (lngNum < 76.5 && latNum < 24.5) return 'WEST';
+  return 'NORTH';
+}
+
+function inferCoachCategory(coachCode: string): [string, string] {
+  const c = coachCode.trim().toUpperCase();
+  if (c.startsWith('EC') || c.includes('EA') || c.includes('EV')) return ['Executive AC', 'EC'];
+  if (c.startsWith('H')) return ['First AC', '1A'];
+  if (c.startsWith('A')) return ['AC 2-Tier', '2A'];
+  if (c.startsWith('M')) return ['AC 3-Economy', '3E'];
+  if (c.startsWith('B')) return ['AC 3-Tier', '3A'];
+  if (c.startsWith('C') || c.startsWith('J')) return ['AC Chair Car', 'CC'];
+  if (c.startsWith('S') && !c.startsWith('SLR')) return ['Sleeper', 'SL'];
+  if (c.startsWith('D')) return ['Second Sitting', '2S'];
+  if (c === 'GS' || c === 'GEN' || c === 'UR' || c.startsWith('GS') || c.startsWith('GEN')) {
+    return ['General Second Class', 'GS'];
+  }
+  if (c.startsWith('PC')) return ['Pantry Car', 'PC'];
+  if (c.startsWith('SLR')) return ['SLR / Guard', 'SLR'];
+  if (c.startsWith('EOG') || c.startsWith('LWLRRM') || c.startsWith('LPR')) return ['EOG / Power Car', 'EOG'];
+  return ['Coach', 'COACH'];
+}
+
+function parseCoachPositionString(coachPosition?: string | null): CoachCompositionItem[] {
+  if (!coachPosition || typeof coachPosition !== 'string') return [];
+  const coaches: CoachCompositionItem[] = [];
+  let pos = 1;
+  for (const raw of coachPosition.split('-')) {
+    const label = raw.trim().toUpperCase();
+    if (!label || label === 'LOCO' || label === 'L' || label === 'ENG') continue;
+    const [coach_category, coach_type] = inferCoachCategory(label);
+    coaches.push({
+      position: pos++,
+      coach_number: label,
+      coach_category,
+      coach_type,
+    });
+  }
+  return coaches;
+}
+
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function normalizeRunDays(rawDays: any): string[] | null {
+  if (!Array.isArray(rawDays) || rawDays.length === 0) return null;
+  const days = rawDays
+    .map((d) => String(d || '').trim().slice(0, 3))
+    .filter(Boolean)
+    .map((d) => DAY_NAMES.find((n) => n.toLowerCase() === d.toLowerCase()) || d);
+  return days.length > 0 ? days : null;
 }
 
 function buildEmptyErrorResult(
@@ -190,6 +360,12 @@ function buildEmptyErrorResult(
 }
 
 function classifyHttpFailure(status: number, rawMessage?: string): ClassifiedLookupError {
+  if (status === 404) {
+    return new ClassifiedLookupError('NOT_FOUND', rawMessage || messageForErrorCode('NOT_FOUND'), {
+      status,
+      retryable: false,
+    });
+  }
   if (status === 429) {
     return new ClassifiedLookupError('RATE_LIMITED', rawMessage || messageForErrorCode('RATE_LIMITED'), {
       status,
@@ -424,10 +600,172 @@ class TrainLookupService {
     }
   }
 
+  private async lookupViaRailRadarPublic(
+    trainNumber: string,
+    signal: AbortSignal
+  ): Promise<{ outcome: 'verified' | 'not_found' | 'unsupported' | 'unavailable'; result?: TrainLookupResult; attempt: ProviderAttempt; errorCode?: TrainLookupErrorCode }> {
+    const started = performance.now();
+    const url = `${RAILRADAR_PUBLIC_BASE}/trains/${encodeURIComponent(trainNumber)}`;
+    try {
+      const payload = await fetchJsonWithTimeoutAndRetry(url, {
+        timeoutMs: RAILRADAR_PUBLIC_TIMEOUT_MS,
+        retries: 1,
+        externalSignal: signal,
+      });
+      const latency = Math.round((performance.now() - started) * 100) / 100;
+      const train = payload?.data?.train;
+      if (!payload || payload.success !== true || !train || typeof train !== 'object') {
+        const errCodeFromPayload = String(payload?.error?.code || '').toUpperCase();
+        if (errCodeFromPayload.includes('NOT_FOUND')) {
+          return {
+            outcome: 'not_found',
+            attempt: { provider: 'RailRadar Public API', outcome: 'not_found', latency_ms: latency, detail: payload?.error?.message || 'Train not found' },
+          };
+        }
+        return {
+          outcome: 'unavailable',
+          errorCode: 'INVALID_RESPONSE',
+          attempt: { provider: 'RailRadar Public API', outcome: 'invalid_response', latency_ms: latency, detail: 'Unexpected payload structure' },
+        };
+      }
+
+      const returnedNum = String(train.number || train.trainNumber || '').trim();
+      if (returnedNum && returnedNum !== trainNumber) {
+        return {
+          outcome: 'unavailable',
+          errorCode: 'INVALID_RESPONSE',
+          attempt: { provider: 'RailRadar Public API', outcome: 'mismatched', latency_ms: latency, detail: `Requested ${trainNumber}, received ${returnedNum}` },
+        };
+      }
+
+      const name = String(train.name || train.trainName || '').trim();
+      if (!name) {
+        return {
+          outcome: 'not_found',
+          attempt: { provider: 'RailRadar Public API', outcome: 'not_found', latency_ms: latency, detail: 'Missing train name' },
+        };
+      }
+
+      const expressCheck = isExpressFamilyTrain(train.type, train.category, name);
+      const alreadyExists = localFleetStore.hasTrain(trainNumber);
+      if (!expressCheck.allowed) {
+        const attempt: ProviderAttempt = {
+          provider: 'RailRadar Public API',
+          outcome: 'rejected_non_express',
+          latency_ms: latency,
+          detail: `Non-Express category: ${expressCheck.label}`,
+        };
+        return {
+          outcome: 'unsupported',
+          attempt,
+          result: {
+            ...buildEmptyErrorResult(
+              trainNumber,
+              'UNSUPPORTED_TYPE',
+              'NON_EXPRESS_TRAIN',
+              `Only Express family trains are supported (Train ${trainNumber} is ${expressCheck.label}). Passenger, MEMU, DEMU, and suburban trains are excluded.`,
+              'RailRadar Public API'
+            ),
+            train_name: name,
+            train_type: normalizeTrainType(train.type, name),
+            already_exists: alreadyExists,
+            latency_ms: latency,
+            provider_attempts: [attempt],
+          },
+        };
+      }
+
+      const src = typeof train.source === 'object' && train.source ? train.source : {};
+      const dst = typeof train.destination === 'object' && train.destination ? train.destination : {};
+      const rawRoute = Array.isArray(payload?.data?.route) ? payload.data.route : [];
+      const route: RouteStopItem[] = [];
+      for (const stop of rawRoute) {
+        if (!stop || typeof stop !== 'object' || stop.isHalt === false) continue;
+        const stCode = stop.station?.code || stop.stationCode;
+        if (!stCode) continue;
+        route.push({
+          station_code: String(stCode).trim().toUpperCase(),
+          station_name: String(stop.station?.name || stop.stationName || stCode).trim(),
+          arrival: stop.arrival || null,
+          departure: stop.departure || null,
+          day: stop.arrivalDay ?? stop.departureDay ?? stop.day ?? null,
+        });
+      }
+
+      const coachComposition = parseCoachPositionString(train.coachPosition);
+      const runningDays = normalizeRunDays(train.runDays);
+      const zone = train.zone ? String(train.zone).trim().toUpperCase() : null;
+      const region = zone ? mapZoneToRegion(zone) : (inferRegionFromCoords(src.lat, src.lng) || 'NORTH');
+
+      const missingFields: string[] = [];
+      if (!src.name && !src.code) missingFields.push('sourceStation');
+      if (!dst.name && !dst.code) missingFields.push('destinationStation');
+      if (!zone) missingFields.push('railwayZone');
+      if (!runningDays) missingFields.push('runningDays');
+      if (route.length === 0) missingFields.push('route');
+      if (coachComposition.length === 0) missingFields.push('coachComposition');
+
+      const attempt: ProviderAttempt = {
+        provider: 'RailRadar Public API',
+        outcome: 'verified',
+        latency_ms: latency,
+        detail: 'Resolved from RailRadar Public v1 API',
+      };
+
+      return {
+        outcome: 'verified',
+        attempt,
+        result: {
+          status: 'VERIFIED',
+          error_code: null,
+          train_number: trainNumber,
+          train_name: name,
+          source_station: src.name ? String(src.name).trim() : null,
+          source_code: src.code ? String(src.code).trim().toUpperCase() : null,
+          destination_station: dst.name ? String(dst.name).trim() : null,
+          destination_code: dst.code ? String(dst.code).trim().toUpperCase() : null,
+          region,
+          railway_zone: zone,
+          train_type: normalizeTrainType(train.type, name),
+          running_days: runningDays,
+          route,
+          coach_composition: coachComposition,
+          total_coaches: coachComposition.length || null,
+          has_official_composition: coachComposition.length > 0,
+          provider: 'RailRadar Public API',
+          cached: false,
+          latency_ms: latency,
+          verified_at: new Date().toISOString(),
+          missing_fields: missingFields,
+          already_exists: alreadyExists,
+          message: 'Train successfully verified.',
+          provider_attempts: [attempt],
+        },
+      };
+    } catch (err: any) {
+      if (err?.name === 'AbortError' && signal.aborted) {
+        throw err;
+      }
+      const latency = Math.round((performance.now() - started) * 100) / 100;
+      const classified = classifyCaughtError(err);
+      if (classified.code === 'NOT_FOUND') {
+        return {
+          outcome: 'not_found',
+          attempt: { provider: 'RailRadar Public API', outcome: 'not_found', latency_ms: latency, detail: 'HTTP 404' },
+        };
+      }
+      return {
+        outcome: 'unavailable',
+        errorCode: classified.code,
+        attempt: { provider: 'RailRadar Public API', outcome: classified.code.toLowerCase(), latency_ms: latency, detail: classified.message },
+      };
+    }
+  }
+
   private async lookupViaPublicDataMeet(
     trainNumber: string,
     options: { refresh?: boolean; signal: AbortSignal }
-  ): Promise<TrainLookupResult> {
+  ): Promise<{ outcome: 'verified' | 'not_found' | 'unsupported' | 'unavailable'; result?: TrainLookupResult; attempt: ProviderAttempt; errorCode?: TrainLookupErrorCode }> {
     const started = performance.now();
     let index = options.refresh ? null : this.readStoredDataMeetIndex();
     let cached = Boolean(index);
@@ -454,14 +792,13 @@ class TrainLookupService {
       }
 
       if (!index) {
+        const latency = Math.round((performance.now() - started) * 100) / 100;
         const finalErr = lastErr || new ClassifiedLookupError('SERVER_UNAVAILABLE', messageForErrorCode('SERVER_UNAVAILABLE'));
-        return buildEmptyErrorResult(
-          trainNumber,
-          'UNAVAILABLE',
-          finalErr.code,
-          finalErr.message,
-          'DataMeet OpenData'
-        );
+        return {
+          outcome: 'unavailable',
+          errorCode: finalErr.code,
+          attempt: { provider: 'DataMeet OpenData', outcome: finalErr.code.toLowerCase(), latency_ms: latency, detail: finalErr.message },
+        };
       }
     }
 
@@ -471,21 +808,45 @@ class TrainLookupService {
 
     if (!entry) {
       return {
-        ...buildEmptyErrorResult(trainNumber, 'NOT_FOUND', 'NOT_FOUND', messageForErrorCode('NOT_FOUND'), 'DataMeet OpenData'),
-        already_exists: alreadyExists,
-        cached,
-        latency_ms: latency,
+        outcome: 'not_found',
+        attempt: { provider: 'DataMeet OpenData', outcome: 'not_found', latency_ms: latency, detail: 'Train absent from DataMeet index' },
       };
     }
 
     if (String(entry.number).trim() !== trainNumber) {
-      return buildEmptyErrorResult(
-        trainNumber,
-        'UNAVAILABLE',
-        'INVALID_RESPONSE',
-        messageForErrorCode('INVALID_RESPONSE'),
-        'DataMeet OpenData'
-      );
+      return {
+        outcome: 'unavailable',
+        errorCode: 'INVALID_RESPONSE',
+        attempt: { provider: 'DataMeet OpenData', outcome: 'mismatched', latency_ms: latency, detail: `Requested ${trainNumber}, received ${entry.number}` },
+      };
+    }
+
+    const expressCheck = isExpressFamilyTrain(entry.type, null, entry.name);
+    if (!expressCheck.allowed) {
+      const attempt: ProviderAttempt = {
+        provider: 'DataMeet OpenData',
+        outcome: 'rejected_non_express',
+        latency_ms: latency,
+        detail: `Non-Express category: ${expressCheck.label}`,
+      };
+      return {
+        outcome: 'unsupported',
+        attempt,
+        result: {
+          ...buildEmptyErrorResult(
+            trainNumber,
+            'UNSUPPORTED_TYPE',
+            'NON_EXPRESS_TRAIN',
+            `Only Express family trains are supported (Train ${trainNumber} is ${expressCheck.label}). Passenger, MEMU, DEMU, and suburban trains are excluded.`,
+            'DataMeet OpenData'
+          ),
+          train_name: entry.name,
+          train_type: normalizeTrainType(entry.type, entry.name),
+          already_exists: alreadyExists,
+          latency_ms: latency,
+          provider_attempts: [attempt],
+        },
+      };
     }
 
     const zone = entry.zone || null;
@@ -496,38 +857,86 @@ class TrainLookupService {
     if (!zone) missingFields.push('railwayZone');
     missingFields.push('coachComposition');
 
-    return {
-      status: 'VERIFIED',
-      error_code: null,
-      train_number: trainNumber,
-      train_name: entry.name,
-      source_station: entry.from_station_name || null,
-      source_code: entry.from_station_code || null,
-      destination_station: entry.to_station_name || null,
-      destination_code: entry.to_station_code || null,
-      region,
-      railway_zone: zone,
-      train_type: normalizeTrainType(entry.type, entry.name),
-      running_days: null,
-      route: [],
-      coach_composition: [],
-      total_coaches: null,
-      has_official_composition: false,
+    const attempt: ProviderAttempt = {
       provider: 'DataMeet OpenData',
-      cached,
+      outcome: 'verified',
       latency_ms: latency,
-      verified_at: new Date().toISOString(),
-      missing_fields: missingFields,
+      detail: cached ? 'Resolved from verified DataMeet OpenData cache' : 'Resolved from live DataMeet OpenData API',
+    };
+
+    return {
+      outcome: 'verified',
+      attempt,
+      result: {
+        status: 'VERIFIED',
+        error_code: null,
+        train_number: trainNumber,
+        train_name: entry.name,
+        source_station: entry.from_station_name || null,
+        source_code: entry.from_station_code || null,
+        destination_station: entry.to_station_name || null,
+        destination_code: entry.to_station_code || null,
+        region,
+        railway_zone: zone,
+        train_type: normalizeTrainType(entry.type, entry.name),
+        running_days: null,
+        route: [],
+        coach_composition: [],
+        total_coaches: null,
+        has_official_composition: false,
+        provider: 'DataMeet OpenData',
+        cached,
+        latency_ms: latency,
+        verified_at: new Date().toISOString(),
+        missing_fields: missingFields,
+        already_exists: alreadyExists,
+        message: 'Train successfully verified.',
+        provider_attempts: [attempt],
+      },
+    };
+  }
+
+  private async lookupViaPublicProviders(
+    trainNumber: string,
+    options: { refresh?: boolean; signal: AbortSignal; onProgress?: (providerLabel: string) => void }
+  ): Promise<TrainLookupResult> {
+    const started = performance.now();
+    const attempts: ProviderAttempt[] = [];
+    const alreadyExists = localFleetStore.hasTrain(trainNumber);
+
+    options.onProgress?.('Querying RailRadar Public API...');
+    const primary = await this.lookupViaRailRadarPublic(trainNumber, options.signal);
+    attempts.push(primary.attempt);
+    if ((primary.outcome === 'verified' || primary.outcome === 'unsupported') && primary.result) {
+      return { ...primary.result, provider_attempts: attempts };
+    }
+
+    options.onProgress?.('Fallback: Querying DataMeet OpenData...');
+    const fallback = await this.lookupViaPublicDataMeet(trainNumber, {
+      refresh: options.refresh,
+      signal: options.signal,
+    });
+    attempts.push(fallback.attempt);
+    if ((fallback.outcome === 'verified' || fallback.outcome === 'unsupported') && fallback.result) {
+      return { ...fallback.result, provider_attempts: attempts };
+    }
+
+    const totalMs = Math.round((performance.now() - started) * 100) / 100;
+    if (primary.outcome === 'not_found' && fallback.outcome !== 'unavailable') {
+      return {
+        ...buildEmptyErrorResult(trainNumber, 'NOT_FOUND', 'NOT_FOUND', messageForErrorCode('NOT_FOUND'), 'RailRadar Public API'),
+        already_exists: alreadyExists,
+        latency_ms: totalMs,
+        provider_attempts: attempts,
+      };
+    }
+
+    const errorCode = primary.errorCode || fallback.errorCode || 'SERVER_UNAVAILABLE';
+    return {
+      ...buildEmptyErrorResult(trainNumber, 'UNAVAILABLE', errorCode, messageForErrorCode(errorCode)),
       already_exists: alreadyExists,
-      message: 'Train successfully verified.',
-      provider_attempts: [
-        {
-          provider: 'DataMeet OpenData',
-          outcome: 'verified',
-          latency_ms: latency,
-          detail: cached ? 'Resolved from verified DataMeet OpenData cache' : 'Resolved from live DataMeet OpenData API',
-        },
-      ],
+      latency_ms: totalMs,
+      provider_attempts: attempts,
     };
   }
 
@@ -589,7 +998,7 @@ class TrainLookupService {
 
   async lookup(
     rawTrainNumber: string,
-    options?: { refresh?: boolean }
+    options?: { refresh?: boolean; onProgress?: (providerLabel: string) => void }
   ): Promise<{ result: TrainLookupResult; stale: boolean }> {
     const trainNumber = rawTrainNumber.trim();
 
@@ -621,9 +1030,17 @@ class TrainLookupService {
 
     const promise = (async (): Promise<{ result: TrainLookupResult; stale: boolean }> => {
       try {
-        const result = ApiClient.hasBackend()
-          ? await this.lookupViaBackend(trainNumber, { refresh: options?.refresh, signal: controller.signal })
-          : await this.lookupViaPublicDataMeet(trainNumber, { refresh: options?.refresh, signal: controller.signal });
+        let result: TrainLookupResult;
+        if (ApiClient.hasBackend()) {
+          options?.onProgress?.('Querying Backend Multi-Provider API...');
+          result = await this.lookupViaBackend(trainNumber, { refresh: options?.refresh, signal: controller.signal });
+        } else {
+          result = await this.lookupViaPublicProviders(trainNumber, {
+            refresh: options?.refresh,
+            signal: controller.signal,
+            onProgress: options?.onProgress,
+          });
+        }
 
         if (seq !== this.requestSeq) {
           return { stale: true, result };

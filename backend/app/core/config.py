@@ -72,7 +72,7 @@ class Settings(BaseSettings):
 
     # Indian Railways Multi-Provider Lookup (credentials loaded from .env / environment only)
     RAILRADAR_API_KEY: Optional[str] = None
-    RAILRADAR_BASE_URL: str = "https://api.railradar.in/v1"
+    RAILRADAR_BASE_URL: str = "https://railradar.in/api/v1"
     RAPIDAPI_IRCTC_KEY: Optional[str] = None
     RAPIDAPI_IRCTC_HOST: str = "irctc1.p.rapidapi.com"
     INDIANRAIL_API_KEY: Optional[str] = None

@@ -83,35 +83,106 @@ async function run() {
       ],
     };
 
-    // 1. Successful DataMeet verification (train 15102) + deduped concurrent requests
+    // 1. Primary RailRadar Public API verification (15120) + deduped concurrent requests
+    const sample15120 = {
+      success: true,
+      data: {
+        train: {
+          number: '15120',
+          name: 'Banaras Janta Express',
+          type: 'Mail/Express',
+          category: 'Express',
+          source: { code: 'DDN', name: 'Dehradoon', lat: 30.31454, lng: 78.033243 },
+          destination: { code: 'BNRS', name: 'Banaras', lat: 25.29926, lng: 82.97177 },
+          runDays: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+          coachPosition: 'ENG-SLRD-GEN-S1-S2-B1-A1-H1-LPR',
+        },
+        route: [
+          { sequence: 1, station: { code: 'DDN', name: 'Dehradoon' }, isHalt: true, departure: '18:30', departureDay: 1 },
+          { sequence: 2, station: { code: 'LKO', name: 'Lucknow' }, isHalt: false },
+          { sequence: 3, station: { code: 'BNRS', name: 'Banaras' }, isHalt: true, arrival: '15:05', arrivalDay: 2 },
+        ],
+      },
+    };
+
     let fetchCount = 0;
+    const seenProgress = [];
     global.fetch = async (url) => {
       fetchCount++;
-      assert(String(url).includes('datameet/railways'), 'Expected DataMeet URL, got ' + url);
-      await new Promise((r) => setTimeout(r, 40));
-      return {
-        ok: true,
-        status: 200,
-        text: async () => JSON.stringify(sampleGeoJson),
-      };
+      if (String(url).includes('railradar.in/api/v1/trains/15120')) {
+        await new Promise((r) => setTimeout(r, 40));
+        return { ok: true, status: 200, text: async () => JSON.stringify(sample15120) };
+      }
+      if (String(url).includes('datameet/railways')) {
+        await new Promise((r) => setTimeout(r, 40));
+        return { ok: true, status: 200, text: async () => JSON.stringify(sampleGeoJson) };
+      }
+      return { ok: false, status: 404, text: async () => JSON.stringify({ success: false, error: { code: 'TRAIN_NOT_FOUND' } }) };
     };
 
     const [r1, r2, r3] = await Promise.all([
-      trainLookupService.lookup('15102'),
-      trainLookupService.lookup('15102'),
-      trainLookupService.lookup('15102'),
+      trainLookupService.lookup('15120', { onProgress: (lbl) => seenProgress.push(lbl) }),
+      trainLookupService.lookup('15120'),
+      trainLookupService.lookup('15120'),
     ]);
     assert.strictEqual(fetchCount, 1, 'Expected concurrent Verify calls for same train to deduplicate to 1 request');
     assert.strictEqual(r1.result.status, 'VERIFIED');
-    assert.strictEqual(r1.result.train_name, 'Mumbai CST Chhapra Jansadharan Express');
-    assert.strictEqual(r1.result.source_code, 'CSTM');
-    assert.strictEqual(r1.result.destination_code, 'CPR');
-    assert.strictEqual(r1.result.railway_zone, 'NER');
+    assert.strictEqual(r1.result.provider, 'RailRadar Public API');
+    assert.strictEqual(r1.result.train_name, 'Banaras Janta Express');
+    assert.strictEqual(r1.result.source_code, 'DDN');
+    assert.strictEqual(r1.result.destination_code, 'BNRS');
     assert.strictEqual(r1.result.region, 'NORTH');
-    assert.strictEqual(r1.result.train_type, 'Express');
+    assert.strictEqual(r1.result.railway_zone, null);
+    assert(r1.result.missing_fields.includes('railwayZone'), 'Should not fabricate missing railwayZone');
+    assert.strictEqual(r1.result.route.length, 2, 'Should keep halting stops only');
+    assert(r1.result.coach_composition.length > 0 && !r1.result.coach_composition.some((c) => c.coach_number === 'ENG'));
+    assert(seenProgress.some((s) => s.includes('RailRadar')), 'Expected progress callback');
     assert.strictEqual(r2.result.status, 'VERIFIED');
     assert.strictEqual(r3.result.status, 'VERIFIED');
-    console.log('[PASS] Static DataMeet verification (15102) & rapid-click deduplication');
+    console.log('[PASS] Static RailRadar Public verification (15120) & rapid-click deduplication');
+
+    // 1b. RailRadar 404 falls back cleanly to DataMeet OpenData (15102)
+    const dmFallback = await trainLookupService.lookup('15102');
+    assert.strictEqual(dmFallback.result.status, 'VERIFIED');
+    assert.strictEqual(dmFallback.result.provider, 'DataMeet OpenData');
+    assert.strictEqual(dmFallback.result.train_name, 'Mumbai CST Chhapra Jansadharan Express');
+    assert.strictEqual(dmFallback.result.railway_zone, 'NER');
+    assert.strictEqual(dmFallback.result.region, 'NORTH');
+    console.log('[PASS] Static fallback from RailRadar 404 to DataMeet OpenData (15102)');
+
+    // 1c. Non-Express MEMU/Passenger exclusion using structured metadata
+    global.fetch = async (url) => {
+      if (String(url).includes('railradar.in/api/v1/trains/10107')) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({
+            success: true,
+            data: {
+              train: {
+                number: '10107',
+                name: 'Mangaluru Central MEMU Express',
+                type: 'MEMU',
+                category: 'Local',
+              },
+            },
+          }),
+        };
+      }
+      return { ok: false, status: 404, text: async () => '{}' };
+    };
+    const nonExp = await trainLookupService.lookup('10107', { refresh: true });
+    assert.strictEqual(nonExp.result.status, 'UNSUPPORTED_TYPE');
+    assert.strictEqual(nonExp.result.error_code, 'NON_EXPRESS_TRAIN');
+    console.log('[PASS] Non-Express MEMU exclusion even with Express in train name');
+
+    // Restore primary mock before 99998 NOT_FOUND + localFleetStore checks
+    global.fetch = async (url) => {
+      if (String(url).includes('datameet/railways')) {
+        return { ok: true, status: 200, text: async () => JSON.stringify(sampleGeoJson) };
+      }
+      return { ok: false, status: 404, text: async () => JSON.stringify({ success: false, error: { code: 'TRAIN_NOT_FOUND' } }) };
+    };
 
     // 2. Non-existent train -> NOT_FOUND
     const nf = await trainLookupService.lookup('99998');

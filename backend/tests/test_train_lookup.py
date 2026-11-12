@@ -20,6 +20,7 @@ from app.services.train_lookup_service import (
     RailRadarProvider,
     RapidApiIrctcProvider,
     TrainLookupService,
+    is_express_family_train,
     map_zone_to_region,
     normalize_train_type,
     train_lookup_service,
@@ -343,3 +344,116 @@ async def test_error_code_differentiation_for_rate_limit_auth_timeout(monkeypatc
     res_to = await svc_to.lookup("15102")
     assert res_to.status == "UNAVAILABLE"
     assert res_to.error_code == "TIMEOUT"
+
+    # 4. Malformed JSON response
+    svc_bad = TrainLookupService(
+        providers=[RailRadarProvider()],
+        client_factory=lambda: httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda req: httpx.Response(200, text="{not valid json"))
+        ),
+    )
+    res_bad = await svc_bad.lookup("15102")
+    assert res_bad.status == "UNAVAILABLE"
+    assert res_bad.error_code == "INVALID_RESPONSE"
+
+    # 5. Live 404 from primary falling back cleanly to DataMeet archive
+    idx_file = tmp_path / "fallback_dm.json"
+    idx_file.write_text(
+        json.dumps(
+            {
+                "12621": {
+                    "number": "12621",
+                    "name": "TAMIL NADU SF EXPRESS",
+                    "zone": "SR",
+                    "from_station_code": "MAS",
+                    "from_station_name": "CHENNAI CENTRAL",
+                    "to_station_code": "NDLS",
+                    "to_station_name": "NEW DELHI",
+                    "type": "SF",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    svc_404_fb = TrainLookupService(
+        providers=[RailRadarProvider(), DataMeetOpenProvider(index_path=idx_file)],
+        client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(lambda req: httpx.Response(404))),
+    )
+    res_fb = await svc_404_fb.lookup("12621")
+    assert res_fb.status == "VERIFIED"
+    assert res_fb.provider == "DataMeet OpenData"
+    assert {a.provider: a.outcome for a in res_fb.provider_attempts}["RailRadar"] == "not_found"
+
+    # 6. Live API unavailable + archive miss must report UNAVAILABLE (not false NOT_FOUND)
+    svc_unavail_archive = TrainLookupService(
+        providers=[RailRadarProvider(), DataMeetOpenProvider(index_path=idx_file)],
+        client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(timeout_handler)),
+    )
+    res_ua = await svc_unavail_archive.lookup("15120")
+    assert res_ua.status == "UNAVAILABLE"
+    assert res_ua.error_code == "TIMEOUT"
+
+
+@pytest.mark.asyncio
+async def test_express_only_filter_metadata_and_heuristics():
+    # Structured metadata takes precedence over name tokens
+    assert is_express_family_train("Mail/Express", "Express", "Bilaspur Express cum Passenger")[0] is True
+    assert is_express_family_train("MEMU", "Local", "Mangaluru Central MEMU Express")[0] is False
+    assert is_express_family_train("DEMU", "Local", "Sangli DEMU Express")[0] is False
+    assert is_express_family_train("Passenger", "Passenger", "Gorakhpur Gonda Passenger")[0] is False
+    assert is_express_family_train("Rajdhani Express", "Premium", "Howrah New Delhi Rajdhani")[0] is True
+
+    def non_express_handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path.endswith("/trains/64101/coaches"):
+            return httpx.Response(404)
+        return httpx.Response(
+            200,
+            json={
+                "success": True,
+                "data": {
+                    "train": {
+                        "number": "64101",
+                        "name": "Aligarh - Delhi EMU",
+                        "type": "EMU",
+                        "category": "Local",
+                        "source": {"code": "ALJN", "name": "Aligarh Jn"},
+                        "destination": {"code": "DLI", "name": "Delhi Jn"},
+                    }
+                },
+            },
+        )
+
+    svc = TrainLookupService(
+        providers=[RailRadarProvider()],
+        client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(non_express_handler)),
+    )
+    res = await svc.lookup("64101")
+    assert res.status == "UNSUPPORTED_TYPE"
+    assert res.error_code == "NON_EXPRESS_TRAIN"
+
+
+@pytest.mark.asyncio
+async def test_live_all_target_express_trains_including_15120(monkeypatch):
+    monkeypatch.setattr(settings, "RAILRADAR_API_KEY", "")
+    monkeypatch.setattr(settings, "RAPIDAPI_IRCTC_KEY", "")
+    monkeypatch.setattr(settings, "INDIANRAIL_API_KEY", "")
+
+    svc = TrainLookupService()
+    targets = {
+        "15120": ("JANTA", "DDN", ("BNRS", "BSBS")),
+        "12301": ("RAJDHANI", "HWH", ("NDLS",)),
+        "12302": ("RAJDHANI", "NDLS", ("HWH",)),
+        "12309": ("RAJDHANI", "RJPB", ("NDLS",)),
+        "12310": ("RAJDHANI", "NDLS", ("RJPB",)),
+        "12951": ("RAJDHANI", "MMCT", ("NDLS",)),
+        "12952": ("RAJDHANI", "NDLS", ("MMCT",)),
+    }
+    for num, (name_kw, expected_src, expected_dsts) in targets.items():
+        res = await svc.lookup(num, force_refresh=True)
+        assert res.status == "VERIFIED", f"{num} failed: {res.status} {res.message} {res.provider_attempts}"
+        assert res.train_number == num
+        assert name_kw in (res.train_name or "").upper(), f"Unexpected name for {num}: {res.train_name}"
+        assert res.source_code == expected_src, f"Unexpected src for {num}: {res.source_code}"
+        assert res.destination_code in expected_dsts, f"Unexpected dst for {num}: {res.destination_code}"
+        assert "EXPRESS" in (res.train_type or "").upper()
+    assert svc.get_provider_health().get("RailRadar", {}).get("verified", 0) >= len(targets)

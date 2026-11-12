@@ -24,11 +24,12 @@ export interface ProviderAttempt {
   detail?: string | null;
 }
 
-export type TrainLookupStatus = 'VERIFIED' | 'NOT_FOUND' | 'UNAVAILABLE' | 'INVALID_FORMAT';
+export type TrainLookupStatus = 'VERIFIED' | 'NOT_FOUND' | 'UNAVAILABLE' | 'INVALID_FORMAT' | 'UNSUPPORTED_TYPE';
 
 export type TrainLookupErrorCode =
   | 'INVALID_FORMAT'
   | 'NOT_FOUND'
+  | 'NON_EXPRESS_TRAIN'
   | 'TIMEOUT'
   | 'RATE_LIMITED'
   | 'AUTH_ERROR'
