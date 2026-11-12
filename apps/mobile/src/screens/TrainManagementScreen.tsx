@@ -3,7 +3,8 @@ import { colors, typography, metrics } from '../theme';
 import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
 import { RegionSummary, TrainOverviewItem, TrainConsist } from '../types';
-import { Train, Plus, Trash2, X, ChevronRight, MapPin, ArrowLeft, ArrowRight, CheckCircle2, Edit3 } from 'lucide-react';
+import { Train, Plus, Trash2, X, ChevronRight, MapPin, ArrowLeft, ArrowRight, CheckCircle2, Edit3, Layers } from 'lucide-react';
+import { AddTrainModal } from '../components/train/AddTrainModal';
 
 export const TrainManagementScreen: React.FC = () => {
   const {
@@ -81,6 +82,9 @@ export const TrainManagementScreen: React.FC = () => {
 
   const [formError, setFormError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [deleteTargetTrain, setDeleteTargetTrain] = useState<TrainOverviewItem | null>(null);
+  const [deletingTrain, setDeletingTrain] = useState<boolean>(false);
 
   useEffect(() => {
     refreshRegions();
@@ -109,24 +113,35 @@ export const TrainManagementScreen: React.FC = () => {
     }
   };
 
-  const handleDeleteTrain = async (trainNumber: string) => {
+  const requestDeleteTrain = (train: TrainOverviewItem) => {
+    setActionError(null);
     if (currentUser?.role !== 'ADMIN') {
-      alert('Only administrators can remove trains from the fleet.');
+      setActionError('Only administrators can remove trains from the fleet.');
       return;
     }
-    if (!window.confirm(`Are you sure you want to delete Train ${trainNumber}?`)) {
-      return;
-    }
+    setDeleteTargetTrain(train);
+  };
+
+  const confirmDeleteTrain = async () => {
+    if (!deleteTargetTrain || deletingTrain) return;
+    const trainNumber = deleteTargetTrain.train_number;
     try {
-      await ApiClient.deleteTrain(trainNumber);
-      setActionMessage(`Train ${trainNumber} deleted successfully.`);
-      setTimeout(() => setActionMessage(null), 3500);
+      setDeletingTrain(true);
+      setActionError(null);
+      const res = await ApiClient.deleteTrain(trainNumber);
+      setDeleteTargetTrain(null);
       await refreshRegions();
       if (selectedTrain?.train_number === trainNumber) {
         setSelectedTrain(null);
       }
+      setActionMessage(res?.message || `Train ${trainNumber} deleted successfully.`);
+      setTimeout(() => setActionMessage(null), 3500);
     } catch (e: any) {
-      alert(`Delete failed: ${e.message}`);
+      console.error('[TrainManagementScreen] Delete train failed:', e);
+      setDeleteTargetTrain(null);
+      setActionError(e?.message || `Failed to delete Train ${trainNumber}.`);
+    } finally {
+      setDeletingTrain(false);
     }
   };
 
@@ -327,6 +342,8 @@ export const TrainManagementScreen: React.FC = () => {
 
       {actionMessage && (
         <div
+          role="status"
+          data-testid="train-action-success"
           style={{
             backgroundColor: '#ECFDF5',
             border: '1px solid #A7F3D0',
@@ -342,6 +359,36 @@ export const TrainManagementScreen: React.FC = () => {
         >
           <CheckCircle2 size={16} />
           <span>{actionMessage}</span>
+        </div>
+      )}
+
+      {actionError && (
+        <div
+          role="alert"
+          data-testid="train-action-error"
+          style={{
+            backgroundColor: '#FEF2F2',
+            border: '1px solid #FECACA',
+            color: '#991B1B',
+            borderRadius: '6px',
+            padding: '10px 16px',
+            fontSize: '13px',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '10px',
+          }}
+        >
+          <span>{actionError}</span>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            aria-label="Dismiss error"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991B1B', display: 'flex' }}
+          >
+            <X size={15} />
+          </button>
         </div>
       )}
 
@@ -711,7 +758,8 @@ export const TrainManagementScreen: React.FC = () => {
                           <Edit3 size={13} />
                         </button>
                         <button
-                          onClick={() => handleDeleteTrain(train.train_number)}
+                          onClick={() => requestDeleteTrain(train)}
+                          data-testid={`delete-train-${train.train_number}`}
                           style={{
                             backgroundColor: '#FFF1F2',
                             border: '1px solid #FECDD3',
@@ -1025,226 +1073,17 @@ export const TrainManagementScreen: React.FC = () => {
       )}
 
       {/* 5. ADD TRAIN MODAL DIALOG */}
-      {isAddModalOpen && (
-        <div
-          className="modal-backdrop"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(15, 23, 42, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-          }}
-        >
-          <div
-            className="modal-dialog"
-            style={{
-              backgroundColor: '#FFFFFF',
-              borderRadius: '10px',
-              padding: '20px',
-              width: '460px',
-              maxWidth: 'min(460px, calc(100vw - 24px))',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '16px',
-              }}
-            >
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0F172A' }}>
-                Add Railway Train Fleet
-              </h3>
-              <button
-                onClick={() => setIsAddModalOpen(false)}
-                title="Close modal"
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  color: '#94A3B8',
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '4px',
-                }}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {formError && (
-              <div
-                style={{
-                  backgroundColor: '#FEE2E2',
-                  border: '1px solid #FCA5A5',
-                  color: '#DC2626',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  marginBottom: '14px',
-                }}
-              >
-                {formError}
-              </div>
-            )}
-
-            <form onSubmit={handleCreateTrainSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                  Train Number (5-digit Indian Railways code)
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. 12004 or 12302"
-                  value={newTrainNumber}
-                  onChange={(e) => setNewTrainNumber(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: '6px',
-                    border: '1px solid #CBD5E1',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                  Train Name & Route
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Lucknow Shatabdi Express"
-                  value={newTrainName}
-                  onChange={(e) => setNewTrainName(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: '6px',
-                    border: '1px solid #CBD5E1',
-                    fontSize: '13px',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                  Railway Region Zone
-                </label>
-                <select
-                  value={newTrainRegion}
-                  onChange={(e) => setNewTrainRegion(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: '6px',
-                    border: '1px solid #CBD5E1',
-                    fontSize: '13px',
-                    backgroundColor: '#FFFFFF',
-                    boxSizing: 'border-box',
-                  }}
-                >
-                  <option value="NORTH">NORTH — Northern Railway (NR)</option>
-                  <option value="SOUTH">SOUTH — Southern Railway (SR)</option>
-                  <option value="EAST">EAST — Eastern Railway (ER)</option>
-                  <option value="WEST">WEST — Western Railway (WR)</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                    Initial Coach Number
-                  </label>
-                  <input
-                    type="text"
-                    value={newCoachNumber}
-                    onChange={(e) => setNewCoachNumber(e.target.value)}
-                    placeholder="B1, C1, A2..."
-                    style={{
-                      width: '100%',
-                      padding: '8px 10px',
-                      borderRadius: '6px',
-                      border: '1px solid #CBD5E1',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                    Tank Capacity (L)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={newCapacity}
-                    onChange={(e) => setNewCapacity(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 10px',
-                      borderRadius: '6px',
-                      border: '1px solid #CBD5E1',
-                      fontSize: '13px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '14px' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  style={{
-                    backgroundColor: '#F1F5F9',
-                    border: '1px solid #CBD5E1',
-                    borderRadius: '6px',
-                    padding: '8px 16px',
-                    fontSize: '12px',
-                    color: '#475569',
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  style={{
-                    backgroundColor: '#2563EB',
-                    border: 'none',
-                    borderRadius: '6px',
-                    padding: '8px 20px',
-                    fontSize: '12px',
-                    color: '#FFFFFF',
-                    cursor: 'pointer',
-                    fontWeight: 700,
-                  }}
-                >
-                  {loading ? 'Registering...' : 'Add Train Consist'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <AddTrainModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onTrainAdded={async (trainNo, meta) => {
+          if (meta?.region) {
+            setSelectedRegion(meta.region);
+          }
+          setActionMessage(`Train ${trainNo} registered successfully.`);
+          await refreshRegions();
+        }}
+      />
 
       {/* Edit Train Modal */}
       {isEditModalOpen && (
@@ -1402,6 +1241,115 @@ export const TrainManagementScreen: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Train Confirmation Modal */}
+      {deleteTargetTrain && (
+        <div
+          className="modal-backdrop"
+          data-testid="delete-train-modal"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1150,
+            padding: '16px',
+          }}
+        >
+          <div
+            className="modal-dialog"
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '8px',
+              width: '440px',
+              maxWidth: 'min(440px, calc(100vw - 24px))',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                padding: '16px 20px',
+                borderBottom: '1px solid #E2E8F0',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0F172A' }}>
+                Confirm Train Deletion
+              </h3>
+              <button
+                type="button"
+                disabled={deletingTrain}
+                onClick={() => setDeleteTargetTrain(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p style={{ margin: 0, fontSize: '13px', color: '#334155', lineHeight: 1.5 }}>
+                Are you sure you want to delete <strong>Train {deleteTargetTrain.train_number}</strong>
+                {deleteTargetTrain.name ? ` (${deleteTargetTrain.name})` : ''}?
+              </p>
+              <div
+                style={{
+                  backgroundColor: '#FFF7ED',
+                  border: '1px solid #FED7AA',
+                  borderRadius: '6px',
+                  padding: '10px 12px',
+                  fontSize: '12px',
+                  color: '#9A3412',
+                  lineHeight: 1.45,
+                }}
+              >
+                Assigned coach hardware ({deleteTargetTrain.coaches_count} coaches, {deleteTargetTrain.tanks_count} tanks) will be released to the unassigned inventory pool while preserving historical telemetry and alarm logs.
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
+                <button
+                  type="button"
+                  disabled={deletingTrain}
+                  onClick={() => setDeleteTargetTrain(null)}
+                  data-testid="cancel-delete-train"
+                  style={{
+                    backgroundColor: '#F1F5F9',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '6px',
+                    padding: '8px 16px',
+                    fontSize: '12px',
+                    color: '#475569',
+                    cursor: deletingTrain ? 'not-allowed' : 'pointer',
+                    fontWeight: 600,
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingTrain}
+                  onClick={confirmDeleteTrain}
+                  data-testid="confirm-delete-train"
+                  style={{
+                    backgroundColor: deletingTrain ? '#FCA5A5' : '#DC2626',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '8px 18px',
+                    fontSize: '12px',
+                    color: '#FFFFFF',
+                    cursor: deletingTrain ? 'wait' : 'pointer',
+                    fontWeight: 700,
+                  }}
+                >
+                  {deletingTrain ? 'Deleting...' : 'Delete Train'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

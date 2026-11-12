@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { colors, metrics, typography } from '../theme';
 import { useApp } from '../state/AppContext';
 import { TankLiveStatus } from '../types';
+import { filterConsistTanks, CoachTankFilterMode } from '../services/tankStatusService';
 import { TankVisualization } from '../components/tank/TankVisualization';
 import { LevelTrendCard } from '../components/charts/LevelTrendCard';
 import { BaseCard } from '../components/common/BaseCard';
@@ -26,10 +27,10 @@ import {
 } from 'lucide-react';
 
 export const WaterTankScreen: React.FC = () => {
-  const { tanks, liveTank, managedDevices, connectionStatus, refreshData, selectedTankId: contextTankId, setSelectedTankId: setContextTankId, setActiveScreen, consistTanks } = useApp();
+  const { tanks, liveTank, managedDevices, connectionStatus, refreshData, selectedTankId: contextTankId, setSelectedTankId: setContextTankId, setActiveScreen, consistTanks, consistMetrics } = useApp();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'ALL' | 'ONLINE' | 'OFFLINE' | 'LOW_LEVEL'>('ALL');
+  const [activeFilter, setActiveFilter] = useState<CoachTankFilterMode>('ALL');
   const [selectedTankId, setSelectedTankId] = useState<string | null>(contextTankId || null);
 
   useEffect(() => {
@@ -46,32 +47,9 @@ export const WaterTankScreen: React.FC = () => {
     return tanks;
   }, [consistTanks, tanks]);
 
-  // Filter and search logic
+  // Filter and search logic (shared model-level filtering: ALL shows online items only)
   const filteredTanks = useMemo(() => {
-    return allTanks.filter((t) => {
-      // Search query
-      if (searchQuery.trim().length > 0) {
-        const q = searchQuery.toLowerCase();
-        const matchName = t.tankName.toLowerCase().includes(q);
-        const matchCoach = t.coachNumber.toLowerCase().includes(q);
-        const matchTrain = t.trainNumber.toLowerCase().includes(q);
-        const matchId = t.tankId.toLowerCase().includes(q);
-        const matchUid = t.deviceUid.toLowerCase().includes(q);
-        if (!matchName && !matchCoach && !matchTrain && !matchId && !matchUid) return false;
-      }
-
-      // Filter tabs
-      if (activeFilter === 'ONLINE') {
-        return t.isOnline;
-      }
-      if (activeFilter === 'OFFLINE') {
-        return !t.isOnline;
-      }
-      if (activeFilter === 'LOW_LEVEL') {
-        return t.hasTelemetry && t.levelPercent != null && t.levelPercent < 20.0;
-      }
-      return true;
-    });
+    return filterConsistTanks(allTanks, activeFilter, searchQuery);
   }, [allTanks, searchQuery, activeFilter]);
 
   // Selected tank for detailed drawer
@@ -80,12 +58,12 @@ export const WaterTankScreen: React.FC = () => {
     return allTanks.find((t) => t.tankId === selectedTankId) || null;
   }, [allTanks, selectedTankId]);
 
-  // Aggregate metrics
+  // Aggregate metrics (summary counters always show actual totals across registered coaches & tanks)
   const totalTanks = allTanks.length;
   const onlineTanks = allTanks.filter((t) => t.isOnline).length;
   const offlineTanks = totalTanks - onlineTanks;
   const lowLevelTanks = allTanks.filter(
-    (t) => t.hasTelemetry && t.levelPercent != null && t.levelPercent < 20.0
+    (t) => t.isOnline && t.hasTelemetry && t.levelPercent != null && t.levelPercent < 20.0
   ).length;
 
   const validLevels = allTanks
@@ -136,11 +114,33 @@ export const WaterTankScreen: React.FC = () => {
           </button>
         </div>
 
+        {/* Coach Summary Cards: actual total / online / offline counts */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gap: '10px',
+          }}
+        >
+          <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748B' }}>All Coaches</span>
+            <strong style={{ fontSize: '15px', fontWeight: 800, color: '#0F172A' }}>{consistMetrics.totalCoaches}</strong>
+          </div>
+          <div style={{ backgroundColor: '#F0FDF4', borderRadius: '8px', border: '1px solid #BBF7D0', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: '#15803D' }}>Online</span>
+            <strong style={{ fontSize: '15px', fontWeight: 800, color: '#16A34A' }}>{consistMetrics.onlineCoaches}</strong>
+          </div>
+          <div style={{ backgroundColor: '#FEF2F2', borderRadius: '8px', border: '1px solid #FECACA', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: '#B91C1C' }}>Offline</span>
+            <strong style={{ fontSize: '15px', fontWeight: 800, color: '#DC2626' }}>{consistMetrics.offlineCoaches}</strong>
+          </div>
+        </div>
+
         {/* 1. Filter Pills Row & Search Bar (Qt AllTanksPage.qml) */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
           {/* Filter Pills */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            {/* All Tanks */}
+            {/* All Coaches (Online Only by Default) */}
             <button
               onClick={() => setActiveFilter('ALL')}
               style={{
@@ -158,7 +158,7 @@ export const WaterTankScreen: React.FC = () => {
                 transition: 'all 0.15s ease',
               }}
             >
-              <span>All Tanks</span>
+              <span>All Coaches</span>
               <span
                 style={{
                   backgroundColor: activeFilter === 'ALL' ? '#1D4ED8' : '#F1F5F9',
@@ -350,8 +350,18 @@ export const WaterTankScreen: React.FC = () => {
         {filteredTanks.length === 0 ? (
           <div style={{ padding: '48px', textAlign: 'center', backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
             <Droplets size={36} color="#94A3B8" style={{ margin: '0 auto 8px auto' }} />
-            <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', color: '#0F172A' }}>No tanks match your search or filter</h3>
-            <p style={{ margin: 0, fontSize: '13px', color: '#64748B' }}>Try adjusting your filters or search terms.</p>
+            <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', color: '#0F172A' }}>
+              {(activeFilter === 'ALL' || activeFilter === 'ONLINE') && onlineTanks === 0
+                ? 'No coaches are currently online.'
+                : activeFilter === 'OFFLINE' && searchQuery.trim().length === 0
+                  ? 'No offline coaches'
+                  : 'No coaches match your search or filter'}
+            </h3>
+            <p style={{ margin: 0, fontSize: '13px', color: '#64748B' }}>
+              {(activeFilter === 'ALL' || activeFilter === 'ONLINE') && onlineTanks === 0
+                ? 'Connected coaches will appear here automatically once live telemetry is received.'
+                : 'Try adjusting your filters or search terms.'}
+            </p>
           </div>
         ) : viewMode === 'grid' ? (
           /* Grid View */

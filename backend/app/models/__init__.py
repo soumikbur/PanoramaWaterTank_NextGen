@@ -7,6 +7,7 @@ from app.models.telemetry import TelemetryReading
 from app.models.alarm import Alarm, AlarmHistory
 from app.models.setting import Setting
 from app.models.audit import AuditEvent
+from app.models.train import Train, TrainLookupCache
 
 __all__ = [
     "Base",
@@ -18,5 +19,7 @@ __all__ = [
     "AlarmHistory",
     "Setting",
     "AuditEvent",
+    "Train",
+    "TrainLookupCache",
 ]
 

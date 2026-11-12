@@ -250,7 +250,7 @@ Item {
                         anchors.centerIn: parent
                         spacing: 6
                         Text {
-                            text: "All Tanks"
+                            text: "All Coaches"
                             color: root.activeFilter === "All" ? "#FFFFFF" : Theme.colors.textPrimary
                             font.family: Theme.typography.fontFamily
                             font.pixelSize: 13
@@ -629,19 +629,31 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            // Empty State (No Tanks Found)
+            // Empty State (No Online Coaches / Matching Coaches Found)
             Item {
                 anchors.centerIn: parent
                 visible: root.filteredTanks.length === 0
-                width: 300
+                width: 340
                 height: 160
+
+                readonly property int currentOnlineCount: (ApplicationStateManager.hasTrainContext && ApplicationStateManager.selectedTrainNumber !== "")
+                    ? TrainManager.filteredOnlineTanks
+                    : TrainManager.onlineTanks
 
                 ColumnLayout {
                     anchors.centerIn: parent
                     spacing: 8
 
                     Text {
-                        text: "No tanks found"
+                        text: {
+                            if ((root.activeFilter === "All" || root.activeFilter === "Online") && parent.parent.currentOnlineCount === 0) {
+                                return "No coaches are currently online."
+                            }
+                            if (root.activeFilter === "Offline" && root.searchQuery.trim() === "") {
+                                return "No offline coaches found"
+                            }
+                            return "No matching coaches found"
+                        }
                         color: Theme.colors.textPrimary
                         font.family: Theme.typography.fontFamily
                         font.pixelSize: 16
@@ -650,10 +662,18 @@ Item {
                     }
 
                     Text {
-                        text: "No tanks match the selected filter or search terms."
+                        text: {
+                            if ((root.activeFilter === "All" || root.activeFilter === "Online") && parent.parent.currentOnlineCount === 0) {
+                                return "Connected coaches will appear automatically once live telemetry is received."
+                            }
+                            return "Try adjusting the active filter or search terms."
+                        }
                         color: Theme.colors.textSecondary
                         font.family: Theme.typography.fontFamily
                         font.pixelSize: 13
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        Layout.maximumWidth: 320
                         Layout.alignment: Qt.AlignHCenter
                     }
                 }

@@ -1,5 +1,5 @@
 export type AlarmSeverity = 'CRITICAL' | 'WARNING' | 'INFO';
-export type AlarmType = 'CRITICAL_LOW' | 'WARNING_LOW' | 'OVERFLOW' | 'SENSOR_FAULT' | 'VOLTAGE_FAULT';
+export type AlarmType = 'CRITICAL_LOW' | 'WARNING_LOW' | 'OVERFLOW' | 'SENSOR_FAULT' | 'VOLTAGE_FAULT' | 'DEVICE_OFFLINE';
 export type AlarmLifecycleState = 'ACTIVE' | 'ACKNOWLEDGED' | 'RESOLVED';
 
 export interface AlarmItem {

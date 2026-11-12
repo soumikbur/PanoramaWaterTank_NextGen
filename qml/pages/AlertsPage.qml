@@ -328,7 +328,7 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Text {
-                            text: "Active Alerts (" + TankModel.activeAlertCount + ")"
+                            text: "Active Alerts (" + (TankModel.activeAlertCount + TrainManager.connectivityAlertCount) + ")"
                             color: "#0F172A"
                             font.family: Theme.typography.fontFamily
                             font.pixelSize: 16
@@ -344,6 +344,75 @@ Item {
                     }
 
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
+
+                    // Coach Connectivity Disconnect Alerts
+                    Repeater {
+                        model: TrainManager.connectivityAlerts
+
+                        delegate: Rectangle {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            height: 82
+                            radius: 8
+                            color: "#FFFBEB"
+                            border.color: "#FDE68A"
+                            border.width: 1
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 14
+                                spacing: 14
+
+                                ColumnLayout {
+                                    Layout.preferredWidth: 100
+                                    spacing: 4
+                                    Rectangle {
+                                        height: 24
+                                        width: connSevText.implicitWidth + 16
+                                        radius: 12
+                                        color: "#FEF3C7"
+                                        border.color: "#FDE68A"
+                                        border.width: 1
+                                        Text {
+                                            id: connSevText
+                                            anchors.centerIn: parent
+                                            text: modelData.severity || "WARNING"
+                                            color: "#92400E"
+                                            font.pixelSize: 11
+                                            font.weight: Font.Bold
+                                            font.family: Theme.typography.fontFamily
+                                        }
+                                    }
+                                    Text {
+                                        text: modelData.timestamp || "--"
+                                        color: "#64748B"
+                                        font.pixelSize: 11
+                                        font.family: Theme.typography.fontFamily
+                                    }
+                                }
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 4
+                                    Text {
+                                        text: modelData.title || ""
+                                        color: "#92400E"
+                                        font.family: Theme.typography.fontFamily
+                                        font.pixelSize: 15
+                                        font.weight: Font.Bold
+                                    }
+                                    Text {
+                                        text: modelData.message || ""
+                                        color: "#475569"
+                                        font.family: Theme.typography.fontFamily
+                                        font.pixelSize: 13
+                                        wrapMode: Text.WordWrap
+                                        Layout.fillWidth: true
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     // Active Alert Cards
                     Repeater {
@@ -467,7 +536,7 @@ Item {
                         Layout.fillWidth: true
                         Layout.topMargin: 20
                         Layout.bottomMargin: 20
-                        visible: TankModel.activeAlertCount === 0
+                        visible: TankModel.activeAlertCount === 0 && TrainManager.connectivityAlertCount === 0
                         spacing: 8
 
                         Rectangle {

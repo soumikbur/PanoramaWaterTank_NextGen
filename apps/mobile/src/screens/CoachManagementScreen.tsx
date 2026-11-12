@@ -3,6 +3,7 @@ import { typography } from '../theme';
 import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
 import { TankLiveStatus, Device, AlarmStatus } from '../types';
+import { filterConsistCoaches, CoachTankFilterMode } from '../services/tankStatusService';
 import { TankVisualization } from '../components/tank/TankVisualization';
 import {
   Layers,
@@ -22,6 +23,7 @@ import {
   Radio,
   SlidersHorizontal,
   LayoutGrid,
+  Search,
 } from 'lucide-react';
 
 export interface CoachRecord {
@@ -59,6 +61,8 @@ export const CoachManagementScreen: React.FC = () => {
 
   const [activeTrain, setActiveTrain] = useState<string>(selectedTrainNumber || '225256');
   const [viewMode, setViewMode] = useState<'track' | 'grid'>('track');
+  const [coachFilter, setCoachFilter] = useState<CoachTankFilterMode>('ALL');
+  const [coachSearch, setCoachSearch] = useState<string>('');
   const [selectedCoach, setSelectedCoach] = useState<CoachRecord | null>(null);
   const [isAddCoachOpen, setIsAddCoachOpen] = useState(false);
   const [isEditCoachOpen, setIsEditCoachOpen] = useState(false);
@@ -86,6 +90,7 @@ export const CoachManagementScreen: React.FC = () => {
 
   // Generate 24 coaches for demonstrative consist or map real backend coaches
   const [customCoaches, setCustomCoaches] = useState<CoachRecord[]>([]);
+  const [coachOverrides, setCoachOverrides] = useState<Record<string, Partial<CoachRecord>>>({});
 
   // Construct coach fleet for active train
   const coachesList: CoachRecord[] = useMemo(() => {
@@ -185,7 +190,18 @@ export const CoachManagementScreen: React.FC = () => {
     ];
   }, [activeTrain, devices, liveTank, liveTelemetry]);
 
-  const allCoaches = [...coachesList, ...customCoaches];
+  const allCoaches = useMemo(
+    () =>
+      [...coachesList, ...customCoaches].map((c) =>
+        coachOverrides[c.id] ? { ...c, ...coachOverrides[c.id] } : c
+      ),
+    [coachesList, customCoaches, coachOverrides]
+  );
+  const filteredCoaches = useMemo(
+    () => filterConsistCoaches(allCoaches, coachFilter, coachSearch),
+    [allCoaches, coachFilter, coachSearch]
+  );
+  const onlineCoachesCount = useMemo(() => allCoaches.filter((c) => c.isOnline).length, [allCoaches]);
 
   // Auto-select coach matching global context or default to first coach
   useEffect(() => {
@@ -202,11 +218,18 @@ export const CoachManagementScreen: React.FC = () => {
     }
   }, [allCoaches, selectedCoach, selectedCoachNumber]);
 
-  const handleScrollTrack = (dir: 'left' | 'right') => {
-    if (trackScrollRef.current) {
-      const offset = dir === 'left' ? -380 : 380;
-      trackScrollRef.current.scrollBy({ left: offset, behavior: 'smooth' });
+  const handleScrollTrack = (dir: 'left' | 'right' | 'start' | 'end') => {
+    const el = trackScrollRef.current;
+    if (!el) return;
+    if (dir === 'start') {
+      el.scrollTo({ left: 0, behavior: 'smooth' });
+      return;
     }
+    if (dir === 'end') {
+      el.scrollTo({ left: el.scrollWidth, behavior: 'smooth' });
+      return;
+    }
+    el.scrollBy({ left: dir === 'left' ? -380 : 380, behavior: 'smooth' });
   };
 
   const handleOpenAddCoach = () => {
@@ -254,30 +277,37 @@ export const CoachManagementScreen: React.FC = () => {
     e.preventDefault();
     if (!coachToEdit) return;
 
+    const patch: Partial<CoachRecord> = {
+      coachNumber: editCoachNum.trim() || coachToEdit.coachNumber,
+      coachType: editCoachType,
+      deviceId: editCoachDev.trim() || 'Not Mapped',
+    };
+
+    setCoachOverrides((prev) => ({
+      ...prev,
+      [coachToEdit.id]: { ...prev[coachToEdit.id], ...patch },
+    }));
     setCustomCoaches((prev) =>
-      prev.map((c) =>
-        c.id === coachToEdit.id
-          ? { ...c, coachNumber: editCoachNum, coachType: editCoachType, deviceId: editCoachDev }
-          : c
-      )
+      prev.map((c) => (c.id === coachToEdit.id ? { ...c, ...patch } : c))
     );
     if (selectedCoach?.id === coachToEdit.id) {
-      setSelectedCoach((prev) =>
-        prev ? { ...prev, coachNumber: editCoachNum, coachType: editCoachType, deviceId: editCoachDev } : null
-      );
+      setSelectedCoach((prev) => (prev ? { ...prev, ...patch } : null));
+      if (patch.coachNumber) setSelectedCoachNumber(patch.coachNumber);
     }
     setIsEditCoachOpen(false);
-    setActionFeedback(`Coach ${editCoachNum} updated successfully.`);
+    setActionFeedback(`Coach ${patch.coachNumber} updated successfully.`);
     setTimeout(() => setActionFeedback(null), 3500);
   };
 
   // Step through coaches in detailed view
   const handleNavigateCoach = (dir: 'prev' | 'next') => {
-    if (!selectedCoach) return;
+    if (!selectedCoach || allCoaches.length === 0) return;
     const idx = allCoaches.findIndex((c) => c.id === selectedCoach.id);
     if (idx === -1) return;
     const newIdx = dir === 'prev' ? Math.max(0, idx - 1) : Math.min(allCoaches.length - 1, idx + 1);
-    setSelectedCoach(allCoaches[newIdx]);
+    const nextCoach = allCoaches[newIdx];
+    setSelectedCoach(nextCoach);
+    setSelectedCoachNumber(nextCoach.coachNumber);
   };
 
   // Build dual tank models for the selected coach
@@ -416,13 +446,54 @@ export const CoachManagementScreen: React.FC = () => {
             </span>
             <span>&bull;</span>
             <span>
-              Consist: <strong>{allCoaches.length} Coaches</strong> (Capacity: 24)
+              All Coaches: <strong>{allCoaches.length}</strong> &bull; Online: <strong style={{ color: '#16A34A' }}>{allCoaches.filter((c) => c.isOnline).length}</strong> &bull; Offline: <strong style={{ color: '#DC2626' }}>{allCoaches.filter((c) => !c.isOnline).length}</strong>
             </span>
           </div>
         </div>
 
         {/* View Mode & Add Coach Button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {(['ALL', 'ONLINE', 'OFFLINE'] as CoachTankFilterMode[]).map((mode) => {
+              const label = mode === 'ALL' ? 'All Coaches' : mode === 'ONLINE' ? 'Online' : 'Offline';
+              const active = coachFilter === mode;
+              return (
+                <button
+                  key={mode}
+                  onClick={() => setCoachFilter(mode)}
+                  style={{
+                    border: active ? '1px solid #2563EB' : '1px solid #E2E8F0',
+                    backgroundColor: active ? '#2563EB' : '#FFFFFF',
+                    color: active ? '#FFFFFF' : '#475569',
+                    padding: '4px 10px',
+                    borderRadius: '14px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <Search size={13} color="#94A3B8" style={{ position: 'absolute', left: '8px', pointerEvents: 'none' }} />
+            <input
+              type="text"
+              value={coachSearch}
+              onChange={(e) => setCoachSearch(e.target.value)}
+              placeholder="Search coaches..."
+              style={{
+                height: '30px',
+                padding: '0 8px 0 26px',
+                borderRadius: '6px',
+                border: '1px solid #E2E8F0',
+                fontSize: '11px',
+                width: '130px',
+              }}
+            />
+          </div>
           <div style={{ display: 'flex', backgroundColor: '#F1F5F9', padding: '2px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
             <button
               onClick={() => setViewMode('track')}
@@ -514,332 +585,403 @@ export const CoachManagementScreen: React.FC = () => {
       <div
         style={{
           backgroundColor: '#FFFFFF',
-          borderRadius: '8px',
+          borderRadius: '10px',
           border: '1px solid #E2E8F0',
           padding: '16px',
           position: 'relative',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-          <div>
+        <div className="consist-panel-header" style={{ marginBottom: '14px' }}>
+          <div style={{ minWidth: 0, flex: '1 1 240px' }}>
             <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
               Graphical Consist Layout (Engine &rarr; C1 &rarr; C2 &rarr; ... &rarr; C24)
             </h3>
-            <span style={{ fontSize: '11px', color: '#64748B' }}>
-              Showing full 24-coach rake capability with dual water tanks and battery alert telemetry
+            <span style={{ fontSize: '11px', color: '#64748B', display: 'block', marginTop: '2px' }}>
+              Showing {filteredCoaches.length} of {allCoaches.length} coaches &bull; Dual water tanks, sensor connectivity &amp; battery telemetry
             </span>
           </div>
 
           {viewMode === 'track' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div className="consist-nav-controls">
               <button
+                type="button"
+                data-testid="consist-scroll-start"
+                onClick={() => handleScrollTrack('start')}
+                className="consist-scroll-btn"
+                style={{ width: 'auto', padding: '0 8px', fontSize: '11px', fontWeight: 700 }}
+                title="Jump to Locomotive"
+                aria-label="Jump to Locomotive"
+              >
+                Loco
+              </button>
+              <button
+                type="button"
+                data-testid="consist-scroll-left"
                 onClick={() => handleScrollTrack('left')}
-                style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '6px',
-                  border: '1px solid #CBD5E1',
-                  backgroundColor: '#F8FAFC',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: '#475569',
-                }}
+                className="consist-scroll-btn"
                 title="Scroll Left"
+                aria-label="Scroll Consist Left"
               >
                 <ChevronLeft size={16} />
               </button>
               <button
+                type="button"
+                data-testid="consist-scroll-right"
                 onClick={() => handleScrollTrack('right')}
-                style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '6px',
-                  border: '1px solid #CBD5E1',
-                  backgroundColor: '#F8FAFC',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: '#475569',
-                }}
+                className="consist-scroll-btn"
                 title="Scroll Right"
+                aria-label="Scroll Consist Right"
               >
                 <ChevronRight size={16} />
+              </button>
+              <button
+                type="button"
+                data-testid="consist-scroll-end"
+                onClick={() => handleScrollTrack('end')}
+                className="consist-scroll-btn"
+                style={{ width: 'auto', padding: '0 8px', fontSize: '11px', fontWeight: 700 }}
+                title="Jump to Last Coach"
+                aria-label="Jump to Last Coach"
+              >
+                Tail
               </button>
             </div>
           )}
         </div>
 
-        {/* Consist Stream: Track Mode (Horizontal Scroll) or Grid Mode */}
-        {viewMode === 'track' ? (
-          <div
-            ref={trackScrollRef}
-            style={{
-              display: 'flex',
-              alignItems: 'stretch',
-              gap: '12px',
-              overflowX: 'auto',
-              paddingBottom: '16px',
-              scrollBehavior: 'smooth',
-            }}
-          >
-            {/* Locomotive Engine Card */}
-            <div
-              style={{
-                width: '160px',
-                minWidth: '160px',
-                borderRadius: '8px',
-                backgroundColor: 'var(--color-surface, #FFFFFF)',
-                border: '1px solid var(--color-border-strong, #CBD5E1)',
-                color: 'var(--color-text-primary, #0F172A)',
-                padding: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                flexShrink: 0,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-              }}
-            >
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-primary, #2563EB)', letterSpacing: '0.5px' }}>
-                    LOCOMOTIVE
-                  </span>
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#16A34A' }} />
-                </div>
-                <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--color-text-primary, #0F172A)' }}>
-                  WAP-7
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--color-text-muted, #64748B)', marginTop: '2px' }}>
-                  Electric Loco #30245
-                </div>
-              </div>
+        {(() => {
+          const renderTankBar = (label: string, level: number | null, accentColor: string, isOnline: boolean) => {
+            const hasLevel = level != null && Number.isFinite(level);
+            const clamped = hasLevel ? Math.max(0, Math.min(100, level)) : 0;
+            const isCritical = hasLevel && clamped < 20;
+            const barColor = isCritical ? '#EF4444' : accentColor;
+            const statusText = hasLevel ? `${clamped.toFixed(0)}%` : isOnline ? 'Awaiting' : 'Offline';
 
-              <div style={{ marginTop: '14px', paddingTop: '10px', borderTop: '1px solid var(--color-border, #E2E8F0)', fontSize: '10px', color: 'var(--color-text-secondary, #475569)' }}>
-                <div>Speed: <strong>78.5 km/h</strong></div>
-                <div>Traction: <strong style={{ color: 'var(--color-success, #16A34A)' }}>Active</strong></div>
-              </div>
-            </div>
-
-            {/* Coupling Line Graphic */}
-            <div style={{ display: 'flex', alignItems: 'center', color: '#94A3B8', flexShrink: 0, fontSize: '12px', fontWeight: 700 }}>
-              &harr;
-            </div>
-
-            {/* Sequential Coaches (C1 to C24) */}
-            {allCoaches.map((coach) => {
-              const isSelected = selectedCoach?.id === coach.id;
-              const isBatteryLow = coach.batteryPercent < 40;
-
-              return (
-                <div
-                  key={coach.id}
-                  onClick={() => {
-                    setSelectedCoach(coach);
-                    setSelectedCoachNumber(coach.coachNumber);
-                  }}
-                  style={{
-                    width: '210px',
-                    minWidth: '210px',
-                    borderRadius: '8px',
-                    backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
-                    border: isBatteryLow
-                      ? '2px solid #EF4444'
-                      : isSelected
-                      ? '2px solid #2563EB'
-                      : '1px solid #E2E8F0',
-                    boxShadow: isSelected ? '0 4px 6px -1px rgba(37, 99, 235, 0.15)' : 'none',
-                    padding: '12px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    flexShrink: 0,
-                    boxSizing: 'border-box',
-                    position: 'relative',
-                  }}
-                >
-                  {/* Battery Alert Badge if < 40% */}
-                  {isBatteryLow && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '-8px',
-                        right: '8px',
-                        backgroundColor: '#EF4444',
-                        color: '#FFFFFF',
-                        fontSize: '8px',
-                        fontWeight: 800,
-                        padding: '1px 5px',
-                        borderRadius: '4px',
-                        letterSpacing: '0.3px',
-                        animation: 'pulse 1.5s infinite',
-                      }}
-                    >
-                      BATTERY LOW &lt;40%
-                    </div>
-                  )}
-
-                  {/* Header: Coach Number & Type */}
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <span
-                        style={{
-                          fontSize: '14px',
-                          fontWeight: 800,
-                          color: isSelected ? '#2563EB' : '#0F172A',
-                        }}
-                      >
-                        Coach {coach.coachNumber}
-                      </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <div
-                          style={{
-                            width: '7px',
-                            height: '7px',
-                            borderRadius: '50%',
-                            backgroundColor: coach.isOnline ? '#16A34A' : '#DC2626',
-                          }}
-                        />
-                        <span style={{ fontSize: '9px', fontWeight: 600, color: coach.isOnline ? '#16A34A' : '#DC2626' }}>
-                          {coach.isOnline ? 'ONLINE' : 'OFFLINE'}
-                        </span>
-                      </div>
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '10px' }}>
-                      {coach.coachType}
-                    </div>
-
-                    {/* Dual Water Tank Gauges */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', backgroundColor: '#F8FAFC', padding: '8px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
-                      {/* Arrival Tank */}
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#475569', marginBottom: '2px' }}>
-                          <span>Arrival Tank:</span>
-                          <strong>{coach.arrivalLevel != null ? `${coach.arrivalLevel.toFixed(0)}%` : 'Awaiting'}</strong>
-                        </div>
-                        <div style={{ height: '6px', backgroundColor: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
-                          <div
-                            style={{
-                              width: `${Math.max(0, Math.min(100, coach.arrivalLevel || 0))}%`,
-                              height: '100%',
-                              backgroundColor: coach.arrivalLevel && coach.arrivalLevel < 20 ? '#EF4444' : '#2563EB',
-                              transition: 'width 0.3s ease',
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Departure Tank */}
-                      <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#475569', marginBottom: '2px' }}>
-                          <span>Departure Tank:</span>
-                          <strong>{coach.departureLevel != null ? `${coach.departureLevel.toFixed(0)}%` : 'Awaiting'}</strong>
-                        </div>
-                        <div style={{ height: '6px', backgroundColor: '#E2E8F0', borderRadius: '3px', overflow: 'hidden' }}>
-                          <div
-                            style={{
-                              width: `${Math.max(0, Math.min(100, coach.departureLevel || 0))}%`,
-                              height: '100%',
-                              backgroundColor: coach.departureLevel && coach.departureLevel < 20 ? '#EF4444' : '#0284C7',
-                              transition: 'width 0.3s ease',
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Footer: Device & Battery */}
-                  <div
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px', fontSize: '11px' }}>
+                  <span style={{ color: '#475569', fontWeight: 600 }}>{label}</span>
+                  <span
                     style={{
-                      marginTop: '10px',
-                      paddingTop: '8px',
-                      borderTop: '1px solid #E2E8F0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      fontSize: '10px',
+                      fontWeight: 700,
+                      color: hasLevel ? (isCritical ? '#DC2626' : '#0F172A') : '#94A3B8',
+                      fontVariantNumeric: 'tabular-nums',
                     }}
                   >
-                    <span style={{ color: '#64748B' }}>{coach.deviceId}</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: isBatteryLow ? '#DC2626' : '#16A34A', fontWeight: 700 }}>
-                      {isBatteryLow ? <BatteryWarning size={13} /> : <Battery size={13} />}
-                      <span>{coach.batteryPercent}%</span>
-                    </div>
-                  </div>
+                    {statusText}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
-        ) : (
-          /* Grid View Mode */
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
-              gap: '12px',
-            }}
-          >
-            {allCoaches.map((coach) => {
-              const isSelected = selectedCoach?.id === coach.id;
-              const isBatteryLow = coach.batteryPercent < 40;
+                <div style={{ height: '6px', backgroundColor: '#E2E8F0', borderRadius: '999px', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      width: `${clamped}%`,
+                      height: '100%',
+                      backgroundColor: hasLevel ? barColor : '#CBD5E1',
+                      borderRadius: '999px',
+                      transition: 'width 0.3s ease',
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          };
 
-              return (
-                <div
-                  key={coach.id}
-                  onClick={() => {
-                    setSelectedCoach(coach);
-                    setSelectedCoachNumber(coach.coachNumber);
-                  }}
-                  style={{
-                    borderRadius: '8px',
-                    backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
-                    border: isBatteryLow
-                      ? '2px solid #EF4444'
-                      : isSelected
-                      ? '2px solid #2563EB'
-                      : '1px solid #E2E8F0',
-                    padding: '12px',
-                    cursor: 'pointer',
-                    boxSizing: 'border-box',
-                    position: 'relative',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 800, color: isSelected ? '#2563EB' : '#0F172A' }}>
+          const renderCoachCard = (coach: CoachRecord, layout: 'track' | 'grid') => {
+            const isSelected = selectedCoach?.id === coach.id;
+            const isBatteryLow = coach.batteryPercent != null && coach.batteryPercent < 40;
+            const isMapped = Boolean(coach.deviceId && coach.deviceId !== 'Not Mapped');
+            const sensorStatusLabel = coach.isOnline ? 'Sensors: Live' : isMapped ? 'Sensors: Offline' : 'Sensors: Unmapped';
+            const sensorColor = coach.isOnline ? '#15803D' : isMapped ? '#DC2626' : '#64748B';
+            const batteryLabel = coach.batteryPercent != null ? `${coach.batteryPercent}%` : 'N/A';
+
+            return (
+              <div
+                key={coach.id}
+                data-testid={`consist-coach-card-${coach.coachNumber}`}
+                onClick={() => {
+                  setSelectedCoach(coach);
+                  setSelectedCoachNumber(coach.coachNumber);
+                }}
+                className={`consist-coach-card${layout === 'grid' ? ' consist-coach-card--grid' : ''}`}
+                style={{
+                  backgroundColor: isSelected ? '#F0F7FF' : '#FFFFFF',
+                  border: isBatteryLow
+                    ? '1.5px solid #EF4444'
+                    : isSelected
+                    ? '2px solid #2563EB'
+                    : '1px solid #CBD5E1',
+                  boxShadow: isSelected
+                    ? '0 4px 12px rgba(37, 99, 235, 0.16)'
+                    : '0 1px 3px rgba(15, 23, 42, 0.05)',
+                }}
+              >
+                {/* Header: Coach Number, Category & Completely Contained Status Pill */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', minWidth: 0 }}>
+                    <span
+                      className="consist-truncate"
+                      title={`Coach ${coach.coachNumber}`}
+                      style={{
+                        flex: 1,
+                        fontSize: '14px',
+                        fontWeight: 800,
+                        color: isSelected ? '#1D4ED8' : '#0F172A',
+                      }}
+                    >
                       Coach {coach.coachNumber}
                     </span>
-                    <span style={{ fontSize: '10px', fontWeight: 700, color: coach.isOnline ? '#16A34A' : '#DC2626' }}>
+                    <span
+                      data-testid="coach-status-badge"
+                      style={{
+                        flexShrink: 0,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '2px 7px',
+                        borderRadius: '999px',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        lineHeight: 1.2,
+                        letterSpacing: '0.3px',
+                        backgroundColor: coach.isOnline ? '#DCFCE7' : '#FEE2E2',
+                        color: coach.isOnline ? '#15803D' : '#B91C1C',
+                        border: `1px solid ${coach.isOnline ? '#86EFAC' : '#FECACA'}`,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          backgroundColor: coach.isOnline ? '#16A34A' : '#DC2626',
+                        }}
+                      />
                       {coach.isOnline ? 'ONLINE' : 'OFFLINE'}
                     </span>
                   </div>
-                  <div style={{ fontSize: '11px', color: '#64748B', margin: '2px 0 8px 0' }}>
-                    {coach.coachType}
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', minWidth: 0 }}>
+                    <span className="consist-truncate" title={coach.coachType} style={{ fontSize: '11px', color: '#64748B', fontWeight: 500 }}>
+                      {coach.coachType}
+                    </span>
+                    {isBatteryLow && (
+                      <span
+                        style={{
+                          flexShrink: 0,
+                          backgroundColor: '#DC2626',
+                          color: '#FFFFFF',
+                          fontSize: '9px',
+                          fontWeight: 800,
+                          padding: '1px 5px',
+                          borderRadius: '4px',
+                          letterSpacing: '0.2px',
+                        }}
+                      >
+                        BAT &lt;40%
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Body: Dual Tank Telemetry & Sensor Connectivity */}
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '7px',
+                    backgroundColor: '#F8FAFC',
+                    padding: '8px 10px',
+                    borderRadius: '8px',
+                    border: '1px solid #E2E8F0',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', fontSize: '10px' }}>
+                    <span style={{ color: '#64748B', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <Radio size={11} color={sensorColor} />
+                      Dual Tank Telemetry
+                    </span>
+                    <span style={{ color: sensorColor, fontWeight: 700 }}>{sensorStatusLabel}</span>
                   </div>
 
-                  <div style={{ fontSize: '10px', color: '#475569', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Arrival:</span>
-                      <strong>{coach.arrivalLevel != null ? `${coach.arrivalLevel.toFixed(0)}%` : '—'}</strong>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Departure:</span>
-                      <strong>{coach.departureLevel != null ? `${coach.departureLevel.toFixed(0)}%` : '—'}</strong>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: isBatteryLow ? '#DC2626' : '#16A34A', fontWeight: 700 }}>
-                      <span>Battery:</span>
-                      <span>{coach.batteryPercent}%</span>
+                  {renderTankBar('Arrival Tank', coach.arrivalLevel, '#2563EB', coach.isOnline)}
+                  {renderTankBar('Departure Tank', coach.departureLevel, '#0284C7', coach.isOnline)}
+                </div>
+
+                {/* Footer: Mapping Status, Tank Connectivity & Battery */}
+                <div
+                  style={{
+                    paddingTop: '8px',
+                    borderTop: '1px solid #E2E8F0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '8px',
+                    fontSize: '10px',
+                    minWidth: 0,
+                  }}
+                >
+                  <span
+                    className="consist-truncate"
+                    title={isMapped ? `Device: ${coach.deviceId}` : 'Device Not Mapped'}
+                    style={{
+                      flex: 1,
+                      color: isMapped ? '#334155' : '#64748B',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {isMapped ? `Mapped · ${coach.deviceId}` : 'Unmapped'}
+                  </span>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    <span
+                      style={{
+                        color: coach.isOnline ? '#15803D' : '#64748B',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {coach.isOnline ? '2/2 Live' : '0/2 Live'}
+                    </span>
+                    <div
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        color: isBatteryLow ? '#DC2626' : coach.batteryPercent != null ? '#16A34A' : '#64748B',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {isBatteryLow ? <BatteryWarning size={12} /> : <Battery size={12} />}
+                      <span>{batteryLabel}</span>
                     </div>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+              </div>
+            );
+          };
+
+          const renderCoupler = (key: string) => (
+            <div key={key} className="consist-coupler" aria-hidden="true">
+              <div className="consist-coupler-bar">
+                <span className="consist-coupler-node">&rarr;</span>
+              </div>
+            </div>
+          );
+
+          if (viewMode === 'track') {
+            return (
+              <div className="consist-yard-frame">
+                <div ref={trackScrollRef} data-testid="consist-track-scroll" className="consist-track-scroll">
+                  <div className="consist-rail-stage">
+                    <div className="consist-rail-beam" aria-hidden="true" />
+
+                    {/* Distinct SCADA Locomotive Block */}
+                    <div data-testid="consist-locomotive-card" className="consist-locomotive-card">
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '10px', fontWeight: 700, color: '#93C5FD', letterSpacing: '0.7px' }}>
+                            LOCOMOTIVE
+                          </span>
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '2px 6px',
+                              borderRadius: '999px',
+                              backgroundColor: 'rgba(22, 163, 74, 0.2)',
+                              color: '#4ADE80',
+                              fontSize: '9px',
+                              fontWeight: 700,
+                            }}
+                          >
+                            ACTIVE
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '20px', fontWeight: 800, color: '#FFFFFF', letterSpacing: '0.3px' }}>
+                          WAP-7
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>
+                          Electric Loco #30245
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          paddingTop: '10px',
+                          borderTop: '1px solid rgba(148, 163, 184, 0.25)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '3px',
+                          fontSize: '11px',
+                          color: '#CBD5E1',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Speed:</span>
+                          <strong style={{ color: '#FFFFFF' }}>78.5 km/h</strong>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Traction:</span>
+                          <strong style={{ color: '#4ADE80' }}>Active</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Locomotive -> First Coach / Empty State Coupler */}
+                    {renderCoupler('coupler-loco')}
+
+                    {filteredCoaches.length === 0 ? (
+                      <div
+                        style={{
+                          padding: '24px 28px',
+                          borderRadius: '10px',
+                          backgroundColor: '#FFFFFF',
+                          border: '1px dashed #CBD5E1',
+                          color: '#64748B',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          display: 'flex',
+                          alignItems: 'center',
+                        }}
+                      >
+                        {(coachFilter === 'ALL' || coachFilter === 'ONLINE') && onlineCoachesCount === 0
+                          ? 'No coaches are currently online.'
+                          : coachFilter === 'OFFLINE' && coachSearch.trim().length === 0
+                            ? 'No offline coaches'
+                            : 'No matching coaches found.'}
+                      </div>
+                    ) : (
+                      filteredCoaches.map((coach, idx) => (
+                        <React.Fragment key={coach.id}>
+                          {renderCoachCard(coach, 'track')}
+                          {idx < filteredCoaches.length - 1 && renderCoupler(`coupler-${coach.id}`)}
+                        </React.Fragment>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          if (filteredCoaches.length === 0) {
+            return (
+              <div style={{ padding: '40px', textAlign: 'center', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px dashed #CBD5E1', color: '#64748B', fontSize: '13px', fontWeight: 600 }}>
+                {(coachFilter === 'ALL' || coachFilter === 'ONLINE') && onlineCoachesCount === 0
+                  ? 'No coaches are currently online.'
+                  : coachFilter === 'OFFLINE' && coachSearch.trim().length === 0
+                    ? 'No offline coaches'
+                    : 'No matching coaches found.'}
+              </div>
+            );
+          }
+
+          return (
+            <div className="consist-grid-cards">
+              {filteredCoaches.map((coach) => renderCoachCard(coach, 'grid'))}
+            </div>
+          );
+        })()}
       </div>
 
       {/* 3. Dedicated Coach Details Section: Dual Tank Monitoring */}
@@ -987,49 +1129,57 @@ export const CoachManagementScreen: React.FC = () => {
           </div>
 
           {/* Independent Battery & Device Status Strip */}
-          <div
-            style={{
-              backgroundColor: selectedCoach.batteryPercent < 40 ? '#FEF2F2' : '#F8FAFC',
-              border: `1px solid ${selectedCoach.batteryPercent < 40 ? '#FCA5A5' : '#E2E8F0'}`,
-              borderRadius: '6px',
-              padding: '10px 14px',
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: '16px',
-              gap: '10px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {(() => {
+            const detailBatLow = selectedCoach.batteryPercent != null && selectedCoach.batteryPercent < 40;
+            const detailBatMissing = selectedCoach.batteryPercent == null;
+            return (
               <div
                 style={{
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  backgroundColor: selectedCoach.batteryPercent < 40 ? '#DC2626' : '#16A34A',
-                  color: '#FFFFFF',
-                  fontSize: '11px',
-                  fontWeight: 700,
+                  backgroundColor: detailBatLow ? '#FEF2F2' : '#F8FAFC',
+                  border: `1px solid ${detailBatLow ? '#FCA5A5' : '#E2E8F0'}`,
+                  borderRadius: '6px',
+                  padding: '10px 14px',
                   display: 'flex',
+                  flexWrap: 'wrap',
                   alignItems: 'center',
-                  gap: '5px',
+                  justifyContent: 'space-between',
+                  marginBottom: '16px',
+                  gap: '10px',
                 }}
               >
-                {selectedCoach.batteryPercent < 40 ? <BatteryWarning size={14} /> : <Battery size={14} />}
-                <span>Battery: {selectedCoach.batteryPercent}%</span>
-              </div>
-              <span style={{ fontSize: '12px', color: selectedCoach.batteryPercent < 40 ? '#991B1B' : '#475569', fontWeight: 600 }}>
-                {selectedCoach.batteryPercent < 40
-                  ? 'CRITICAL BATTERY ALERT: Charge or replace node power cell immediately.'
-                  : 'Power subsystem nominal. Wireless telemetry communicating regularly.'}
-              </span>
-            </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      backgroundColor: detailBatLow ? '#DC2626' : detailBatMissing ? '#64748B' : '#16A34A',
+                      color: '#FFFFFF',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                    }}
+                  >
+                    {detailBatLow ? <BatteryWarning size={14} /> : <Battery size={14} />}
+                    <span>Battery: {detailBatMissing ? 'N/A' : `${selectedCoach.batteryPercent}%`}</span>
+                  </div>
+                  <span style={{ fontSize: '12px', color: detailBatLow ? '#991B1B' : '#475569', fontWeight: 600 }}>
+                    {detailBatLow
+                      ? 'CRITICAL BATTERY ALERT: Charge or replace node power cell immediately.'
+                      : detailBatMissing
+                        ? 'Battery telemetry unavailable — node offline or awaiting device mapping.'
+                        : 'Power subsystem nominal. Wireless telemetry communicating regularly.'}
+                  </span>
+                </div>
 
-            <div style={{ fontSize: '11px', color: '#64748B' }}>
-              Tank Mapping: <strong>Sensor 1 = Arrival Tank</strong> &bull;{' '}
-              <strong>Sensor 2 = Departure Tank</strong>
-            </div>
-          </div>
+                <div style={{ fontSize: '11px', color: '#64748B' }}>
+                  Tank Mapping: <strong>Sensor 1 = Arrival Tank</strong> &bull;{' '}
+                  <strong>Sensor 2 = Departure Tank</strong>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* DUAL WATER TANK VISUALIZATION (Side-by-Side Cards) */}
           <div
@@ -1164,7 +1314,7 @@ export const CoachManagementScreen: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleCreateCoach} style={{ padding: '18px' }}>
+            <form data-testid="add-coach-form" onSubmit={handleCreateCoach} style={{ padding: '18px' }}>
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
                   Coach Number *
@@ -1316,7 +1466,7 @@ export const CoachManagementScreen: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSaveEditCoach} style={{ padding: '18px' }}>
+            <form data-testid="edit-coach-form" onSubmit={handleSaveEditCoach} style={{ padding: '18px' }}>
               <div style={{ marginBottom: '12px' }}>
                 <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
                   Coach Number

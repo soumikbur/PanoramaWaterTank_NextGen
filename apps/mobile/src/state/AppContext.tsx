@@ -2,7 +2,7 @@
  * Global Application Context and State Management.
  */
 
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef, ReactNode } from 'react';
 import {
   TankLiveStatus,
   Device,
@@ -32,7 +32,12 @@ import {
   AlertToast,
   AlertHistoryEntry,
   AlertConfig,
+  ManagedAlertRecord,
 } from '../services/alertNotificationService';
+import {
+  browserNotificationBridge,
+  BrowserNotificationPermission,
+} from '../services/browserNotificationBridge';
 
 export type ScreenName =
   | 'login'
@@ -104,9 +109,12 @@ interface AppContextType {
   alertToast: AlertToast | null;
   dismissAlertToast: () => void;
   alertHistory: AlertHistoryEntry[];
+  managedAlerts: ManagedAlertRecord[];
   alertConfig: AlertConfig;
   updateAlertConfig: (cfg: Partial<AlertConfig>) => void;
   clearAlertHistory: () => Promise<void>;
+  notificationPermission: BrowserNotificationPermission;
+  requestNotificationPermission: () => Promise<BrowserNotificationPermission>;
 }
 
 const defaultStats: AlarmStats = {
@@ -176,15 +184,50 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const [alertToast, setAlertToast] = useState<AlertToast | null>(null);
   const [alertHistory, setAlertHistory] = useState<AlertHistoryEntry[]>(() => alertNotificationService.getHistory());
+  const [managedAlerts, setManagedAlerts] = useState<ManagedAlertRecord[]>(() => alertNotificationService.getManagedAlerts());
   const [alertConfig, setAlertConfigState] = useState<AlertConfig>(() => alertNotificationService.getConfig());
+  const [notificationPermission, setNotificationPermission] = useState<BrowserNotificationPermission>(
+    () => browserNotificationBridge.getPermission()
+  );
 
   useEffect(() => {
-    const unsub = alertNotificationService.onToast((toast) => {
+    const unsubToast = alertNotificationService.onToast((toast) => {
       setAlertToast(toast);
       setAlertHistory(alertNotificationService.getHistory());
     });
-    return unsub;
+    const unsubAlerts = alertNotificationService.onAlertsChange((alerts) => {
+      setManagedAlerts(alerts);
+      setAlertHistory(alertNotificationService.getHistory());
+    });
+    const unsubPerm = browserNotificationBridge.onPermissionChange((perm) => {
+      setNotificationPermission(perm);
+    });
+    const unsubClick = browserNotificationBridge.onNotificationClick((data) => {
+      if (data.trainNumber) setSelectedTrainNumber(data.trainNumber);
+      if (data.coachNumber) setSelectedCoachNumber(data.coachNumber);
+      if (data.tankId) setSelectedTankId(data.tankId);
+      const target = (data.screen || 'alerts') as ScreenName;
+      setActiveScreen(target);
+      AppRouter.navigate(target, data.trainNumber || selectedTrainNumber, data.coachNumber || selectedCoachNumber);
+    });
+
+    browserNotificationBridge.registerServiceWorker().then(() => {
+      setNotificationPermission(browserNotificationBridge.getPermission());
+    });
+
+    return () => {
+      unsubToast();
+      unsubAlerts();
+      unsubPerm();
+      unsubClick();
+    };
   }, []);
+
+  const requestNotificationPermission = async (): Promise<BrowserNotificationPermission> => {
+    const perm = await alertNotificationService.requestBrowserPermission();
+    setNotificationPermission(perm);
+    return perm;
+  };
 
   const dismissAlertToast = () => {
     setAlertToast(null);
@@ -239,6 +282,78 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       now: Date.now(),
     });
   }, [selectedTrainNumber, managedDevices, liveTelemetry, mqttConnectionStatus, telemetryTimeoutSec, telemetryTick]);
+
+  // Monitor mapped coaches for real-time disconnect & reconnect transitions (timeout / MQTT drop / recovery)
+  const prevCoachOnlineMapRef = useRef<Map<string, boolean>>(new Map());
+  useEffect(() => {
+    const prevMap = prevCoachOnlineMapRef.current;
+    const addedDisconnectAlarms: AlarmItem[] = [];
+    const reconnectedIds = new Set<string>();
+
+    for (const coach of consistData.coaches) {
+      if (!coach.isMapped || !coach.deviceUid) continue;
+      const key = `${coach.deviceUid}::${coach.coachNumber}`;
+      const wasOnline = prevMap.get(key);
+
+      if (wasOnline === undefined) {
+        prevMap.set(key, coach.isOnline);
+        if (coach.isOnline) {
+          alertNotificationService.evaluateDeviceConnectivity({
+            deviceId: coach.deviceUid,
+            coachNumber: coach.coachNumber,
+            isOnline: true,
+          });
+        }
+        continue;
+      }
+
+      if (wasOnline && !coach.isOnline) {
+        prevMap.set(key, false);
+        alertNotificationService.evaluateDeviceConnectivity({
+          deviceId: coach.deviceUid,
+          coachNumber: coach.coachNumber,
+          isOnline: false,
+        });
+        const alarmId = `alarm-conn-${coach.deviceUid}`;
+        addedDisconnectAlarms.push({
+          id: alarmId,
+          deviceId: coach.deviceUid,
+          coachNumber: coach.coachNumber,
+          alarmType: 'DEVICE_OFFLINE',
+          severity: 'WARNING',
+          status: 'ACTIVE',
+          message: `Coach ${coach.coachNumber} (${coach.deviceUid}) disconnected.`,
+          triggeredAt: new Date().toISOString(),
+        });
+      } else if (!wasOnline && coach.isOnline) {
+        prevMap.set(key, true);
+        alertNotificationService.evaluateDeviceConnectivity({
+          deviceId: coach.deviceUid,
+          coachNumber: coach.coachNumber,
+          isOnline: true,
+        });
+        reconnectedIds.add(`alarm-conn-${coach.deviceUid}`);
+      }
+    }
+
+    if (addedDisconnectAlarms.length > 0 || reconnectedIds.size > 0) {
+      setActiveAlarms((prev) => {
+        const next = prev.filter((a) => !reconnectedIds.has(a.id));
+        for (const item of addedDisconnectAlarms) {
+          if (!next.some((a) => a.id === item.id)) {
+            next.unshift(item);
+          }
+        }
+        return next;
+      });
+      setAlarmStats((stats) => ({
+        ...stats,
+        totalActive: Math.max(0, stats.totalActive + addedDisconnectAlarms.length - reconnectedIds.size),
+        warningCount: Math.max(0, stats.warningCount + addedDisconnectAlarms.length - reconnectedIds.size),
+        resolvedToday: stats.resolvedToday + reconnectedIds.size,
+      }));
+    }
+  }, [consistData.coaches]);
 
   // Global Display Scaling preferences (delegated to DisplayPreferencesService)
   const [displayScale, setDisplayScaleState] = useState<string>(() => {
@@ -430,11 +545,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   // Setup WebSocket stream
+  const wsHadConnectedRef = useRef(false);
   useEffect(() => {
     wsService.connect();
 
     const unsubStatus = wsService.onStatusChange((status) => {
       setConnectionStatus(status);
+      if (status === 'CONNECTED') {
+        wsHadConnectedRef.current = true;
+        alertNotificationService.evaluateCommunicationFailure({
+          channel: 'WebSocket',
+          isHealthy: true,
+        });
+      } else if (status === 'DISCONNECTED' && wsHadConnectedRef.current) {
+        alertNotificationService.evaluateCommunicationFailure({
+          channel: 'WebSocket',
+          isHealthy: false,
+          reason: 'Backend WebSocket live stream disconnected.',
+        });
+      }
     });
 
     const unsubTelemetry = wsService.addEventListener('TELEMETRY_UPDATE', (data: any) => {
@@ -505,6 +634,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return t;
         });
       });
+      if (data.primaryLevel != null) {
+        alertNotificationService.evaluateWaterLevel({
+          tankId: data.tankId || `${data.deviceUid || 'DEV-WLI-01'}-arrival`,
+          tankName: data.tankName || 'Primary Storage Tank',
+          trainNumber: data.trainNumber || '12002',
+          coachNumber: data.coachNumber || 'C1',
+          levelPercent: Number(data.primaryLevel),
+          isOnline: data.isOnline ?? true,
+        });
+      }
+      if (data.secondaryLevel != null) {
+        alertNotificationService.evaluateWaterLevel({
+          tankId: data.secondaryTankId || `${data.deviceUid || 'DEV-WLI-01'}-departure`,
+          tankName: data.secondaryTankName || 'Departure Side (Tank 2)',
+          trainNumber: data.trainNumber || '12002',
+          coachNumber: data.coachNumber || 'C1',
+          levelPercent: Number(data.secondaryLevel),
+          isOnline: data.isOnline ?? true,
+        });
+      }
     });
 
     const unsubAlarmTriggered = wsService.addEventListener('ALARM_TRIGGERED', () => {
@@ -525,18 +674,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   // Setup Live MQTT Client stream (Topic: 0023004D4B42501120353332)
+  const mqttAttemptedRef = useRef(false);
   useEffect(() => {
     mqttService.connect();
 
     const unsubMqttStatus = mqttService.onStatusChange((st) => {
       setMqttConnectionStatus(st);
       if (st === 'CONNECTED') {
+        mqttAttemptedRef.current = true;
         setConnectionStatus('CONNECTED');
         setMqttBrokerStatus('CONNECTED');
+        alertNotificationService.evaluateBrokerConnectivity({ isConnected: true });
       } else if (st === 'CONNECTING') {
+        mqttAttemptedRef.current = true;
         setConnectionStatus('RECONNECTING');
       } else if (st === 'DISCONNECTED') {
         setMqttBrokerStatus('DISCONNECTED');
+        if (mqttAttemptedRef.current) {
+          alertNotificationService.evaluateBrokerConnectivity({
+            isConnected: false,
+            reason: 'MQTT broker connection lost or unreachable.',
+          });
+        }
       }
     });
 
@@ -623,35 +782,49 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Deduplicated real-time alert evaluation and dispatch
       alertNotificationService.evaluateWaterLevel({
         tankId: arrivalTank.tankId,
+        tankName: arrivalTank.tankName,
+        trainNumber: activeTrno,
         coachNumber: activeChno,
         levelPercent: arrivalLevelPct,
         isOnline: arrivalTank.isOnline,
       });
       alertNotificationService.evaluateWaterLevel({
         tankId: departureTank.tankId,
+        tankName: departureTank.tankName,
+        trainNumber: activeTrno,
         coachNumber: activeChno,
         levelPercent: departureLevelPct,
         isOnline: departureTank.isOnline,
       });
       alertNotificationService.evaluateDeviceConnectivity({
         deviceId: telemetry.uid,
+        trainNumber: activeTrno,
         coachNumber: activeChno,
         isOnline: !telemetry.isStale,
       });
       alertNotificationService.evaluateSensorHealth({
         sensorId: `s1-${telemetry.uid}`,
+        trainNumber: activeTrno,
         coachNumber: activeChno,
+        tankId: arrivalTank.tankId,
+        tankName: arrivalTank.tankName,
+        levelPercent: arrivalLevelPct,
         isValid: !!telemetry.wlv1,
         sensorName: 'Arrival Sensor 1',
       });
       alertNotificationService.evaluateSensorHealth({
         sensorId: `s2-${telemetry.uid}`,
+        trainNumber: activeTrno,
         coachNumber: activeChno,
+        tankId: departureTank.tankId,
+        tankName: departureTank.tankName,
+        levelPercent: departureLevelPct,
         isValid: !!telemetry.wlv2,
         sensorName: 'Departure Sensor 2',
       });
       alertNotificationService.evaluateModemStatus({
         deviceId: telemetry.uid,
+        trainNumber: activeTrno,
         coachNumber: activeChno,
         modemOk: !telemetry.isStale,
       });
@@ -786,8 +959,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   const acknowledgeAlarm = async (alarmId: string, comment?: string) => {
-    await ApiClient.acknowledgeAlarm(alarmId, comment);
-    await refreshData();
+    const ackedBy = currentUser?.username || 'Operator';
+    const ackTime = new Date().toISOString();
+    alertNotificationService.acknowledgeAlert(alarmId, ackedBy, comment);
+
+    setActiveAlarms((prev) =>
+      prev.map((a) =>
+        a.id === alarmId
+          ? {
+              ...a,
+              status: 'ACKNOWLEDGED',
+              acknowledgedAt: ackTime,
+              acknowledged_at: ackTime,
+            }
+          : a
+      )
+    );
+
+    try {
+      await ApiClient.acknowledgeAlarm(alarmId, comment);
+    } catch {
+      // Dynamic client-side MQTT alerts may not exist in backend DB yet
+    }
   };
 
   const toggleSidebar = () => {
@@ -919,9 +1112,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         alertToast,
         dismissAlertToast,
         alertHistory,
+        managedAlerts,
         alertConfig,
         updateAlertConfig,
         clearAlertHistory,
+        notificationPermission,
+        requestNotificationPermission,
       }}
     >
       {children}

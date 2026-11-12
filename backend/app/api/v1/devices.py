@@ -55,7 +55,7 @@ async def get_device_diagnostics(
 ):
     """Retrieve raw edge diagnostic parameters for a specific device."""
     repo = DeviceRepository(db)
-    device = await repo.get_by_id(device_id)
+    device = await repo.get_by_id(device_id) or await repo.get_by_uid(device_id)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
@@ -131,7 +131,7 @@ async def update_device(
 ):
     """Update device metadata, train/coach assignment, and firmware version (Admin Only)."""
     repo = DeviceRepository(db)
-    device = await repo.get_by_id(device_id)
+    device = await repo.get_by_id(device_id) or await repo.get_by_uid(device_id)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
@@ -176,9 +176,10 @@ async def delete_device(
 ):
     """Delete a device and its associated tanks (Admin Only)."""
     repo = DeviceRepository(db)
-    success = await repo.delete(device_id)
+    target = await repo.get_by_id(device_id) or await repo.get_by_uid(device_id)
+    success = await repo.delete(target.id) if target else False
     if not success:
         raise HTTPException(status_code=404, detail="Device not found")
     await db.commit()
-    return {"message": "Device deleted successfully", "id": device_id}
+    return {"message": "Device deleted successfully", "id": target.id}
 

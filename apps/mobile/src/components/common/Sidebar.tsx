@@ -49,6 +49,7 @@ export const Sidebar: React.FC = () => {
     setIsMobileNavOpen,
     devices,
     activeAlarms,
+    managedAlerts,
     selectedTrainNumber,
     currentUser,
     logout,
@@ -79,6 +80,11 @@ export const Sidebar: React.FC = () => {
   const isConnected = connectionStatus === 'CONNECTED' || mqttConnectionStatus === 'CONNECTED';
   const isAdmin = currentUser?.role === 'ADMIN';
 
+  const unackedAlertCount = Math.max(
+    managedAlerts.filter((a) => a.status === 'ACTIVE').length,
+    activeAlarms.filter((a) => a.status === 'ACTIVE').length
+  );
+
   // Navigation Items matching restructured SCADA specification
   const primaryNavItems: NavItemDef[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -86,7 +92,7 @@ export const Sidebar: React.FC = () => {
     { id: 'watertank', label: 'All Tanks', icon: Gauge },
     { id: 'devices', label: 'Devices', icon: Cpu },
     { id: 'location', label: 'Location', icon: MapPin },
-    { id: 'alerts', label: 'Alerts', icon: AlertTriangle, badge: activeAlarms.length },
+    { id: 'alerts', label: 'Alerts', icon: AlertTriangle, badge: unackedAlertCount },
     { id: 'history', label: 'History', icon: LineChart },
     { id: 'reports', label: 'Reports', icon: FileText },
   ];
@@ -101,7 +107,7 @@ export const Sidebar: React.FC = () => {
   const totalTanksCount = consistMetrics.totalTanks;
   const onlineTanksCount = consistMetrics.onlineTanks;
   const offlineTanksCount = consistMetrics.offlineTanks;
-  const totalAlertsCount = activeAlarms.length;
+  const totalAlertsCount = unackedAlertCount;
 
   const isCollapsed = sidebarMode === 'collapsed' || sidebarMode === 'iconOnly' || sidebarCollapsed;
   const sidebarWidth = isCollapsed ? '68px' : '240px';

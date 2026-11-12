@@ -4,10 +4,12 @@ import { useApp } from '../state/AppContext';
 import { BaseCard } from '../components/common/BaseCard';
 import { ApiClient } from '../api/client';
 import { alertNotificationService } from '../services/alertNotificationService';
-import { CheckCircle2 } from 'lucide-react';
+import { NOTIFICATION_CONFIG } from '../config/notificationConfig';
+import { CheckCircle2, Bell, BellOff, Clock } from 'lucide-react';
 
 interface AlertItemData {
   id: string;
+  alertKey?: string;
   severity: 'CRITICAL' | 'WARNING';
   badgeColor: string;
   bgColor: string;
@@ -19,6 +21,13 @@ interface AlertItemData {
   threshold: string;
   timestamp: string;
   acknowledged: boolean;
+  acknowledgedAt?: string;
+  acknowledgedBy?: string;
+  reminderCount?: number;
+  nextReminderInSec?: number;
+  trainNumber?: string;
+  coachNumber?: string;
+  tankName?: string;
   statusText: string;
   type: 'level' | 'sensor';
 }
@@ -30,14 +39,35 @@ interface AlertHistoryEvent {
   value: string;
   threshold: string;
   status: 'Active' | 'Acknowledged' | 'Resolved';
+  acknowledgedBy?: string;
 }
 
 export const AlertsScreen: React.FC = () => {
-  const { liveTank, activeAlarms, acknowledgeAlarm, connectionStatus, currentTime } = useApp();
+  const {
+    liveTank,
+    activeAlarms,
+    managedAlerts,
+    alertHistory: contextAlertHistory,
+    acknowledgeAlarm,
+    connectionStatus,
+    currentTime,
+    notificationPermission,
+    requestNotificationPermission,
+    setActiveScreen,
+    setSelectedTrainNumber,
+    setSelectedCoachNumber,
+    setSelectedTankId,
+  } = useApp();
 
   const [waterLevelAlertAcked, setWaterLevelAlertAcked] = useState(false);
   const [sensorAlertAcked, setSensorAlertAcked] = useState(false);
   const [alertHistory, setAlertHistory] = useState<AlertHistoryEvent[]>([]);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const hasData = liveTank?.levelPercent != null && liveTank?.hasTelemetry !== false;
   const fillPct = liveTank?.levelPercent ?? null;
@@ -49,6 +79,19 @@ export const AlertsScreen: React.FC = () => {
   // Fetch real past alarms from database or local persistent alert history
   useEffect(() => {
     let mounted = true;
+    const mapLocalHistory = () => {
+      const localHist = alertNotificationService.getHistory();
+      return localHist.map((h) => ({
+        time: new Date(h.timestamp).toLocaleTimeString(),
+        title: h.trainNumber ? `${h.alertType} (Train ${h.trainNumber} · ${h.target})` : `${h.alertType} (${h.target})`,
+        severity: h.severity as any,
+        value: h.waterLevel != null ? `${h.waterLevel.toFixed(1)}%` : 'N/A',
+        threshold: h.alertType === 'CRITICAL_LOW' ? '< 10%' : h.alertType === 'WARNING_LOW' ? '< 20%' : 'Limit',
+        status: h.status,
+        acknowledgedBy: h.acknowledgedBy,
+      }));
+    };
+
     ApiClient.fetchAlarms().then((data) => {
       if (mounted) {
         if (data && data.length > 0) {
@@ -60,51 +103,88 @@ export const AlertsScreen: React.FC = () => {
               value: a.triggerValue != null ? `${a.triggerValue.toFixed(1)}%` : 'N/A',
               threshold: a.thresholdValue != null ? `${a.thresholdValue.toFixed(1)}%` : 'Nominal',
               status: a.status === 'RESOLVED' ? 'Resolved' : a.status === 'ACKNOWLEDGED' ? 'Acknowledged' : 'Active',
+              acknowledgedBy: a.acknowledgedBy || a.acknowledged_by,
             }))
           );
         } else {
-          const localHist = alertNotificationService.getHistory();
-          setAlertHistory(
-            localHist.map((h) => ({
-              time: new Date(h.timestamp).toLocaleTimeString(),
-              title: `${h.alertType} (${h.target})`,
-              severity: h.severity as any,
-              value: h.waterLevel != null ? `${h.waterLevel.toFixed(1)}%` : 'N/A',
-              threshold: 'Limit',
-              status: h.status,
-            }))
-          );
+          setAlertHistory(mapLocalHistory());
         }
       }
     }).catch(() => {
       if (mounted) {
-        const localHist = alertNotificationService.getHistory();
-        setAlertHistory(
-          localHist.map((h) => ({
-            time: new Date(h.timestamp).toLocaleTimeString(),
-            title: `${h.alertType} (${h.target})`,
-            severity: h.severity as any,
-            value: h.waterLevel != null ? `${h.waterLevel.toFixed(1)}%` : 'N/A',
-            threshold: 'Limit',
-            status: h.status,
-          }))
-        );
+        setAlertHistory(mapLocalHistory());
       }
     });
     return () => {
       mounted = false;
     };
-  }, [activeAlarms]);
+  }, [activeAlarms, managedAlerts, contextAlertHistory]);
 
-  // Active alerts list strictly from backend active alarms or real telemetry conditions
+  // Active & acknowledged non-resolved alerts list from notification engine + backend
   const activeAlertsList: AlertItemData[] = useMemo(() => {
     const list: AlertItemData[] = [];
+    const seenIds = new Set<string>();
     const nowTime = currentTime || 'Just now';
 
-    // Map from real database active alarms if available
+    // 1. Primary persistent alerts managed by AlertNotificationService (supports 30s reminders & per-alert ack)
+    managedAlerts
+      .filter((m) => m.status !== 'RESOLVED')
+      .forEach((m) => {
+        const isCrit = m.severity === 'CRITICAL';
+        const isAcked = m.status === 'ACKNOWLEDGED';
+        const nextSec = !isAcked ? Math.max(0, Math.ceil((m.nextReminderAt - nowMs) / 1000)) : undefined;
+        seenIds.add(m.id);
+        list.push({
+          id: m.id,
+          alertKey: m.alertKey,
+          severity: isCrit ? 'CRITICAL' : 'WARNING',
+          badgeColor: isCrit ? '#EF4444' : '#F59E0B',
+          bgColor: isCrit ? '#FEF2F2' : '#FFFBEB',
+          borderColor: isCrit ? '#FECACA' : '#FDE68A',
+          textColor: isCrit ? '#991B1B' : '#92400E',
+          title: m.title,
+          description: m.message,
+          currentValue: m.levelPercent != null ? `${m.levelPercent.toFixed(1)}%` : 'Fault / Offline',
+          threshold:
+            m.alertType === 'CRITICAL_LOW'
+              ? '< 10.0%'
+              : m.alertType === 'WARNING_LOW'
+              ? '< 20.0%'
+              : m.alertType === 'OVERFLOW'
+              ? '>= 100.0%'
+              : 'Signal / Link Check',
+          timestamp: new Date(m.triggeredAt).toLocaleTimeString(),
+          acknowledged: isAcked,
+          acknowledgedAt: m.acknowledgedAt ? new Date(m.acknowledgedAt).toLocaleTimeString() : undefined,
+          acknowledgedBy: m.acknowledgedBy,
+          reminderCount: m.reminderCount,
+          nextReminderInSec: nextSec,
+          trainNumber: m.trainNumber,
+          coachNumber: m.coachNumber,
+          tankName: m.tankName,
+          statusText: isAcked
+            ? `Acknowledged${m.acknowledgedBy ? ` by ${m.acknowledgedBy}` : ''}`
+            : `Active · Reminder in ${nextSec ?? NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS}s`,
+          type: m.alertKey.startsWith('level-') ? 'level' : 'sensor',
+        });
+      });
+
+    // 2. Include any backend/dynamic activeAlarms not already covered by managedAlerts
     if (activeAlarms && activeAlarms.length > 0) {
       activeAlarms.forEach((a) => {
+        if (seenIds.has(a.id)) return;
+        const alreadyInManaged = managedAlerts.some(
+          (m) =>
+            m.status !== 'RESOLVED' &&
+            ((a.id.startsWith('alarm-low-tank2-') && m.alertKey === `level-${a.id.replace('alarm-low-tank2-', '')}-departure`) ||
+              (a.id.startsWith('alarm-s1-') && m.alertKey === `sensor-s1-${a.id.replace('alarm-s1-', '')}`) ||
+              (a.id.startsWith('alarm-s2-') && m.alertKey === `sensor-s2-${a.id.replace('alarm-s2-', '')}`) ||
+              (a.id.startsWith('alarm-conn-') && m.alertKey === `conn-${a.id.replace('alarm-conn-', '')}`))
+        );
+        if (alreadyInManaged) return;
+
         const isCrit = a.severity === 'CRITICAL';
+        const isAcked = a.status === 'ACKNOWLEDGED';
         list.push({
           id: a.id,
           severity: isCrit ? 'CRITICAL' : 'WARNING',
@@ -117,11 +197,16 @@ export const AlertsScreen: React.FC = () => {
           currentValue: a.triggerValue != null ? `${a.triggerValue.toFixed(1)}%` : 'Active',
           threshold: a.thresholdValue != null ? `${a.thresholdValue.toFixed(1)}%` : 'Threshold',
           timestamp: a.triggeredAt ? new Date(a.triggeredAt).toLocaleTimeString() : nowTime,
-          acknowledged: a.status === 'ACKNOWLEDGED',
-          statusText: a.status === 'ACKNOWLEDGED' ? 'Acknowledged' : 'Active Alarm',
+          acknowledged: isAcked,
+          acknowledgedAt: a.acknowledgedAt ? new Date(a.acknowledgedAt).toLocaleTimeString() : undefined,
+          coachNumber: a.coachNumber,
+          statusText: isAcked ? 'Acknowledged' : 'Active Alarm',
           type: (a.alarmType || '').includes('SENSOR') ? 'sensor' : 'level',
         });
       });
+    }
+
+    if (list.length > 0) {
       return list;
     }
 
@@ -202,18 +287,31 @@ export const AlertsScreen: React.FC = () => {
     }
 
     return list;
-  }, [activeAlarms, hasData, fillPct, waterHeight, maxHeight, isOffline, currentTime, waterLevelAlertAcked, sensorAlertAcked]);
+  }, [activeAlarms, managedAlerts, nowMs, hasData, fillPct, waterHeight, maxHeight, isOffline, currentTime, waterLevelAlertAcked, sensorAlertAcked]);
 
+  const unacknowledgedCount = activeAlertsList.filter((a) => !a.acknowledged).length;
   const criticalCount = activeAlertsList.filter((a) => a.severity === 'CRITICAL').length;
   const warningCount = activeAlertsList.filter((a) => a.severity === 'WARNING').length;
   const activeCount = activeAlertsList.length;
   const resolvedCount = alertHistory.filter((h) => h.status === 'Resolved').length;
 
+  const handleAcknowledgeOne = async (alert: AlertItemData) => {
+    if (alert.id === 'ALT-WLI-CRIT' || alert.id === 'ALT-WLI-WARN' || alert.id === 'ALT-WLI-OVERFLOW') {
+      setWaterLevelAlertAcked(true);
+    }
+    if (alert.id === 'ALT-SNS-FAULT') {
+      setSensorAlertAcked(true);
+    }
+    await acknowledgeAlarm(alert.id, 'Acknowledged by operator');
+  };
+
   const handleAcknowledgeAll = async () => {
     setWaterLevelAlertAcked(true);
     setSensorAlertAcked(true);
-    for (const a of activeAlarms) {
-      await acknowledgeAlarm(a.id, 'Acknowledged by operator');
+    for (const item of activeAlertsList) {
+      if (!item.acknowledged) {
+        await acknowledgeAlarm(item.id, 'Acknowledged all active alerts');
+      }
     }
   };
 
@@ -235,7 +333,72 @@ export const AlertsScreen: React.FC = () => {
         </div>
 
         {/* Header Action Buttons & Status Badge */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* Browser Notification Permission & Reminder Status */}
+          {notificationPermission === 'granted' ? (
+            <div
+              data-testid="alerts-browser-notif-granted"
+              style={{
+                height: '32px',
+                padding: '0 12px',
+                borderRadius: '6px',
+                backgroundColor: '#ECFDF5',
+                border: '1px solid #A7F3D0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <Bell size={14} color="#059669" />
+              <span style={{ fontSize: '12px', fontWeight: 700, color: '#065F46', fontFamily: typography.fontFamily }}>
+                Browser Popups: ON ({NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS}s)
+              </span>
+            </div>
+          ) : notificationPermission === 'denied' ? (
+            <div
+              data-testid="alerts-browser-notif-denied"
+              style={{
+                height: '32px',
+                padding: '0 12px',
+                borderRadius: '6px',
+                backgroundColor: '#FFF7ED',
+                border: '1px solid #FDBA74',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <BellOff size={14} color="#C2410C" />
+              <span style={{ fontSize: '12px', fontWeight: 700, color: '#9A3412', fontFamily: typography.fontFamily }}>
+                Popups Blocked (In-App Active)
+              </span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              data-testid="alerts-enable-popups-btn"
+              onClick={() => void requestNotificationPermission()}
+              style={{
+                height: '32px',
+                padding: '0 12px',
+                borderRadius: '6px',
+                backgroundColor: '#2563EB',
+                border: 'none',
+                color: '#FFFFFF',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontFamily: typography.fontFamily,
+              }}
+            >
+              <Bell size={14} />
+              Enable Browser Popups
+            </button>
+          )}
+
           {/* Alarm System State Badge */}
           <div
             style={{
@@ -257,7 +420,8 @@ export const AlertsScreen: React.FC = () => {
 
           <button
             onClick={handleAcknowledgeAll}
-            disabled={activeAlertsList.length === 0 || (waterLevelAlertAcked && sensorAlertAcked)}
+            disabled={unacknowledgedCount === 0}
+            data-testid="acknowledge-all-btn"
             style={{
               padding: '8px 16px',
               borderRadius: '6px',
@@ -266,8 +430,8 @@ export const AlertsScreen: React.FC = () => {
               color: '#334155',
               fontSize: '13px',
               fontWeight: 500,
-              cursor: activeAlertsList.length > 0 ? 'pointer' : 'default',
-              opacity: activeAlertsList.length > 0 && (!waterLevelAlertAcked || !sensorAlertAcked) ? 1 : 0.5,
+              cursor: unacknowledgedCount > 0 ? 'pointer' : 'default',
+              opacity: unacknowledgedCount > 0 ? 1 : 0.5,
               fontFamily: typography.fontFamily,
             }}
           >
@@ -506,6 +670,21 @@ export const AlertsScreen: React.FC = () => {
                       {alert.description}
                     </div>
                     <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginTop: '2px' }}>
+                      {alert.trainNumber && (
+                        <span style={{ fontSize: '12px', color: '#334155', fontFamily: typography.fontFamily }}>
+                          Train: <strong>{alert.trainNumber}</strong>
+                        </span>
+                      )}
+                      {alert.coachNumber && (
+                        <span style={{ fontSize: '12px', color: '#334155', fontFamily: typography.fontFamily }}>
+                          Coach: <strong>{alert.coachNumber}</strong>
+                        </span>
+                      )}
+                      {alert.tankName && (
+                        <span style={{ fontSize: '12px', color: '#334155', fontFamily: typography.fontFamily }}>
+                          Tank: <strong>{alert.tankName}</strong>
+                        </span>
+                      )}
                       <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', fontFamily: typography.fontFamily }}>
                         Current Level: {alert.currentValue}
                       </span>
@@ -513,14 +692,50 @@ export const AlertsScreen: React.FC = () => {
                         Threshold: {alert.threshold}
                       </span>
                     </div>
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center', marginTop: '2px', fontSize: '11px', color: '#64748B' }}>
+                      {!alert.acknowledged ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#B45309', fontWeight: 600 }}>
+                          <Clock size={12} />
+                          Auto-reminder every {NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS}s (sent {alert.reminderCount ?? 0}×)
+                        </span>
+                      ) : (
+                        <span style={{ color: '#3730A3', fontWeight: 600 }}>
+                          Reminders stopped{alert.acknowledgedAt ? ` at ${alert.acknowledgedAt}` : ''}{alert.acknowledgedBy ? ` by ${alert.acknowledgedBy}` : ''}
+                        </span>
+                      )}
+                      {alert.trainNumber && alert.coachNumber && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedTrainNumber(alert.trainNumber!);
+                            setSelectedCoachNumber(alert.coachNumber!);
+                            if (alert.alertKey?.startsWith('level-')) {
+                              setSelectedTankId(alert.alertKey.replace('level-', ''));
+                            }
+                            setActiveScreen('watertank');
+                          }}
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            color: '#2563EB',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            padding: 0,
+                          }}
+                        >
+                          View Tank →
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Right Status & Acknowledge Action */}
-                  <div style={{ minWidth: '130px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                  <div style={{ minWidth: '150px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                     <div
                       style={{
-                        height: '22px',
-                        padding: '0 10px',
+                        minHeight: '22px',
+                        padding: '2px 10px',
                         borderRadius: '11px',
                         backgroundColor: alert.acknowledged ? '#E0E7FF' : '#FEE2E2',
                         display: 'inline-flex',
@@ -528,17 +743,15 @@ export const AlertsScreen: React.FC = () => {
                         justifyContent: 'center',
                       }}
                     >
-                      <span style={{ fontSize: '10px', fontWeight: 'bold', color: alert.acknowledged ? '#3730A3' : '#991B1B' }}>
+                      <span style={{ fontSize: '10px', fontWeight: 'bold', color: alert.acknowledged ? '#3730A3' : '#991B1B', textAlign: 'center' }}>
                         {alert.statusText}
                       </span>
                     </div>
 
                     <button
-                      onClick={() => {
-                        if (alert.type === 'level') setWaterLevelAlertAcked(true);
-                        if (alert.type === 'sensor') setSensorAlertAcked(true);
-                      }}
+                      onClick={() => void handleAcknowledgeOne(alert)}
                       disabled={alert.acknowledged}
+                      data-testid={`ack-btn-${alert.id}`}
                       className="touch-target-44"
                       style={{
                         width: '100%',
@@ -667,7 +880,7 @@ export const AlertsScreen: React.FC = () => {
                   fontFamily: typography.fontFamily,
                 }}
               >
-                {item.status}
+                {item.status}{item.acknowledgedBy ? ` (${item.acknowledgedBy})` : ''}
               </span>
             </div>
           ))}

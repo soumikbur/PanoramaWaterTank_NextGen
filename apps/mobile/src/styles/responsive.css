@@ -908,6 +908,236 @@ html, body, #root, .app-layout {
   }
 }
 
+/* ==========================================================================
+   Graphical Train Consist SCADA Layout (Scoped — CoachManagementScreen)
+   ========================================================================== */
+.consist-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.consist-nav-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.consist-scroll-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  border-radius: 7px;
+  border: 1px solid #CBD5E1;
+  background-color: #FFFFFF;
+  color: #334155;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.consist-scroll-btn:hover {
+  background-color: #F1F5F9;
+  border-color: #94A3B8;
+}
+
+.consist-yard-frame {
+  background-color: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 12px 12px 8px 12px;
+  overflow: hidden;
+}
+
+.consist-track-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  padding: 6px 4px 16px 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #94A3B8 #E2E8F0;
+}
+
+.consist-track-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.consist-track-scroll::-webkit-scrollbar-track {
+  background: #E2E8F0;
+  border-radius: 999px;
+}
+
+.consist-track-scroll::-webkit-scrollbar-thumb {
+  background: #94A3B8;
+  border-radius: 999px;
+  border: 2px solid #E2E8F0;
+}
+
+.consist-track-scroll::-webkit-scrollbar-thumb:hover {
+  background: #64748B;
+}
+
+.consist-rail-stage {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  min-width: 100%;
+  padding-right: 12px;
+  padding-bottom: 18px;
+}
+
+.consist-rail-beam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 4px;
+  height: 6px;
+  border-top: 2px solid #94A3B8;
+  border-bottom: 1px solid #CBD5E1;
+  background-image: repeating-linear-gradient(
+    90deg,
+    #CBD5E1 0px,
+    #CBD5E1 6px,
+    transparent 6px,
+    transparent 18px
+  );
+  pointer-events: none;
+}
+
+.consist-locomotive-card {
+  width: 188px;
+  min-width: 188px;
+  max-width: 188px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  border: 1.5px solid #1E293B;
+  background: linear-gradient(180deg, #0F172A 0%, #1E293B 100%);
+  color: #F8FAFC;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  box-sizing: border-box;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.14);
+  overflow: hidden;
+  position: relative;
+}
+
+.consist-coupler {
+  width: 28px;
+  min-width: 28px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  user-select: none;
+}
+
+.consist-coupler-bar {
+  width: 100%;
+  height: 3px;
+  background: #94A3B8;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.consist-coupler-node {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background-color: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.consist-coach-card {
+  width: 264px;
+  min-width: 264px;
+  max-width: 264px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  box-sizing: border-box;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  position: relative;
+}
+
+.consist-coach-card--grid {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.consist-grid-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(264px, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+
+.consist-truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .consist-yard-frame {
+    padding: 8px 8px 6px 8px;
+  }
+
+  .consist-locomotive-card {
+    width: 164px;
+    min-width: 164px;
+    max-width: 164px;
+    padding: 10px;
+  }
+
+  .consist-coach-card {
+    width: 244px;
+    min-width: 244px;
+    max-width: 244px;
+    padding: 10px;
+  }
+
+  .consist-coupler {
+    width: 22px;
+    min-width: 22px;
+  }
+
+  .consist-grid-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+
 
 
 

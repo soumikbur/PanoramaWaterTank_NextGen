@@ -8,6 +8,7 @@ import { DisplayPreferencesProvider } from './context/DisplayPreferencesContext'
 import { AppLayout } from './components/layout/AppLayout';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { AlertToastBanner } from './components/common/AlertToastBanner';
+import { ActiveAlertBanner } from './components/common/ActiveAlertBanner';
 import { ShieldAlert } from 'lucide-react';
 
 // Screens
@@ -130,7 +131,16 @@ const MainContent: React.FC = () => {
 };
 
 const AppShell: React.FC = () => {
-  const { isAuthenticated, authLoading, activeScreen, currentUser, alertToast, dismissAlertToast } = useApp();
+  const {
+    isAuthenticated,
+    authLoading,
+    activeScreen,
+    setActiveScreen,
+    currentUser,
+    alertToast,
+    dismissAlertToast,
+    acknowledgeAlarm,
+  } = useApp();
 
   if (authLoading) {
     return (
@@ -171,8 +181,14 @@ const AppShell: React.FC = () => {
   return (
     <DisplayPreferencesProvider activeUsername={currentUser?.username}>
       <AppLayout>
-        <AlertToastBanner toast={alertToast} onDismiss={dismissAlertToast} />
+        <AlertToastBanner
+          toast={alertToast}
+          onDismiss={dismissAlertToast}
+          onViewAlerts={() => setActiveScreen('alerts')}
+          onAcknowledge={(id) => void acknowledgeAlarm(id, 'Acknowledged from alert banner')}
+        />
         <Header />
+        <ActiveAlertBanner />
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           <Sidebar />
           <MainContent />

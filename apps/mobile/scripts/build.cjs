@@ -163,6 +163,12 @@ async function build() {
   </body>
 </html>`;
 
+  // Copy public static assets first (so generated index.html/404.html are never overwritten)
+  const publicDir = path.resolve(__dirname, '../public');
+  if (fs.existsSync(publicDir)) {
+    fs.cpSync(publicDir, distDir, { recursive: true, force: true });
+  }
+
   fs.writeFileSync(path.join(distDir, 'index.html'), htmlContent, 'utf8');
   fs.writeFileSync(path.join(distDir, '404.html'), notFoundContent, 'utf8');
 

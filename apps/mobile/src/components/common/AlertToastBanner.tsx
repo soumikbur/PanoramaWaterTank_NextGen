@@ -5,9 +5,16 @@ import { AlertTriangle, AlertCircle, CheckCircle2, X } from 'lucide-react';
 interface AlertToastBannerProps {
   toast: AlertToast | null;
   onDismiss: () => void;
+  onViewAlerts?: () => void;
+  onAcknowledge?: (alertId: string) => void;
 }
 
-export const AlertToastBanner: React.FC<AlertToastBannerProps> = ({ toast, onDismiss }) => {
+export const AlertToastBanner: React.FC<AlertToastBannerProps> = ({
+  toast,
+  onDismiss,
+  onViewAlerts,
+  onAcknowledge,
+}) => {
   if (!toast) return null;
 
   const isCrit = toast.severity === 'CRITICAL';
@@ -22,6 +29,7 @@ export const AlertToastBanner: React.FC<AlertToastBannerProps> = ({ toast, onDis
   return (
     <aside
       aria-label="System Alert"
+      data-testid="alert-toast-banner"
       style={{
         position: 'fixed',
         top: '16px',
@@ -39,7 +47,7 @@ export const AlertToastBanner: React.FC<AlertToastBannerProps> = ({ toast, onDis
         aria-live={isCrit ? 'assertive' : 'polite'}
         style={{
           margin: '0 auto',
-          maxWidth: '460px',
+          maxWidth: '480px',
           backgroundColor: bg,
           border: `1.5px solid ${border}`,
           borderRadius: '10px',
@@ -83,6 +91,63 @@ export const AlertToastBanner: React.FC<AlertToastBannerProps> = ({ toast, onDis
           >
             {toast.message}
           </p>
+
+          {(toast.trainNumber || toast.coachNumber || toast.tankName) && (
+            <div style={{ marginTop: '4px', fontSize: '11px', color: '#475569', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {toast.trainNumber && <span>Train: {toast.trainNumber}</span>}
+              {toast.coachNumber && <span>Coach: {toast.coachNumber}</span>}
+              {toast.tankName && <span>Tank: {toast.tankName}</span>}
+            </div>
+          )}
+
+          {toast.severity !== 'NORMAL' && (onViewAlerts || onAcknowledge) && (
+            <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {onAcknowledge && (
+                <button
+                  type="button"
+                  data-testid="toast-acknowledge-btn"
+                  onClick={() => {
+                    onAcknowledge(toast.alertKey || toast.id);
+                    onDismiss();
+                  }}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    border: `1px solid ${border}`,
+                    backgroundColor: '#FFFFFF',
+                    color: textTitle,
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Acknowledge
+                </button>
+              )}
+              {onViewAlerts && (
+                <button
+                  type="button"
+                  data-testid="toast-view-alerts-btn"
+                  onClick={() => {
+                    onViewAlerts();
+                    onDismiss();
+                  }}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    backgroundColor: isCrit ? '#DC2626' : '#D97706',
+                    color: '#FFFFFF',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Open Alerts
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <button

@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from app.core.config import settings
 from app.core.database import init_db
 from app.mqtt.client import mqtt_service
-from app.api.v1 import api_router
+from app.api.v1 import api_router, trains as trains_v1
 
 # Configure logging
 logging.basicConfig(
@@ -72,12 +72,24 @@ app.add_middleware(
     allow_origins=_explicit_origins,
     allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://soumikbur\.github\.io$",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def normalize_api_trailing_slash(request: Request, call_next):
+    # Prevent FastAPI 307/405 responses when clients call /api/... with a trailing slash
+    path = request.scope.get("path", "")
+    if path.startswith("/api/") and len(path) > 5 and path.endswith("/"):
+        request.scope["path"] = path.rstrip("/")
+        request.scope["raw_path"] = request.scope["path"].encode("ascii", errors="ignore")
+    return await call_next(request)
+
+
 # Mount API Routers
 app.include_router(api_router)
+app.include_router(trains_v1.router, prefix="/api", include_in_schema=False)
 
 
 @app.middleware("http")
@@ -122,6 +134,22 @@ if os.path.exists(_static_dir):
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 
+@app.get("/sw.js", include_in_schema=False)
+async def service_worker():
+    """Serve the notification Service Worker with strict JavaScript MIME headers."""
+    sw_file = os.path.join(_static_dir, "sw.js")
+    if os.path.exists(sw_file):
+        return FileResponse(
+            sw_file,
+            media_type="application/javascript",
+            headers={
+                "Service-Worker-Allowed": "/",
+                "Cache-Control": "no-cache",
+            },
+        )
+    return JSONResponse(status_code=404, content={"detail": "Service Worker not built"})
+
+
 @app.get("/", tags=["Root"])
 async def root(request: Request, format: Optional[str] = None):
     """Serve the React production application shell or API metadata."""
@@ -150,8 +178,12 @@ async def root(request: Request, format: Optional[str] = None):
     }
 
 
-@app.get("/{full_path:path}", include_in_schema=False)
-async def spa_fallback(full_path: str):
+@app.api_route(
+    "/{full_path:path}",
+    methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
+    include_in_schema=False,
+)
+async def spa_fallback(request: Request, full_path: str):
     """SPA fallback routing for React application direct URLs and refreshes."""
     if (
         full_path.startswith("api/")
@@ -163,6 +195,9 @@ async def spa_fallback(full_path: str):
         or full_path.startswith("static/")
     ):
         return JSONResponse(status_code=404, content={"detail": "Not Found"})
+
+    if request.method not in ("GET", "HEAD"):
+        return JSONResponse(status_code=405, content={"detail": "Method Not Allowed"})
 
     # Defensive path traversal and hidden file mitigation
     clean_path = os.path.normpath(full_path).lstrip("/\\")

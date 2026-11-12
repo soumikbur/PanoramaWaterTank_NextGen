@@ -52,14 +52,20 @@ int main(int argc, char *argv[])
     }
 
     // -------------------------------------------------------------
-    // Test 2: Search & Status Filtering
+    // Test 2: Search & Status Filtering (Default "all" -> Online only)
     // -------------------------------------------------------------
     std::cout << "\n[Test 2] Filter Bar & Search Behavior..." << std::endl;
     {
-        // "all" filter
+        // "all" / "All Coaches" filter MUST display ONLY online coaches/tanks by default
         QVariantList allList = trainManager.getTanksFiltered(QString(), QStringLiteral("all"));
-        assert(allList.size() == trainManager.totalTanks());
-        std::cout << "  - Filter 'all': " << allList.size() << " tanks." << std::endl;
+        assert(allList.size() == trainManager.onlineTanks());
+        for (const auto &item : allList) {
+            assert(item.toMap().value("isOnline").toBool() == true);
+        }
+        std::cout << "  - Filter 'all' (online only): " << allList.size() << " / total " << trainManager.totalTanks() << " tanks." << std::endl;
+
+        QVariantList allCoachesList = trainManager.getTanksFiltered(QString(), QStringLiteral("All Coaches"));
+        assert(allCoachesList.size() == trainManager.onlineTanks());
 
         // "online" filter
         QVariantList onlineList = trainManager.getTanksFiltered(QString(), QStringLiteral("online"));
@@ -82,15 +88,20 @@ int main(int argc, char *argv[])
         assert(lowLevelList.size() == trainManager.lowLevelCount());
         std::cout << "  - Filter 'low_level': " << lowLevelList.size() << " tanks." << std::endl;
 
-        // Search by Tank ID
-        QVariantList search001 = trainManager.getTanksFiltered(QStringLiteral("001"), QStringLiteral("all"));
-        assert(search001.size() >= 1);
-        std::cout << "  - Search '001': " << search001.size() << " tanks." << std::endl;
+        // Search by Tank ID ("001" is offline initially so must not appear in 'all', must appear in 'offline')
+        QVariantList search001All = trainManager.getTanksFiltered(QStringLiteral("001"), QStringLiteral("all"));
+        for (const auto &item : search001All) {
+            assert(item.toMap().value("isOnline").toBool() == true);
+        }
+        QVariantList search001Offline = trainManager.getTanksFiltered(QStringLiteral("001"), QStringLiteral("offline"));
+        assert(search001Offline.size() >= 1);
+        std::cout << "  - Search '001': " << search001All.size() << " in 'all' (online-only), "
+                  << search001Offline.size() << " in 'offline'." << std::endl;
 
-        // Search by Coach
-        QVariantList searchCoach = trainManager.getTanksFiltered(QStringLiteral("Coach A"), QStringLiteral("all"));
-        assert(searchCoach.size() >= 1);
-        std::cout << "  - Search 'Coach A': " << searchCoach.size() << " tanks." << std::endl;
+        // Search by Coach within online filter & offline filter
+        QVariantList searchCoachOffline = trainManager.getTanksFiltered(QStringLiteral("Coach A"), QStringLiteral("offline"));
+        assert(searchCoachOffline.size() >= 1);
+        std::cout << "  - Search 'Coach A' in 'offline': " << searchCoachOffline.size() << " tanks." << std::endl;
 
         // Search non-existent
         QVariantList searchEmpty = trainManager.getTanksFiltered(QStringLiteral("NonExistentTankXYZ"), QStringLiteral("all"));
@@ -522,6 +533,64 @@ int main(int argc, char *argv[])
         assert(tm.warningThresholdPercent() == 20.0);
 
         std::cout << "  [PASS] Threshold validation and invalid configuration rejection verified." << std::endl;
+    }
+
+    // -------------------------------------------------------------
+    // Test 12: Online-Only Transition, Disconnect Alert & Reconnect Clear
+    // -------------------------------------------------------------
+    std::cout << "\n[Test 12] Coach Online/Offline Transition, Disconnect Alert & Reconnect Clear..." << std::endl;
+    {
+        Panorama::TrainManager tm;
+        // Scenario A: All offline initially -> "all" returns 0, totals remain accurate
+        assert(tm.totalTanks() > 0);
+        assert(tm.onlineTanks() == 0);
+        assert(tm.offlineTanks() == tm.totalTanks());
+        assert(tm.getTanksFiltered(QString(), QStringLiteral("all")).isEmpty());
+        assert(tm.getTanksFiltered(QString(), QStringLiteral("online")).isEmpty());
+        assert(tm.getTanksFiltered(QString(), QStringLiteral("offline")).size() == tm.totalTanks());
+
+        // Scenario B: Coach comes online via fresh telemetry -> appears in "all" and "online"
+        qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+        tm.processReading(35.0, 1012.0, QStringLiteral("Healthy"), nowMs, true);
+        assert(tm.onlineTanks() == 1);
+        assert(tm.offlineTanks() == tm.totalTanks() - 1);
+        QVariantList onlineDefault = tm.getTanksFiltered(QString(), QStringLiteral("all"));
+        assert(onlineDefault.size() == 1);
+        assert(onlineDefault.first().toMap().value("isOnline").toBool() == true);
+        assert(tm.connectivityAlertCount() == 0);
+
+        // Search within online list
+        QVariantList searchOnline = tm.getTanksFiltered(QStringLiteral("001"), QStringLiteral("all"));
+        assert(searchOnline.size() == 1);
+
+        // Scenario C: Coach disconnects via timeout -> disappears, counters update, 1 alert created (deduped)
+        tm.setTelemetryTimeoutMs(60000);
+        tm.checkStaleTanks(nowMs + 120000);
+        assert(tm.onlineTanks() == 0);
+        assert(tm.offlineTanks() == tm.totalTanks());
+        assert(tm.getTanksFiltered(QString(), QStringLiteral("all")).isEmpty());
+        assert(tm.connectivityAlertCount() == 1);
+        // Repeated stale check must NOT create duplicate alerts
+        tm.checkStaleTanks(nowMs + 180000);
+        assert(tm.connectivityAlertCount() == 1);
+
+        // Scenario D: Coach reconnects -> reappears in "all", counters update, disconnect alert cleared
+        tm.processReading(40.0, 1013.0, QStringLiteral("Healthy"), nowMs + 200000, true);
+        assert(tm.onlineTanks() == 1);
+        assert(tm.offlineTanks() == tm.totalTanks() - 1);
+        assert(tm.getTanksFiltered(QString(), QStringLiteral("all")).size() == 1);
+        assert(tm.connectivityAlertCount() == 0);
+
+        // Scenario E: Broker/connection state disconnect & reconnect
+        tm.setConnectionState(QStringLiteral("Disconnected"));
+        assert(tm.onlineTanks() == 0);
+        assert(tm.getTanksFiltered(QString(), QStringLiteral("all")).isEmpty());
+        assert(tm.connectivityAlertCount() == 1);
+        tm.setConnectionState(QStringLiteral("Connected"));
+        assert(tm.onlineTanks() == 1);
+        assert(tm.connectivityAlertCount() == 0);
+
+        std::cout << "  [PASS] Online-only transitions, counters, disconnect alerts, and reconnect resolution verified." << std::endl;
     }
 
     std::cout << "\n=======================================================" << std::endl;

@@ -7,6 +7,7 @@
 #include <QVariantMap>
 #include <QJsonObject>
 #include <QDateTime>
+#include <QTimer>
 #include <qqml.h>
 
 namespace Panorama {
@@ -68,6 +69,8 @@ class TrainManager : public QObject
     Q_PROPERTY(int filteredOfflineTanks READ filteredOfflineTanks NOTIFY filteredTanksChanged)
     Q_PROPERTY(int filteredAlertCount READ filteredAlertCount NOTIFY filteredTanksChanged)
     Q_PROPERTY(int filteredLowLevelCount READ filteredLowLevelCount NOTIFY filteredTanksChanged)
+    Q_PROPERTY(QVariantList connectivityAlerts READ connectivityAlerts NOTIFY connectivityAlertsChanged)
+    Q_PROPERTY(int connectivityAlertCount READ connectivityAlertCount NOTIFY connectivityAlertsChanged)
 
 public:
     explicit TrainManager(QObject *parent = nullptr);
@@ -88,12 +91,16 @@ public:
     int filteredOfflineTanks() const;
     int filteredAlertCount() const;
     int filteredLowLevelCount() const;
+    QVariantList connectivityAlerts() const;
+    int connectivityAlertCount() const;
 
     Q_INVOKABLE QVariantList getTanksFiltered(const QString &searchQuery, const QString &statusFilter) const;
     Q_INVOKABLE QVariantList getFilteredTanksForTrain(const QString &trainNumber, const QString &searchQuery, const QString &statusFilter) const;
     Q_INVOKABLE QVariantMap getTank(const QString &tankId) const;
     Q_INVOKABLE void selectTank(const QString &tankId);
     Q_INVOKABLE void setActiveTrainNumber(const QString &trainNumber);
+    Q_INVOKABLE void setTelemetryTimeoutMs(int timeoutMs);
+    Q_INVOKABLE void checkStaleTanks(qint64 nowMs = 0);
 
     void setTankModel(TankModel *tankModel);
     void setTrainConfigProvider(TrainConfigProvider *provider);
@@ -112,10 +119,13 @@ signals:
     void tankSelectedForDetail(const QString &tankId);
     void activeTrainChanged();
     void filteredTanksChanged();
+    void connectivityAlertsChanged();
+    void coachConnectivityChanged(const QString &coachId, const QString &tankId, bool isOnline, const QString &message);
 
 private:
     void initializeTrainConsist();
     void recalculateAlarmsAndCounters();
+    void recordConnectivityTransition(const TankItem &tank, bool wasOnline, bool isOnline);
     TankItem* findPrimaryTank();
     void updatePrimaryTankTelemetry(double waterLevelCm, double rawVoltage, double pressureHpa,
                                    double humidity, int sensorStatusInt,
@@ -129,6 +139,9 @@ private:
     DatabaseManager *m_dbManager{nullptr};
     QString m_activeTrainNumber;
     QStringList m_activeTrainTankIds;
+    QVariantList m_connectivityAlerts;
+    int m_telemetryTimeoutMs{120000};
+    QTimer m_staleCheckTimer;
 
     int m_totalTanks{18};
     int m_onlineTanks{16};

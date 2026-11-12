@@ -104,6 +104,8 @@ async def list_all_tanks(db: AsyncSession = Depends(get_db)):
     results = []
     for tank in tanks:
         device = await device_repo.get_by_id(tank.device_id)
+        if not device or not device.train_number or device.train_number.upper() == "UNASSIGNED":
+            continue
         latest = await telemetry_repo.get_latest_for_tank(tank.id)
         active_alarms = await alarm_repo.list_alarms(status="ACTIVE", device_id=tank.device_id) if device else []
         results.append(_calculate_tank_status(tank, device, latest, active_alarms))

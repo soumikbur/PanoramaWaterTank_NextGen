@@ -68,6 +68,7 @@ export const Header: React.FC = () => {
     isMobileNavOpen,
     alarmStats,
     activeAlarms,
+    managedAlerts,
   } = useApp();
 
   const { theme, setTheme, resolvedTheme, isDark } = useDisplayPreferences();
@@ -820,7 +821,8 @@ export const Header: React.FC = () => {
     );
   };
 
-  const activeAlarmCount = alarmStats?.totalActive ?? activeAlarms?.length ?? 0;
+  const unackedManagedCount = managedAlerts?.filter((a) => a.status === 'ACTIVE').length ?? 0;
+  const activeAlarmCount = Math.max(unackedManagedCount, alarmStats?.totalActive ?? activeAlarms?.filter((a) => a.status === 'ACTIVE').length ?? 0);
 
   return (
     <header

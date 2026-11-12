@@ -17,6 +17,7 @@ import {
   EmployeeRegistrationPayload,
   TrainLocation
 } from '../types';
+import { TrainLookupResult, TrainCreatePayload } from '../types/train';
 import { deviceRegistry } from '../services/deviceRegistry';
 
 const API_BASE =
@@ -35,15 +36,37 @@ export class ApiClient {
     };
 
     const response = await fetch(url, { ...options, headers });
-    if (!response.ok) {
-      let errorMsg = `API error ${response.status}: ${response.statusText}`;
+    const rawText = await response.text();
+    let parsedJson: any = null;
+    if (rawText) {
       try {
-        const errorJson = await response.json();
-        if (errorJson.detail) errorMsg = errorJson.detail;
-      } catch {}
-      throw new Error(errorMsg);
+        parsedJson = JSON.parse(rawText);
+      } catch {
+        parsedJson = null;
+      }
     }
-    return response.json() as Promise<T>;
+
+    if (!response.ok) {
+      let errorMsg = `API error ${response.status}${response.statusText ? `: ${response.statusText}` : ''}`;
+      if (parsedJson && (parsedJson.message || parsedJson.detail)) {
+        errorMsg = String(parsedJson.detail || parsedJson.message);
+      } else if (response.status === 405) {
+        errorMsg = 'HTTP 405 Method Not Allowed: API endpoint does not accept this request or is routed to static hosting.';
+      }
+      console.error(`[ApiClient] ${options.method || 'GET'} ${url} failed (${response.status}):`, parsedJson || rawText.slice(0, 200));
+      const err: any = new Error(errorMsg);
+      err.status = response.status;
+      if (parsedJson?.code) err.code = parsedJson.code;
+      throw err;
+    }
+
+    if (parsedJson !== null) {
+      return parsedJson as T;
+    }
+    if (response.status === 204 || !rawText.trim()) {
+      return {} as T;
+    }
+    throw new Error(`Invalid non-JSON response from ${url}`);
   }
 
   // Auth
@@ -699,7 +722,18 @@ export class ApiClient {
     };
   }
 
-  static async createTrain(data: { train_number: string; name: string; region: string; coach_number?: string; tank_capacity?: number }): Promise<any> {
+  static async lookupTrain(
+    trainNumber: string,
+    options?: { refresh?: boolean; signal?: AbortSignal }
+  ): Promise<TrainLookupResult> {
+    const clean = encodeURIComponent(trainNumber.trim());
+    const qs = options?.refresh ? '?refresh=true' : '';
+    return this.request<TrainLookupResult>(`/trains/lookup/${clean}${qs}`, {
+      signal: options?.signal,
+    });
+  }
+
+  static async createTrain(data: TrainCreatePayload): Promise<any> {
     return this.request('/trains', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -713,8 +747,12 @@ export class ApiClient {
     });
   }
 
-  static async deleteTrain(trainNumber: string): Promise<any> {
-    return this.request(`/trains/${trainNumber}`, {
+  static async deleteTrain(trainNumber: string): Promise<{ success?: boolean; message: string; trainId?: string }> {
+    const clean = encodeURIComponent((trainNumber || '').trim());
+    if (!clean) {
+      throw new Error('Train number is required for deletion.');
+    }
+    return this.request(`/trains/${clean}`, {
       method: 'DELETE',
     });
   }

@@ -4,7 +4,9 @@ import { typography } from '../theme';
 import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
 import { TrainOverviewItem, TankLiveStatus } from '../types';
+import { filterConsistCoaches } from '../services/tankStatusService';
 import { useDisplayPreferences } from '../context/DisplayPreferencesContext';
+import { AddTrainModal } from '../components/train/AddTrainModal';
 import {
   Train,
   Plus,
@@ -187,16 +189,20 @@ export const EmployeeDashboard: React.FC = () => {
       return {
         trainNumber: first.train_number,
         name: first.name,
-        source: (first as any).source || 'Station A',
-        destination: (first as any).destination || 'Station B',
-        region: first.region || 'Eastern',
+        source: first.source_station
+          ? (first.source_code ? `${first.source_station} (${first.source_code})` : first.source_station)
+          : (first as any).source || '—',
+        destination: first.destination_station
+          ? (first.destination_code ? `${first.destination_station} (${first.destination_code})` : first.destination_station)
+          : (first as any).destination || '—',
+        region: first.railway_zone || first.region || 'Eastern',
         status: first.is_online ? 'Active' : 'Standby',
         latitude: (first as any).latitude || null,
         longitude: (first as any).longitude || null,
         speedKmh: 0,
-        nearestStation: 'Station A',
-        lastUpdate: first.last_telemetry || 'Awaiting telemetry',
-        totalCoaches: first.coaches_count || 24,
+        nearestStation: first.source_station || 'Awaiting telemetry',
+        lastUpdate: (first as any).last_telemetry || 'Awaiting telemetry',
+        totalCoaches: first.total_coaches || first.coaches_count || 24,
       };
     }
 
@@ -846,6 +852,7 @@ export const EmployeeDashboard: React.FC = () => {
 
             {/* Add Train Button */}
             <button
+              data-testid="open-add-train-btn"
               onClick={handleOpenAddModal}
               className="touch-target-44"
               style={{
@@ -1045,13 +1052,17 @@ export const EmployeeDashboard: React.FC = () => {
                       {train.name}
                     </td>
                     <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
-                      {(train as any).source || 'Station A'}
+                      {train.source_station
+                        ? (train.source_code ? `${train.source_station} (${train.source_code})` : train.source_station)
+                        : ((train as any).source || '—')}
                     </td>
                     <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
-                      {(train as any).destination || 'Station B'}
+                      {train.destination_station
+                        ? (train.destination_code ? `${train.destination_station} (${train.destination_code})` : train.destination_station)
+                        : ((train as any).destination || '—')}
                     </td>
                     <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
-                      {train.region || 'Eastern'}
+                      {train.railway_zone ? `${train.region} (${train.railway_zone})` : (train.region || 'Eastern')}
                     </td>
                     <td style={{ padding: '10px 14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -1417,7 +1428,7 @@ export const EmployeeDashboard: React.FC = () => {
               }}
             >
               <Layers size={13} />
-              <span>Total Coaches : 24</span>
+              <span>All Coaches : {consistMetrics.totalCoaches} &bull; Online : {consistMetrics.onlineCoaches} &bull; Offline : {consistMetrics.offlineCoaches}</span>
             </div>
           </div>
         </div>
@@ -1579,8 +1590,28 @@ export const EmployeeDashboard: React.FC = () => {
               }}
             />
 
-            {/* ==================== 24 COACHES (C1 TO C24) ==================== */}
-            {coaches24.map((coach) => {
+            {/* ==================== ONLINE COACHES ONLY ==================== */}
+            {(() => {
+              const onlineCoachesList = filterConsistCoaches(coaches24, 'ALL');
+              if (onlineCoachesList.length === 0) {
+                return (
+                  <div
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: '6px',
+                      backgroundColor: '#F8FAFC',
+                      border: '1px dashed #CBD5E1',
+                      color: '#64748B',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      marginLeft: '8px',
+                    }}
+                  >
+                    No coaches are currently online.
+                  </div>
+                );
+              }
+              return onlineCoachesList.map((coach) => {
               const isSelected = coach.coachNumber === activeCoachNum;
               const hasData = coach.hasTelemetry;
 
@@ -1720,7 +1751,8 @@ export const EmployeeDashboard: React.FC = () => {
                   </div>
                 </div>
               );
-            })}
+            });
+            })()}
           </div>
 
           {/* Railway Rails & Sleepers Track Base */}
@@ -2620,257 +2652,24 @@ export const EmployeeDashboard: React.FC = () => {
           MODALS: Add Train & Edit Train Configuration
           ========================================================================= */}
       {/* MODAL 1: Add Train Modal */}
-      {isAddModalOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.6)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-          }}
-        >
-          <div
-            className="dialog-content"
-            style={{
-              backgroundColor: 'var(--color-surface, #FFFFFF)',
-              borderRadius: '8px',
-              width: '100%',
-              maxWidth: '480px',
-              boxShadow: 'var(--shadow-modal, 0 20px 25px -5px rgba(0,0,0,0.2))',
-              overflow: 'hidden',
-              border: '1px solid var(--color-border, #E2E8F0)',
-            }}
-          >
-            <div
-              style={{
-                padding: '14px 18px',
-                borderBottom: '1px solid var(--color-border, #E2E8F0)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Train size={18} color="var(--color-primary, #2563EB)" />
-                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary, #0F172A)' }}>
-                  Add Train to Fleet
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsAddModalOpen(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted, #64748B)' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateTrainSubmit} style={{ padding: '18px' }}>
-              {formError && (
-                <div
-                  style={{
-                    backgroundColor: '#FEE2E2',
-                    color: '#DC2626',
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    marginBottom: '14px',
-                  }}
-                >
-                  {formError}
-                </div>
-              )}
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary, #475569)', marginBottom: '4px' }}>
-                    Train Number *
-                  </label>
-                  <input
-                    type="text"
-                    value={newTrainNumber}
-                    onChange={(e) => setNewTrainNumber(e.target.value)}
-                    placeholder="e.g. 12842"
-                    required
-                    style={{
-                      width: '100%',
-                      height: '34px',
-                      padding: '0 10px',
-                      borderRadius: '6px',
-                      border: '1px solid var(--color-border, #CBD5E1)',
-                      backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
-                      color: 'var(--color-text-primary, #0F172A)',
-                      fontSize: '12px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary, #475569)', marginBottom: '4px' }}>
-                    Train Name *
-                  </label>
-                  <input
-                    type="text"
-                    value={newTrainName}
-                    onChange={(e) => setNewTrainName(e.target.value)}
-                    placeholder="e.g. Dhauli Express"
-                    required
-                    style={{
-                      width: '100%',
-                      height: '34px',
-                      padding: '0 10px',
-                      borderRadius: '6px',
-                      border: '1px solid var(--color-border, #CBD5E1)',
-                      backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
-                      color: 'var(--color-text-primary, #0F172A)',
-                      fontSize: '12px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary, #475569)', marginBottom: '4px' }}>
-                    Source Station
-                  </label>
-                  <input
-                    type="text"
-                    value={newTrainSource}
-                    onChange={(e) => setNewTrainSource(e.target.value)}
-                    placeholder="e.g. Howrah (HWH)"
-                    style={{
-                      width: '100%',
-                      height: '34px',
-                      padding: '0 10px',
-                      borderRadius: '6px',
-                      border: '1px solid var(--color-border, #CBD5E1)',
-                      backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
-                      color: 'var(--color-text-primary, #0F172A)',
-                      fontSize: '12px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary, #475569)', marginBottom: '4px' }}>
-                    Destination Station
-                  </label>
-                  <input
-                    type="text"
-                    value={newTrainDestination}
-                    onChange={(e) => setNewTrainDestination(e.target.value)}
-                    placeholder="e.g. Puri (PURI)"
-                    style={{
-                      width: '100%',
-                      height: '34px',
-                      padding: '0 10px',
-                      borderRadius: '6px',
-                      border: '1px solid var(--color-border, #CBD5E1)',
-                      backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
-                      color: 'var(--color-text-primary, #0F172A)',
-                      fontSize: '12px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary, #475569)', marginBottom: '4px' }}>
-                    Railway Region
-                  </label>
-                  <select
-                    value={newTrainRegion}
-                    onChange={(e) => setNewTrainRegion(e.target.value)}
-                    style={{
-                      width: '100%',
-                      height: '34px',
-                      padding: '0 10px',
-                      borderRadius: '6px',
-                      border: '1px solid var(--color-border, #CBD5E1)',
-                      backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
-                      color: 'var(--color-text-primary, #0F172A)',
-                      fontSize: '12px',
-                      boxSizing: 'border-box',
-                    }}
-                  >
-                    <option value="South East">South East</option>
-                    <option value="Northern">Northern</option>
-                    <option value="Western">Western</option>
-                    <option value="Central">Central</option>
-                    <option value="Southern">Southern</option>
-                    <option value="Eastern">Eastern</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary, #475569)', marginBottom: '4px' }}>
-                    Initial Coach
-                  </label>
-                  <input
-                    type="text"
-                    value={newInitialCoach}
-                    onChange={(e) => setNewInitialCoach(e.target.value)}
-                    placeholder="C1"
-                    style={{
-                      width: '100%',
-                      height: '34px',
-                      padding: '0 10px',
-                      borderRadius: '6px',
-                      border: '1px solid var(--color-border, #CBD5E1)',
-                      backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
-                      color: 'var(--color-text-primary, #0F172A)',
-                      fontSize: '12px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  style={{
-                    padding: '8px 14px',
-                    borderRadius: '6px',
-                    border: '1px solid var(--color-border, #CBD5E1)',
-                    backgroundColor: 'var(--color-surface, #FFFFFF)',
-                    color: 'var(--color-text-secondary, #475569)',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: '6px',
-                    border: 'none',
-                    backgroundColor: 'var(--color-primary, #2563EB)',
-                    color: '#FFFFFF',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {loading ? 'Adding...' : 'Add Train'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <AddTrainModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onTrainAdded={async (trainNo, meta) => {
+          const regionDisplayMap: Record<string, string> = {
+            NORTH: 'Northern',
+            SOUTH: 'Southern',
+            EAST: 'Eastern',
+            WEST: 'Western',
+          };
+          if (meta?.region && selectedRegion !== 'ALL') {
+            setSelectedRegion(regionDisplayMap[meta.region] || 'ALL');
+          }
+          await loadTrains();
+          await refreshRegions();
+          setSelectedTrainNumber(trainNo);
+        }}
+      />
 
       {/* MODAL 2: Edit Train Modal */}
       {isEditModalOpen && (

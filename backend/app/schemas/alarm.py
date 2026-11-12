@@ -17,6 +17,7 @@ class AlarmOut(BaseModel):
     status: str
     triggeredAt: datetime = Field(..., alias="triggered_at")
     acknowledgedAt: Optional[datetime] = Field(None, alias="acknowledged_at")
+    acknowledgedBy: Optional[str] = Field(None, alias="acknowledged_by")
     resolvedAt: Optional[datetime] = Field(None, alias="resolved_at")
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)

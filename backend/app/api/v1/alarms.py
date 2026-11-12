@@ -43,6 +43,7 @@ async def list_alarms(
             status=a.status,
             triggered_at=a.triggered_at,
             acknowledged_at=a.acknowledged_at,
+            acknowledged_by=a.acknowledged_by,
             resolved_at=a.resolved_at
         )
         out_list.append(out)
@@ -60,6 +61,7 @@ async def acknowledge_alarm(
     alarm_repo = AlarmRepository(db)
     alarm = await alarm_repo.acknowledge_alarm(
         alarm_id=alarm_id,
+        user_id=current_user.id,
         comment=ack_data.comment
     )
     if not alarm:

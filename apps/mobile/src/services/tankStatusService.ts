@@ -384,3 +384,87 @@ export function computeConsistData(params: {
   };
 }
 
+export type CoachTankFilterMode = 'ALL' | 'ONLINE' | 'OFFLINE' | 'LOW_LEVEL';
+
+export function filterConsistTanks<T extends {
+  tankName: string;
+  coachNumber: string;
+  trainNumber: string;
+  tankId: string;
+  deviceUid?: string | null;
+  isOnline: boolean;
+  hasTelemetry?: boolean;
+  levelPercent: number | null;
+}>(
+  tanks: T[],
+  filter: CoachTankFilterMode = 'ALL',
+  searchQuery: string = ''
+): T[] {
+  const q = searchQuery.trim().toLowerCase();
+  return tanks.filter((t) => {
+    if (filter === 'OFFLINE') {
+      if (t.isOnline) return false;
+    } else if (filter === 'LOW_LEVEL') {
+      if (!t.isOnline || t.hasTelemetry === false || t.levelPercent == null || t.levelPercent >= 20.0) {
+        return false;
+      }
+    } else {
+      // 'ALL' (All Coaches) & 'ONLINE': display only online items by default
+      if (!t.isOnline) return false;
+    }
+
+    if (q.length > 0) {
+      return (
+        t.tankName.toLowerCase().includes(q) ||
+        t.coachNumber.toLowerCase().includes(q) ||
+        t.trainNumber.toLowerCase().includes(q) ||
+        t.tankId.toLowerCase().includes(q) ||
+        (t.deviceUid || '').toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+}
+
+export function filterConsistCoaches<T extends {
+  coachNumber: string;
+  coachType?: string;
+  trainNumber?: string;
+  deviceUid?: string | null;
+  deviceId?: string;
+  isOnline?: boolean;
+  deviceStatus?: string;
+  arrivalLevel?: number | null;
+  departureLevel?: number | null;
+}>(
+  coaches: T[],
+  filter: CoachTankFilterMode = 'ALL',
+  searchQuery: string = ''
+): T[] {
+  const q = searchQuery.trim().toLowerCase();
+  return coaches.filter((c) => {
+    const online = c.isOnline ?? (c.deviceStatus === 'Online');
+    if (filter === 'OFFLINE') {
+      if (online) return false;
+    } else if (filter === 'LOW_LEVEL') {
+      const hasLow =
+        (c.arrivalLevel != null && c.arrivalLevel < 20.0) ||
+        (c.departureLevel != null && c.departureLevel < 20.0);
+      if (!online || !hasLow) return false;
+    } else {
+      // 'ALL' (All Coaches) & 'ONLINE': display only online coaches by default
+      if (!online) return false;
+    }
+
+    if (q.length > 0) {
+      return (
+        c.coachNumber.toLowerCase().includes(q) ||
+        (c.coachType || '').toLowerCase().includes(q) ||
+        (c.trainNumber || '').toLowerCase().includes(q) ||
+        (c.deviceUid || c.deviceId || '').toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+}
+

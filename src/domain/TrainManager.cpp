@@ -44,11 +44,29 @@ QVariantMap TankItem::toMap() const
     return map;
 }
 
+static bool matchesTankStatusFilter(const TankItem &t, const QString &statusFilter)
+{
+    const QString sf = statusFilter.trimmed().toLower();
+    const bool isOnline = (t.connectionState == QStringLiteral("Online"));
+    if (sf == QStringLiteral("offline")) {
+        return !isOnline;
+    }
+    if (sf == QStringLiteral("low level") || sf == QStringLiteral("low_level")) {
+        return isOnline && t.levelPercent < 20.0;
+    }
+    // "All", "All Coaches", "All Tanks", "Online", or empty default: display online only
+    return isOnline;
+}
+
 TrainManager::TrainManager(QObject *parent)
     : QObject(parent)
 {
     initializeTrainConsist();
     recalculateAlarmsAndCounters();
+
+    m_staleCheckTimer.setInterval(5000);
+    connect(&m_staleCheckTimer, &QTimer::timeout, this, [this]() { checkStaleTanks(); });
+    m_staleCheckTimer.start();
 }
 
 int TrainManager::totalTanks() const
@@ -113,15 +131,8 @@ QVariantList TrainManager::getTanksFiltered(const QString &searchQuery, const QS
             if (!matches) continue;
         }
 
-        // 2. Status Filter: "All", "Online", "Offline", "Low Level" (case-insensitive)
-        QString sf = statusFilter.trimmed().toLower();
-        if (sf == QStringLiteral("online")) {
-            if (t.connectionState != QStringLiteral("Online")) continue;
-        } else if (sf == QStringLiteral("offline")) {
-            if (t.connectionState == QStringLiteral("Online")) continue;
-        } else if (sf == QStringLiteral("low level") || sf == QStringLiteral("low_level")) {
-            if (t.connectionState != QStringLiteral("Online") || t.levelPercent >= 20.0) continue;
-        }
+        // 2. Status Filter: default "All"/"All Coaches"/"Online" -> Online only; "Offline" -> Offline only; "Low Level" -> Online & < 20%
+        if (!matchesTankStatusFilter(t, statusFilter)) continue;
 
         result.append(t.toMap());
     }
@@ -281,11 +292,111 @@ QVariantList TrainManager::filteredTanks() const
 
     QVariantList list;
     for (const auto &tank : m_tanks) {
-        if (m_activeTrainTankIds.contains(tank.id) || (m_activeTrainTankIds.isEmpty() && tank.trainNumber == m_activeTrainNumber)) {
+        if ((m_activeTrainTankIds.contains(tank.id) || (m_activeTrainTankIds.isEmpty() && tank.trainNumber == m_activeTrainNumber))
+            && matchesTankStatusFilter(tank, QStringLiteral("All"))) {
             list.append(tank.toMap());
         }
     }
     return list;
+}
+
+QVariantList TrainManager::connectivityAlerts() const
+{
+    return m_connectivityAlerts;
+}
+
+int TrainManager::connectivityAlertCount() const
+{
+    return m_connectivityAlerts.size();
+}
+
+void TrainManager::setTelemetryTimeoutMs(int timeoutMs)
+{
+    if (timeoutMs > 0) {
+        m_telemetryTimeoutMs = timeoutMs;
+    }
+}
+
+void TrainManager::recordConnectivityTransition(const TankItem &tank, bool wasOnline, bool isOnline)
+{
+    if (wasOnline == isOnline) {
+        return;
+    }
+
+    const QString coachLabel = tank.coachName.isEmpty() ? tank.coachId : tank.coachName;
+
+    if (wasOnline && !isOnline) {
+        // Deduplicate by tankId so repeated disconnect checks never emit duplicate alerts
+        for (const auto &entry : m_connectivityAlerts) {
+            if (entry.toMap().value(QStringLiteral("tankId")).toString() == tank.id) {
+                return;
+            }
+        }
+        const QString msg = QStringLiteral("%1 (%2) disconnected and was removed from online coaches.")
+            .arg(coachLabel, tank.tankName);
+        QVariantMap alert;
+        alert[QStringLiteral("id")] = QStringLiteral("conn-%1").arg(tank.id);
+        alert[QStringLiteral("tankId")] = tank.id;
+        alert[QStringLiteral("coachId")] = tank.coachId;
+        alert[QStringLiteral("coachName")] = coachLabel;
+        alert[QStringLiteral("severity")] = QStringLiteral("WARNING");
+        alert[QStringLiteral("title")] = QStringLiteral("Coach Disconnected (%1)").arg(tank.coachId);
+        alert[QStringLiteral("message")] = msg;
+        alert[QStringLiteral("status")] = QStringLiteral("Active");
+        alert[QStringLiteral("timestamp")] = QDateTime::currentDateTime().toString(QStringLiteral("hh:mm:ss AP"));
+        m_connectivityAlerts.prepend(alert);
+        emit connectivityAlertsChanged();
+        emit coachConnectivityChanged(tank.coachId, tank.id, false, msg);
+    } else if (!wasOnline && isOnline) {
+        bool removed = false;
+        for (int i = m_connectivityAlerts.size() - 1; i >= 0; --i) {
+            if (m_connectivityAlerts[i].toMap().value(QStringLiteral("tankId")).toString() == tank.id) {
+                m_connectivityAlerts.removeAt(i);
+                removed = true;
+            }
+        }
+        if (removed) {
+            const QString msg = QStringLiteral("%1 (%2) reconnected and is back online.")
+                .arg(coachLabel, tank.tankName);
+            emit connectivityAlertsChanged();
+            emit coachConnectivityChanged(tank.coachId, tank.id, true, msg);
+        }
+    }
+}
+
+void TrainManager::checkStaleTanks(qint64 nowMs)
+{
+    const QDateTime nowDt = (nowMs > 0)
+        ? QDateTime::fromMSecsSinceEpoch(nowMs).toLocalTime()
+        : QDateTime::currentDateTime();
+
+    bool anyTimedOut = false;
+    TankItem *primaryPtr = findPrimaryTank();
+    for (auto &t : m_tanks) {
+        if (t.connectionState == QStringLiteral("Online") && t.lastUpdate.isValid()) {
+            const qint64 ageMs = t.lastUpdate.msecsTo(nowDt);
+            if (ageMs > m_telemetryTimeoutMs) {
+                t.connectionState = QStringLiteral("Offline");
+                t.sensorStatus = QStringLiteral("Disconnected");
+                t.alarmState = QStringLiteral("Offline");
+                recordConnectivityTransition(t, true, false);
+                anyTimedOut = true;
+
+                if (primaryPtr && &t == primaryPtr && m_tankModel &&
+                    (m_selectedTankId == t.id || m_selectedTankId == t.tankNumber ||
+                     m_selectedTankId == t.deviceId || m_selectedTankId == t.legacyId ||
+                     m_selectedTankId == QStringLiteral("1") || m_selectedTankId == QStringLiteral("T-12301-01") ||
+                     m_selectedTankId == QStringLiteral("T01"))) {
+                    m_tankModel->applyOfflineState(t.maxHeightCm, t.capacityLiters,
+                        t.lastUpdate.toString(QStringLiteral("h:mm:ss AP")));
+                }
+            }
+        }
+    }
+
+    if (anyTimedOut) {
+        recalculateAlarmsAndCounters();
+    }
 }
 
 int TrainManager::filteredTotalTanks() const
@@ -385,14 +496,7 @@ QVariantList TrainManager::getFilteredTanksForTrain(const QString &trainNumber, 
         }
 
         // Status filter
-        QString sf = statusFilter.trimmed().toLower();
-        if (sf == QStringLiteral("online")) {
-            if (t.connectionState != QStringLiteral("Online")) continue;
-        } else if (sf == QStringLiteral("offline")) {
-            if (t.connectionState == QStringLiteral("Online")) continue;
-        } else if (sf == QStringLiteral("low level") || sf == QStringLiteral("low_level")) {
-            if (t.connectionState != QStringLiteral("Online") || t.levelPercent >= 20.0) continue;
-        }
+        if (!matchesTankStatusFilter(t, statusFilter)) continue;
 
         result.append(t.toMap());
     }
@@ -637,11 +741,13 @@ void TrainManager::processReading(double waterLevel, double pressure, const QStr
     TankItem *primaryPtr = findPrimaryTank();
     if (!primaryPtr) return;
     auto &primary = *primaryPtr;
+    const bool wasOnline = (primary.connectionState == QStringLiteral("Online"));
 
     if (!isFresh) {
         primary.connectionState = QStringLiteral("Offline");
         primary.sensorStatus = QStringLiteral("Disconnected");
         primary.alarmState = QStringLiteral("Offline");
+        recordConnectivityTransition(primary, wasOnline, false);
         recalculateAlarmsAndCounters();
 
         if (m_tankModel && (m_selectedTankId == primary.id || m_selectedTankId == primary.tankNumber ||
@@ -668,6 +774,7 @@ void TrainManager::processReading(double waterLevel, double pressure, const QStr
     primary.pressureHpa = pressure;
     primary.sensorStatus = sensorStatus;
 
+    recordConnectivityTransition(primary, wasOnline, true);
     recalculateAlarmsAndCounters();
 
     if (m_tankModel && (m_selectedTankId == primary.id || m_selectedTankId == primary.tankNumber ||
@@ -696,6 +803,7 @@ void TrainManager::processEsp32Status(const QJsonObject &statusObj)
     TankItem *primaryPtr = findPrimaryTank();
     if (!primaryPtr) return;
     auto &primary = *primaryPtr;
+    const bool wasOnline = (primary.connectionState == QStringLiteral("Online"));
 
     primary.connectionState = QStringLiteral("Online");
 
@@ -746,6 +854,7 @@ void TrainManager::processEsp32Status(const QJsonObject &statusObj)
         primary.sensorStatus = (st == 1) ? QStringLiteral("Healthy") : QStringLiteral("Error");
     }
 
+    recordConnectivityTransition(primary, wasOnline, true);
     recalculateAlarmsAndCounters();
 
     if (m_tankModel && (m_selectedTankId == primary.id || m_selectedTankId == primary.tankNumber ||
@@ -780,9 +889,11 @@ void TrainManager::setConnectionState(const QString &state)
 
     if (state == QStringLiteral("Disconnected") || state == QStringLiteral("Offline") || state == QStringLiteral("Error")) {
         if (primaryPtr) {
+            const bool wasOnline = (primaryPtr->connectionState == QStringLiteral("Online"));
             primaryPtr->connectionState = QStringLiteral("Offline");
             primaryPtr->sensorStatus = QStringLiteral("Disconnected");
             primaryPtr->alarmState = QStringLiteral("Offline");
+            recordConnectivityTransition(*primaryPtr, wasOnline, false);
             recalculateAlarmsAndCounters();
             if (m_tankModel && (m_selectedTankId == primaryPtr->id || m_selectedTankId == primaryPtr->tankNumber ||
                                 m_selectedTankId == primaryPtr->deviceId || m_selectedTankId == primaryPtr->legacyId ||
@@ -794,8 +905,10 @@ void TrainManager::setConnectionState(const QString &state)
         }
     } else if (state == QStringLiteral("Connected")) {
         if (primaryPtr && primaryPtr->lastUpdate.isValid()) {
+            const bool wasOnline = (primaryPtr->connectionState == QStringLiteral("Online"));
             primaryPtr->connectionState = QStringLiteral("Online");
             primaryPtr->sensorStatus = QStringLiteral("Healthy");
+            recordConnectivityTransition(*primaryPtr, wasOnline, true);
             recalculateAlarmsAndCounters();
         }
     }

@@ -156,10 +156,12 @@ async def get_train_locations(
     db: AsyncSession = Depends(get_db)
 ):
     """Retrieve real-time GPS locations and recent track paths for trains."""
-    # Query devices
+    # Query active-train devices
     stmt = select(Device)
     if train_number:
         stmt = stmt.where(Device.train_number == train_number)
+    else:
+        stmt = stmt.where(Device.train_number != "UNASSIGNED")
     devices_res = await db.execute(stmt)
     devices = devices_res.scalars().all()
 

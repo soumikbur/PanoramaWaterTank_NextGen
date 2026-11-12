@@ -209,6 +209,10 @@ void ApplicationController::setupDependencyWiring()
     m_trainManager->setDatabaseManager(m_databaseManager.get());
     m_trainManager->setTankModel(m_tankModel.get());
     m_trainManager->setTrainConfigProvider(m_trainConfigProvider.get());
+    m_trainManager->setTelemetryTimeoutMs(m_settings->timeoutMs());
+    connect(m_settings.get(), &SettingsManager::timeoutMsChanged, m_trainManager.get(), [this]() {
+        m_trainManager->setTelemetryTimeoutMs(m_settings->timeoutMs());
+    });
     m_connectionManager->setTrainManager(m_trainManager.get());
 
     // LocationManager setup
