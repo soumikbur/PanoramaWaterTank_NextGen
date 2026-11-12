@@ -71,15 +71,18 @@ const TRAIN_TYPE_MAP: Record<string, string> = {
   GR: 'Garib Rath Express',
   'GARIB RATH': 'Garib Rath Express',
   JSHT: 'Jan Shatabdi Express',
+  JSHTB: 'Jan Shatabdi Express',
   'JAN SHATABDI': 'Jan Shatabdi Express',
   VB: 'Vande Bharat Express',
   'VANDE BHARAT': 'Vande Bharat Express',
   SK: 'Sampark Kranti Express',
+  SKR: 'Sampark Kranti Express',
   HS: 'Humsafar Express',
   TEJ: 'Tejas Express',
   MEMU: 'MEMU',
   DEMU: 'DEMU',
   MAIL: 'Mail Express',
+  MAIL_EXPRESS: 'Mail Express',
   ANT: 'Antyodaya Express',
 };
 
@@ -187,6 +190,10 @@ const NON_EXPRESS_TOKENS = [
   'LOCAL',
   'SUBURBAN',
   'ORDINARY',
+  'TOY',
+  'FREIGHT',
+  'GOODS',
+  'PARCEL',
 ];
 
 const EXPRESS_FAMILY_TOKENS = [
@@ -921,8 +928,19 @@ class TrainLookupService {
       return { ...fallback.result, provider_attempts: attempts };
     }
 
+    options.onProgress?.('Fallback: Querying eRail OpenData...');
+    const erailFallback = await this.lookupViaPublicErail(trainNumber, options.signal);
+    attempts.push(erailFallback.attempt);
+    if ((erailFallback.outcome === 'verified' || erailFallback.outcome === 'unsupported') && erailFallback.result) {
+      return { ...erailFallback.result, provider_attempts: attempts };
+    }
+
     const totalMs = Math.round((performance.now() - started) * 100) / 100;
-    if (primary.outcome === 'not_found' && fallback.outcome !== 'unavailable') {
+    if (
+      (primary.outcome === 'not_found' || erailFallback.outcome === 'not_found') &&
+      fallback.outcome !== 'unavailable' &&
+      erailFallback.outcome !== 'unavailable'
+    ) {
       return {
         ...buildEmptyErrorResult(trainNumber, 'NOT_FOUND', 'NOT_FOUND', messageForErrorCode('NOT_FOUND'), 'RailRadar Public API'),
         already_exists: alreadyExists,
@@ -931,13 +949,154 @@ class TrainLookupService {
       };
     }
 
-    const errorCode = primary.errorCode || fallback.errorCode || 'SERVER_UNAVAILABLE';
+    const errorCode = primary.errorCode || fallback.errorCode || erailFallback.errorCode || 'SERVER_UNAVAILABLE';
     return {
       ...buildEmptyErrorResult(trainNumber, 'UNAVAILABLE', errorCode, messageForErrorCode(errorCode)),
       already_exists: alreadyExists,
       latency_ms: totalMs,
       provider_attempts: attempts,
     };
+  }
+
+  private async lookupViaPublicErail(
+    trainNumber: string,
+    signal: AbortSignal
+  ): Promise<{ outcome: 'verified' | 'not_found' | 'unsupported' | 'unavailable'; result?: TrainLookupResult; attempt: ProviderAttempt; errorCode?: TrainLookupErrorCode }> {
+    const started = performance.now();
+    const url = `https://erail.in/rail/getTrains.aspx?TrainNo=${encodeURIComponent(trainNumber)}`;
+    const controller = new AbortController();
+    let timedOut = false;
+    const onAbort = () => controller.abort();
+    signal.addEventListener('abort', onAbort, { once: true });
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, RAILRADAR_PUBLIC_TIMEOUT_MS);
+
+    try {
+      const res = await fetch(url, { method: 'GET', signal: controller.signal });
+      const latency = Math.round((performance.now() - started) * 100) / 100;
+      if (!res.ok) {
+        const err = classifyHttpFailure(res.status);
+        return {
+          outcome: res.status === 404 ? 'not_found' : 'unavailable',
+          errorCode: err.code,
+          attempt: { provider: 'eRail OpenData', outcome: res.status === 404 ? 'not_found' : err.code.toLowerCase(), latency_ms: latency, detail: err.message },
+        };
+      }
+      const body = (await res.text()).trim();
+      if (body.includes('Train not found') || !body.includes('^')) {
+        return {
+          outcome: 'not_found',
+          attempt: { provider: 'eRail OpenData', outcome: 'not_found', latency_ms: latency, detail: 'Train not found' },
+        };
+      }
+      const record = body.split('^')[1].split('~');
+      const returnedNum = (record[0] || '').trim();
+      if (returnedNum && returnedNum !== trainNumber) {
+        return {
+          outcome: 'unavailable',
+          errorCode: 'INVALID_RESPONSE',
+          attempt: { provider: 'eRail OpenData', outcome: 'mismatched', latency_ms: latency, detail: `Requested ${trainNumber}, got ${returnedNum}` },
+        };
+      }
+      const name = (record[1] || '').trim();
+      if (!name) {
+        return {
+          outcome: 'not_found',
+          attempt: { provider: 'eRail OpenData', outcome: 'not_found', latency_ms: latency, detail: 'Empty train name' },
+        };
+      }
+      const lastIdx = record.indexOf('Last');
+      const rawType = lastIdx !== -1 && lastIdx + 1 < record.length ? record[lastIdx + 1].trim() : null;
+      const alreadyExists = localFleetStore.hasTrain(trainNumber);
+      const expressCheck = isExpressFamilyTrain(rawType, null, name);
+      if (!expressCheck.allowed) {
+        const attempt: ProviderAttempt = {
+          provider: 'eRail OpenData',
+          outcome: 'rejected_non_express',
+          latency_ms: latency,
+          detail: `Non-Express category: ${expressCheck.label}`,
+        };
+        return {
+          outcome: 'unsupported',
+          attempt,
+          result: {
+            ...buildEmptyErrorResult(
+              trainNumber,
+              'UNSUPPORTED_TYPE',
+              'NON_EXPRESS_TRAIN',
+              `Only Express family trains are supported (Train ${trainNumber} is ${expressCheck.label}). Passenger, MEMU, DEMU, and suburban trains are excluded.`,
+              'eRail OpenData'
+            ),
+            train_name: name,
+            train_type: normalizeTrainType(rawType, name),
+            already_exists: alreadyExists,
+            latency_ms: latency,
+            provider_attempts: [attempt],
+          },
+        };
+      }
+
+      const srcName = (record[2] || '').trim() || null;
+      const srcCode = (record[3] || '').trim().toUpperCase() || null;
+      const dstName = (record[4] || '').trim() || null;
+      const dstCode = (record[5] || '').trim().toUpperCase() || null;
+      const runDays = parseRunningDays((record[13] || '').trim() || null);
+      const attempt: ProviderAttempt = { provider: 'eRail OpenData', outcome: 'verified', latency_ms: latency };
+      const missingFields: string[] = [];
+      if (!srcName && !srcCode) missingFields.push('sourceStation');
+      if (!dstName && !dstCode) missingFields.push('destinationStation');
+      missingFields.push('railwayZone');
+      if (!runDays) missingFields.push('runningDays');
+      missingFields.push('route', 'coachComposition');
+
+      return {
+        outcome: 'verified',
+        attempt,
+        result: {
+          status: 'VERIFIED',
+          train_number: trainNumber,
+          train_name: name,
+          source_station: srcName,
+          source_code: srcCode,
+          destination_station: dstName,
+          destination_code: dstCode,
+          region: 'NORTH',
+          railway_zone: null,
+          train_type: normalizeTrainType(rawType, name),
+          running_days: runDays,
+          route: [],
+          coach_composition: [],
+          total_coaches: null,
+          has_official_composition: false,
+          provider: 'eRail OpenData',
+          cached: false,
+          latency_ms: latency,
+          verified_at: new Date().toISOString(),
+          missing_fields: missingFields,
+          already_exists: alreadyExists,
+          message: 'Train successfully verified.',
+          provider_attempts: [attempt],
+        },
+      };
+    } catch (err: any) {
+      if (err?.name === 'AbortError' && signal.aborted && !timedOut) {
+        throw err;
+      }
+      const latency = Math.round((performance.now() - started) * 100) / 100;
+      const classified = timedOut
+        ? new ClassifiedLookupError('TIMEOUT', messageForErrorCode('TIMEOUT'))
+        : classifyCaughtError(err);
+      return {
+        outcome: 'unavailable',
+        errorCode: classified.code,
+        attempt: { provider: 'eRail OpenData', outcome: classified.code.toLowerCase(), latency_ms: latency, detail: classified.message },
+      };
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
+    }
   }
 
   private async lookupViaBackend(

@@ -80,15 +80,18 @@ TRAIN_TYPE_MAP: Dict[str, str] = {
     "GR": "Garib Rath Express",
     "GARIB RATH": "Garib Rath Express",
     "JSHT": "Jan Shatabdi Express",
+    "JSHTB": "Jan Shatabdi Express",
     "JAN SHATABDI": "Jan Shatabdi Express",
     "VB": "Vande Bharat Express",
     "VANDE BHARAT": "Vande Bharat Express",
     "SK": "Sampark Kranti Express",
+    "SKR": "Sampark Kranti Express",
     "HS": "Humsafar Express",
     "TEJ": "Tejas Express",
     "MEMU": "MEMU",
     "DEMU": "DEMU",
     "MAIL": "Mail Express",
+    "MAIL_EXPRESS": "Mail Express",
     "ANT": "Antyodaya Express",
 }
 
@@ -154,6 +157,10 @@ NON_EXPRESS_TOKENS = (
     "LOCAL",
     "SUBURBAN",
     "ORDINARY",
+    "TOY",
+    "FREIGHT",
+    "GOODS",
+    "PARCEL",
 )
 
 EXPRESS_FAMILY_TOKENS = (
@@ -875,6 +882,294 @@ class IndianRailApiProvider(BaseTrainProvider):
         return ProviderFetchOutcome(outcome="verified", data=resp)
 
 
+class ErailPublicAdapter(BaseTrainProvider):
+    """Structured open endpoint adapter: eRail public train enquiry (`erail.in`)."""
+
+    name = "eRail OpenData"
+
+    def is_configured(self) -> bool:
+        return True
+
+    async def fetch(
+        self,
+        train_number: str,
+        client: httpx.AsyncClient,
+        timeout: float,
+    ) -> ProviderFetchOutcome:
+        url = "https://erail.in/rail/getTrains.aspx"
+        headers = {
+            "Accept": "text/plain, */*",
+            "User-Agent": "PanoramaWaterTank/2.0",
+        }
+        try:
+            res = await _get_with_retry(
+                client, url, headers=headers, params={"TrainNo": train_number}, timeout=timeout
+            )
+        except Exception as exc:
+            err_code = "TIMEOUT" if isinstance(exc, httpx.TimeoutException) else "SERVER_UNAVAILABLE"
+            return ProviderFetchOutcome(outcome="unavailable", error_code=err_code, detail=str(exc))
+
+        if res.status_code == 404:
+            return ProviderFetchOutcome(outcome="not_found", detail="HTTP 404")
+        if res.status_code != 200:
+            err_code, detail = _classify_http_status(res.status_code)
+            return ProviderFetchOutcome(outcome="unavailable", error_code=err_code, detail=detail)
+
+        body = (res.text or "").strip()
+        if "Train not found" in body or "^" not in body:
+            return ProviderFetchOutcome(outcome="not_found", detail="Train not found on eRail")
+
+        record = body.split("^", 1)[1].split("~")
+        if len(record) < 15:
+            return ProviderFetchOutcome(
+                outcome="unavailable", error_code="INVALID_RESPONSE", detail="Malformed eRail record"
+            )
+
+        returned_num = record[0].strip()
+        if returned_num and returned_num != train_number:
+            return ProviderFetchOutcome(
+                outcome="mismatched",
+                detail=f"Requested {train_number}, received {returned_num}",
+            )
+
+        name = record[1].strip()
+        if not name:
+            return ProviderFetchOutcome(outcome="not_found", detail="Missing train name")
+
+        src_name = record[2].strip() or None
+        src_code = record[3].strip().upper() or None
+        dst_name = record[4].strip() or None
+        dst_code = record[5].strip().upper() or None
+        running_days = parse_running_days(record[13].strip() if len(record) > 13 else None)
+
+        raw_type = None
+        for idx, token in enumerate(record):
+            if token == "Last" and idx + 1 < len(record):
+                raw_type = record[idx + 1].strip() or None
+                break
+
+        resp = TrainLookupResponse(
+            status="VERIFIED",
+            train_number=train_number,
+            train_name=name,
+            source_station=src_name,
+            source_code=src_code,
+            destination_station=dst_name,
+            destination_code=dst_code,
+            region="NORTH",
+            railway_zone=None,
+            train_type=normalize_train_type(raw_type, name),
+            running_days=running_days,
+            route=[],
+            coach_composition=[],
+            total_coaches=None,
+            has_official_composition=False,
+            provider=self.name,
+            verified_at=datetime.now(timezone.utc).isoformat(),
+            message="Train verified successfully.",
+        )
+        resp.missing_fields = _compute_missing_fields(resp)
+        return ProviderFetchOutcome(
+            outcome="verified",
+            data=resp,
+            train_category=raw_type,
+        )
+
+
+class LocalExpressDatabase:
+    """Curated, deduplicated local Indian Express train repository with number & name indexing."""
+
+    DEFAULT_FRESHNESS_DAYS = 30
+
+    def __init__(self, db_path: Optional[Path] = None):
+        backend_root = Path(__file__).resolve().parents[2]
+        self.db_path = db_path or (backend_root / "data" / "express_trains_db.json")
+        self._by_number: Optional[Dict[str, Dict[str, Any]]] = None
+        self._name_tokens: Dict[str, List[str]] = {}
+        self._meta: Dict[str, Any] = {}
+
+    def _rebuild_name_index(self) -> None:
+        token_map: Dict[str, List[str]] = {}
+        for num, rec in (self._by_number or {}).items():
+            raw_name = str(rec.get("train_name") or "").upper()
+            for tok in set(re.findall(r"[A-Z0-9]{2,}", raw_name)):
+                token_map.setdefault(tok, []).append(num)
+        self._name_tokens = token_map
+
+    def load(self) -> Dict[str, Dict[str, Any]]:
+        if self._by_number is not None:
+            return self._by_number
+        if not self.db_path.exists():
+            self._by_number = {}
+            self._name_tokens = {}
+            return self._by_number
+        try:
+            raw = json.loads(self.db_path.read_text(encoding="utf-8"))
+            if isinstance(raw, dict) and isinstance(raw.get("by_number"), dict):
+                self._by_number = dict(raw["by_number"])
+                self._meta = dict(raw.get("meta") or {})
+                if isinstance(raw.get("name_tokens"), dict):
+                    self._name_tokens = raw["name_tokens"]
+                else:
+                    self._rebuild_name_index()
+            elif isinstance(raw, dict):
+                self._by_number = {str(k): v for k, v in raw.items() if isinstance(v, dict)}
+                self._rebuild_name_index()
+            else:
+                self._by_number = {}
+        except Exception as exc:
+            logger.warning("Failed to load LocalExpressDatabase: %s", exc)
+            self._by_number = {}
+        return self._by_number
+
+    def is_fresh(self, entry: Dict[str, Any], max_age_days: int = DEFAULT_FRESHNESS_DAYS) -> bool:
+        verified_raw = entry.get("verified_at")
+        if not verified_raw:
+            return False
+        try:
+            dt = datetime.fromisoformat(str(verified_raw).replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return (datetime.now(timezone.utc) - dt) <= timedelta(days=max_age_days)
+        except Exception:
+            return False
+
+    def get_by_number(self, train_number: str) -> Optional[Dict[str, Any]]:
+        return self.load().get((train_number or "").strip())
+
+    def search_by_name(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
+        index = self.load()
+        tokens = [t for t in re.findall(r"[A-Z0-9]{2,}", (query or "").upper())]
+        if not tokens:
+            return []
+        candidate_sets = [set(self._name_tokens.get(t, [])) for t in tokens]
+        matched_nums = set.intersection(*candidate_sets) if candidate_sets else set()
+        if not matched_nums:
+            q_upper = (query or "").strip().upper()
+            matched_nums = {
+                num
+                for num, rec in index.items()
+                if q_upper in str(rec.get("train_name") or "").upper()
+            }
+        results = [index[num] for num in sorted(matched_nums) if num in index]
+        return results[:limit]
+
+    def upsert_verified(self, resp: TrainLookupResponse) -> None:
+        if resp.status != "VERIFIED" or not resp.train_number or not resp.train_name:
+            return
+        index = self.load()
+        index[resp.train_number] = {
+            "train_number": resp.train_number,
+            "train_name": resp.train_name,
+            "source_station": resp.source_station,
+            "source_code": resp.source_code,
+            "destination_station": resp.destination_station,
+            "destination_code": resp.destination_code,
+            "railway_zone": resp.railway_zone,
+            "region": resp.region,
+            "train_type": resp.train_type,
+            "running_days": resp.running_days,
+            "source": resp.provider or "Verified API",
+            "verified_at": resp.verified_at or datetime.now(timezone.utc).isoformat(),
+            "is_express": True,
+        }
+        self._rebuild_name_index()
+        try:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "meta": {
+                    "schema_version": 1,
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "express_train_count": len(index),
+                },
+                "by_number": index,
+                "name_tokens": self._name_tokens,
+            }
+            tmp = self.db_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(payload), encoding="utf-8")
+            os.replace(tmp, self.db_path)
+        except Exception as exc:
+            logger.warning("Failed to persist LocalExpressDatabase update: %s", exc)
+
+
+class LocalExpressDatabaseAdapter(BaseTrainProvider):
+    """O(1) local curated Indian Express database adapter with freshness tracking."""
+
+    name = "Local Express Database"
+
+    def __init__(self, database: Optional[LocalExpressDatabase] = None):
+        self.database = database or LocalExpressDatabase()
+
+    def is_configured(self) -> bool:
+        return self.database.db_path.exists() and len(self.database.load()) > 0
+
+    async def fetch(
+        self,
+        train_number: str,
+        client: httpx.AsyncClient,
+        timeout: float,
+    ) -> ProviderFetchOutcome:
+        entry = self.database.get_by_number(train_number)
+        if not entry:
+            return ProviderFetchOutcome(outcome="not_found", detail="Train absent from local Express database")
+
+        name = str(entry.get("train_name") or "").strip()
+        if not name:
+            return ProviderFetchOutcome(outcome="not_found", detail="Missing train name in local record")
+
+        zone = str(entry.get("railway_zone") or "").strip().upper() or None
+        resp = TrainLookupResponse(
+            status="VERIFIED",
+            train_number=train_number,
+            train_name=name,
+            source_station=entry.get("source_station"),
+            source_code=entry.get("source_code"),
+            destination_station=entry.get("destination_station"),
+            destination_code=entry.get("destination_code"),
+            region=entry.get("region") or map_zone_to_region(zone),
+            railway_zone=zone,
+            train_type=normalize_train_type(entry.get("train_type"), name),
+            running_days=entry.get("running_days"),
+            route=[],
+            coach_composition=[],
+            total_coaches=None,
+            has_official_composition=False,
+            provider=str(entry.get("source") or self.name),
+            verified_at=str(entry.get("verified_at") or datetime.now(timezone.utc).isoformat()),
+            message="Train verified from Local Express Database.",
+        )
+        resp.missing_fields = _compute_missing_fields(resp)
+        return ProviderFetchOutcome(outcome="verified", data=resp)
+
+
+class TrainDataAggregator:
+    """Compares and merges verified responses without overwriting authoritative fields or fabricating missing data."""
+
+    @staticmethod
+    def merge_verified_results(
+        primary: TrainLookupResponse, secondary: TrainLookupResponse
+    ) -> TrainLookupResponse:
+        if primary.train_number != secondary.train_number:
+            return primary
+        merged_zone = primary.railway_zone or secondary.railway_zone
+        updates: Dict[str, Any] = {
+            "source_station": primary.source_station or secondary.source_station,
+            "source_code": primary.source_code or secondary.source_code,
+            "destination_station": primary.destination_station or secondary.destination_station,
+            "destination_code": primary.destination_code or secondary.destination_code,
+            "railway_zone": merged_zone,
+            "region": primary.region if primary.railway_zone else (map_zone_to_region(merged_zone) if merged_zone else primary.region),
+            "running_days": primary.running_days or secondary.running_days,
+            "route": primary.route or secondary.route,
+            "coach_composition": primary.coach_composition or secondary.coach_composition,
+            "total_coaches": primary.total_coaches or secondary.total_coaches,
+            "has_official_composition": primary.has_official_composition or secondary.has_official_composition,
+        }
+        merged = primary.model_copy(update=updates)
+        merged.missing_fields = _compute_missing_fields(merged)
+        return merged
+
+
 class DataMeetOpenProvider(BaseTrainProvider):
     """Open public zero-key Indian Railways provider backed by DataMeet `trains.json`.
 
@@ -1058,19 +1353,31 @@ class DataMeetOpenProvider(BaseTrainProvider):
         return ProviderFetchOutcome(outcome="verified", data=resp)
 
 
+# Clean adapter aliases for multi-source aggregator architecture
+BaseTrainAdapter = BaseTrainProvider
+RailRadarAdapter = RailRadarProvider
+RapidApiIrctcAdapter = RapidApiIrctcProvider
+IndianRailApiAdapter = IndianRailApiProvider
+DataMeetOpenAdapter = DataMeetOpenProvider
+
+
 class TrainLookupService:
-    """Orchestrates cached & live multi-provider train verification."""
+    """Orchestrates cached & live multi-adapter train verification."""
 
     def __init__(
         self,
         providers: Optional[List[BaseTrainProvider]] = None,
         client_factory: Optional[Any] = None,
+        local_db: Optional[LocalExpressDatabase] = None,
     ):
+        self.local_db = local_db or LocalExpressDatabase()
         self.providers: List[BaseTrainProvider] = providers or [
-            RailRadarProvider(),
-            RapidApiIrctcProvider(),
-            IndianRailApiProvider(),
-            DataMeetOpenProvider(),
+            RailRadarAdapter(),
+            ErailPublicAdapter(),
+            RapidApiIrctcAdapter(),
+            IndianRailApiAdapter(),
+            LocalExpressDatabaseAdapter(self.local_db),
+            DataMeetOpenAdapter(),
         ]
         self._client_factory = client_factory
         self._mem_cache: Dict[str, Tuple[float, TrainLookupResponse]] = {}
@@ -1300,11 +1607,21 @@ class TrainLookupService:
                             "provider_attempts": attempts,
                         }
                     )
+                    # Enrich missing railway zone metadata from curated Local Express DB without fabricating
+                    local_entry = self.local_db.get_by_number(train_number)
+                    if local_entry and not verified.railway_zone and local_entry.get("railway_zone"):
+                        zone = str(local_entry["railway_zone"]).strip().upper()
+                        verified = verified.model_copy(
+                            update={"railway_zone": zone, "region": map_zone_to_region(zone)}
+                        )
+                        verified.missing_fields = _compute_missing_fields(verified)
+                    elif not isinstance(provider, LocalExpressDatabaseAdapter):
+                        self.local_db.upsert_verified(verified)
                     await self._write_cache(verified, db)
                     return verified
 
                 if outcome.outcome == "not_found":
-                    if isinstance(provider, DataMeetOpenProvider):
+                    if isinstance(provider, (DataMeetOpenProvider, LocalExpressDatabaseAdapter)):
                         any_archive_not_found = True
                     else:
                         any_live_not_found = True

@@ -15,8 +15,7 @@ import {
   TrainConsist,
   UserProfile,
   EmployeeRegistrationPayload,
-  TrainLocation,
-  DEFAULT_CORRIDOR_STATIONS
+  TrainLocation
 } from '../types';
 import { TrainLookupResult, TrainCreatePayload } from '../types/train';
 import { deviceRegistry } from '../services/deviceRegistry';
@@ -675,9 +674,10 @@ export class ApiClient {
     return this.request<TrainLocation[]>(`/location${query}`);
   }
 
-  static async fetchCorridorStations(): Promise<import('../types').CorridorStation[]> {
-    if (!API_BASE) return DEFAULT_CORRIDOR_STATIONS;
-    return this.request<import('../types').CorridorStation[]>('/location/corridor');
+  static async fetchCorridorStations(trainNumber?: string): Promise<import('../types').CorridorStation[]> {
+    if (!API_BASE) return [];
+    const query = trainNumber ? `?train_number=${encodeURIComponent(trainNumber)}` : '';
+    return this.request<import('../types').CorridorStation[]>(`/location/corridor${query}`);
   }
 
   // Tanks

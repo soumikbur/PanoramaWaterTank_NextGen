@@ -53,101 +53,57 @@ class CorridorStation(BaseModel):
     is_destination: bool = False
 
 
-# Authoritative Howrah to Asansol Corridor Stations & Verified Water Refill Facilities
-CORRIDOR_HOWRAH_ASANSOL: List[CorridorStation] = [
-    CorridorStation(
-        id="hwh",
-        name="Howrah Junction",
-        code="HWH",
-        latitude=22.5839,
-        longitude=88.3426,
-        route_order=0,
-        water_refill_available=True,
-        water_capacity_liters=50000.0,
-        operational_status="Operational",
-        last_verified="05 Sep 2026",
-        is_source=True
-    ),
-    CorridorStation(
-        id="kqu",
-        name="Kamarkundu",
-        code="KQU",
-        latitude=22.8272,
-        longitude=88.1969,
-        route_order=1,
-        water_refill_available=False,
-        water_capacity_liters=0.0,
-        operational_status="No Facility",
-        last_verified="05 Sep 2026"
-    ),
-    CorridorStation(
-        id="bwn",
-        name="Bardhaman Junction",
-        code="BWN",
-        latitude=23.2324,
-        longitude=87.8615,
-        route_order=2,
-        water_refill_available=True,
-        water_capacity_liters=25000.0,
-        operational_status="Operational",
-        last_verified="05 Sep 2026"
-    ),
-    CorridorStation(
-        id="pan",
-        name="Panagarh",
-        code="PAN",
-        latitude=23.4518,
-        longitude=87.4382,
-        route_order=3,
-        water_refill_available=False,
-        water_capacity_liters=0.0,
-        operational_status="No Facility",
-        last_verified="05 Sep 2026"
-    ),
-    CorridorStation(
-        id="dgr",
-        name="Durgapur",
-        code="DGR",
-        latitude=23.5014,
-        longitude=87.3119,
-        route_order=4,
-        water_refill_available=True,
-        water_capacity_liters=20000.0,
-        operational_status="Operational",
-        last_verified="05 Sep 2026"
-    ),
-    CorridorStation(
-        id="rng",
-        name="Raniganj",
-        code="RNG",
-        latitude=23.6186,
-        longitude=87.1358,
-        route_order=5,
-        water_refill_available=False,
-        water_capacity_liters=0.0,
-        operational_status="No Facility",
-        last_verified="05 Sep 2026"
-    ),
-    CorridorStation(
-        id="asn",
-        name="Asansol Junction",
-        code="ASN",
-        latitude=23.6871,
-        longitude=86.9746,
-        route_order=6,
-        water_refill_available=True,
-        water_capacity_liters=30000.0,
-        operational_status="Operational",
-        last_verified="05 Sep 2026",
-        is_destination=True
-    )
-]
-
-
+# Do not seed or serve hardcoded demonstration corridors; return empty unless real route stops exist.
 @router.get("/corridor", response_model=List[CorridorStation])
-async def get_route_corridor():
-    """Retrieve the configured railway corridor stations and water refill facilities."""
-    return CORRIDOR_HOWRAH_ASANSOL
+async def get_route_corridor(
+    train_number: Optional[str] = Query(None, description="Configured train number"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve route stations only when verified route metadata exists for a configured train."""
+    if not train_number:
+        return []
+    res = await db.execute(select(Train).where(Train.train_number == train_number.strip()))
+    db_train = res.scalar_one_or_none()
+    if not db_train or not db_train.route_json:
+        return []
+    try:
+        import json
+        raw_route = json.loads(db_train.route_json)
+    except Exception:
+        return []
+    stations: List[CorridorStation] = []
+    if isinstance(raw_route, list):
+        for idx, stop in enumerate(raw_route):
+            if not isinstance(stop, dict):
+                continue
+            lat = stop.get("latitude") or stop.get("lat")
+            lon = stop.get("longitude") or stop.get("lng") or stop.get("lon")
+            if lat is None or lon is None:
+                continue
+            try:
+                lat_f, lon_f = float(lat), float(lon)
+            except (TypeError, ValueError):
+                continue
+            if not (-90.0 <= lat_f <= 90.0 and -180.0 <= lon_f <= 180.0) or (lat_f == 0 and lon_f == 0):
+                continue
+            code = str(stop.get("station_code") or f"ST{idx+1}")
+            stations.append(
+                CorridorStation(
+                    id=code.lower(),
+                    name=str(stop.get("station_name") or code),
+                    code=code,
+                    latitude=lat_f,
+                    longitude=lon_f,
+                    route_order=idx,
+                    water_refill_available=False,
+                    water_capacity_liters=0.0,
+                    operational_status="Route Halt",
+                    last_verified=db_train.last_verified_at.isoformat() if db_train.last_verified_at else "",
+                    is_source=(idx == 0),
+                    is_destination=(idx == len(raw_route) - 1),
+                )
+            )
+    return stations
 
 
 @router.get("", response_model=List[TrainLocation])
@@ -198,10 +154,16 @@ async def get_train_locations(
         last_upd = None
 
         if readings and readings[0].latitude is not None and readings[0].longitude is not None:
-            if abs(readings[0].latitude) > 0.0001 or abs(readings[0].longitude) > 0.0001:
+            r_lat = readings[0].latitude
+            r_lon = readings[0].longitude
+            if (
+                -90.0 <= r_lat <= 90.0
+                and -180.0 <= r_lon <= 180.0
+                and (abs(r_lat) > 0.0001 or abs(r_lon) > 0.0001)
+            ):
                 has_gps = True
-                curr_lat = readings[0].latitude
-                curr_lon = readings[0].longitude
+                curr_lat = r_lat
+                curr_lon = r_lon
                 curr_alt = readings[0].altitude
                 curr_spd = readings[0].speed_kmh
                 sat_cnt = readings[0].satellites

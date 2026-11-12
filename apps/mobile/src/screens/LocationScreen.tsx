@@ -14,7 +14,7 @@ if (typeof L !== 'undefined' && L.DomUtil && (L.DomUtil as any)._safePositionPat
 import { colors, typography, metrics } from '../theme';
 import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
-import { TrainLocation, CorridorStation, DEFAULT_CORRIDOR_STATIONS } from '../types';
+import { TrainLocation, CorridorStation } from '../types';
 import {
   Maximize2,
   Minimize2,
@@ -80,7 +80,8 @@ function calculateRouteCorridorBounds(
   }
 
   if (points.length === 0) {
-    points.push([22.5839, 88.3426], [23.6871, 86.9746]);
+    // Neutral India geographic bounds when no live MQTT GPS or route halts exist
+    points.push([8.0, 68.0], [35.5, 97.5]);
   }
 
   if (hasTrainGps && trainLoc && typeof trainLoc.current_latitude === 'number' && typeof trainLoc.current_longitude === 'number') {
@@ -101,10 +102,11 @@ export const LocationScreen: React.FC = () => {
     lastValidGps,
     gpsWaypoints,
     mqttConnectionStatus,
+    configuredTrains,
   } = useApp();
   const googleMapsApiKey = (typeof process !== 'undefined' && (process.env?.GOOGLE_MAPS_API_KEY || process.env?.VITE_GOOGLE_MAPS_API_KEY)) || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_MAPS_API_KEY) || '';
   const [locations, setLocations] = useState<TrainLocation[]>([]);
-  const [stations, setStations] = useState<CorridorStation[]>(DEFAULT_CORRIDOR_STATIONS);
+  const [stations, setStations] = useState<CorridorStation[]>([]);
   const [selectedStationCode, setSelectedStationCode] = useState<string>('');
   const [selectedEntity, setSelectedEntity] = useState<CorridorStation | null>(null);
   const [isMapExpanded, setIsMapExpanded] = useState<boolean>(false);
@@ -179,19 +181,24 @@ export const LocationScreen: React.FC = () => {
     }
   }, [contextStationCode, stations]);
 
-  // Fetch corridor stations and train locations
+  // Fetch verified train route stops (if backend active) and train locations
   useEffect(() => {
     let isMounted = true;
     const fetchData = async () => {
+      if (!ApiClient.hasBackend()) {
+        if (isMounted) {
+          setStations([]);
+          setLocations([]);
+        }
+        return;
+      }
       try {
         const [corridorData, locsData] = await Promise.all([
-          ApiClient.fetchCorridorStations().catch(() => DEFAULT_CORRIDOR_STATIONS),
+          ApiClient.fetchCorridorStations(selectedTrainNumber).catch(() => []),
           ApiClient.fetchLocations().catch(() => []),
         ]);
         if (isMounted) {
-          if (Array.isArray(corridorData) && corridorData.length > 0) {
-            setStations(corridorData);
-          }
+          setStations(Array.isArray(corridorData) ? corridorData : []);
           if (Array.isArray(locsData)) {
             setLocations(locsData);
           }
@@ -212,7 +219,7 @@ export const LocationScreen: React.FC = () => {
       isMounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [selectedTrainNumber]);
 
   const safeLocations = Array.isArray(locations) ? locations : [];
   const activeTrainLoc: TrainLocation | null = useMemo(() => {
@@ -265,10 +272,18 @@ export const LocationScreen: React.FC = () => {
     return realBackendLoc || null;
   }, [liveTelemetry, lastValidGps, gpsWaypoints, mqttConnectionStatus, safeLocations, selectedTrainNumber]);
 
+  const hasConfiguredTrain = configuredTrains.length > 0 || Boolean(liveTelemetry) || Boolean(lastValidGps);
+
   const hasGps = Boolean(
     activeTrainLoc?.has_gps &&
-      activeTrainLoc.current_latitude != null &&
-      activeTrainLoc.current_longitude != null &&
+      typeof activeTrainLoc.current_latitude === 'number' &&
+      typeof activeTrainLoc.current_longitude === 'number' &&
+      Number.isFinite(activeTrainLoc.current_latitude) &&
+      Number.isFinite(activeTrainLoc.current_longitude) &&
+      activeTrainLoc.current_latitude >= -90 &&
+      activeTrainLoc.current_latitude <= 90 &&
+      activeTrainLoc.current_longitude >= -180 &&
+      activeTrainLoc.current_longitude <= 180 &&
       !(activeTrainLoc.current_latitude === 0 && activeTrainLoc.current_longitude === 0)
   );
 
@@ -284,6 +299,16 @@ export const LocationScreen: React.FC = () => {
   );
 
   const gpsStatusMeta = useMemo(() => {
+    if (!hasConfiguredTrain) {
+      return {
+        color: '#64748B',
+        glow: 'none',
+        mobileLabel: 'No Train',
+        desktopLabel: 'NO TRAIN CONFIGURED',
+        modeLabel: 'No Configured Train',
+        badgeHtml: '<span style="background-color: #F1F5F9; color: #475569; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">NO TRAIN</span>',
+      };
+    }
     if (!hasGps && isMqttDisconnected) {
       return {
         color: '#DC2626',
@@ -353,7 +378,7 @@ export const LocationScreen: React.FC = () => {
       modeLabel: 'Live MQTT GNSS Hardware',
       badgeHtml: '<span style="background-color: #ECFDF5; color: #16A34A; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">LIVE MQTT GPS</span>',
     };
-  }, [hasGps, isMqttDisconnected, isTelemetryGpsLost, isStale, activeTrainLoc?.satellites]);
+  }, [hasConfiguredTrain, hasGps, isMqttDisconnected, isTelemetryGpsLost, isStale, activeTrainLoc?.satellites]);
 
   // Compute distances, ETAs, and next refill facility
   const enrichedStations = useMemo(() => {
@@ -388,8 +413,7 @@ export const LocationScreen: React.FC = () => {
       const sorted = [...refillStations].sort((a, b) => a.distanceKm - b.distanceKm);
       return sorted[0];
     }
-    // Default to the first major intermediate refill station (Bardhaman)
-    return refillStations.find((s) => s.code === 'BWN') || refillStations[0];
+    return refillStations[0];
   }, [enrichedStations, hasGps]);
 
   // Initialize Leaflet Map with Single World Bounds & Full Zoom Range
@@ -399,8 +423,8 @@ export const LocationScreen: React.FC = () => {
     if (!mapInstanceRef.current) {
       const worldBounds = L.latLngBounds(WORLD_MAP_BOUNDS);
       const map = L.map(mapContainerRef.current, {
-        center: [23.2324, 87.8615], // Bardhaman/corridor center
-        zoom: 8,
+        center: [22.5, 79.0], // Neutral India map view until live MQTT GPS telemetry arrives
+        zoom: 5,
         minZoom: 2,
         maxZoom: 19,
         maxBounds: worldBounds,
@@ -413,12 +437,14 @@ export const LocationScreen: React.FC = () => {
         markerZoomAnimation: true,
       });
 
-      const initialRouteBounds = calculateRouteCorridorBounds(stations, activeTrainLoc, hasGps);
-      map.fitBounds(initialRouteBounds, {
-        padding: [60, 60],
-        maxZoom: 8,
-        animate: false,
-      });
+      if (hasGps || stations.length > 0) {
+        const initialRouteBounds = calculateRouteCorridorBounds(stations, activeTrainLoc, hasGps);
+        map.fitBounds(initialRouteBounds, {
+          padding: [60, 60],
+          maxZoom: 8,
+          animate: false,
+        });
+      }
       mapInstanceRef.current = map;
     }
 
@@ -542,42 +568,44 @@ export const LocationScreen: React.FC = () => {
     }
   }, [tileMode]);
 
-  // Draw Corridor Track Polyline and Station Markers with Vector SVG Icons (No Unicode Emoji)
+  // Draw Verified Route Track Polyline and Station Markers (only when real route stops exist)
   useEffect(() => {
     const map = mapInstanceRef.current;
-    if (!map || stations.length === 0) return;
+    if (!map) return;
 
-    // Remove existing polyline
+    // Remove existing polyline & markers whenever station list updates
     if (polylineRef.current) {
       map.removeLayer(polylineRef.current);
       polylineRef.current = null;
     }
+    Object.values(stationMarkersRef.current).forEach((m) => map.removeLayer(m));
+    stationMarkersRef.current = {};
+
+    if (stations.length === 0) return;
 
     const corridorCoords: [number, number][] = stations
       .filter((s) => s && typeof s.latitude === 'number' && typeof s.longitude === 'number')
       .map((s) => [s.latitude, s.longitude]);
 
-    const isSatellite = tileMode === 'satellite';
-    const polyline = L.polyline(corridorCoords, {
-      color: isSatellite ? '#38BDF8' : '#1D4ED8',
-      weight: 4,
-      opacity: 0.92,
-      dashArray: '8, 6',
-    }).addTo(map);
+    if (corridorCoords.length >= 2) {
+      const isSatellite = tileMode === 'satellite';
+      const polyline = L.polyline(corridorCoords, {
+        color: isSatellite ? '#38BDF8' : '#1D4ED8',
+        weight: 4,
+        opacity: 0.92,
+        dashArray: '8, 6',
+      }).addTo(map);
 
-    polyline.bindTooltip('Eastern Railway Mainline Corridor Axis (Howrah — Asansol • 218 km)', {
-      sticky: true,
-      className: 'rail-corridor-tooltip',
-    });
-    polylineRef.current = polyline;
-
-    // Clear existing station markers
-    Object.values(stationMarkersRef.current).forEach((m) => map.removeLayer(m));
-    stationMarkersRef.current = {};
+      polyline.bindTooltip('Configured Train Route Halts', {
+        sticky: true,
+        className: 'rail-corridor-tooltip',
+      });
+      polylineRef.current = polyline;
+    }
 
     // Render Station Markers using Pure Vector SVGs
     stations.forEach((st) => {
-      const isDestination = st.is_destination || st.code === 'ASN';
+      const isDestination = Boolean(st.is_destination);
       const isRefill = st.water_refill_available && !isDestination;
       const isSelected = selectedStationCode === st.code;
 
@@ -862,22 +890,30 @@ export const LocationScreen: React.FC = () => {
   };
 
   const handleOpenGoogleMaps = () => {
-    const origin = '22.5839,88.3426'; // Howrah Junction
-    const destination = '23.6871,86.9746'; // Asansol Junction
-    const gmapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=transit`;
+    if (!hasGps || activeTrainLoc?.current_latitude == null || activeTrainLoc?.current_longitude == null) {
+      setFeedbackToast('Live MQTT GPS coordinates unavailable — connect train hardware to view in Google Maps.');
+      return;
+    }
+    const lat = activeTrainLoc.current_latitude.toFixed(6);
+    const lon = activeTrainLoc.current_longitude.toFixed(6);
+    const gmapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
     window.open(gmapsUrl, '_blank', 'noopener,noreferrer');
-    setFeedbackToast('Opened Eastern Railway corridor (Howrah — Asansol) in Google Maps Live viewer');
+    setFeedbackToast(`Opened live MQTT GPS location (${lat}, ${lon}) in Google Maps`);
   };
 
   const handleFitCorridor = () => {
-    if (!mapInstanceRef.current || stations.length === 0) return;
+    if (!mapInstanceRef.current) return;
+    if (stations.length === 0 && !hasGps) {
+      setFeedbackToast('No live MQTT GPS coordinates or route halts available to fit.');
+      return;
+    }
     const bounds = calculateRouteCorridorBounds(stations, activeTrainLoc, hasGps);
     mapInstanceRef.current.fitBounds(bounds, {
       padding: [60, 60],
-      maxZoom: 8,
+      maxZoom: hasGps && stations.length === 0 ? 13 : 8,
       animate: true,
     });
-    setFeedbackToast('Map viewport fitted to Eastern Railway Corridor (Howrah to Asansol)');
+    setFeedbackToast('Map viewport fitted to active train telemetry bounds');
   };
 
   const handleWorldView = () => {
@@ -1536,7 +1572,7 @@ export const LocationScreen: React.FC = () => {
                 <button
                   id="map-fitcorridor-btn"
                   onClick={handleFitCorridor}
-                  title="Fit Viewport to Eastern Railway Corridor"
+                  title="Fit Viewport to Active Telemetry"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1796,7 +1832,11 @@ export const LocationScreen: React.FC = () => {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '11px', color: colors.textMuted }}>
-              Howrah (HWH) to Asansol (ASN) • 7 Stations • 4 Verified Water Refill Hubs
+              {stations.length > 0
+                ? `${stations.length} Route Stations • ${stations.filter((s) => s.water_refill_available).length} Verified Water Refill Hubs`
+                : hasConfiguredTrain
+                ? 'Awaiting MQTT GPS telemetry & verified route coordinates'
+                : 'No train configured — awaiting train setup & MQTT telemetry'}
             </span>
 
             <button

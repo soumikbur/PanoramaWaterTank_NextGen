@@ -12,6 +12,7 @@ export const TrainManagementScreen: React.FC = () => {
     refreshRegions,
     setActiveScreen,
     setSelectedTrainNumber,
+    setSelectedCoachNumber,
     currentUser,
     searchQuery,
     managedDevices,

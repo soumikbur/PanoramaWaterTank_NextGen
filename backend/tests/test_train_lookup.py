@@ -16,9 +16,14 @@ from app.models.device import Device
 from app.models.train import Train, TrainLookupCache
 from app.services.train_lookup_service import (
     DataMeetOpenProvider,
+    ErailPublicAdapter,
     IndianRailApiProvider,
+    LocalExpressDatabase,
+    LocalExpressDatabaseAdapter,
     RailRadarProvider,
     RapidApiIrctcProvider,
+    TrainDataAggregator,
+    TrainLookupResponse,
     TrainLookupService,
     is_express_family_train,
     map_zone_to_region,
@@ -457,3 +462,88 @@ async def test_live_all_target_express_trains_including_15120(monkeypatch):
         assert res.destination_code in expected_dsts, f"Unexpected dst for {num}: {res.destination_code}"
         assert "EXPRESS" in (res.train_type or "").upper()
     assert svc.get_provider_health().get("RailRadar", {}).get("verified", 0) >= len(targets)
+
+
+@pytest.mark.asyncio
+async def test_local_express_db_erail_adapter_and_aggregator(tmp_path: Path):
+    # 1. LocalExpressDatabase number lookup, name token search & freshness
+    db_file = tmp_path / "express_trains_db.json"
+    local_db = LocalExpressDatabase(db_path=db_file)
+    verified_sample = TrainLookupResponse(
+        status="VERIFIED",
+        train_number="15120",
+        train_name="Banaras Janta Express",
+        source_station="Dehradun",
+        source_code="DDN",
+        destination_station="Banaras",
+        destination_code="BSBS",
+        region="NORTH",
+        railway_zone="NR",
+        train_type="Mail Express",
+        provider="RailRadar",
+        verified_at=datetime.now(timezone.utc).isoformat(),
+    )
+    local_db.upsert_verified(verified_sample)
+    row = local_db.get_by_number("15120")
+    assert row is not None and local_db.is_fresh(row) is True
+    assert [r["train_number"] for r in local_db.search_by_name("Banaras Janta")] == ["15120"]
+
+    local_adapter = LocalExpressDatabaseAdapter(local_db)
+    svc_local = TrainLookupService(providers=[local_adapter], local_db=local_db)
+    local_res = await svc_local.lookup("15120", force_refresh=True)
+    assert local_res.status == "VERIFIED"
+    assert local_res.railway_zone == "NR"
+
+    # 2. TrainDataAggregator merges missing metadata without overwriting primary data
+    incomplete_primary = TrainLookupResponse(
+        status="VERIFIED",
+        train_number="12301",
+        train_name="Howrah Rajdhani Express",
+        source_code="HWH",
+        destination_code="NDLS",
+        region="EAST",
+        train_type="Rajdhani Express",
+        provider="RailRadar",
+    )
+    enrichment_secondary = TrainLookupResponse(
+        status="VERIFIED",
+        train_number="12301",
+        train_name="OTHER NAME",
+        railway_zone="ER",
+        running_days=["Mon", "Tue", "Wed"],
+        provider="Secondary",
+    )
+    merged = TrainDataAggregator.merge_verified_results(incomplete_primary, enrichment_secondary)
+    assert merged.train_name == "Howrah Rajdhani Express"
+    assert merged.railway_zone == "ER"
+    assert merged.running_days == ["Mon", "Tue", "Wed"]
+
+    # 3. ErailPublicAdapter parses structured record, rejects ORDINARY, and detects not-found
+    def erail_handler(req: httpx.Request) -> httpx.Response:
+        tno = req.url.params.get("TrainNo")
+        if tno == "15120":
+            return httpx.Response(
+                200,
+                text="~~~~~~2026-11-4-5-21-33~~~^15120~DDN BNRS EXP~Dehradun~DDN~Banaras~BNRS~Dehradun~DDN~Banaras~BNRS~18.30~15.05~20.35~1111111~~~~~~~~111~0~0~1~1~18.30~15.05~47~1111111~First~Last~MAIL_EXPRESS~2588",
+            )
+        if tno == "64101":
+            return httpx.Response(
+                200,
+                text="~~~~~~2026-11-4-9-48-42~~~^64101~ALJN-DLI EMU~Aligarh Jn~ALJN~Delhi~DLI~Aligarh Jn~ALJN~Delhi~DLI~01.40~05.05~03.25~1111111~~~~~~~~000~0~0~0~1~01.40~05.05~21~1111111~First~Last~ORDINARY~5646",
+            )
+        return httpx.Response(200, text="~~~~~Train not found")
+
+    svc_erail = TrainLookupService(
+        providers=[ErailPublicAdapter()],
+        client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(erail_handler)),
+        local_db=local_db,
+    )
+    ok_res = await svc_erail.lookup("15120", force_refresh=True)
+    assert ok_res.status == "VERIFIED"
+    assert ok_res.provider == "eRail OpenData"
+    assert ok_res.source_code == "DDN"
+    assert ok_res.destination_code == "BNRS"
+    emu_res = await svc_erail.lookup("64101", force_refresh=True)
+    assert emu_res.status == "UNSUPPORTED_TYPE"
+    nf_res = await svc_erail.lookup("99998", force_refresh=True)
+    assert nf_res.status == "NOT_FOUND"

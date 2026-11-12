@@ -84,7 +84,7 @@ const AccessDeniedScreen: React.FC = () => {
 };
 
 const MainContent: React.FC = () => {
-  const { activeScreen, currentUser } = useApp();
+  const { activeScreen, setActiveScreen, currentUser } = useApp();
   const isAdmin = currentUser?.role === 'ADMIN';
 
   return (

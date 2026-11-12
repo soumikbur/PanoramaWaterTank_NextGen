@@ -209,7 +209,11 @@ export const Sidebar: React.FC = () => {
 
             {/* Subtitle Zone */}
             <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 500, paddingLeft: '2px' }}>
-              {liveTelemetry ? 'Eastern Railway • Live Corridor' : 'Eastern Railway'}
+              {activeConfiguredTrain
+                ? `${activeConfiguredTrain.railway_zone || activeConfiguredTrain.region}${liveTelemetry ? ' • Live Telemetry' : ''}`
+                : liveTelemetry
+                ? 'Live MQTT Telemetry'
+                : 'Awaiting Train Assignment'}
             </div>
 
             {/* 2x2 Metric Grid */}

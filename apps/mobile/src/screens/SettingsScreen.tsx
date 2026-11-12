@@ -34,6 +34,73 @@ import {
 import { DisplaySettingsPanel } from '../components/settings/DisplaySettingsPanel';
 
 export const SettingsScreen: React.FC = () => {
+  const { currentUser } = useApp();
+  const [adminTab, setAdminTab] = useState<'system' | 'display'>('system');
+
+  if (currentUser?.role !== 'ADMIN') {
+    return <DisplaySettingsPanel />;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: `${metrics.cardSpacing}px`, backgroundColor: colors.background, boxSizing: 'border-box', minHeight: '100%' }}>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '8px',
+          borderBottom: `1px solid ${colors.border}`,
+          paddingBottom: '12px',
+        }}
+      >
+        <button
+          onClick={() => setAdminTab('system')}
+          style={{
+            padding: '10px 16px',
+            minHeight: '44px',
+            borderRadius: '6px',
+            border: `1px solid ${adminTab === 'system' ? colors.primaryBorder : colors.borderStrong}`,
+            backgroundColor: adminTab === 'system' ? colors.primarySurface : colors.surfaceAlt,
+            color: adminTab === 'system' ? colors.primary : colors.textSecondary,
+            fontSize: '13px',
+            fontWeight: adminTab === 'system' ? 700 : 600,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+          }}
+        >
+          <SettingsIcon size={14} />
+          <span>System & Hardware Configuration</span>
+        </button>
+        <button
+          onClick={() => setAdminTab('display')}
+          style={{
+            padding: '10px 16px',
+            minHeight: '44px',
+            borderRadius: '6px',
+            border: `1px solid ${adminTab === 'display' ? colors.primaryBorder : colors.borderStrong}`,
+            backgroundColor: adminTab === 'display' ? colors.primarySurface : colors.surfaceAlt,
+            color: adminTab === 'display' ? colors.primary : colors.textSecondary,
+            fontSize: '13px',
+            fontWeight: adminTab === 'display' ? 700 : 600,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+          }}
+        >
+          <Sliders size={14} />
+          <span>Display & Interface Preferences</span>
+        </button>
+      </div>
+      {adminTab === 'display' ? <DisplaySettingsPanel isAdminView={true} /> : <AdminSystemSettings />}
+    </div>
+  );
+};
+
+const AdminSystemSettings: React.FC = () => {
   const {
     liveTank,
     refreshData,
@@ -59,71 +126,9 @@ export const SettingsScreen: React.FC = () => {
   } = useDisplayPreferences();
 
   const isAdmin = currentUser?.role === 'ADMIN';
-  const [adminTab, setAdminTab] = useState<'system' | 'display'>('system');
-
-  // Employee role gets personal display settings directly
-  if (!isAdmin) {
-    return <DisplaySettingsPanel />;
-  }
-
-  // Admin display preferences view
-  if (adminTab === 'display') {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div
-          style={{
-            display: 'flex',
-            gap: '8px',
-            borderBottom: `1px solid ${colors.border}`,
-            paddingBottom: '12px',
-          }}
-        >
-          <button
-            onClick={() => setAdminTab('system')}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '6px',
-              border: `1px solid ${colors.borderStrong}`,
-              backgroundColor: colors.surfaceAlt,
-              color: colors.textSecondary,
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            <SettingsIcon size={14} />
-            <span>System & Hardware Configuration</span>
-          </button>
-          <button
-            onClick={() => setAdminTab('display')}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '6px',
-              border: `1px solid ${colors.primaryBorder}`,
-              backgroundColor: colors.primarySurface,
-              color: colors.primary,
-              fontSize: '13px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            <Sliders size={14} />
-            <span>Display & Interface Preferences</span>
-          </button>
-        </div>
-        <DisplaySettingsPanel isAdminView={true} />
-      </div>
-    );
-  }
 
   // Section 1: General Settings
-  const [systemName, setSystemName] = useState('Panorama Water Tank SCADA & HMI — Eastern Railway');
+  const [systemName, setSystemName] = useState('Panorama Water Tank SCADA & HMI');
   const [scadaMode, setScadaMode] = useState<'PRODUCTION' | 'SIMULATION' | 'MAINTENANCE'>('PRODUCTION');
   const [clockFormat, setClockFormat] = useState<'12H' | '24H'>('12H');
 
@@ -163,7 +168,7 @@ export const SettingsScreen: React.FC = () => {
   const [showToken, setShowToken] = useState(false);
 
   // Section 5: Map & Location Settings
-  const [defaultCorridor, setDefaultCorridor] = useState('HOWRAH_ASANSOL');
+  const [defaultCorridor, setDefaultCorridor] = useState('ACTIVE_TRAIN_GPS');
   const [defaultMapEngine, setDefaultMapEngine] = useState<'OSM' | 'ESRI'>('OSM');
   const [gnssPollRate, setGnssPollRate] = useState(4);
 
@@ -451,72 +456,7 @@ export const SettingsScreen: React.FC = () => {
   ];
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: `${metrics.cardSpacing}px`,
-        backgroundColor: colors.background,
-        boxSizing: 'border-box',
-        minHeight: '100%',
-      }}
-    >
-      {/* Admin Module Tabs: System Configuration vs Display Preferences */}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: isMobile ? 'column' : 'row',
-          gap: '8px',
-          borderBottom: `1px solid ${colors.border}`,
-          paddingBottom: '12px',
-        }}
-      >
-        <button
-          onClick={() => setAdminTab('system')}
-          style={{
-            padding: '10px 16px',
-            minHeight: '44px',
-            borderRadius: '6px',
-            border: `1px solid ${colors.primaryBorder}`,
-            backgroundColor: colors.primarySurface,
-            color: colors.primary,
-            fontSize: '13px',
-            fontWeight: 700,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            width: isMobile ? '100%' : 'auto',
-          }}
-        >
-          <SettingsIcon size={14} />
-          <span>System & Hardware Configuration</span>
-        </button>
-        <button
-          onClick={() => setAdminTab('display')}
-          style={{
-            padding: '10px 16px',
-            minHeight: '44px',
-            borderRadius: '6px',
-            border: `1px solid ${colors.borderStrong}`,
-            backgroundColor: colors.surfaceAlt,
-            color: colors.textSecondary,
-            fontSize: '13px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            width: isMobile ? '100%' : 'auto',
-          }}
-        >
-          <Sliders size={14} />
-          <span>Display & Interface Preferences</span>
-        </button>
-      </div>
-
+    <>
       {/* 1. Top Action & Status Bar */}
       <div
         style={{
@@ -1706,7 +1646,7 @@ export const SettingsScreen: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '16px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
-                Primary Corridor Definition
+                Default Map Tracking Mode
               </label>
               <select
                 value={defaultCorridor}
@@ -1723,9 +1663,8 @@ export const SettingsScreen: React.FC = () => {
                   backgroundColor: '#FFFFFF',
                 }}
               >
-                <option value="HOWRAH_ASANSOL">Eastern Railway: Howrah (HWH) — Asansol (ASN) [218 km]</option>
-                <option value="DELHI_BHOPAL">Northern/Central: New Delhi (NDLS) — Bhopal (BPL) [707 km]</option>
-                <option value="MUMBAI_DELHI">Western Railway: Mumbai Central (MMCT) — New Delhi (NDLS) [1386 km]</option>
+                <option value="ACTIVE_TRAIN_GPS">Follow Active Train MQTT GPS Telemetry</option>
+                <option value="ALL_INDIA_NETWORK">All-India Fleet Telemetry Overview</option>
               </select>
             </div>
 
@@ -2620,6 +2559,6 @@ export const SettingsScreen: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };

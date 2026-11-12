@@ -3,7 +3,7 @@ import { colors, typography } from '../../theme';
 import { useApp, ScreenName } from '../../state/AppContext';
 import { useDisplayPreferences } from '../../context/DisplayPreferencesContext';
 import { AppRouter } from '../../services/router';
-import { DEFAULT_CORRIDOR_STATIONS, TrainOverviewItem, TankLiveStatus, Device } from '../../types';
+import { TrainOverviewItem, TankLiveStatus, Device } from '../../types';
 import panoramaLogoHeader from '../../assets/panorama_logo_header.png';
 import panoramaLogoIcon from '../../assets/panorama_logo_icon.png';
 import {
@@ -357,52 +357,33 @@ export const Header: React.FC = () => {
       }
     });
 
-    // 5. Search Stations (from DEFAULT_CORRIDOR_STATIONS)
-    DEFAULT_CORRIDOR_STATIONS.forEach((st) => {
-      const matchName = st.name.toLowerCase().includes(term);
-      const matchCode = st.code.toLowerCase().includes(term);
-      const matchRoute = 'eastern railway corridor howrah asansol'.includes(term);
-
-      if (matchName || matchCode || matchRoute) {
-        matches.push({
-          id: `station-${st.code}`,
-          type: 'STATION',
-          name: `${st.name} (${st.code})`,
-          identifier: `Station: ${st.code}`,
-          subtitle: `Route: Eastern Railway Corridor • ${st.water_refill_available ? 'Water Refill Hub (' + st.water_capacity_liters.toLocaleString() + ' L)' : 'No Water Facility'}`,
-          status: st.water_refill_available ? 'REFILL READY' : 'NO FACILITY',
-          isOnline: st.operational_status === 'Operational',
-          onClick: () => {
-            setSelectedStationCode(st.code);
-            setActiveScreen('location');
-            setIsOpen(false);
-          },
-        });
-      }
-    });
-
-    // 6. Search Locations (Corridors & Yards)
-    const configuredLocations = [
-      { name: 'Eastern Railway Main Line (HWH - ASN)', code: 'HWH-ASN', desc: 'Active 200 km monitoring corridor between Howrah & Asansol' },
-      { name: 'Howrah Coaching Yard & Depot', code: 'HWH-DEPOT', desc: 'Eastern Railway carriage and wagon water filling depot' },
-      { name: 'Asansol Electric Locomotive Shed', code: 'ASN-SHED', desc: 'Water refill facility & terminal maintenance hub' },
-    ];
-    configuredLocations.forEach((loc) => {
-      if (loc.name.toLowerCase().includes(term) || loc.code.toLowerCase().includes(term) || loc.desc.toLowerCase().includes(term)) {
-        matches.push({
-          id: `loc-${loc.code}`,
-          type: 'LOCATION',
-          name: loc.name,
-          identifier: loc.code,
-          subtitle: loc.desc,
-          status: 'CONFIGURED',
-          isOnline: true,
-          onClick: () => {
-            setActiveScreen('location');
-            setIsOpen(false);
-          },
-        });
-      }
+    // 5. Search Stations from configured trains' verified source/destination & route stops
+    const seenStations = new Set<string>();
+    configuredTrains.forEach((tr) => {
+      const candidates = [
+        tr.source_code && tr.source_station ? { code: tr.source_code, name: tr.source_station, train: tr.train_number } : null,
+        tr.destination_code && tr.destination_station ? { code: tr.destination_code, name: tr.destination_station, train: tr.train_number } : null,
+      ].filter(Boolean) as { code: string; name: string; train: string }[];
+      candidates.forEach((st) => {
+        if (seenStations.has(st.code)) return;
+        if (st.name.toLowerCase().includes(term) || st.code.toLowerCase().includes(term)) {
+          seenStations.add(st.code);
+          matches.push({
+            id: `station-${st.code}`,
+            type: 'STATION',
+            name: `${st.name} (${st.code})`,
+            identifier: `Station: ${st.code}`,
+            subtitle: `Configured endpoint for Train ${st.train}`,
+            status: 'VERIFIED',
+            isOnline: true,
+            onClick: () => {
+              setSelectedStationCode(st.code);
+              setActiveScreen('location');
+              setIsOpen(false);
+            },
+          });
+        }
+      });
     });
 
     setResults(matches);
