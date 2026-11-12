@@ -19,6 +19,7 @@ import {
 } from '../types';
 import { TrainLookupResult, TrainCreatePayload } from '../types/train';
 import { deviceRegistry } from '../services/deviceRegistry';
+import { localFleetStore } from '../services/localFleetStore';
 
 function resolveApiBase(): string | null {
   const configured =
@@ -40,6 +41,10 @@ function resolveApiBase(): string | null {
 const API_BASE = resolveApiBase();
 
 export class ApiClient {
+  static hasBackend(): boolean {
+    return Boolean(API_BASE);
+  }
+
   private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     if (!API_BASE) {
       throw new Error('External FastAPI backend URL is not configured (set VITE_API_URL). GitHub Pages hosts static frontend assets only.');
@@ -573,118 +578,20 @@ export class ApiClient {
 
   // Trains and Fleet Management
   static async fetchRegionsSummary(): Promise<RegionSummary[]> {
+    if (!API_BASE) {
+      return localFleetStore.getRegionsSummary();
+    }
     try {
       const res = await this.request<RegionSummary[]>('/trains/regions');
       if (Array.isArray(res) && res.length > 0) return res;
     } catch {}
-    return [
-      {
-        region: 'EAST',
-        name: 'Eastern Railway',
-        code: 'ER',
-        configuredTrains: 2,
-        coaches: 48,
-        tanks: 96,
-        onlineTrains: 0,
-        status: 'All Normal',
-        trains: [
-          {
-            train_number: '12301',
-            name: 'Rajdhani Express',
-            type: 'Superfast / Rajdhani',
-            coaches_count: 24,
-            tanks_count: 48,
-            is_online: false,
-            status: 'Standby',
-            active_alarms: 0,
-            region: 'EAST',
-          },
-          {
-            train_number: '225256',
-            name: 'Express Fleet (Telemetry)',
-            type: 'Special Express',
-            coaches_count: 24,
-            tanks_count: 48,
-            is_online: false,
-            status: 'Standby',
-            active_alarms: 0,
-            region: 'EAST',
-          },
-        ],
-      },
-      {
-        region: 'NORTH',
-        name: 'Northern Railway',
-        code: 'NR',
-        configuredTrains: 1,
-        coaches: 24,
-        tanks: 48,
-        onlineTrains: 1,
-        status: 'All Normal',
-        trains: [
-          {
-            train_number: '12423',
-            name: 'Rajdhani Express',
-            type: 'Rajdhani Express',
-            coaches_count: 24,
-            tanks_count: 48,
-            is_online: true,
-            status: 'Operational',
-            active_alarms: 0,
-            region: 'NORTH',
-          },
-        ],
-      },
-      {
-        region: 'WEST',
-        name: 'Western Railway',
-        code: 'WR',
-        configuredTrains: 1,
-        coaches: 24,
-        tanks: 48,
-        onlineTrains: 1,
-        status: 'All Normal',
-        trains: [
-          {
-            train_number: '12951',
-            name: 'Mumbai Rajdhani',
-            type: 'Rajdhani Express',
-            coaches_count: 24,
-            tanks_count: 48,
-            is_online: true,
-            status: 'Operational',
-            active_alarms: 0,
-            region: 'WEST',
-          },
-        ],
-      },
-      {
-        region: 'SOUTH',
-        name: 'Southern Railway',
-        code: 'SR',
-        configuredTrains: 1,
-        coaches: 24,
-        tanks: 48,
-        onlineTrains: 1,
-        status: 'All Normal',
-        trains: [
-          {
-            train_number: '12621',
-            name: 'Tamil Nadu Express',
-            type: 'Superfast Express',
-            coaches_count: 24,
-            tanks_count: 48,
-            is_online: true,
-            status: 'Operational',
-            active_alarms: 0,
-            region: 'SOUTH',
-          },
-        ],
-      },
-    ];
+    return localFleetStore.getRegionsSummary();
   }
 
   static async fetchTrains(region?: string, search?: string): Promise<TrainOverviewItem[]> {
+    if (!API_BASE) {
+      return localFleetStore.listTrains(region, search);
+    }
     const params = new URLSearchParams();
     if (region) params.append('region', region);
     if (search) params.append('search', search);
@@ -693,10 +600,15 @@ export class ApiClient {
   }
 
   static async fetchTrainConsist(trainNumber: string): Promise<TrainConsist> {
-    try {
-      const res = await this.request<TrainConsist>(`/trains/${trainNumber}/consist`);
-      if (res && res.train_number) return res;
-    } catch {}
+    if (!API_BASE) {
+      const localConsist = localFleetStore.getTrainConsist(trainNumber);
+      if (localConsist) return localConsist;
+    } else {
+      try {
+        const res = await this.request<TrainConsist>(`/trains/${trainNumber}/consist`);
+        if (res && res.train_number) return res;
+      } catch {}
+    }
     const coaches = Array.from({ length: 24 }, (_, idx) => {
       const pos = idx + 1;
       const cNum = pos === 1 ? 'CR123456' : `S${pos}`;
@@ -751,6 +663,9 @@ export class ApiClient {
   }
 
   static async createTrain(data: TrainCreatePayload): Promise<any> {
+    if (!API_BASE) {
+      return localFleetStore.createTrain(data);
+    }
     return this.request('/trains', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -758,6 +673,9 @@ export class ApiClient {
   }
 
   static async updateTrain(trainNumber: string, data: { name?: string; region?: string; type?: string }): Promise<any> {
+    if (!API_BASE) {
+      return localFleetStore.updateTrain(trainNumber, data);
+    }
     return this.request(`/trains/${trainNumber}`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -768,6 +686,9 @@ export class ApiClient {
     const clean = encodeURIComponent((trainNumber || '').trim());
     if (!clean) {
       throw new Error('Train number is required for deletion.');
+    }
+    if (!API_BASE) {
+      return localFleetStore.deleteTrain(trainNumber);
     }
     return this.request(`/trains/${clean}`, {
       method: 'DELETE',

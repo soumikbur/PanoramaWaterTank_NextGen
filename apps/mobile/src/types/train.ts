@@ -26,8 +26,18 @@ export interface ProviderAttempt {
 
 export type TrainLookupStatus = 'VERIFIED' | 'NOT_FOUND' | 'UNAVAILABLE' | 'INVALID_FORMAT';
 
+export type TrainLookupErrorCode =
+  | 'INVALID_FORMAT'
+  | 'NOT_FOUND'
+  | 'TIMEOUT'
+  | 'RATE_LIMITED'
+  | 'AUTH_ERROR'
+  | 'INVALID_RESPONSE'
+  | 'SERVER_UNAVAILABLE';
+
 export interface TrainLookupResult {
   status: TrainLookupStatus;
+  error_code?: TrainLookupErrorCode | null;
   train_number: string;
   train_name?: string | null;
   source_station?: string | null;

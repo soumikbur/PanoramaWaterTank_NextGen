@@ -231,13 +231,14 @@ class RouteStopItem(BaseModel):
 
 class ProviderAttempt(BaseModel):
     provider: str
-    outcome: str  # verified | not_found | skipped_no_key | timeout | error | mismatched
+    outcome: str  # verified | not_found | skipped_no_key | timeout | error | mismatched | rate_limited | auth_error | invalid_response
     latency_ms: float = 0.0
     detail: Optional[str] = None
 
 
 class TrainLookupResponse(BaseModel):
     status: str  # VERIFIED | NOT_FOUND | UNAVAILABLE | INVALID_FORMAT
+    error_code: Optional[str] = None  # TIMEOUT | RATE_LIMITED | AUTH_ERROR | INVALID_RESPONSE | SERVER_UNAVAILABLE | NOT_FOUND | INVALID_FORMAT
     train_number: str
     train_name: Optional[str] = None
     source_station: Optional[str] = None
@@ -264,8 +265,48 @@ class TrainLookupResponse(BaseModel):
 
 class ProviderFetchOutcome(BaseModel):
     outcome: str  # verified | not_found | unavailable | mismatched | skipped_no_key
+    error_code: Optional[str] = None  # TIMEOUT | RATE_LIMITED | AUTH_ERROR | INVALID_RESPONSE | SERVER_UNAVAILABLE
     data: Optional[TrainLookupResponse] = None
     detail: Optional[str] = None
+
+
+async def _get_with_retry(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    headers: Optional[Dict[str, str]] = None,
+    params: Optional[Dict[str, Any]] = None,
+    timeout: float = 5.0,
+    retries: int = 1,
+) -> httpx.Response:
+    """Perform GET with bounded retry on transient network/timeout or 5xx responses."""
+    last_exc: Optional[BaseException] = None
+    last_resp: Optional[httpx.Response] = None
+    for attempt in range(retries + 1):
+        try:
+            resp = await client.get(url, headers=headers, params=params, timeout=timeout)
+            if resp.status_code < 500 or attempt >= retries:
+                return resp
+            last_resp = resp
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            last_exc = exc
+            if attempt >= retries:
+                raise
+        await asyncio.sleep(0.15 * (attempt + 1))
+    if last_resp is not None:
+        return last_resp
+    assert last_exc is not None
+    raise last_exc
+
+
+def _classify_http_status(status_code: int) -> Tuple[str, str]:
+    if status_code == 429:
+        return "RATE_LIMITED", "HTTP 429 rate limit exceeded"
+    if status_code in (401, 403):
+        return "AUTH_ERROR", f"HTTP {status_code} invalid API credentials"
+    if status_code >= 500:
+        return "SERVER_UNAVAILABLE", f"HTTP {status_code} upstream server error"
+    return "SERVER_UNAVAILABLE", f"HTTP {status_code}"
 
 
 class BaseTrainProvider(ABC):
@@ -331,26 +372,27 @@ class RailRadarProvider(BaseTrainProvider):
         coaches_url = f"{base}/trains/{train_number}/coaches"
 
         try:
-            info_task = client.get(info_url, headers=headers, timeout=timeout)
-            coach_task = client.get(coaches_url, headers=headers, timeout=timeout)
+            info_task = _get_with_retry(client, info_url, headers=headers, timeout=timeout)
+            coach_task = _get_with_retry(client, coaches_url, headers=headers, timeout=timeout, retries=0)
             info_res, coach_res = await asyncio.gather(info_task, coach_task, return_exceptions=True)
         except Exception as exc:
-            return ProviderFetchOutcome(outcome="unavailable", detail=str(exc))
+            err_code = "TIMEOUT" if isinstance(exc, httpx.TimeoutException) else "SERVER_UNAVAILABLE"
+            return ProviderFetchOutcome(outcome="unavailable", error_code=err_code, detail=str(exc))
 
         if isinstance(info_res, BaseException):
-            return ProviderFetchOutcome(outcome="unavailable", detail=str(info_res))
+            err_code = "TIMEOUT" if isinstance(info_res, httpx.TimeoutException) else "SERVER_UNAVAILABLE"
+            return ProviderFetchOutcome(outcome="unavailable", error_code=err_code, detail=str(info_res))
 
         if info_res.status_code == 404:
             return ProviderFetchOutcome(outcome="not_found", detail="HTTP 404")
-        if info_res.status_code in (401, 403, 429) or info_res.status_code >= 500:
-            return ProviderFetchOutcome(outcome="unavailable", detail=f"HTTP {info_res.status_code}")
         if info_res.status_code != 200:
-            return ProviderFetchOutcome(outcome="unavailable", detail=f"HTTP {info_res.status_code}")
+            err_code, detail = _classify_http_status(info_res.status_code)
+            return ProviderFetchOutcome(outcome="unavailable", error_code=err_code, detail=detail)
 
         try:
             payload = info_res.json()
         except Exception:
-            return ProviderFetchOutcome(outcome="unavailable", detail="Invalid JSON response")
+            return ProviderFetchOutcome(outcome="unavailable", error_code="INVALID_RESPONSE", detail="Invalid JSON response")
 
         data = payload.get("data") if isinstance(payload, dict) and "data" in payload else payload
         if not isinstance(data, dict):
@@ -473,21 +515,21 @@ class RapidApiIrctcProvider(BaseTrainProvider):
         url = f"https://{host}/api/v1/getTrainSchedule"
 
         try:
-            res = await client.get(url, headers=headers, params={"trainNo": train_number}, timeout=timeout)
+            res = await _get_with_retry(client, url, headers=headers, params={"trainNo": train_number}, timeout=timeout)
         except Exception as exc:
-            return ProviderFetchOutcome(outcome="unavailable", detail=str(exc))
+            err_code = "TIMEOUT" if isinstance(exc, httpx.TimeoutException) else "SERVER_UNAVAILABLE"
+            return ProviderFetchOutcome(outcome="unavailable", error_code=err_code, detail=str(exc))
 
         if res.status_code == 404:
             return ProviderFetchOutcome(outcome="not_found", detail="HTTP 404")
-        if res.status_code in (401, 403, 429) or res.status_code >= 500:
-            return ProviderFetchOutcome(outcome="unavailable", detail=f"HTTP {res.status_code}")
         if res.status_code != 200:
-            return ProviderFetchOutcome(outcome="unavailable", detail=f"HTTP {res.status_code}")
+            err_code, detail = _classify_http_status(res.status_code)
+            return ProviderFetchOutcome(outcome="unavailable", error_code=err_code, detail=detail)
 
         try:
             payload = res.json()
         except Exception:
-            return ProviderFetchOutcome(outcome="unavailable", detail="Invalid JSON response")
+            return ProviderFetchOutcome(outcome="unavailable", error_code="INVALID_RESPONSE", detail="Invalid JSON response")
 
         data = payload.get("data") if isinstance(payload, dict) else None
         if not isinstance(data, dict) or not (data.get("trainName") or data.get("train_name")):
@@ -573,25 +615,29 @@ class IndianRailApiProvider(BaseTrainProvider):
 
         try:
             info_res, coach_res = await asyncio.gather(
-                client.get(info_url, timeout=timeout),
-                client.get(coach_url, timeout=timeout),
+                _get_with_retry(client, info_url, timeout=timeout),
+                _get_with_retry(client, coach_url, timeout=timeout, retries=0),
                 return_exceptions=True,
             )
         except Exception as exc:
-            return ProviderFetchOutcome(outcome="unavailable", detail=str(exc))
+            err_code = "TIMEOUT" if isinstance(exc, httpx.TimeoutException) else "SERVER_UNAVAILABLE"
+            return ProviderFetchOutcome(outcome="unavailable", error_code=err_code, detail=str(exc))
 
-        if isinstance(info_res, BaseException) or info_res.status_code >= 500:
-            detail = str(info_res) if isinstance(info_res, BaseException) else f"HTTP {info_res.status_code}"
-            return ProviderFetchOutcome(outcome="unavailable", detail=detail)
+        if isinstance(info_res, BaseException):
+            err_code = "TIMEOUT" if isinstance(info_res, httpx.TimeoutException) else "SERVER_UNAVAILABLE"
+            return ProviderFetchOutcome(outcome="unavailable", error_code=err_code, detail=str(info_res))
+        if info_res.status_code != 200:
+            err_code, detail = _classify_http_status(info_res.status_code)
+            return ProviderFetchOutcome(outcome="unavailable", error_code=err_code, detail=detail)
 
         try:
             payload = info_res.json()
         except Exception:
-            return ProviderFetchOutcome(outcome="unavailable", detail="Invalid JSON response")
+            return ProviderFetchOutcome(outcome="unavailable", error_code="INVALID_RESPONSE", detail="Invalid JSON response")
 
         code = str(payload.get("ResponseCode") or "")
         if code == "201":
-            return ProviderFetchOutcome(outcome="unavailable", detail="Authentication rejected (201)")
+            return ProviderFetchOutcome(outcome="unavailable", error_code="AUTH_ERROR", detail="Authentication rejected (201)")
         if code != "200":
             return ProviderFetchOutcome(outcome="not_found", detail=str(payload.get("Message") or f"Code {code}"))
 
@@ -670,6 +716,7 @@ class DataMeetOpenProvider(BaseTrainProvider):
         self.index_path = index_path or (backend_root / "data" / "datameet_trains_index.json")
         self._index: Optional[Dict[str, Dict[str, Any]]] = None
         self._load_lock = asyncio.Lock()
+        self._last_error_code: Optional[str] = None
 
     def is_configured(self) -> bool:
         return bool(settings.DATAMEET_TRAINS_URL)
@@ -735,12 +782,21 @@ class DataMeetOpenProvider(BaseTrainProvider):
 
             # 2. Fetch upstream DataMeet trains.json
             download_timeout = max(timeout, 15.0)
+            self._last_error_code = None
             try:
-                res = await client.get(settings.DATAMEET_TRAINS_URL, timeout=download_timeout)
+                res = await _get_with_retry(client, settings.DATAMEET_TRAINS_URL, timeout=download_timeout)
                 if res.status_code != 200:
-                    raise RuntimeError(f"HTTP {res.status_code}")
-                parsed = self._parse_dataset(res.json())
+                    err_code, detail = _classify_http_status(res.status_code)
+                    self._last_error_code = err_code
+                    raise RuntimeError(detail)
+                try:
+                    raw_json = res.json()
+                except Exception as json_exc:
+                    self._last_error_code = "INVALID_RESPONSE"
+                    raise RuntimeError("Invalid JSON response") from json_exc
+                parsed = self._parse_dataset(raw_json)
                 if not parsed:
+                    self._last_error_code = "INVALID_RESPONSE"
                     raise RuntimeError("DataMeet dataset empty")
                 self._index = parsed
                 try:
@@ -753,6 +809,8 @@ class DataMeetOpenProvider(BaseTrainProvider):
                 return self._index
             except Exception as exc:
                 logger.warning("DataMeet fetch failed (%s)", exc)
+                if not self._last_error_code:
+                    self._last_error_code = "TIMEOUT" if isinstance(exc, httpx.TimeoutException) else "SERVER_UNAVAILABLE"
                 # Stale disk index is still better than total outage
                 if self.index_path.exists():
                     try:
@@ -775,7 +833,11 @@ class DataMeetOpenProvider(BaseTrainProvider):
 
         index = await self._ensure_index(client, timeout)
         if index is None:
-            return ProviderFetchOutcome(outcome="unavailable", detail="Could not load DataMeet dataset")
+            return ProviderFetchOutcome(
+                outcome="unavailable",
+                error_code=self._last_error_code or "SERVER_UNAVAILABLE",
+                detail="Could not load DataMeet dataset",
+            )
 
         entry = index.get(train_number)
         if not entry:
@@ -944,6 +1006,7 @@ class TrainLookupService:
         attempts: List[ProviderAttempt] = []
         any_authoritative_not_found = False
         any_unavailable = False
+        last_error_code: Optional[str] = None
         timeout = float(settings.RAILWAY_LOOKUP_TIMEOUT_SECONDS)
 
         client_ctx = (
@@ -977,6 +1040,7 @@ class TrainLookupService:
                         )
                     )
                     any_unavailable = True
+                    last_error_code = last_error_code or "TIMEOUT"
                     continue
                 except Exception as exc:
                     attempts.append(
@@ -988,6 +1052,7 @@ class TrainLookupService:
                         )
                     )
                     any_unavailable = True
+                    last_error_code = last_error_code or ("TIMEOUT" if isinstance(exc, httpx.TimeoutException) else "SERVER_UNAVAILABLE")
                     continue
 
                 p_ms = round((time.perf_counter() - p_start) * 1000, 2)
@@ -1016,25 +1081,50 @@ class TrainLookupService:
                     any_authoritative_not_found = True
                 elif outcome.outcome in ("unavailable", "mismatched"):
                     any_unavailable = True
+                    if outcome.error_code:
+                        last_error_code = outcome.error_code
+                    elif outcome.outcome == "mismatched":
+                        last_error_code = "INVALID_RESPONSE"
 
         total_ms = round((time.perf_counter() - t0) * 1000, 2)
-        if any_authoritative_not_found:
+        if any_authoritative_not_found and not any_unavailable:
             return TrainLookupResponse(
                 status="NOT_FOUND",
+                error_code="NOT_FOUND",
                 train_number=train_number,
                 already_exists=already_exists,
                 latency_ms=total_ms,
                 provider_attempts=attempts,
-                message="Invalid Train Number – No matching train was found.",
+                message="Invalid Train Number. No matching train information was found.",
+            )
+        if any_authoritative_not_found and any_unavailable:
+            # An authoritative dataset returned not_found even while another optional provider failed
+            return TrainLookupResponse(
+                status="NOT_FOUND",
+                error_code="NOT_FOUND",
+                train_number=train_number,
+                already_exists=already_exists,
+                latency_ms=total_ms,
+                provider_attempts=attempts,
+                message="Invalid Train Number. No matching train information was found.",
             )
 
+        resolved_code = last_error_code or "SERVER_UNAVAILABLE"
+        error_messages = {
+            "TIMEOUT": "Network timeout while contacting railway verification servers. Click Verify to retry.",
+            "RATE_LIMITED": "Railway API rate limit exceeded. Wait a moment and click Verify again.",
+            "AUTH_ERROR": "Invalid API credentials configured for the railway lookup provider.",
+            "INVALID_RESPONSE": "Unexpected response format received from the railway API.",
+            "SERVER_UNAVAILABLE": "Railway API server unavailable. Please verify connectivity and retry.",
+        }
         return TrainLookupResponse(
             status="UNAVAILABLE",
+            error_code=resolved_code,
             train_number=train_number,
             already_exists=already_exists,
             latency_ms=total_ms,
             provider_attempts=attempts,
-            message="Railway APIs are currently unavailable or timed out. Verify connectivity or enter details manually.",
+            message=error_messages.get(resolved_code, error_messages["SERVER_UNAVAILABLE"]),
         )
 
 

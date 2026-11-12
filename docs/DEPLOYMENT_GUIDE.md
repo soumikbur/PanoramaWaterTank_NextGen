@@ -28,7 +28,7 @@ Frontend deployment is automated exclusively via GitHub Actions:
 
 | Variable Name | Required | Default / Example | Purpose |
 | :--- | :--- | :--- | :--- |
-| `VITE_API_URL` | No | `https://api.panorama.railways.gov` | Base URL for REST API. If omitted, frontend uses relative paths or origin. |
+| `VITE_API_URL` | No | `https://api.panorama.railways.gov/api/v1` | External FastAPI base URL. On GitHub Pages when omitted, train verification queries public CORS-enabled DataMeet OpenData (`raw.githubusercontent.com/datameet/railways`) directly without backend keys. |
 | `VITE_WS_URL` | No | `wss://api.panorama.railways.gov/api/v1/ws/live` | WebSocket endpoint for live tank levels. |
 | `VITE_MAP_TILES_URL` | No | `https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png` | OpenStreetMap tile server source. |
 

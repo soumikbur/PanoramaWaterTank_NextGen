@@ -116,11 +116,12 @@ export const EmployeeDashboard: React.FC = () => {
   const [editTrainStatus, setEditTrainStatus] = useState('Running');
 
   // Load backend trains
-  const loadTrains = async () => {
+  const loadTrains = async (regionOverride?: string) => {
     try {
       setLoading(true);
+      const effectiveRegion = regionOverride ?? selectedRegion;
       const res = await ApiClient.fetchTrains(
-        selectedRegion === 'ALL' ? undefined : selectedRegion,
+        effectiveRegion === 'ALL' ? undefined : effectiveRegion,
         searchQuery || undefined
       );
       setBackendTrains(Array.isArray(res) ? res : []);
@@ -171,16 +172,20 @@ export const EmployeeDashboard: React.FC = () => {
       return {
         trainNumber: match.train_number,
         name: match.name,
-        source: (match as any).source || 'Station A',
-        destination: (match as any).destination || 'Station B',
-        region: match.region || 'Eastern',
+        source: match.source_station
+          ? (match.source_code ? `${match.source_station} (${match.source_code})` : match.source_station)
+          : (match as any).source || '—',
+        destination: match.destination_station
+          ? (match.destination_code ? `${match.destination_station} (${match.destination_code})` : match.destination_station)
+          : (match as any).destination || '—',
+        region: match.railway_zone || match.region || 'Eastern',
         status: match.is_online ? 'Active' : 'Standby',
         latitude: (match as any).latitude || 22.557279,
         longitude: (match as any).longitude || 88.352432,
         speedKmh: (match as any).speed_kmh || 0,
-        nearestStation: (match as any).nearest_station || 'Howrah Junction (HWH)',
+        nearestStation: match.source_station || (match as any).nearest_station || 'Awaiting telemetry',
         lastUpdate: match.last_telemetry || 'Awaiting telemetry',
-        totalCoaches: match.coaches_count || 24,
+        totalCoaches: match.total_coaches || match.coaches_count || 24,
       };
     }
 
@@ -2662,10 +2667,15 @@ export const EmployeeDashboard: React.FC = () => {
             EAST: 'Eastern',
             WEST: 'Western',
           };
+          const nextRegion = meta?.region && selectedRegion !== 'ALL'
+            ? (regionDisplayMap[meta.region] || 'ALL')
+            : selectedRegion;
           if (meta?.region && selectedRegion !== 'ALL') {
-            setSelectedRegion(regionDisplayMap[meta.region] || 'ALL');
+            setSelectedRegion(nextRegion);
           }
-          await loadTrains();
+          setActionFeedback(`Train ${trainNo}${meta?.name ? ` (${meta.name})` : ''} verified and added to fleet.`);
+          setTimeout(() => setActionFeedback(null), 4500);
+          await loadTrains(nextRegion);
           await refreshRegions();
           setSelectedTrainNumber(trainNo);
         }}

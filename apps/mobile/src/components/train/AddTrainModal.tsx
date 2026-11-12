@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AlertCircle,
@@ -6,13 +6,13 @@ import {
   Loader2,
   RefreshCw,
   Search,
-  Sparkles,
+  ShieldCheck,
   Train as TrainIcon,
   X,
 } from 'lucide-react';
 import { ApiClient } from '../../api/client';
 import { trainLookupService } from '../../services/trainLookupService';
-import { TrainCreatePayload, TrainLookupResult } from '../../types/train';
+import { TrainCreatePayload, TrainLookupErrorCode, TrainLookupResult } from '../../types/train';
 
 export interface AddTrainModalProps {
   isOpen: boolean;
@@ -29,6 +29,16 @@ const REGION_OPTIONS = [
   { key: 'EAST', label: 'EAST — Eastern Railway (ER)' },
   { key: 'WEST', label: 'WEST — Western Railway (WR)' },
 ];
+
+const ERROR_TITLES: Record<TrainLookupErrorCode, string> = {
+  INVALID_FORMAT: 'Invalid Format',
+  NOT_FOUND: 'Invalid Train Number',
+  TIMEOUT: 'Network Timeout',
+  RATE_LIMITED: 'Rate Limit Exceeded',
+  AUTH_ERROR: 'Invalid API Credentials',
+  INVALID_RESPONSE: 'Unexpected API Response',
+  SERVER_UNAVAILABLE: 'API Server Unavailable',
+};
 
 export const AddTrainModal: React.FC<AddTrainModalProps> = ({
   isOpen,
@@ -50,14 +60,12 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
 
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupResult, setLookupResult] = useState<TrainLookupResult | null>(null);
+  const [verifiedTrainNumber, setVerifiedTrainNumber] = useState<string | null>(null);
   const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set());
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const resetForm = () => {
-    setTrainNumber('');
+  const clearPopulatedMetadata = () => {
     setTrainName('');
     setSourceStation('');
     setSourceCode('');
@@ -67,17 +75,22 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
     setRailwayZone('NR');
     setTrainType('Express');
     setInitialCoach('B1');
+    setAutoFilledFields(new Set());
+  };
+
+  const resetForm = () => {
+    setTrainNumber('');
+    clearPopulatedMetadata();
     setTankCapacity('20');
     setUseOfficialConsist(true);
     setLookupLoading(false);
     setLookupResult(null);
-    setAutoFilledFields(new Set());
+    setVerifiedTrainNumber(null);
     setSubmitError(null);
   };
 
   useEffect(() => {
     if (!isOpen) {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
       trainLookupService.abortActive();
       return;
     }
@@ -88,9 +101,12 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
     setLookupResult(res);
     setSubmitError(null);
     if (res.status !== 'VERIFIED') {
+      setVerifiedTrainNumber(null);
+      clearPopulatedMetadata();
       return;
     }
 
+    setVerifiedTrainNumber(res.train_number);
     const filled = new Set<string>();
     if (res.train_name) {
       setTrainName(res.train_name);
@@ -142,18 +158,23 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
     setAutoFilledFields(filled);
   };
 
-  const runLookup = async (value: string, refresh = false) => {
-    const clean = value.trim();
+  // Executes railway API verification ONLY when the user clicks Verify.
+  const handleVerifyClick = async () => {
+    if (lookupLoading) return;
+
+    const clean = trainNumber.trim();
     if (!clean) {
-      setLookupResult(null);
-      setLookupLoading(false);
+      setSubmitError('Please enter a train number before clicking Verify.');
       return;
     }
 
     if (!trainLookupService.isValidTrainNumberFormat(clean)) {
+      setVerifiedTrainNumber(null);
+      clearPopulatedMetadata();
       setLookupLoading(false);
       setLookupResult({
         status: 'INVALID_FORMAT',
+        error_code: 'INVALID_FORMAT',
         train_number: clean,
         route: [],
         coach_composition: [],
@@ -170,43 +191,29 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
 
     setLookupLoading(true);
     setSubmitError(null);
-    const { result, stale } = await trainLookupService.lookup(clean, { refresh });
-    if (stale) return;
-    setLookupLoading(false);
-    applyLookupData(result);
+    const shouldRefresh = Boolean(lookupResult && lookupResult.train_number === clean);
+    try {
+      const { result, stale } = await trainLookupService.lookup(clean, { refresh: shouldRefresh });
+      if (stale) return;
+      applyLookupData(result);
+    } finally {
+      setLookupLoading(false);
+    }
   };
 
+  // Typing or editing train number invalidates any prior verification without firing API requests.
   const handleTrainNumberChange = (raw: string) => {
     const next = raw.replace(/\s+/g, '');
     setTrainNumber(next);
     setSubmitError(null);
-    setAutoFilledFields(new Set());
-
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    if (!next) {
+    if (lookupLoading) {
       trainLookupService.abortActive();
       setLookupLoading(false);
-      setLookupResult(null);
-      return;
     }
-
-    // Immediate lookup on 5 digits, brief debounce for 4 digits or incomplete typing
-    if (/^\d{5}$/.test(next)) {
-      debounceRef.current = setTimeout(() => {
-        void runLookup(next);
-      }, 150);
-    } else if (/^\d{4}$/.test(next)) {
-      debounceRef.current = setTimeout(() => {
-        void runLookup(next);
-      }, 450);
-    } else if (/^\d{1,3}$/.test(next)) {
-      trainLookupService.abortActive();
-      setLookupLoading(false);
+    if (lookupResult !== null || verifiedTrainNumber !== null || autoFilledFields.size > 0) {
       setLookupResult(null);
-    } else {
-      // Contains non-digits or >5 chars: show immediate format error
-      void runLookup(next);
+      setVerifiedTrainNumber(null);
+      clearPopulatedMetadata();
     }
   };
 
@@ -218,15 +225,19 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
       return;
     }
     if (lookupResult?.status === 'NOT_FOUND') {
-      setSubmitError('Invalid Train Number – Cannot register a non-existent train number.');
+      setSubmitError('Invalid Train Number. No matching train information was found.');
+      return;
+    }
+    if (lookupResult?.status !== 'VERIFIED' || verifiedTrainNumber !== cleanNum) {
+      setSubmitError('Train number must be verified via the Verify button before adding to the fleet.');
       return;
     }
     if (lookupResult?.already_exists) {
       setSubmitError(`Train ${cleanNum} is already registered in the fleet.`);
       return;
     }
-    if (!trainName.trim()) {
-      setSubmitError('Train Name is required before adding to the fleet.');
+    if (!trainName.trim() || !region.trim()) {
+      setSubmitError('Train Name and Railway Region are required before adding to the fleet.');
       return;
     }
 
@@ -253,12 +264,12 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
         route: lookupResult?.route || [],
         total_coaches: hasOfficial ? lookupResult?.coach_composition.length : 1,
         has_official_composition: hasOfficial,
-        api_provider: lookupResult?.status === 'VERIFIED' ? lookupResult.provider : 'Manual Entry',
-        last_verified_at: lookupResult?.status === 'VERIFIED' ? lookupResult.verified_at : null,
+        api_provider: lookupResult.provider || 'DataMeet OpenData',
+        last_verified_at: lookupResult.verified_at || new Date().toISOString(),
         tank_capacity: parseFloat(tankCapacity) || 20.0,
         ...(hasOfficial
           ? {
-              coaches: lookupResult!.coach_composition.map((c) => ({
+              coaches: lookupResult.coach_composition.map((c) => ({
                 coach_number: c.coach_number,
                 coach_category: c.coach_category,
                 coach_type: c.coach_type,
@@ -280,7 +291,8 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
 
   if (!isOpen) return null;
 
-  const isVerified = lookupResult?.status === 'VERIFIED';
+  const cleanInputNum = trainNumber.trim();
+  const isVerified = lookupResult?.status === 'VERIFIED' && verifiedTrainNumber === cleanInputNum;
   const isErrorStatus =
     lookupResult?.status === 'NOT_FOUND' ||
     lookupResult?.status === 'INVALID_FORMAT' ||
@@ -289,11 +301,20 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
   const canConfirm =
     !submitLoading &&
     !lookupLoading &&
+    isVerified &&
     !isDuplicate &&
-    lookupResult?.status !== 'NOT_FOUND' &&
-    lookupResult?.status !== 'INVALID_FORMAT' &&
-    Boolean(trainNumber.trim()) &&
-    Boolean(trainName.trim());
+    Boolean(cleanInputNum) &&
+    Boolean(trainName.trim()) &&
+    Boolean(region.trim());
+
+  const errorCode: TrainLookupErrorCode =
+    lookupResult?.error_code ||
+    (lookupResult?.status === 'NOT_FOUND'
+      ? 'NOT_FOUND'
+      : lookupResult?.status === 'INVALID_FORMAT'
+        ? 'INVALID_FORMAT'
+        : 'SERVER_UNAVAILABLE');
+  const errorTitle = ERROR_TITLES[errorCode] || 'Verification Failed';
 
   const autoTag = (field: string) =>
     autoFilledFields.has(field) ? (
@@ -310,12 +331,13 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
           textTransform: 'uppercase',
         }}
       >
-        Auto-filled
+        Verified
       </span>
     ) : null;
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
+    minWidth: 0,
     padding: '8px 10px',
     borderRadius: '6px',
     border: '1px solid #CBD5E1',
@@ -336,7 +358,7 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 99999,
-        padding: '16px',
+        padding: '12px',
       }}
     >
       <div
@@ -346,10 +368,11 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
           padding: '20px',
           width: '620px',
           maxWidth: '100%',
-          maxHeight: 'calc(100vh - 32px)',
+          maxHeight: 'calc(100vh - 24px)',
           overflowY: 'auto',
           boxShadow: '0 24px 40px -12px rgba(15, 23, 42, 0.28)',
           border: '1px solid #E2E8F0',
+          boxSizing: 'border-box',
         }}
       >
         {/* Header */}
@@ -358,12 +381,13 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            gap: '12px',
             marginBottom: '14px',
             borderBottom: '1px solid #F1F5F9',
             paddingBottom: '12px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
             <div
               style={{
                 width: '34px',
@@ -379,13 +403,13 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
             >
               <TrainIcon size={18} />
             </div>
-            <div>
+            <div style={{ minWidth: 0 }}>
               <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0F172A' }}>
                 Add Train to Fleet
               </h3>
               <div style={{ fontSize: '11px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Sparkles size={11} color="#2563EB" />
-                Automatic Indian Railways lookup & verification
+                <ShieldCheck size={12} color="#2563EB" />
+                Enter train number and click Verify to fetch Indian Railways details
               </div>
             </div>
           </div>
@@ -404,6 +428,7 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
               padding: '6px',
               display: 'flex',
               alignItems: 'center',
+              flexShrink: 0,
             }}
           >
             <X size={16} />
@@ -411,29 +436,24 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {/* Train Number + Verify Trigger */}
+          {/* Train Number + Explicit Verify Button */}
           <div>
             <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
               Train Number (4 or 5 digits) *
             </label>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
               <input
                 data-testid="train-number-input"
                 type="text"
                 inputMode="numeric"
                 maxLength={6}
                 required
-                placeholder="e.g. 12002, 12301, 12951"
+                placeholder="e.g. 15102, 12002, 12951"
                 value={trainNumber}
                 onChange={(e) => handleTrainNumberChange(e.target.value)}
-                onBlur={() => {
-                  if (/^\d{4}$/.test(trainNumber.trim()) && !lookupResult && !lookupLoading) {
-                    void runLookup(trainNumber);
-                  }
-                }}
                 style={{
                   ...inputStyle,
-                  flex: '1 1 180px',
+                  flex: '1 1 auto',
                   fontWeight: 700,
                   letterSpacing: '0.4px',
                   borderColor: isVerified ? '#16A34A' : isErrorStatus ? '#DC2626' : '#CBD5E1',
@@ -442,31 +462,47 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
               <button
                 type="button"
                 data-testid="verify-train-btn"
-                onClick={() => void runLookup(trainNumber, Boolean(lookupResult))}
-                disabled={lookupLoading || !trainNumber.trim()}
-                title="Verify train number via Railway APIs"
+                onClick={() => void handleVerifyClick()}
+                disabled={lookupLoading || !cleanInputNum}
+                title="Verify train number via Railway API"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
+                  justifyContent: 'center',
                   gap: '6px',
-                  padding: '8px 12px',
+                  padding: '8px 14px',
                   borderRadius: '6px',
-                  border: '1px solid #CBD5E1',
-                  backgroundColor: '#F8FAFC',
-                  color: '#0F172A',
+                  border: isVerified ? '1px solid #86EFAC' : '1px solid #2563EB',
+                  backgroundColor: lookupLoading || !cleanInputNum
+                    ? '#F1F5F9'
+                    : isVerified
+                      ? '#F0FDF4'
+                      : '#2563EB',
+                  color: lookupLoading || !cleanInputNum
+                    ? '#94A3B8'
+                    : isVerified
+                      ? '#166534'
+                      : '#FFFFFF',
                   fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: lookupLoading || !trainNumber.trim() ? 'not-allowed' : 'pointer',
+                  fontWeight: 700,
+                  cursor: lookupLoading || !cleanInputNum ? 'not-allowed' : 'pointer',
                   whiteSpace: 'nowrap',
+                  flexShrink: 0,
                 }}
               >
-                {lookupResult ? <RefreshCw size={13} /> : <Search size={13} />}
-                {lookupResult ? 'Re-verify' : 'Verify'}
+                {lookupLoading ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : isVerified ? (
+                  <RefreshCw size={13} />
+                ) : (
+                  <Search size={13} />
+                )}
+                {lookupLoading ? 'Verifying...' : isVerified ? 'Re-verify' : 'Verify'}
               </button>
             </div>
           </div>
 
-          {/* Lookup Status Banner */}
+          {/* Lookup Loading Banner */}
           {lookupLoading && (
             <div
               data-testid="train-lookup-status"
@@ -484,10 +520,11 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
               }}
             >
               <Loader2 size={15} className="animate-spin" />
-              Searching Indian Railways database...
+              Verifying train information...
             </div>
           )}
 
+          {/* Verified State Banner */}
           {!lookupLoading && isVerified && lookupResult && (
             <div
               data-testid="train-lookup-status"
@@ -508,7 +545,7 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
                   <CheckCircle2 size={15} />
                   {isDuplicate
                     ? `Train ${lookupResult.train_number} is already registered in the fleet.`
-                    : 'Train verified successfully.'}
+                    : 'Train successfully verified.'}
                 </span>
                 <span style={{ fontSize: '10px', fontWeight: 600, opacity: 0.9 }}>
                   Source: {lookupResult.provider} · {lookupResult.cached ? 'Cached' : 'Live'} ({lookupResult.latency_ms} ms)
@@ -516,15 +553,17 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
               </div>
               {lookupResult.missing_fields.length > 0 && (
                 <div style={{ fontSize: '11px', opacity: 0.88 }}>
-                  Provider note: {lookupResult.missing_fields.join(', ')} not supplied by {lookupResult.provider}; manual/app defaults preserved.
+                  Provider note: {lookupResult.missing_fields.join(', ')} not supplied by {lookupResult.provider}; app defaults preserved.
                 </div>
               )}
             </div>
           )}
 
+          {/* Differentiated Verification Error Popup */}
           {!lookupLoading && isErrorStatus && lookupResult && (
             <div
               data-testid="train-lookup-error"
+              data-error-code={errorCode}
               role="alert"
               style={{
                 display: 'flex',
@@ -538,14 +577,10 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
                 fontSize: '12px',
               }}
             >
-              <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '1px' }} />
-              <div>
-                <div style={{ fontWeight: 700 }}>{lookupResult.message}</div>
-                {lookupResult.status === 'UNAVAILABLE' && (
-                  <div style={{ fontSize: '11px', marginTop: '2px' }}>
-                    You can retry verification or complete the fields manually below.
-                  </div>
-                )}
+              <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700 }}>{errorTitle}</div>
+                <div style={{ marginTop: '2px' }}>{lookupResult.message}</div>
               </div>
             </div>
           )}
@@ -568,9 +603,9 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
             </div>
           )}
 
-          {/* Auto-populated Train Metadata Fields */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
-            <div>
+          {/* Train Metadata Fields */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px' }}>
+            <div style={{ minWidth: 0 }}>
               <label style={{ display: 'flex', alignItems: 'center', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
                 Train Name * {autoTag('name')}
               </label>
@@ -578,21 +613,21 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
                 data-testid="train-name-input"
                 type="text"
                 required
-                placeholder="e.g. BHOPAL SHATABDI"
+                placeholder="Populated after clicking Verify"
                 value={trainName}
                 onChange={(e) => setTrainName(e.target.value)}
                 style={inputStyle}
               />
             </div>
 
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label style={{ display: 'flex', alignItems: 'center', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
                 Train Type {autoTag('type')}
               </label>
               <input
                 data-testid="train-type-input"
                 type="text"
-                placeholder="e.g. Shatabdi Express, Rajdhani, Superfast"
+                placeholder="Express, Rajdhani, Shatabdi..."
                 value={trainType}
                 onChange={(e) => setTrainType(e.target.value)}
                 style={inputStyle}
@@ -600,8 +635,8 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
-            <div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px' }}>
+            <div style={{ minWidth: 0 }}>
               <label style={{ display: 'flex', alignItems: 'center', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
                 Source Station {autoTag('source')}
               </label>
@@ -615,7 +650,7 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
               />
             </div>
 
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label style={{ display: 'flex', alignItems: 'center', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
                 Destination Station {autoTag('destination')}
               </label>
@@ -630,8 +665,8 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px' }}>
-            <div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
+            <div style={{ minWidth: 0 }}>
               <label style={{ display: 'flex', alignItems: 'center', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
                 Railway Region * {autoTag('region')}
               </label>
@@ -649,21 +684,21 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
               </select>
             </div>
 
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label style={{ display: 'flex', alignItems: 'center', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
                 Railway Zone {autoTag('zone')}
               </label>
               <input
                 data-testid="train-zone-input"
                 type="text"
-                placeholder="NR / WR / SR / SER"
+                placeholder="NR / WR / SR / NER"
                 value={railwayZone}
                 onChange={(e) => setRailwayZone(e.target.value)}
                 style={inputStyle}
               />
             </div>
 
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
                 Tank Capacity (L)
               </label>
@@ -679,7 +714,7 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
             </div>
           </div>
 
-          {/* Running Days & Route Summary (when API supplies them) */}
+          {/* Running Days & Route Summary */}
           {isVerified && lookupResult && (lookupResult.running_days?.length || lookupResult.route.length > 0) && (
             <div
               style={{
@@ -755,7 +790,7 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
           ) : (
             <div>
               <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                Initial Coach Number (App-managed consist)
+                Initial Coach Number
               </label>
               <input
                 data-testid="train-coach-input"
@@ -773,6 +808,7 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
             style={{
               display: 'flex',
               justifyContent: 'flex-end',
+              flexWrap: 'wrap',
               gap: '10px',
               marginTop: '6px',
               paddingTop: '12px',

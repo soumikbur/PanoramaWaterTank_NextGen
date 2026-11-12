@@ -165,14 +165,39 @@ function buildElectronScript(token, userProfile) {
         assert.strictEqual(await clickSelector(win, '[data-testid="open-add-train-btn"]'), true);
         await waitForSelector(win, '[data-testid="add-train-modal"]');
 
-        // 2. Invalid format validation
+        // 1b. Enter valid train number WITHOUT clicking Verify -> ZERO automatic API requests!
+        await win.webContents.executeJavaScript(\`
+          window.__lookupCalls = [];
+          window.__origFetch = window.fetch;
+          window.fetch = (...args) => {
+            if (String(args[0]).includes('/trains/lookup/')) {
+              window.__lookupCalls.push(String(args[0]));
+            }
+            return window.__origFetch(...args);
+          };
+          true;
+        \`);
+        await setInputValue(win, '[data-testid="train-number-input"]', '15102');
+        await sleep(600);
+        const autoCallsCount = await win.webContents.executeJavaScript('window.__lookupCalls.length');
+        assert.strictEqual(autoCallsCount, 0, 'Typing train number must NEVER trigger automatic API requests');
+        const unverifiedConfirmDisabled = await win.webContents.executeJavaScript(
+          'document.querySelector(\\'[data-testid="confirm-add-train-btn"]\\').disabled'
+        );
+        assert.strictEqual(unverifiedConfirmDisabled, true, 'Confirm & Add Train must stay disabled before Verify click');
+        console.log('[PASS] No auto-search on typing & Add blocked without verification.');
+
+        // 2. Click Verify for invalid format -> format error without API request
         await setInputValue(win, '[data-testid="train-number-input"]', 'abc');
+        assert.strictEqual(await clickSelector(win, '[data-testid="verify-train-btn"]'), true);
         const fmtErr = await waitForSelector(win, '[data-testid="train-lookup-error"]');
         assert(fmtErr.toLowerCase().includes('4- or 5-digit'), 'Expected format error, got: ' + fmtErr);
-        console.log('[PASS] Desktop format check:', fmtErr);
+        assert.strictEqual(await win.webContents.executeJavaScript('window.__lookupCalls.length'), 0);
+        console.log('[PASS] Desktop format check on Verify click:', fmtErr);
 
-        // 3. Non-existent train number -> NOT_FOUND popup
+        // 3. Non-existent train number -> click Verify -> NOT_FOUND popup
         await setInputValue(win, '[data-testid="train-number-input"]', '99998');
+        assert.strictEqual(await clickSelector(win, '[data-testid="verify-train-btn"]'), true);
         const notFoundText = await waitForSelector(
           win,
           '[data-testid="train-lookup-error"]',
@@ -185,15 +210,23 @@ function buildElectronScript(token, userProfile) {
         await saveShot(win, 'add_train_01_invalid_error.png');
         console.log('[PASS] Desktop NOT_FOUND check:', notFoundText);
 
-        // 4. Rapid typing race cancellation -> 12002 overridden by 12951
-        await setInputValue(win, '[data-testid="train-number-input"]', '12002');
-        await sleep(60);
+        // 4. Rapid Verify clicks deduplication + verification (15102 / 12951) -> change invalidation
+        await win.webContents.executeJavaScript('window.__lookupCalls = []; true;');
         await setInputValue(win, '[data-testid="train-number-input"]', '12951');
+        // Click Verify 3 times rapidly before response resolves
+        await win.webContents.executeJavaScript(\`
+          const btn = document.querySelector('[data-testid="verify-train-btn"]');
+          btn.click();
+          btn.click();
+          btn.click();
+        \`);
         const verified12951 = await waitForSelector(
           win,
           '[data-testid="train-lookup-status"]',
-          'el.innerText.includes("Train verified successfully")'
+          'el.innerText.includes("Train successfully verified")'
         );
+        const rapidCallsCount = await win.webContents.executeJavaScript('window.__lookupCalls.length');
+        assert.strictEqual(rapidCallsCount, 1, 'Rapid Verify clicks must issue only 1 API request, got ' + rapidCallsCount);
         const auto12951 = await win.webContents.executeJavaScript(\`(() => ({
           name: document.querySelector('[data-testid="train-name-input"]')?.value,
           src: document.querySelector('[data-testid="train-source-input"]')?.value,
@@ -205,14 +238,28 @@ function buildElectronScript(token, userProfile) {
         assert(auto12951.name && auto12951.name.toUpperCase().includes('RAJDHANI'), 'Expected Rajdhani for 12951, got ' + auto12951.name);
         assert.strictEqual(auto12951.reg, 'WEST', 'Expected WEST region for WR');
         await saveShot(win, 'add_train_02_desktop_verified.png');
-        console.log('[PASS] Desktop rapid-typing & auto-population (12951):', JSON.stringify(auto12951), verified12951);
+        console.log('[PASS] Desktop rapid-click dedup & auto-population (12951):', JSON.stringify(auto12951), verified12951);
 
-        // 5. Add clean train 12842 -> verify persistence across reload
+        // 4b. Changing verified train number must invalidate verification immediately
+        await setInputValue(win, '[data-testid="train-number-input"]', '1510');
+        await sleep(100);
+        const invalidatedState = await win.webContents.executeJavaScript(\`(() => ({
+          statusPresent: Boolean(document.querySelector('[data-testid="train-lookup-status"]')),
+          nameVal: document.querySelector('[data-testid="train-name-input"]')?.value,
+          confirmDisabled: document.querySelector('[data-testid="confirm-add-train-btn"]')?.disabled,
+        }))()\`);
+        assert.strictEqual(invalidatedState.statusPresent, false, 'Previous verification badge must clear on edit');
+        assert.strictEqual(invalidatedState.nameVal, '', 'Previous train name must clear on edit');
+        assert.strictEqual(invalidatedState.confirmDisabled, true, 'Confirm button must disable when train number edited');
+        console.log('[PASS] Verification invalidated upon editing train number.');
+
+        // 5. Verify & Add clean train 12842 -> verify persistence across reload
         await setInputValue(win, '[data-testid="train-number-input"]', '12842');
+        assert.strictEqual(await clickSelector(win, '[data-testid="verify-train-btn"]'), true);
         await waitForSelector(
           win,
           '[data-testid="train-lookup-status"]',
-          'el.innerText.includes("Train verified successfully")'
+          'el.innerText.includes("Train successfully verified")'
         );
         await waitForSelector(
           win,
@@ -241,6 +288,7 @@ function buildElectronScript(token, userProfile) {
         await clickSelector(win, '[data-testid="open-add-train-btn"]');
         await waitForSelector(win, '[data-testid="add-train-modal"]');
         await setInputValue(win, '[data-testid="train-number-input"]', '12842');
+        assert.strictEqual(await clickSelector(win, '[data-testid="verify-train-btn"]'), true);
         const dupMsg = await waitForSelector(
           win,
           '[data-testid="train-lookup-status"]',
@@ -253,24 +301,46 @@ function buildElectronScript(token, userProfile) {
         await saveShot(win, 'add_train_04_duplicate_blocked.png');
         console.log('[PASS] Duplicate detection:', dupMsg);
 
-        // 7. API Unavailable error differentiation (offline/503 simulation)
+        // 7. API Unavailable error differentiation (offline/503 simulation) & Network Timeout differentiation
         await win.webContents.executeJavaScript(\`
-          window.__origFetch = window.fetch;
+          window.__origFetch = window.__origFetch || window.fetch;
           window.fetch = (...args) => {
             if (String(args[0]).includes('/trains/lookup/')) {
-              return Promise.reject(new Error('Network offline (503 Service Unavailable)'));
+              return Promise.resolve(new Response('Service Unavailable', { status: 503 }));
             }
             return window.__origFetch(...args);
           };
           true;
         \`);
         await setInputValue(win, '[data-testid="train-number-input"]', '12004');
+        assert.strictEqual(await clickSelector(win, '[data-testid="verify-train-btn"]'), true);
         const offlineMsg = await waitForSelector(
           win,
           '[data-testid="train-lookup-error"]',
-          'el.innerText.toLowerCase().includes("unavailable") || el.innerText.toLowerCase().includes("offline")'
+          'el.getAttribute("data-error-code") === "SERVER_UNAVAILABLE"'
         );
         console.log('[PASS] API Unavailable distinction:', offlineMsg);
+
+        await win.webContents.executeJavaScript(\`
+          window.fetch = (...args) => {
+            if (String(args[0]).includes('/trains/lookup/')) {
+              const e = new Error('Network timed out');
+              e.name = 'AbortError';
+              return Promise.reject(e);
+            }
+            return window.__origFetch(...args);
+          };
+          true;
+        \`);
+        await setInputValue(win, '[data-testid="train-number-input"]', '12005');
+        assert.strictEqual(await clickSelector(win, '[data-testid="verify-train-btn"]'), true);
+        const timeoutMsg = await waitForSelector(
+          win,
+          '[data-testid="train-lookup-error"]',
+          'el.getAttribute("data-error-code") === "TIMEOUT"'
+        );
+        console.log('[PASS] Network Timeout distinction:', timeoutMsg);
+
         await win.webContents.executeJavaScript('if (window.__origFetch) { window.fetch = window.__origFetch; } true;');
         await clickSelector(win, '[data-testid="close-add-train-btn"]');
 
@@ -284,10 +354,11 @@ function buildElectronScript(token, userProfile) {
         assert.strictEqual(await clickButtonContaining(win, 'Add Train'), true, 'Mobile Add Train button not found');
         await waitForSelector(win, '[data-testid="add-train-modal"]');
         await setInputValue(win, '[data-testid="train-number-input"]', '12621');
+        assert.strictEqual(await clickSelector(win, '[data-testid="verify-train-btn"]'), true);
         await waitForSelector(
           win,
           '[data-testid="train-lookup-status"]',
-          'el.innerText.includes("Train verified successfully")'
+          'el.innerText.includes("Train successfully verified")'
         );
         await waitForSelector(
           win,

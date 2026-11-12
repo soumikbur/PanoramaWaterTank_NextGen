@@ -306,3 +306,40 @@ async def test_live_datameet_lookup_and_db_cache_persistence():
     async with AsyncSessionLocal() as db:
         row = (await db.execute(select(Train).where(Train.train_number == test_train_no))).scalar_one_or_none()
         assert row is None
+
+
+@pytest.mark.asyncio
+async def test_error_code_differentiation_for_rate_limit_auth_timeout(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(settings, "RAILRADAR_API_KEY", "test-key")
+    monkeypatch.setattr(settings, "RAPIDAPI_IRCTC_KEY", "")
+    monkeypatch.setattr(settings, "INDIANRAIL_API_KEY", "")
+
+    # 1. Rate Limit (429)
+    svc_rl = TrainLookupService(
+        providers=[RailRadarProvider()],
+        client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(lambda req: httpx.Response(429))),
+    )
+    res_rl = await svc_rl.lookup("15102")
+    assert res_rl.status == "UNAVAILABLE"
+    assert res_rl.error_code == "RATE_LIMITED"
+
+    # 2. Invalid credentials (401)
+    svc_auth = TrainLookupService(
+        providers=[RailRadarProvider()],
+        client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(lambda req: httpx.Response(401))),
+    )
+    res_auth = await svc_auth.lookup("15102")
+    assert res_auth.status == "UNAVAILABLE"
+    assert res_auth.error_code == "AUTH_ERROR"
+
+    # 3. Network timeout
+    def timeout_handler(req: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("Timed out")
+
+    svc_to = TrainLookupService(
+        providers=[RailRadarProvider()],
+        client_factory=lambda: httpx.AsyncClient(transport=httpx.MockTransport(timeout_handler)),
+    )
+    res_to = await svc_to.lookup("15102")
+    assert res_to.status == "UNAVAILABLE"
+    assert res_to.error_code == "TIMEOUT"
