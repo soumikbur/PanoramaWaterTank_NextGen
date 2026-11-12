@@ -561,6 +561,9 @@ function runElectronTest() {
               const cRect = container ? container.getBoundingClientRect() : null;
               const hRect = header ? header.getBoundingClientRect() : null;
 
+              const headerEl = header ? header.closest('div') : null;
+              const headerBg = headerEl ? window.getComputedStyle(headerEl.parentElement).backgroundColor : null;
+
               return {
                 viewport: { w: window.innerWidth, h: window.innerHeight },
                 overlayCoversViewport: Boolean(oRect && oRect.top === 0 && oRect.left === 0 && oRect.width >= window.innerWidth - 2 && oRect.height >= window.innerHeight - 2),
@@ -569,6 +572,7 @@ function runElectronTest() {
                 containerWidth: cRect ? Math.round(cRect.width) : 0,
                 containerHeight: cRect ? Math.round(cRect.height) : 0,
                 headerVisibleAndNotClipped: Boolean(hRect && hRect.top >= 10 && hRect.bottom > hRect.top),
+                headerIsLightTheme: headerBg !== 'rgb(15, 23, 42)',
                 tableScrollExists: Boolean(tableScroll),
                 tableMinWidth: table ? table.offsetWidth : 0,
                 rowCount: rows.length,

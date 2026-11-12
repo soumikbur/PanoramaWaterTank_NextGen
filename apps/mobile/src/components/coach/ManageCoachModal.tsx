@@ -423,16 +423,15 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
           overflow: 'hidden',
         }}
       >
-        {/* Modal Header (Sticky) */}
+        {/* Modal Header (Sticky - Restored Light SCADA Theme) */}
         <div
           style={{
-            padding: '14px 20px',
-            backgroundColor: '#0F172A',
-            color: '#FFFFFF',
+            padding: '16px 20px',
+            backgroundColor: '#FFFFFF',
+            borderBottom: '1px solid #E2E8F0',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            borderBottom: '1px solid #1E293B',
             flexShrink: 0,
             gap: '12px',
           }}
@@ -443,14 +442,15 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                 width: '36px',
                 height: '36px',
                 borderRadius: '8px',
-                backgroundColor: '#2563EB',
+                backgroundColor: '#EFF6FF',
+                color: '#2563EB',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
               }}
             >
-              <Layers size={20} color="#FFFFFF" />
+              <Layers size={20} color="#2563EB" />
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -460,8 +460,8 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                     margin: 0,
                     fontSize: '16px',
                     fontWeight: 800,
-                    letterSpacing: '0.3px',
-                    color: '#FFFFFF',
+                    letterSpacing: '0.2px',
+                    color: '#0F172A',
                   }}
                 >
                   Coach Fleet &amp; Consist Management
@@ -470,10 +470,11 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                   style={{
                     fontSize: '11px',
                     fontWeight: 700,
-                    padding: '3px 8px',
+                    padding: '2px 8px',
                     borderRadius: '4px',
-                    backgroundColor: isAdmin ? '#10B981' : '#F59E0B',
-                    color: '#FFFFFF',
+                    backgroundColor: isAdmin ? '#DCFCE7' : '#FEF3C7',
+                    color: isAdmin ? '#15803D' : '#B45309',
+                    border: `1px solid ${isAdmin ? '#86EFAC' : '#FCD34D'}`,
                     letterSpacing: '0.4px',
                   }}
                 >
@@ -481,36 +482,36 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '4px', fontSize: '12px' }}>
-                <span style={{ fontWeight: 700, color: '#93C5FD' }}>
+                <span style={{ fontWeight: 700, color: '#2563EB' }}>
                   Train {effectiveTrainNumber}
                 </span>
-                <span style={{ color: '#64748B' }}>&bull;</span>
-                <span style={{ color: '#E2E8F0', fontWeight: 600 }}>
+                <span style={{ color: '#CBD5E1' }}>&bull;</span>
+                <span style={{ color: '#475569', fontWeight: 600 }}>
                   {matchedTrain?.name || 'Express Fleet'}
                 </span>
-                <span style={{ color: '#64748B' }}>&bull;</span>
+                <span style={{ color: '#CBD5E1' }}>&bull;</span>
                 <span
                   style={{
-                    backgroundColor: '#1E293B',
-                    color: '#38BDF8',
-                    padding: '1px 8px',
+                    backgroundColor: '#EFF6FF',
+                    color: '#1D4ED8',
+                    padding: '2px 8px',
                     borderRadius: '4px',
                     fontSize: '11px',
                     fontWeight: 700,
-                    border: '1px solid #334155',
+                    border: '1px solid #BFDBFE',
                   }}
                 >
                   {rawCoaches.length} Coaches Configured
                 </span>
                 <span
                   style={{
-                    backgroundColor: '#1E293B',
-                    color: '#2DD4BF',
-                    padding: '1px 8px',
+                    backgroundColor: '#F0FDFA',
+                    color: '#0F766E',
+                    padding: '2px 8px',
                     borderRadius: '4px',
                     fontSize: '11px',
                     fontWeight: 700,
-                    border: '1px solid #334155',
+                    border: '1px solid #99F6E4',
                   }}
                 >
                   {rawCoaches.length * 2} Water Tanks
@@ -527,9 +528,9 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
               width: '34px',
               height: '34px',
               borderRadius: '6px',
-              backgroundColor: '#1E293B',
-              color: '#94A3B8',
-              border: '1px solid #334155',
+              backgroundColor: '#F8FAFC',
+              color: '#64748B',
+              border: '1px solid #E2E8F0',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -1205,20 +1206,47 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
           >
             <div
               style={{
-                padding: '12px 16px',
-                backgroundColor: '#1E293B',
-                color: '#FFFFFF',
+                padding: '14px 18px',
+                backgroundColor: '#FFFFFF',
+                borderBottom: '1px solid #E2E8F0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}
             >
-              <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700 }}>
-                {activeSubModal === 'ADD' ? 'Add New Coach to Consist' : `Edit Coach ${targetCoach?.coach_number}`}
-              </h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '6px',
+                    backgroundColor: '#EFF6FF',
+                    color: '#2563EB',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Plus size={16} />
+                </div>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0F172A' }}>
+                  {activeSubModal === 'ADD' ? 'Add New Coach to Consist' : `Edit Coach ${targetCoach?.coach_number}`}
+                </h3>
+              </div>
               <button
                 onClick={() => setActiveSubModal('NONE')}
-                style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer' }}
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '5px',
+                  backgroundColor: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  color: '#64748B',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
                 <X size={16} />
               </button>
@@ -1472,20 +1500,47 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
           >
             <div
               style={{
-                padding: '12px 16px',
-                backgroundColor: '#1E293B',
-                color: '#FFFFFF',
+                padding: '14px 18px',
+                backgroundColor: '#FFFFFF',
+                borderBottom: '1px solid #E2E8F0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}
             >
-              <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700 }}>
-                Rename Coach {targetCoach.coach_number}
-              </h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '6px',
+                    backgroundColor: '#EFF6FF',
+                    color: '#2563EB',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Edit2 size={15} />
+                </div>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0F172A' }}>
+                  Rename Coach {targetCoach.coach_number}
+                </h3>
+              </div>
               <button
                 onClick={() => setActiveSubModal('NONE')}
-                style={{ background: 'transparent', border: 'none', color: '#94A3B8', cursor: 'pointer' }}
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '5px',
+                  backgroundColor: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  color: '#64748B',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
                 <X size={16} />
               </button>
@@ -1587,21 +1642,47 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
           >
             <div
               style={{
-                padding: '12px 16px',
-                backgroundColor: '#DC2626',
-                color: '#FFFFFF',
+                padding: '14px 18px',
+                backgroundColor: '#FFFFFF',
+                borderBottom: '1px solid #FEE2E2',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}
             >
-              <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <AlertTriangle size={16} />
-                <span>Confirm Coach Deletion</span>
-              </h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '6px',
+                    backgroundColor: '#FEF2F2',
+                    color: '#DC2626',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <AlertTriangle size={16} />
+                </div>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#DC2626' }}>
+                  Confirm Coach Deletion
+                </h3>
+              </div>
               <button
                 onClick={() => setActiveSubModal('NONE')}
-                style={{ background: 'transparent', border: 'none', color: '#FEE2E2', cursor: 'pointer' }}
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '5px',
+                  backgroundColor: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  color: '#DC2626',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
               >
                 <X size={16} />
               </button>
