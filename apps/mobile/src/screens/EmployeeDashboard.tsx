@@ -59,6 +59,7 @@ export const EmployeeDashboard: React.FC = () => {
     selectedCoachNumber,
     setSelectedCoachNumber,
     regions,
+    configuredTrains,
     refreshRegions,
     currentUser,
     liveTank,
@@ -66,6 +67,8 @@ export const EmployeeDashboard: React.FC = () => {
     devices,
     activeAlarms,
     liveTelemetry,
+    lastValidGps,
+    gpsWaypoints,
     mqttConnectionStatus,
     consistMetrics,
     consistCoaches,
@@ -79,8 +82,8 @@ export const EmployeeDashboard: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
-  // Selected coach (defaults to live telemetry coach CR123456)
-  const [activeCoachNum, setActiveCoachNum] = useState<string>(selectedCoachNumber || 'CR123456');
+  // Selected coach synced cleanly with real consist coaches
+  const [activeCoachNum, setActiveCoachNum] = useState<string>(selectedCoachNumber || '');
 
   // Track scroll container ref for horizontal scrolling
   const trackScrollRef = useRef<HTMLDivElement>(null);
@@ -89,6 +92,7 @@ export const EmployeeDashboard: React.FC = () => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
+  const miniTrailRef = useRef<L.Polyline | null>(null);
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
@@ -134,7 +138,17 @@ export const EmployeeDashboard: React.FC = () => {
 
   useEffect(() => {
     loadTrains();
-  }, [selectedRegion, searchQuery]);
+  }, [selectedRegion, searchQuery, regions]);
+
+  useEffect(() => {
+    if (consistCoaches.length === 0) {
+      if (activeCoachNum) setActiveCoachNum('');
+      return;
+    }
+    if (!activeCoachNum || !consistCoaches.some((c) => c.coachNumber === activeCoachNum)) {
+      setActiveCoachNum(consistCoaches[0].coachNumber);
+    }
+  }, [consistCoaches, activeCoachNum]);
 
   const availableRegions = [
     'South East',
@@ -146,89 +160,95 @@ export const EmployeeDashboard: React.FC = () => {
     'ALL',
   ];
 
-  // Selected train object
+  const hasConfiguredFleet = configuredTrains.length > 0;
+
+  // Selected train object derived strictly from authoritative configured trains
   const currentTrain = useMemo(() => {
-    // 1. If real MQTT telemetry is active, use it as the primary live train
-    if (liveTelemetry) {
+    if (!hasConfiguredFleet) {
       return {
-        trainNumber: liveTelemetry.trno,
-        name: `Train ${liveTelemetry.trno}`,
-        source: 'Live Route Corridor',
-        destination: 'In Service',
-        region: selectedRegion === 'ALL' ? 'Eastern' : selectedRegion,
-        status: !liveTelemetry.isStale ? 'Active' : 'Standby',
-        latitude: liveTelemetry.lat ?? 22.557279,
-        longitude: liveTelemetry.long ?? 88.352432,
-        speedKmh: liveTelemetry.speed ?? 0,
-        nearestStation: 'Active Track',
-        lastUpdate: liveTelemetry.time,
-        totalCoaches: 24,
+        trainNumber: '',
+        name: 'No Train Configured',
+        source: '—',
+        destination: '—',
+        region: '—',
+        status: 'Unconfigured',
+        latitude: null,
+        longitude: null,
+        gpsFix: false,
+        speedKmh: null,
+        nearestStation: 'No trains configured',
+        lastUpdate: 'Awaiting configuration',
+        totalCoaches: 0,
       };
     }
 
-    // 2. Otherwise look in backend registered trains
-    const match = backendTrains.find((t) => t.train_number === selectedTrainNumber);
-    if (match) {
+    const activePool = backendTrains.length > 0 ? backendTrains : configuredTrains;
+    const targetNo = selectedTrainNumber || activePool[0]?.train_number || '';
+    const match =
+      activePool.find((t) => t.train_number === targetNo) ||
+      configuredTrains.find((t) => t.train_number === targetNo) ||
+      activePool[0];
+
+    const matchedLive =
+      liveTelemetry &&
+      match &&
+      liveTelemetry.trno?.trim() === match.train_number.trim()
+        ? liveTelemetry
+        : null;
+
+    if (matchedLive && match) {
+      const hasLiveGps =
+        matchedLive.gpsFix !== false &&
+        matchedLive.lat != null &&
+        matchedLive.long != null;
+      const gpsLat = hasLiveGps ? matchedLive.lat! : lastValidGps?.lat ?? null;
+      const gpsLon = hasLiveGps ? matchedLive.long! : lastValidGps?.long ?? null;
       return {
         trainNumber: match.train_number,
-        name: match.name,
+        name: match.name || `Train ${match.train_number}`,
         source: match.source_station
           ? (match.source_code ? `${match.source_station} (${match.source_code})` : match.source_station)
-          : (match as any).source || '—',
+          : 'Live Route Corridor',
         destination: match.destination_station
           ? (match.destination_code ? `${match.destination_station} (${match.destination_code})` : match.destination_station)
-          : (match as any).destination || '—',
-        region: match.railway_zone || match.region || 'Eastern',
-        status: match.is_online ? 'Active' : 'Standby',
-        latitude: (match as any).latitude || 22.557279,
-        longitude: (match as any).longitude || 88.352432,
-        speedKmh: (match as any).speed_kmh || 0,
-        nearestStation: match.source_station || (match as any).nearest_station || 'Awaiting telemetry',
-        lastUpdate: match.last_telemetry || 'Awaiting telemetry',
-        totalCoaches: match.total_coaches || match.coaches_count || 24,
+          : 'In Service',
+        region: match.railway_zone || match.region || (selectedRegion === 'ALL' ? 'Eastern' : selectedRegion),
+        status: !matchedLive.isStale ? 'Active' : 'Standby',
+        latitude: gpsLat,
+        longitude: gpsLon,
+        gpsFix: hasLiveGps,
+        speedKmh: matchedLive.speed ?? 0,
+        nearestStation: hasLiveGps ? 'Active Track' : lastValidGps ? 'Last Known Position' : 'Awaiting GPS Fix',
+        lastUpdate: matchedLive.time,
+        totalCoaches: consistMetrics.totalCoaches || match.total_coaches || match.coaches_count || 0,
       };
     }
 
-    if (backendTrains.length > 0) {
-      const first = backendTrains[0];
-      return {
-        trainNumber: first.train_number,
-        name: first.name,
-        source: first.source_station
-          ? (first.source_code ? `${first.source_station} (${first.source_code})` : first.source_station)
-          : (first as any).source || '—',
-        destination: first.destination_station
-          ? (first.destination_code ? `${first.destination_station} (${first.destination_code})` : first.destination_station)
-          : (first as any).destination || '—',
-        region: first.railway_zone || first.region || 'Eastern',
-        status: first.is_online ? 'Active' : 'Standby',
-        latitude: (first as any).latitude || null,
-        longitude: (first as any).longitude || null,
-        speedKmh: 0,
-        nearestStation: first.source_station || 'Awaiting telemetry',
-        lastUpdate: (first as any).last_telemetry || 'Awaiting telemetry',
-        totalCoaches: first.total_coaches || first.coaches_count || 24,
-      };
-    }
-
-    // 3. Awaiting operational telemetry state (No fabricated fallback)
+    const first = match || activePool[0];
+    const firstLat = (first as any).latitude ?? null;
+    const firstLon = (first as any).longitude ?? null;
     return {
-      trainNumber: selectedTrainNumber || '225256',
-      name: selectedTrainNumber ? `Train ${selectedTrainNumber}` : 'Awaiting Telemetry',
-      source: '—',
-      destination: '—',
-      region: selectedRegion === 'ALL' ? 'Eastern' : selectedRegion,
-      status: 'Standby',
-      latitude: null,
-      longitude: null,
-      speedKmh: null,
-      nearestStation: 'No GPS Fix',
-      lastUpdate: 'Awaiting MQTT stream',
-      totalCoaches: 24,
+      trainNumber: first.train_number,
+      name: first.name,
+      source: first.source_station
+        ? (first.source_code ? `${first.source_station} (${first.source_code})` : first.source_station)
+        : (first as any).source || '—',
+      destination: first.destination_station
+        ? (first.destination_code ? `${first.destination_station} (${first.destination_code})` : first.destination_station)
+        : (first as any).destination || '—',
+      region: first.railway_zone || first.region || 'Eastern',
+      status: first.is_online ? 'Active' : 'Standby',
+      latitude: firstLat,
+      longitude: firstLon,
+      gpsFix: firstLat != null && firstLon != null,
+      speedKmh: (first as any).speed_kmh || 0,
+      nearestStation: first.source_station || (first as any).nearest_station || 'Awaiting telemetry',
+      lastUpdate: (first as any).last_telemetry || 'Awaiting telemetry',
+      totalCoaches: consistMetrics.totalCoaches || first.total_coaches || first.coaches_count || 0,
     };
-  }, [liveTelemetry, selectedTrainNumber, backendTrains, selectedRegion]);
+  }, [hasConfiguredFleet, liveTelemetry, lastValidGps, selectedTrainNumber, backendTrains, configuredTrains, selectedRegion, consistMetrics.totalCoaches]);
 
-  // Generate 24 coaches for current train using centralized consist status
+  // Coaches for current train derived strictly from authoritative consist
   const coaches24: DashboardCoach[] = useMemo(() => {
     return consistCoaches.map((c) => ({
       coachNumber: c.coachNumber,
@@ -249,10 +269,10 @@ export const EmployeeDashboard: React.FC = () => {
     const found = coaches24.find((c) => c.coachNumber === activeCoachNum);
     if (found) return found;
     return coaches24[0] || {
-      coachNumber: activeCoachNum || 'CR123456',
-      coachType: 'AC 2-Tier',
-      deviceId: liveTelemetry?.uid || 'Not Mapped',
-      deviceStatus: 'Offline',
+      coachNumber: '—',
+      coachType: '—',
+      deviceId: '—',
+      deviceStatus: 'Offline' as const,
       batteryPercent: null,
       arrivalLevel: null,
       arrivalHeightCm: null,
@@ -260,9 +280,21 @@ export const EmployeeDashboard: React.FC = () => {
       departureHeightCm: null,
       hasTelemetry: false,
     };
-  }, [coaches24, activeCoachNum, liveTelemetry]);
+  }, [coaches24, activeCoachNum]);
 
-  // Leaflet map setup for Train Location
+  // Clean up mini Leaflet map on component unmount only
+  useEffect(() => {
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+        markerRef.current = null;
+        miniTrailRef.current = null;
+      }
+    };
+  }, []);
+
+  // Leaflet map setup & incremental updates for Train Location (MQTT GPS only)
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
@@ -273,6 +305,8 @@ export const EmployeeDashboard: React.FC = () => {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
+        markerRef.current = null;
+        miniTrailRef.current = null;
       }
       return;
     }
@@ -290,27 +324,11 @@ export const EmployeeDashboard: React.FC = () => {
           maxZoom: 18,
         }).addTo(map);
 
-        // Railway route corridor line
-        const trackPoints: [number, number][] = [
-          [lat - 0.04, lon - 0.06],
-          [lat - 0.02, lon - 0.03],
-          [lat, lon],
-          [lat + 0.03, lon + 0.04],
-          [lat + 0.06, lon + 0.08],
-        ];
-        L.polyline(trackPoints, {
-          color: '#0284C7',
-          weight: 4,
-          dashArray: '6, 6',
-          opacity: 0.85,
-        }).addTo(map);
-
-        // Red pin location marker matching reference image
         const pinIcon = L.divIcon({
           className: 'custom-train-marker',
-          html: `<div style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;background:#EF4444;color:white;border-radius:50%;border:2px solid white;box-shadow:0 0 10px rgba(239,68,68,0.8);font-size:12px;cursor:pointer;">📍</div>`,
-          iconSize: [24, 24],
-          iconAnchor: [12, 12],
+          html: `<div style="display:flex;align-items:center;justify-content:center;width:22px;height:22px;background:#2563EB;color:white;border-radius:50%;border:2px solid white;box-shadow:0 0 10px rgba(37,99,235,0.75);"></div>`,
+          iconSize: [22, 22],
+          iconAnchor: [11, 11],
         });
 
         const marker = L.marker([lat, lon], { icon: pinIcon }).addTo(map);
@@ -320,19 +338,23 @@ export const EmployeeDashboard: React.FC = () => {
         console.warn('[EmployeeDashboard] Leaflet init error:', err);
       }
     } else if (mapInstanceRef.current) {
-      mapInstanceRef.current.setView([lat, lon], 12);
-      if (markerRef.current) {
-        markerRef.current.setLatLng([lat, lon]);
-      }
+      markerRef.current?.setLatLng([lat, lon]);
+      mapInstanceRef.current.panTo([lat, lon]);
     }
 
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
+    if (mapInstanceRef.current && gpsWaypoints.length >= 2) {
+      const pts: [number, number][] = gpsWaypoints.map((w) => [w.lat, w.long]);
+      if (miniTrailRef.current) {
+        miniTrailRef.current.setLatLngs(pts);
+      } else {
+        miniTrailRef.current = L.polyline(pts, {
+          color: '#0284C7',
+          weight: 3,
+          opacity: 0.85,
+        }).addTo(mapInstanceRef.current);
       }
-    };
-  }, [currentTrain.latitude, currentTrain.longitude]);
+    }
+  }, [currentTrain.latitude, currentTrain.longitude, gpsWaypoints]);
 
   const handleCenterTrain = () => {
     if (mapInstanceRef.current && currentTrain.latitude != null && currentTrain.longitude != null) {
@@ -490,7 +512,9 @@ export const EmployeeDashboard: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', fontSize: '11px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontWeight: 600, color: 'var(--color-text-secondary, #64748B)' }}>Active Train:</span>
-            <strong style={{ color: 'var(--color-primary, #2563EB)' }}>{currentTrain.trainNumber} ({currentTrain.name})</strong>
+            <strong style={{ color: hasConfiguredFleet ? 'var(--color-primary, #2563EB)' : '#64748B' }}>
+              {hasConfiguredFleet ? `${currentTrain.trainNumber} (${currentTrain.name})` : 'No trains configured. Please add a train to begin monitoring.'}
+            </strong>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontWeight: 600, color: 'var(--color-text-secondary, #64748B)' }}>Selected Coach:</span>
@@ -610,7 +634,9 @@ export const EmployeeDashboard: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '11px' }}>
             <div style={{ padding: '8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
               <div style={{ color: '#64748B', fontSize: '10px', fontWeight: 600 }}>Active Fleet Train</div>
-              <strong style={{ color: '#2563EB', fontSize: '13px' }}>{currentTrain.trainNumber}</strong>
+              <strong style={{ color: hasConfiguredFleet ? '#2563EB' : '#64748B', fontSize: '13px' }}>
+                {hasConfiguredFleet ? currentTrain.trainNumber : 'None'}
+              </strong>
             </div>
             <div style={{ padding: '8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
               <div style={{ color: '#64748B', fontSize: '10px', fontWeight: 600 }}>Active Alarms</div>
@@ -1096,7 +1122,11 @@ export const EmployeeDashboard: React.FC = () => {
                     <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                         <MapPin size={13} color="var(--color-primary, #2563EB)" />
-                        22.5841&deg; N, 88.3429&deg; E
+                        {currentTrain.trainNumber === train.train_number && currentTrain.latitude != null && currentTrain.longitude != null
+                          ? `${currentTrain.latitude.toFixed(4)}° N, ${currentTrain.longitude.toFixed(4)}° E`
+                          : (train as any).latitude != null && (train as any).longitude != null
+                          ? `${Number((train as any).latitude).toFixed(4)}° N, ${Number((train as any).longitude).toFixed(4)}° E`
+                          : 'Awaiting MQTT GPS'}
                       </span>
                     </td>
                     <td
@@ -1295,7 +1325,13 @@ export const EmployeeDashboard: React.FC = () => {
                   </div>
                   <div style={{ gridColumn: 'span 2' }}>
                     <span style={{ color: '#64748B' }}>Location: </span>
-                    <strong>22.5841° N, 88.3429° E</strong>
+                    <strong>
+                      {currentTrain.trainNumber === train.train_number && currentTrain.latitude != null && currentTrain.longitude != null
+                        ? `${currentTrain.latitude.toFixed(4)}° N, ${currentTrain.longitude.toFixed(4)}° E`
+                        : (train as any).latitude != null && (train as any).longitude != null
+                        ? `${Number((train as any).latitude).toFixed(4)}° N, ${Number((train as any).longitude).toFixed(4)}° E`
+                        : 'Awaiting MQTT GPS'}
+                    </strong>
                   </div>
                   <div style={{ gridColumn: 'span 2' }}>
                     <span style={{ color: '#64748B' }}>Last Telemetry: </span>
@@ -1365,10 +1401,12 @@ export const EmployeeDashboard: React.FC = () => {
                 margin: 0,
                 fontSize: '16px',
                 fontWeight: 800,
-                color: 'var(--color-primary, #2563EB)',
+                color: hasConfiguredFleet ? 'var(--color-primary, #2563EB)' : '#64748B',
               }}
             >
-              Train : {currentTrain.trainNumber} &ndash; {currentTrain.name}
+              {hasConfiguredFleet
+                ? `Train : ${currentTrain.trainNumber} \u2013 ${currentTrain.name}`
+                : 'No trains configured. Please add a train to begin monitoring.'}
             </h2>
           </div>
 
@@ -1597,6 +1635,43 @@ export const EmployeeDashboard: React.FC = () => {
 
             {/* ==================== ONLINE COACHES ONLY ==================== */}
             {(() => {
+              if (!hasConfiguredFleet) {
+                return (
+                  <div
+                    data-testid="empty-fleet-consist"
+                    style={{
+                      padding: '14px 18px',
+                      borderRadius: '6px',
+                      backgroundColor: '#F8FAFC',
+                      border: '1px dashed #CBD5E1',
+                      color: '#64748B',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      marginLeft: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                    }}
+                  >
+                    <span>No trains configured. Please add a train to begin monitoring.</span>
+                    <button
+                      onClick={() => setActiveScreen('trains')}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        backgroundColor: '#2563EB',
+                        color: '#FFFFFF',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Go to Train Management
+                    </button>
+                  </div>
+                );
+              }
               const onlineCoachesList = filterConsistCoaches(coaches24, 'ALL');
               if (onlineCoachesList.length === 0) {
                 return (
@@ -2309,8 +2384,6 @@ export const EmployeeDashboard: React.FC = () => {
           >
             {/* Map Preview Container */}
             <div
-              ref={mapContainerRef}
-              data-map-container="true"
               style={{
                 width: '100%',
                 height: '140px',
@@ -2320,7 +2393,34 @@ export const EmployeeDashboard: React.FC = () => {
                 backgroundColor: 'var(--color-surface-alt, #F1F5F9)',
                 position: 'relative',
               }}
-            />
+            >
+              <div
+                ref={mapContainerRef}
+                data-map-container="true"
+                style={{ width: '100%', height: '100%' }}
+              />
+              {(currentTrain.latitude == null || currentTrain.longitude == null) && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
+                    padding: '12px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: mqttConnectionStatus === 'DISCONNECTED' ? '#DC2626' : '#64748B',
+                    backgroundColor: 'rgba(241, 245, 249, 0.92)',
+                  }}
+                >
+                  {mqttConnectionStatus === 'DISCONNECTED'
+                    ? 'MQTT Connection Lost — Awaiting Telemetry'
+                    : 'GPS Signal Unavailable — Awaiting MQTT Fix'}
+                </div>
+              )}
+            </div>
 
             {/* GPS Telemetry Readouts */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11px' }}>
@@ -2525,7 +2625,15 @@ export const EmployeeDashboard: React.FC = () => {
               {currentTrain.speedKmh != null ? `${currentTrain.speedKmh.toFixed(1)} km/h` : '—'}
             </div>
             <div style={{ fontSize: '10px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Fix: 3D DGPS</span>
+              <span>
+                {mqttConnectionStatus === 'DISCONNECTED'
+                  ? 'MQTT Offline'
+                  : currentTrain.gpsFix
+                  ? 'Fix: MQTT GNSS'
+                  : lastValidGps
+                  ? 'Last Known Fix'
+                  : 'No GPS Fix'}
+              </span>
               <span style={{ color: '#2563EB', fontWeight: 700 }}>
                 {currentTrain.latitude != null ? `Lat: ${currentTrain.latitude.toFixed(2)}°` : 'Fix: None'}
               </span>

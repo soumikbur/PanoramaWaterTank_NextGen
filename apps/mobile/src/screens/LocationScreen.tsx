@@ -91,7 +91,17 @@ function calculateRouteCorridorBounds(
 }
 
 export const LocationScreen: React.FC = () => {
-  const { selectedTrainNumber, setSelectedTrainNumber, sidebarCollapsed, selectedStationCode: contextStationCode, setSelectedStationCode: setContextStationCode, liveTelemetry } = useApp();
+  const {
+    selectedTrainNumber,
+    setSelectedTrainNumber,
+    sidebarCollapsed,
+    selectedStationCode: contextStationCode,
+    setSelectedStationCode: setContextStationCode,
+    liveTelemetry,
+    lastValidGps,
+    gpsWaypoints,
+    mqttConnectionStatus,
+  } = useApp();
   const googleMapsApiKey = (typeof process !== 'undefined' && (process.env?.GOOGLE_MAPS_API_KEY || process.env?.VITE_GOOGLE_MAPS_API_KEY)) || (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GOOGLE_MAPS_API_KEY) || '';
   const [locations, setLocations] = useState<TrainLocation[]>([]);
   const [stations, setStations] = useState<CorridorStation[]>(DEFAULT_CORRIDOR_STATIONS);
@@ -143,7 +153,8 @@ export const LocationScreen: React.FC = () => {
   const mapInstanceRef = useRef<L.Map | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const trainMarkerRef = useRef<L.Marker | null>(null);
-  const userMarkerRef = useRef<L.Marker | null>(null);
+  const trailPolylineRef = useRef<L.Polyline | null>(null);
+  const prevTrainCoordsRef = useRef<string>('');
   const stationMarkersRef = useRef<Record<string, L.Marker | L.CircleMarker>>({});
   const polylineRef = useRef<L.Polyline | null>(null);
 
@@ -191,6 +202,11 @@ export const LocationScreen: React.FC = () => {
     };
 
     fetchData();
+    if (!ApiClient.hasBackend()) {
+      return () => {
+        isMounted = false;
+      };
+    }
     const interval = setInterval(fetchData, 4000);
     return () => {
       isMounted = false;
@@ -200,29 +216,144 @@ export const LocationScreen: React.FC = () => {
 
   const safeLocations = Array.isArray(locations) ? locations : [];
   const activeTrainLoc: TrainLocation | null = useMemo(() => {
-    if (liveTelemetry && liveTelemetry.lat != null && liveTelemetry.long != null) {
+    const waypointsPayload = gpsWaypoints.map((w) => ({
+      latitude: w.lat,
+      longitude: w.long,
+      altitude: w.alt ?? undefined,
+      speed_kmh: w.speed,
+      satellites: w.sats ?? undefined,
+      timestamp: w.time,
+    }));
+    // 1. Live valid MQTT GPS frame
+    if (liveTelemetry && liveTelemetry.gpsFix !== false && liveTelemetry.lat != null && liveTelemetry.long != null) {
       return {
         train_number: liveTelemetry.trno,
+        coach_number: liveTelemetry.chno,
+        is_online: !liveTelemetry.isStale,
         current_latitude: liveTelemetry.lat,
         current_longitude: liveTelemetry.long,
+        current_altitude: liveTelemetry.alt ?? undefined,
         current_speed_kmh: liveTelemetry.speed ?? 0,
+        satellites: liveTelemetry.sats ?? undefined,
         has_gps: true,
+        is_simulated: false,
         last_update: new Date(liveTelemetry.receivedAt).toISOString(),
+        waypoints: waypointsPayload,
       };
     }
-    return safeLocations.find((l) => l.train_number === selectedTrainNumber) || safeLocations[0] || null;
-  }, [liveTelemetry, safeLocations, selectedTrainNumber]);
+    // 2. Last known valid MQTT GPS fix (preserved during transient GPS loss / MQTT disconnect / stale)
+    if (lastValidGps) {
+      return {
+        train_number: lastValidGps.trno,
+        coach_number: lastValidGps.chno,
+        is_online: mqttConnectionStatus === 'CONNECTED',
+        current_latitude: lastValidGps.lat,
+        current_longitude: lastValidGps.long,
+        current_altitude: lastValidGps.alt ?? undefined,
+        current_speed_kmh: lastValidGps.speed ?? 0,
+        satellites: lastValidGps.sats ?? undefined,
+        has_gps: true,
+        is_simulated: false,
+        last_update: new Date(lastValidGps.receivedAt).toISOString(),
+        waypoints: waypointsPayload,
+      };
+    }
+    // 3. Real backend GPS telemetry only (never simulated)
+    const realBackendLoc =
+      safeLocations.find((l) => l.train_number === selectedTrainNumber && l.has_gps && !l.is_simulated) ||
+      safeLocations.find((l) => l.has_gps && !l.is_simulated);
+    return realBackendLoc || null;
+  }, [liveTelemetry, lastValidGps, gpsWaypoints, mqttConnectionStatus, safeLocations, selectedTrainNumber]);
 
   const hasGps = Boolean(
     activeTrainLoc?.has_gps &&
       activeTrainLoc.current_latitude != null &&
       activeTrainLoc.current_longitude != null &&
-      (Math.abs(activeTrainLoc.current_latitude) > 0.001 || Math.abs(activeTrainLoc.current_longitude) > 0.001)
+      !(activeTrainLoc.current_latitude === 0 && activeTrainLoc.current_longitude === 0)
   );
 
-  // Freshness check: consider telemetry stale if > 25 seconds elapsed
+  const isMqttDisconnected = mqttConnectionStatus === 'DISCONNECTED';
+  const isTelemetryGpsLost = Boolean(liveTelemetry && liveTelemetry.gpsFix === false);
+
+  // Freshness check: consider telemetry stale when watchdog reports STALE or > 30s elapsed
   const lastUpdateTime = activeTrainLoc?.last_update ? new Date(activeTrainLoc.last_update).getTime() : 0;
-  const isStale = lastUpdateTime > 0 ? Date.now() - lastUpdateTime > 25000 : false;
+  const isStale = Boolean(
+    mqttConnectionStatus === 'STALE' ||
+      liveTelemetry?.isStale ||
+      (lastUpdateTime > 0 && Date.now() - lastUpdateTime > 30000)
+  );
+
+  const gpsStatusMeta = useMemo(() => {
+    if (!hasGps && isMqttDisconnected) {
+      return {
+        color: '#DC2626',
+        glow: 'none',
+        mobileLabel: 'MQTT Offline',
+        desktopLabel: 'MQTT DISCONNECTED — AWAITING BROKER',
+        modeLabel: 'MQTT Connection Lost',
+        badgeHtml: '<span style="background-color: #FEE2E2; color: #DC2626; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">MQTT OFFLINE</span>',
+      };
+    }
+    if (!hasGps && isTelemetryGpsLost) {
+      return {
+        color: '#DC2626',
+        glow: 'none',
+        mobileLabel: 'GPS Signal Lost',
+        desktopLabel: 'GPS SIGNAL LOST — AWAITING FIX',
+        modeLabel: 'GPS Signal Lost',
+        badgeHtml: '<span style="background-color: #FEE2E2; color: #DC2626; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">GPS SIGNAL LOST</span>',
+      };
+    }
+    if (!hasGps) {
+      return {
+        color: '#94A3B8',
+        glow: 'none',
+        mobileLabel: 'No GPS',
+        desktopLabel: 'AWAITING MQTT GPS FIX',
+        modeLabel: 'Awaiting MQTT GNSS Fix',
+        badgeHtml: '<span style="background-color: #F1F5F9; color: #64748B; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">AWAITING GPS</span>',
+      };
+    }
+    if (isMqttDisconnected) {
+      return {
+        color: '#DC2626',
+        glow: 'none',
+        mobileLabel: 'Offline (Last GPS)',
+        desktopLabel: 'MQTT DISCONNECTED (LAST KNOWN GPS)',
+        modeLabel: 'Last Known MQTT Fix (Broker Offline)',
+        badgeHtml: '<span style="background-color: #FEE2E2; color: #DC2626; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">LAST KNOWN • OFFLINE</span>',
+      };
+    }
+    if (isTelemetryGpsLost) {
+      return {
+        color: '#D97706',
+        glow: 'none',
+        mobileLabel: 'Signal Lost (Last GPS)',
+        desktopLabel: 'GPS SIGNAL LOST (LAST KNOWN FIX)',
+        modeLabel: 'Last Known MQTT Fix (Signal Lost)',
+        badgeHtml: '<span style="background-color: #FEF3C7; color: #D97706; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">LAST KNOWN • NO FIX</span>',
+      };
+    }
+    if (isStale) {
+      return {
+        color: '#D97706',
+        glow: 'none',
+        mobileLabel: 'Stale GPS',
+        desktopLabel: 'GNSS DATA STALE',
+        modeLabel: 'MQTT GNSS (Stale)',
+        badgeHtml: '<span style="background-color: #FEF3C7; color: #D97706; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">GNSS DATA STALE</span>',
+      };
+    }
+    const satCount = activeTrainLoc?.satellites;
+    return {
+      color: '#16A34A',
+      glow: '0 0 8px rgba(22, 163, 74, 0.6)',
+      mobileLabel: satCount != null ? `MQTT GPS (${satCount} Sat)` : 'MQTT GPS Live',
+      desktopLabel: satCount != null ? `MQTT GPS LIVE (${satCount} Satellites)` : 'MQTT GPS LIVE',
+      modeLabel: 'Live MQTT GNSS Hardware',
+      badgeHtml: '<span style="background-color: #ECFDF5; color: #16A34A; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">LIVE MQTT GPS</span>',
+    };
+  }, [hasGps, isMqttDisconnected, isTelemetryGpsLost, isStale, activeTrainLoc?.satellites]);
 
   // Compute distances, ETAs, and next refill facility
   const enrichedStations = useMemo(() => {
@@ -329,7 +460,7 @@ export const LocationScreen: React.FC = () => {
         mapInstanceRef.current = null;
         tileLayerRef.current = null;
         trainMarkerRef.current = null;
-        userMarkerRef.current = null;
+        trailPolylineRef.current = null;
         stationMarkersRef.current = {};
         polylineRef.current = null;
       }
@@ -563,11 +694,13 @@ export const LocationScreen: React.FC = () => {
         trainMarkerRef.current.setLatLng([lat, lon]);
       }
 
-      const statusBadge = activeTrainLoc.is_simulated
-        ? '<span style="background-color: #E0F2FE; color: #0284C7; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">ROUTE SIMULATION</span>'
-        : isStale
-        ? '<span style="background-color: #FEF3C7; color: #D97706; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">GNSS DATA STALE</span>'
-        : '<span style="background-color: #ECFDF5; color: #16A34A; padding: 1px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">LIVE BEACON</span>';
+      const statusBadge = gpsStatusMeta.badgeHtml;
+
+      const coordsKey = `${lat.toFixed(6)},${lon.toFixed(6)}`;
+      if (prevTrainCoordsRef.current && prevTrainCoordsRef.current !== coordsKey && !isStale && !isMqttDisconnected) {
+        map.panTo([lat, lon], { animate: true });
+      }
+      prevTrainCoordsRef.current = coordsKey;
 
       trainMarkerRef.current.bindPopup(`
         <div style="font-family: Inter, sans-serif; font-size: 12px; min-width: 200px; line-height: 1.5; color: #0F172A;">
@@ -575,25 +708,43 @@ export const LocationScreen: React.FC = () => {
             <strong style="font-size: 13px;">Train ${activeTrainLoc.train_number}</strong>
             ${statusBadge}
           </div>
-          <div style="color: #475569; font-size: 11px;">Coach: <strong>${activeTrainLoc.coach_number}</strong></div>
+          <div style="color: #475569; font-size: 11px;">Coach: <strong>${activeTrainLoc.coach_number || '—'}</strong></div>
           <div style="color: #2563EB; font-weight: 700; font-size: 12px; margin: 3px 0;">
             Speed: ${activeTrainLoc.current_speed_kmh != null ? activeTrainLoc.current_speed_kmh.toFixed(1) : '—'} km/h
           </div>
           <div style="color: #64748B; font-size: 11px;">
             GPS: ${lat.toFixed(6)}° N, ${lon.toFixed(6)}° E<br/>
-            Altitude: ${activeTrainLoc.current_altitude != null ? activeTrainLoc.current_altitude.toFixed(0) : '—'} m MSL<br/>
-            Satellites: ${activeTrainLoc.satellites != null ? activeTrainLoc.satellites : '—'} Tracked<br/>
+            Altitude: ${activeTrainLoc.current_altitude != null ? activeTrainLoc.current_altitude.toFixed(0) + ' m MSL' : '—'}<br/>
+            Satellites: ${activeTrainLoc.satellites != null ? activeTrainLoc.satellites + ' Tracked' : '—'}<br/>
             Last Update: ${activeTrainLoc.last_update ? new Date(activeTrainLoc.last_update).toLocaleTimeString() : '—'}
           </div>
         </div>
       `);
+
+      // Render incremental MQTT GPS waypoint trail
+      const trailPoints: [number, number][] = gpsWaypoints.map((w) => [w.lat, w.long]);
+      if (trailPoints.length >= 2) {
+        if (trailPolylineRef.current) {
+          trailPolylineRef.current.setLatLngs(trailPoints);
+        } else {
+          trailPolylineRef.current = L.polyline(trailPoints, {
+            color: '#16A34A',
+            weight: 3,
+            opacity: 0.9,
+          }).addTo(map);
+        }
+      }
     } else {
       if (trainMarkerRef.current && map) {
         map.removeLayer(trainMarkerRef.current);
         trainMarkerRef.current = null;
       }
+      if (trailPolylineRef.current && map) {
+        map.removeLayer(trailPolylineRef.current);
+        trailPolylineRef.current = null;
+      }
     }
-  }, [activeTrainLoc, hasGps, isStale]);
+  }, [activeTrainLoc, hasGps, gpsStatusMeta, gpsWaypoints, isStale, isMqttDisconnected]);
 
   const handleToggleFullscreen = () => {
     if (!isFullscreen) {
@@ -693,63 +844,21 @@ export const LocationScreen: React.FC = () => {
     }
   };
 
-  const handleCurrentLocation = () => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      setFeedbackToast('Geolocation is not supported by your browser.');
-      return;
+  const handleLiveTrainPosition = () => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    if (hasGps && activeTrainLoc?.current_latitude != null && activeTrainLoc?.current_longitude != null) {
+      map.setView([activeTrainLoc.current_latitude, activeTrainLoc.current_longitude], 13, {
+        animate: true,
+      });
+      setSelectedStationCode('TRAIN');
+      trainMarkerRef.current?.openPopup();
+      setFeedbackToast(
+        `Live Train Position (${activeTrainLoc.train_number}): ${activeTrainLoc.current_latitude.toFixed(5)}° N, ${activeTrainLoc.current_longitude.toFixed(5)}° E`
+      );
+    } else {
+      setFeedbackToast('GPS telemetry unavailable: awaiting live MQTT GNSS coordinates.');
     }
-    setFeedbackToast('Detecting current browser geolocation...');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        const map = mapInstanceRef.current;
-        if (map) {
-          if (userMarkerRef.current) {
-            userMarkerRef.current.setLatLng([latitude, longitude]);
-          } else {
-            const userIconHtml = `
-              <div style="position: relative; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;">
-                <div style="position: absolute; width: 34px; height: 34px; border-radius: 50%; background-color: rgba(14, 165, 233, 0.35); animation: pulse 1.6s infinite;"></div>
-                <div style="position: absolute; width: 18px; height: 18px; border-radius: 50%; background-color: #0284C7; border: 2.5px solid #FFFFFF; box-shadow: 0 2px 8px rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center;">
-                  <div style="width: 6px; height: 6px; border-radius: 50%; background-color: #FFFFFF;"></div>
-                </div>
-              </div>
-            `;
-            const userIcon = L.divIcon({
-              html: userIconHtml,
-              className: 'user-loc-marker',
-              iconSize: [34, 34],
-              iconAnchor: [17, 17],
-            });
-            userMarkerRef.current = L.marker([latitude, longitude], { icon: userIcon })
-              .bindPopup(`
-                <div style="font-family: Inter, sans-serif; font-size: 12px; line-height: 1.4;">
-                  <strong style="color: #0284C7;">Your Current Location</strong><br/>
-                  <span style="color: #475569; font-size: 11px;">
-                    ${latitude.toFixed(5)}° N, ${longitude.toFixed(5)}° E
-                  </span>
-                </div>
-              `)
-              .addTo(map);
-          }
-          map.setView([latitude, longitude], 13, { animate: true });
-          userMarkerRef.current.openPopup();
-          setFeedbackToast(`Acquired Location: ${latitude.toFixed(4)}° N, ${longitude.toFixed(4)}° E`);
-        }
-      },
-      (err) => {
-        let msg = 'Could not acquire device geolocation.';
-        if (err.code === 1) {
-          msg = 'Geolocation access denied. Please allow browser location permissions to view position.';
-        } else if (err.code === 2) {
-          msg = 'Geolocation position unavailable.';
-        } else if (err.code === 3) {
-          msg = 'Geolocation request timed out.';
-        }
-        setFeedbackToast(msg);
-      },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
-    );
   };
 
   const handleOpenGoogleMaps = () => {
@@ -979,25 +1088,11 @@ export const LocationScreen: React.FC = () => {
                       width: '8px',
                       height: '8px',
                       borderRadius: '50%',
-                      backgroundColor: !hasGps
-                        ? '#94A3B8'
-                        : activeTrainLoc?.is_simulated
-                        ? '#0284C7'
-                        : isStale
-                        ? '#D97706'
-                        : '#16A34A',
-                      boxShadow: hasGps && !isStale ? (activeTrainLoc?.is_simulated ? '0 0 6px rgba(2, 132, 199, 0.6)' : '0 0 6px rgba(22, 163, 74, 0.6)') : 'none',
+                      backgroundColor: gpsStatusMeta.color,
+                      boxShadow: gpsStatusMeta.glow,
                     }}
                   />
-                  <span>
-                    {!hasGps
-                      ? 'No GPS'
-                      : activeTrainLoc?.is_simulated
-                      ? 'Route Demo'
-                      : isStale
-                      ? 'Stale GPS'
-                      : `GPS Fix (${activeTrainLoc?.satellites || 9} Sat)`}
-                  </span>
+                  <span>{gpsStatusMeta.mobileLabel}</span>
                 </div>
 
                 {/* Next Refill Indicator Pill on Mobile */}
@@ -1059,9 +1154,9 @@ export const LocationScreen: React.FC = () => {
                 <button
                   id="map-currentloc-btn"
                   className="location-fab-btn"
-                  onClick={handleCurrentLocation}
-                  title="Current Device Geolocation"
-                  aria-label="Current Location"
+                  onClick={handleLiveTrainPosition}
+                  title="Center on Latest Valid MQTT Train Position"
+                  aria-label="Live Train Position"
                 >
                   <Navigation size={18} color="#0284C7" />
                 </button>
@@ -1115,11 +1210,11 @@ export const LocationScreen: React.FC = () => {
                       <X size={14} color="#64748B" />
                     </button>
                   </div>
-                  <div>Coordinates: <strong>{hasGps && activeTrainLoc?.current_latitude ? `${activeTrainLoc.current_latitude.toFixed(4)}° N, ${activeTrainLoc.current_longitude?.toFixed(4)}° E` : 'Unavailable'}</strong></div>
-                  <div>Speed: <strong>{activeTrainLoc?.current_speed_kmh ? `${activeTrainLoc.current_speed_kmh.toFixed(1)} km/h` : '—'}</strong></div>
-                  <div>Satellites: <strong>{activeTrainLoc?.satellites || 9} tracked</strong></div>
-                  <div>Source: <strong>Coach {activeTrainLoc?.coach_number || 'C1'}</strong></div>
-                  <div>Mode: <strong>{activeTrainLoc?.is_simulated ? 'Route Demo (Simulated)' : 'Live GNSS Hardware'}</strong></div>
+                  <div>Coordinates: <strong>{hasGps && activeTrainLoc?.current_latitude != null ? `${activeTrainLoc.current_latitude.toFixed(6)}° N, ${activeTrainLoc.current_longitude?.toFixed(6)}° E` : 'Unavailable'}</strong></div>
+                  <div>Speed: <strong>{activeTrainLoc?.current_speed_kmh != null ? `${activeTrainLoc.current_speed_kmh.toFixed(1)} km/h` : '—'}</strong></div>
+                  <div>Satellites: <strong>{activeTrainLoc?.satellites != null ? `${activeTrainLoc.satellites} tracked` : '—'}</strong></div>
+                  <div>Source: <strong>Coach {activeTrainLoc?.coach_number || '—'}</strong></div>
+                  <div>Mode: <strong>{gpsStatusMeta.modeLabel}</strong></div>
                 </div>
               )}
             </>
@@ -1214,28 +1309,16 @@ export const LocationScreen: React.FC = () => {
                     width: '8px',
                     height: '8px',
                     borderRadius: '50%',
-                    backgroundColor: !hasGps
-                      ? '#94A3B8'
-                      : activeTrainLoc?.is_simulated
-                      ? '#0284C7'
-                      : isStale
-                      ? '#D97706'
-                      : '#16A34A',
-                    boxShadow: hasGps && !isStale ? (activeTrainLoc?.is_simulated ? '0 0 8px rgba(2, 132, 199, 0.6)' : '0 0 8px rgba(22, 163, 74, 0.6)') : 'none',
+                    backgroundColor: gpsStatusMeta.color,
+                    boxShadow: gpsStatusMeta.glow,
                   }}
                 />
                 <span style={{ fontSize: '11px', fontWeight: 700, color: colors.textPrimary, whiteSpace: 'nowrap' }}>
-                  {!hasGps
-                    ? 'GPS UNAVAILABLE'
-                    : activeTrainLoc?.is_simulated
-                    ? 'ROUTE DEMO (SIMULATED)'
-                    : isStale
-                    ? 'GNSS DATA STALE'
-                    : `GPS FIX AVAILABLE (${activeTrainLoc?.satellites || 9} Satellites)`}
+                  {gpsStatusMeta.desktopLabel}
                 </span>
                 {hasGps && activeTrainLoc?.current_latitude != null && (
                   <span style={{ fontSize: '10px', color: colors.textMuted, borderLeft: '1px solid #CBD5E1', paddingLeft: '8px' }}>
-                    {activeTrainLoc.current_latitude.toFixed(4)}° N, {activeTrainLoc.current_longitude?.toFixed(4)}° E &bull; Source: Coach {activeTrainLoc?.coach_number || 'C1'}
+                    {activeTrainLoc.current_latitude.toFixed(4)}° N, {activeTrainLoc.current_longitude?.toFixed(4)}° E &bull; Source: Coach {activeTrainLoc?.coach_number || '—'}
                   </span>
                 )}
               </div>
@@ -1378,11 +1461,12 @@ export const LocationScreen: React.FC = () => {
                   <span>{tileMode === 'satellite' ? 'Street' : 'Satellite'}</span>
                 </button>
 
-                {/* 5. Current Location */}
+                {/* 5. Live Train Position (MQTT GPS) */}
                 <button
-                  onClick={handleCurrentLocation}
+                  onClick={handleLiveTrainPosition}
                   id="map-currentloc-btn"
-                  title="Center on Physical GPS Telemetry"
+                  title="Center on Latest Valid MQTT Train Position"
+                  aria-label="Live Train Position"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1398,7 +1482,7 @@ export const LocationScreen: React.FC = () => {
                   }}
                 >
                   <Navigation size={13} color="#0284C7" />
-                  <span>Current Location</span>
+                  <span>Live Train Position</span>
                 </button>
 
                 {/* 6. Center Train */}

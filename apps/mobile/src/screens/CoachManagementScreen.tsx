@@ -51,6 +51,8 @@ export const CoachManagementScreen: React.FC = () => {
     setSelectedTrainNumber,
     selectedCoachNumber,
     setSelectedCoachNumber,
+    configuredTrains,
+    consistCoaches,
     devices,
     tanks,
     liveTank,
@@ -59,7 +61,7 @@ export const CoachManagementScreen: React.FC = () => {
     refreshData,
   } = useApp();
 
-  const [activeTrain, setActiveTrain] = useState<string>(selectedTrainNumber || '225256');
+  const [activeTrain, setActiveTrain] = useState<string>(selectedTrainNumber || '');
   const [viewMode, setViewMode] = useState<'track' | 'grid'>('track');
   const [coachFilter, setCoachFilter] = useState<CoachTankFilterMode>('ALL');
   const [coachSearch, setCoachSearch] = useState<string>('');
@@ -81,114 +83,64 @@ export const CoachManagementScreen: React.FC = () => {
 
   const trackScrollRef = useRef<HTMLDivElement>(null);
 
-  // Synchronize with global context
+  // Synchronize with global configured trains & selection
   useEffect(() => {
-    if (selectedTrainNumber) {
-      setActiveTrain(selectedTrainNumber);
+    if (configuredTrains.length === 0) {
+      if (activeTrain) setActiveTrain('');
+      setSelectedCoach(null);
+      return;
     }
-  }, [selectedTrainNumber]);
+    if (selectedTrainNumber && configuredTrains.some((t) => t.train_number === selectedTrainNumber)) {
+      setActiveTrain(selectedTrainNumber);
+    } else if (!activeTrain || !configuredTrains.some((t) => t.train_number === activeTrain)) {
+      setActiveTrain(configuredTrains[0].train_number);
+    }
+  }, [selectedTrainNumber, configuredTrains]);
 
-  // Generate 24 coaches for demonstrative consist or map real backend coaches
   const [customCoaches, setCustomCoaches] = useState<CoachRecord[]>([]);
   const [coachOverrides, setCoachOverrides] = useState<Record<string, Partial<CoachRecord>>>({});
 
-  // Construct coach fleet for active train
+  // Construct coach fleet strictly from configured train consist & mapped devices (never synthetic 24-coach fallbacks)
   const coachesList: CoachRecord[] = useMemo(() => {
-    if (activeTrain === '225256' || (liveTelemetry && activeTrain === liveTelemetry.trno)) {
-      const trainNo = liveTelemetry?.trno || '225256';
-      const liveCoachNum = liveTelemetry?.chno || 'CR123456';
-      const baseCoaches: CoachRecord[] = [];
-      const coachTypes = ['Executive AC', 'AC 2-Tier', 'AC 3-Tier', 'AC Chair Car', 'Sleeper Class', 'Passenger'];
-
-      const liveArrivalPct = liveTelemetry && typeof liveTelemetry.cm1 === 'number'
-        ? Number(((liveTelemetry.cm1 / 150.0) * 100).toFixed(1))
-        : null;
-      const liveDeparturePct = liveTelemetry && typeof liveTelemetry.cm2 === 'number'
-        ? Number(((liveTelemetry.cm2 / 150.0) * 100).toFixed(1))
-        : null;
-
-      for (let i = 1; i <= 24; i++) {
-        const cNum = i === 1 ? liveCoachNum : `C${i}`;
-        const typeIndex = (i - 1) % coachTypes.length;
-        const isLiveCoach = Boolean(liveTelemetry && (cNum === liveTelemetry.chno || i === 1));
-
-        if (isLiveCoach && liveTelemetry) {
-          baseCoaches.push({
-            id: `coach-${trainNo}-${cNum}`,
-            coachNumber: cNum,
-            coachType: 'AC 2-Tier',
-            trainNumber: trainNo,
-            deviceId: liveTelemetry.uid,
-            isOnline: !liveTelemetry.isStale,
-            batteryPercent: liveTelemetry.bat,
-            arrivalLevel: liveArrivalPct,
-            arrivalHeightCm: liveTelemetry.cm1,
-            departureLevel: liveDeparturePct,
-            departureHeightCm: liveTelemetry.cm2,
-            arrivalAlarmStatus: !liveTelemetry.wlv1 ? 'VALVE_ALERT' : (liveArrivalPct != null && liveArrivalPct < 20 ? 'WARNING' : 'NORMAL'),
-            departureAlarmStatus: !liveTelemetry.wlv2 ? 'VALVE_ALERT' : (liveDeparturePct != null && liveDeparturePct < 20 ? 'WARNING' : 'NORMAL'),
-          });
-        } else {
-          baseCoaches.push({
-            id: `coach-${trainNo}-${cNum}`,
-            coachNumber: cNum,
-            coachType: coachTypes[typeIndex],
-            trainNumber: trainNo,
-            deviceId: 'Not Mapped',
-            isOnline: false,
-            batteryPercent: null,
-            arrivalLevel: null,
-            arrivalHeightCm: null,
-            departureLevel: null,
-            departureHeightCm: null,
-            arrivalAlarmStatus: 'NORMAL',
-            departureAlarmStatus: 'NORMAL',
-          });
-        }
-      }
-
-      return baseCoaches;
+    if (!activeTrain || !configuredTrains.some((t) => t.train_number === activeTrain)) {
+      return [];
     }
 
-    // For other trains, build from backend devices and live telemetry
-    const trainDevs = devices.filter((d) => (d.trainNumber || '12002') === activeTrain);
-    if (trainDevs.length > 0) {
-      return trainDevs.map((d, idx) => ({
-        id: d.id,
-        coachNumber: d.coachNumber || `C${idx + 1}`,
-        coachType: 'Standard Coach',
+    if (activeTrain === selectedTrainNumber && consistCoaches.length > 0) {
+      return consistCoaches.map((c) => ({
+        id: `coach-${activeTrain}-${c.coachNumber}`,
+        coachNumber: c.coachNumber,
+        coachType: c.coachType || 'Standard Coach',
         trainNumber: activeTrain,
-        deviceId: d.uid,
-        isOnline: d.isOnline,
-        batteryPercent: d.batteryPercent ?? null,
-        arrivalLevel: idx === 0 ? liveTank?.levelPercent ?? d.primaryLevel ?? null : d.primaryLevel ?? null,
-        arrivalHeightCm: idx === 0 ? liveTank?.heightCm ?? null : null,
-        departureLevel: d.secondaryLevel ?? null,
-        departureHeightCm: null,
-        arrivalAlarmStatus: idx === 0 ? liveTank?.alarmStatus : 'NORMAL',
-        departureAlarmStatus: 'NORMAL',
+        deviceId: c.deviceUid || 'Not Mapped',
+        isOnline: c.isOnline,
+        batteryPercent: c.batteryPercent,
+        arrivalLevel: c.arrivalLevel,
+        arrivalHeightCm: c.arrivalHeightCm,
+        departureLevel: c.departureLevel,
+        departureHeightCm: c.departureHeightCm,
+        arrivalAlarmStatus: (c.tanks?.[0]?.alarmStatus || 'NORMAL') as AlarmStatus,
+        departureAlarmStatus: (c.tanks?.[1]?.alarmStatus || 'NORMAL') as AlarmStatus,
       }));
     }
 
-    // Fallback single coach awaiting telemetry
-    return [
-      {
-        id: 'awaiting-c1',
-        coachNumber: 'C1',
-        coachType: 'Standard Coach',
-        trainNumber: activeTrain,
-        deviceId: 'Not Mapped',
-        isOnline: false,
-        batteryPercent: null,
-        arrivalLevel: null,
-        arrivalHeightCm: null,
-        departureLevel: null,
-        departureHeightCm: null,
-        arrivalAlarmStatus: 'NORMAL',
-        departureAlarmStatus: 'NORMAL',
-      },
-    ];
-  }, [activeTrain, devices, liveTank, liveTelemetry]);
+    const trainDevs = devices.filter((d) => d.trainNumber === activeTrain);
+    return trainDevs.map((d, idx) => ({
+      id: d.id,
+      coachNumber: d.coachNumber || `C${idx + 1}`,
+      coachType: 'Standard Coach',
+      trainNumber: activeTrain,
+      deviceId: d.uid,
+      isOnline: d.isOnline,
+      batteryPercent: d.batteryPercent ?? null,
+      arrivalLevel: d.primaryLevel ?? null,
+      arrivalHeightCm: d.primaryLevel != null ? (d.primaryLevel / 100) * 150.0 : null,
+      departureLevel: d.secondaryLevel ?? null,
+      departureHeightCm: d.secondaryLevel != null ? (d.secondaryLevel / 100) * 150.0 : null,
+      arrivalAlarmStatus: 'NORMAL' as AlarmStatus,
+      departureAlarmStatus: 'NORMAL' as AlarmStatus,
+    }));
+  }, [activeTrain, selectedTrainNumber, configuredTrains, consistCoaches, devices]);
 
   const allCoaches = useMemo(
     () =>
@@ -434,15 +386,27 @@ export const CoachManagementScreen: React.FC = () => {
                 cursor: 'pointer',
               }}
             >
-              <option value="225256">225256 &bull; Express Fleet (24 Coaches)</option>
-              <option value="12002">12002 &bull; Shatabdi Express</option>
-              <option value="12951">12951 &bull; Mumbai Rajdhani</option>
+              {configuredTrains.length === 0 ? (
+                <option value="">No trains configured</option>
+              ) : (
+                configuredTrains.map((t) => (
+                  <option key={t.train_number} value={t.train_number}>
+                    {t.train_number} &bull; {t.name} ({t.coaches_count} Coaches)
+                  </option>
+                ))
+              )}
             </select>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '12px', color: '#64748B' }}>
             <span>
-              Route: <strong>{activeTrain === '225256' ? 'Active Corridor → Destination' : 'New Delhi → Howrah'}</strong>
+              {(() => {
+                const activeMeta = configuredTrains.find((t) => t.train_number === activeTrain);
+                if (!activeMeta) return <>No trains configured. Please add a train to begin monitoring.</>;
+                const src = activeMeta.source_station || 'Origin';
+                const dst = activeMeta.destination_station || 'Destination';
+                return <>Route: <strong>{src} &rarr; {dst}</strong></>;
+              })()}
             </span>
             <span>&bull;</span>
             <span>

@@ -285,7 +285,7 @@ Item {
                                 Text { text: "GPS Status:"; color: "#64748B"; font.pixelSize: 12; font.family: Theme.typography.fontFamily }
                                 Text { text: LocationManager.gpsStatus; font.weight: Font.Bold; font.pixelSize: 12; color: LocationManager.hasValidFix ? "#16A34A" : "#DC2626"; font.family: Theme.typography.fontFamily }
 
-                                Text { text: "Current Location:"; color: "#64748B"; font.pixelSize: 12; font.family: Theme.typography.fontFamily }
+                                Text { text: "Live Train Position:"; color: "#64748B"; font.pixelSize: 12; font.family: Theme.typography.fontFamily }
                                 Text { text: LocationManager.currentStationName; font.weight: Font.Bold; font.pixelSize: 12; color: Theme.colors.textPrimary; font.family: Theme.typography.fontFamily }
 
                                 Text { text: "Latitude:"; color: "#64748B"; font.pixelSize: 12; font.family: Theme.typography.fontFamily }

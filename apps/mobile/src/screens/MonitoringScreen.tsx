@@ -81,17 +81,18 @@ export const MonitoringScreen: React.FC = () => {
       });
     }
 
-    // 2. Real Backend Fleet Devices
+    // 2. Real Backend Fleet Devices (only for active configured train assignments)
     devices.forEach((d) => {
       if (liveTelemetry && d.uid === liveTelemetry.uid) return;
+      if (!d.trainNumber || d.trainNumber.toUpperCase() === 'UNASSIGNED') return;
       const arrLvl = liveTank?.levelPercent ?? d.primaryLevel ?? null;
       const depLvl = d.secondaryLevel ?? null;
       const batt = d.batteryPercent ?? 85;
 
       list.push({
-        trainNumber: d.trainNumber || '225256',
-        trainName: `Express ${d.trainNumber || '225256'}`,
-        coachNumber: d.coachNumber || 'C1',
+        trainNumber: d.trainNumber,
+        trainName: `Train ${d.trainNumber}`,
+        coachNumber: d.coachNumber || '—',
         coachType: 'Standard Coach',
         deviceCode: d.uid,
         isOnline: d.isOnline,

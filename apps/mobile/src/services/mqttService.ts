@@ -6,7 +6,44 @@
 
 // @ts-ignore
 import Paho from 'paho-mqtt';
-import { LiveTelemetryPayload, MqttConnectionStatus } from '../types';
+import { LiveTelemetryPayload, MqttConnectionStatus, MqttGpsFix } from '../types';
+
+export interface ParsedMqttGps {
+  lat: number | null;
+  long: number | null;
+  alt: number | null;
+  sats: number | null;
+  accuracy: number | null;
+  gpsFix: boolean;
+}
+
+/** Validate raw MQTT telemetry GPS fields; rejects NaN, out-of-range, (0,0), and explicit no-fix flags. */
+export function parseValidGps(parsed: Record<string, any>): ParsedMqttGps {
+  const alt = typeof parsed.alt === 'number' && Number.isFinite(parsed.alt) ? parsed.alt : null;
+  const rawSats = parsed.sats ?? parsed.satellites ?? parsed.sat_count;
+  const sats = typeof rawSats === 'number' && Number.isFinite(rawSats) && rawSats >= 0 ? rawSats : null;
+  const rawAcc = parsed.accuracy ?? parsed.hdop;
+  const accuracy = typeof rawAcc === 'number' && Number.isFinite(rawAcc) && rawAcc >= 0 ? rawAcc : null;
+
+  const explicitNoFix =
+    parsed.gps_valid === false ||
+    parsed.has_valid_fix === false ||
+    parsed.gpsValid === false ||
+    parsed.fix === 0 ||
+    parsed.fix === false;
+
+  const rawLat = parsed.lat;
+  const rawLon = parsed.long !== undefined ? parsed.long : parsed.lon;
+  const validLat = typeof rawLat === 'number' && Number.isFinite(rawLat) && rawLat >= -90 && rawLat <= 90;
+  const validLon = typeof rawLon === 'number' && Number.isFinite(rawLon) && rawLon >= -180 && rawLon <= 180;
+  const notNullIsland = validLat && validLon && !(rawLat === 0 && rawLon === 0);
+
+  if (explicitNoFix || !notNullIsland) {
+    return { lat: null, long: null, alt, sats, accuracy, gpsFix: false };
+  }
+
+  return { lat: rawLat, long: rawLon, alt, sats, accuracy, gpsFix: true };
+}
 
 export const DEFAULT_MQTT_TOPIC = '0023004D4B42501120353332';
 export const DEFAULT_DEVICE_UID = '0023004D4B42501120353332';
@@ -27,6 +64,8 @@ export class MqttService {
   private staleTimer: any = null;
   private reconnectAttempts = 0;
   private lastTelemetry: LiveTelemetryPayload | null = null;
+  private lastValidGps: MqttGpsFix | null = null;
+  private gpsWaypoints: MqttGpsFix[] = [];
   private lastPayloadSignature = '';
   private lastMessageReceivedTime = 0;
   private historyBuffer: LiveTelemetryPayload[] = [];
@@ -166,13 +205,12 @@ export class MqttService {
     // Validate and sanitize required fields according to contract:
     // {"uid":"0023004D4B42501120353332","lat":22.557279,"long":88.352432,"speed":3.4,"time":"12:15:39",
     //  "cm1":120.8,"cm2":0.0,"wlp1":12.1,"wlp2":0.0,"wlv1":true,"wlv2":false,"bat":83.6,"chno":"CR123456","trno":"225256"}
-    const uid = String(parsed.uid || parsed.deviceId || DEFAULT_DEVICE_UID);
-    const trno = String(parsed.trno || parsed.trainNumber || '225256');
-    const chno = String(parsed.chno || parsed.coachNumber || 'CR123456');
+    const uid = String(parsed.uid || parsed.deviceId || DEFAULT_DEVICE_UID).trim();
+    const trno = String(parsed.trno || parsed.trainNumber || '').trim();
+    const chno = String(parsed.chno || parsed.coachNumber || '').trim();
 
-    const lat = typeof parsed.lat === 'number' && parsed.lat >= -90 && parsed.lat <= 90 ? parsed.lat : null;
-    const long = typeof parsed.long === 'number' && parsed.long >= -180 && parsed.long <= 180 ? parsed.long : (typeof parsed.lon === 'number' ? parsed.lon : null);
-    const speed = typeof parsed.speed === 'number' && parsed.speed >= 0 ? parsed.speed : 0;
+    const gps = parseValidGps(parsed);
+    const speed = typeof parsed.speed === 'number' && Number.isFinite(parsed.speed) && parsed.speed >= 0 ? parsed.speed : 0;
     const time = typeof parsed.time === 'string' ? parsed.time : new Date().toLocaleTimeString('en-US', { hour12: false });
 
     const cm1 = typeof parsed.cm1 === 'number' && parsed.cm1 >= 0 ? parsed.cm1 : (typeof parsed.primaryHeight === 'number' ? parsed.primaryHeight : 0);
@@ -187,7 +225,7 @@ export class MqttService {
     const bat = typeof parsed.bat === 'number' ? Math.max(0, Math.min(100, parsed.bat)) : (typeof parsed.batteryPercent === 'number' ? parsed.batteryPercent : 85);
 
     // Duplicate message detection
-    const signature = `${uid}-${trno}-${chno}-${cm1}-${cm2}-${wlp1}-${wlp2}-${bat}-${time}`;
+    const signature = `${uid}-${trno}-${chno}-${gps.lat}-${gps.long}-${speed}-${gps.gpsFix}-${cm1}-${cm2}-${wlp1}-${wlp2}-${bat}-${time}`;
     const now = Date.now();
     if (signature === this.lastPayloadSignature && now - this.lastMessageReceivedTime < 1000) {
       return this.lastTelemetry;
@@ -197,8 +235,12 @@ export class MqttService {
 
     const telemetry: LiveTelemetryPayload = {
       uid,
-      lat,
-      long,
+      lat: gps.lat,
+      long: gps.long,
+      alt: gps.alt,
+      sats: gps.sats,
+      accuracy: gps.accuracy,
+      gpsFix: gps.gpsFix,
       speed,
       time,
       cm1,
@@ -213,6 +255,30 @@ export class MqttService {
       receivedAt: now,
       isStale: false,
     };
+
+    if (gps.gpsFix && gps.lat !== null && gps.long !== null) {
+      const fixRecord: MqttGpsFix = {
+        lat: gps.lat,
+        long: gps.long,
+        alt: gps.alt,
+        speed,
+        sats: gps.sats,
+        accuracy: gps.accuracy,
+        time,
+        receivedAt: now,
+        uid,
+        trno,
+        chno,
+      };
+      this.lastValidGps = fixRecord;
+      const prev = this.gpsWaypoints[this.gpsWaypoints.length - 1];
+      if (!prev || prev.lat !== fixRecord.lat || prev.long !== fixRecord.long) {
+        this.gpsWaypoints.push(fixRecord);
+        if (this.gpsWaypoints.length > 200) {
+          this.gpsWaypoints.shift();
+        }
+      }
+    }
 
     this.lastTelemetry = telemetry;
     this.historyBuffer.unshift(telemetry);
@@ -300,6 +366,14 @@ export class MqttService {
 
   getLastTelemetry(): LiveTelemetryPayload | null {
     return this.lastTelemetry;
+  }
+
+  getLastValidGps(): MqttGpsFix | null {
+    return this.lastValidGps;
+  }
+
+  getGpsWaypoints(): MqttGpsFix[] {
+    return [...this.gpsWaypoints];
   }
 
   getTelemetryHistory(filter?: { trno?: string; chno?: string }): LiveTelemetryPayload[] {

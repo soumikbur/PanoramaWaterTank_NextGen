@@ -40,13 +40,8 @@ REGION_CONFIG = {
     "WEST": {"name": "Western Railway", "code": "WR"},
 }
 
-# Known train assignments (fallback metadata for pre-seeded demo devices)
-TRAIN_METADATA: Dict[str, Dict[str, Any]] = {
-    "12002": {"name": "Shatabdi Express (NDLS - BPL)", "region": "NORTH", "type": "Shatabdi Express"},
-    "12301": {"name": "Rajdhani Express (HWH - NDLS)", "region": "EAST", "type": "Rajdhani Express"},
-    "12951": {"name": "Mumbai Rajdhani (MMCT - NDLS)", "region": "WEST", "type": "Superfast AC"},
-    "12431": {"name": "Rajdhani Express (TVC - NZM)", "region": "SOUTH", "type": "Rajdhani Express"},
-}
+# Runtime in-memory cache (never pre-seeded with hardcoded fallback trains)
+TRAIN_METADATA: Dict[str, Dict[str, Any]] = {}
 
 
 def _normalize_region_input(raw_region: str) -> str:
@@ -237,7 +232,7 @@ async def get_regions_summary(db: AsyncSession = Depends(get_db)):
         if d.train_number and d.train_number.upper() != "UNASSIGNED":
             train_devices.setdefault(d.train_number, []).append(d)
 
-    all_train_keys = sorted(set(train_devices.keys()) | set(db_trains.keys()))
+    all_train_keys = sorted(db_trains.keys())
 
     # Build region statistics from registered DB trains and devices
     regions_data = []
@@ -339,7 +334,7 @@ async def list_trains(
         norm_filter_region = _normalize_region_input(region)
 
     trains = []
-    all_train_keys = sorted(set(train_devices.keys()) | set(db_trains.keys()))
+    all_train_keys = sorted(db_trains.keys())
     for train_no in all_train_keys:
         meta = _build_train_meta(train_no, db_trains.get(train_no))
         train_reg = meta.get("region", "NORTH")
@@ -390,6 +385,8 @@ async def get_train_consist(train_number: str, db: AsyncSession = Depends(get_db
     db_train = (
         await db.execute(select(Train).where(Train.train_number == train_number))
     ).scalar_one_or_none()
+    if db_train is None:
+        raise HTTPException(status_code=404, detail=f"Train {train_number} not found.")
     meta = _build_train_meta(train_number, db_train)
 
     devices_result = await db.execute(select(Device).where(Device.train_number == train_number))
@@ -474,14 +471,11 @@ async def create_train(
 
     reg = _normalize_region_input(data.region)
 
-    # Prevent duplicate train entries
+    # Prevent duplicate train entries (authoritative Train table)
     existing_train = (
         await db.execute(select(Train.id).where(Train.train_number == train_number))
     ).scalar_one_or_none()
-    existing_dev = (
-        await db.execute(select(Device.id).where(Device.train_number == train_number).limit(1))
-    ).scalar_one_or_none()
-    if existing_train or existing_dev:
+    if existing_train:
         raise HTTPException(
             status_code=409,
             detail=f"Train {train_number} is already registered in the fleet.",

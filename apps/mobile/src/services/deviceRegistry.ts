@@ -65,6 +65,14 @@ class DeviceRegistryService {
 
   private constructor() {
     this.loadFromStorage();
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('storage', (e) => {
+        if (e.key === STORAGE_KEY) {
+          this.loadFromStorage();
+          this.notify();
+        }
+      });
+    }
   }
 
   public static getInstance(): DeviceRegistryService {
@@ -191,8 +199,8 @@ class DeviceRegistryService {
         tank2HeightCm: telemetry.cm2,
         valve1Normal: telemetry.wlv1,
         valve2Normal: telemetry.wlv2,
-        latitude: telemetry.lat,
-        longitude: telemetry.long,
+        latitude: telemetry.lat !== null && telemetry.long !== null ? telemetry.lat : existing.latitude,
+        longitude: telemetry.lat !== null && telemetry.long !== null ? telemetry.long : existing.longitude,
         speedKmh: telemetry.speed,
         lastSeen: timeStr,
         lastSeenTimestamp: now,
@@ -273,8 +281,8 @@ class DeviceRegistryService {
       tank2HeightCm: 0,
       valve1Normal: true,
       valve2Normal: true,
-      latitude: 22.557279,
-      longitude: 88.352432,
+      latitude: null,
+      longitude: null,
       speedKmh: 0,
       lastSeen: new Date().toLocaleTimeString('en-US', { hour12: false }),
       lastSeenTimestamp: now,
@@ -364,6 +372,32 @@ class DeviceRegistryService {
     }
 
     return unassigned;
+  }
+
+  /**
+   * Unassign all hardware devices bound to a deleted train without destroying device history.
+   */
+  public detachTrain(trainNumber: string): number {
+    const clean = (trainNumber || '').trim().toLowerCase();
+    if (!clean) return 0;
+    let count = 0;
+    this.devices.forEach((dev, uid) => {
+      if ((dev.trainNumber || '').trim().toLowerCase() === clean) {
+        this.devices.set(uid, {
+          ...dev,
+          trainNumber: null,
+          coachNumber: null,
+          assignmentStatus: 'AVAILABLE',
+          isOnline: false,
+        });
+        count += 1;
+      }
+    });
+    if (count > 0) {
+      this.saveToStorage();
+      this.notify();
+    }
+    return count;
   }
 
   /**

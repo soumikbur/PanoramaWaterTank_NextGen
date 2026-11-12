@@ -1,10 +1,20 @@
 /**
- * Static-hosting fleet store used ONLY when the frontend is served on static
- * hosting (GitHub Pages) without a configured external FastAPI `VITE_API_URL`.
+ * Persistent browser-side fleet store for static hosting deployments (e.g. GitHub Pages).
+ * Stores ONLY user-configured trains and their real coach/tank consists in localStorage.
+ * Never fabricates hardcoded baseline trains or 24-coach fallbacks.
  */
-import { RegionSummary, TrainConsist, TrainCreatePayload, TrainOverviewItem } from '../types';
+import {
+  CoachConsist,
+  RegionSummary,
+  TankLiveStatus,
+  TrainConsist,
+  TrainCreatePayload,
+  TrainOverviewItem,
+} from '../types';
 
-const STORAGE_KEY = 'panorama_static_fleet_v1';
+export const FLEET_STORAGE_KEY = 'panorama_static_fleet_v2';
+const LEGACY_FLEET_KEY = 'panorama_static_fleet_v1';
+export const FLEET_UPDATED_EVENT = 'panorama:fleet-updated';
 
 interface StoredTrainRecord {
   train: TrainOverviewItem;
@@ -12,161 +22,102 @@ interface StoredTrainRecord {
 }
 
 interface StaticFleetState {
-  added: Record<string, StoredTrainRecord>;
-  edited: Record<string, Partial<TrainOverviewItem>>;
-  deleted: string[];
+  trains: Record<string, StoredTrainRecord>;
 }
 
 const REGION_META: Record<string, { name: string; code: string }> = {
-  EAST: { name: 'Eastern Railway', code: 'ER' },
   NORTH: { name: 'Northern Railway', code: 'NR' },
-  WEST: { name: 'Western Railway', code: 'WR' },
   SOUTH: { name: 'Southern Railway', code: 'SR' },
+  EAST: { name: 'Eastern & South East', code: 'ER/SER' },
+  WEST: { name: 'Western Railway', code: 'WR' },
 };
 
-const BASELINE_TRAINS: TrainOverviewItem[] = [
-  {
-    train_number: '12301',
-    name: 'Rajdhani Express',
-    type: 'Superfast / Rajdhani',
-    coaches_count: 24,
-    tanks_count: 48,
-    is_online: false,
-    status: 'Standby',
-    active_alarms: 0,
-    region: 'EAST',
-  },
-  {
-    train_number: '225256',
-    name: 'Express Fleet (Telemetry)',
-    type: 'Special Express',
-    coaches_count: 24,
-    tanks_count: 48,
-    is_online: false,
-    status: 'Standby',
-    active_alarms: 0,
-    region: 'EAST',
-  },
-  {
-    train_number: '12423',
-    name: 'Rajdhani Express',
-    type: 'Rajdhani Express',
-    coaches_count: 24,
-    tanks_count: 48,
-    is_online: true,
-    status: 'Operational',
-    active_alarms: 0,
-    region: 'NORTH',
-  },
-  {
-    train_number: '12951',
-    name: 'Mumbai Rajdhani',
-    type: 'Rajdhani Express',
-    coaches_count: 24,
-    tanks_count: 48,
-    is_online: true,
-    status: 'Operational',
-    active_alarms: 0,
-    region: 'WEST',
-  },
-  {
-    train_number: '12621',
-    name: 'Tamil Nadu Express',
-    type: 'Superfast Express',
-    coaches_count: 24,
-    tanks_count: 48,
-    is_online: true,
-    status: 'Operational',
-    active_alarms: 0,
-    region: 'SOUTH',
-  },
-];
-
-export function normalizeRegionCode(region?: string): string {
-  const r = (region || 'NORTH').trim().toUpperCase();
-  if (r.includes('NORTH') || r === 'NR') return 'NORTH';
-  if (r.includes('SOUTH EAST') || r.includes('EAST') || r === 'ER' || r === 'SER') return 'EAST';
-  if (r.includes('SOUTH') || r === 'SR') return 'SOUTH';
-  if (r.includes('WEST') || r.includes('CENTRAL') || r === 'WR' || r === 'CR') return 'WEST';
+export function normalizeRegionCode(raw?: string | null): 'NORTH' | 'SOUTH' | 'EAST' | 'WEST' {
+  const s = (raw || '').trim().toUpperCase();
+  if (s === 'NORTH' || s === 'NR' || s === 'NCR' || s === 'NWR' || s === 'NER' || s.includes('NORTH')) {
+    return 'NORTH';
+  }
+  if (s === 'SOUTH' || s === 'SR' || s === 'SCR' || s === 'SWR' || s.includes('SOUTH')) {
+    return 'SOUTH';
+  }
+  if (s === 'WEST' || s === 'WR' || s === 'WCR' || s === 'CR' || s.includes('WEST') || s.includes('CENTRAL')) {
+    return 'WEST';
+  }
+  if (s === 'EAST' || s === 'ER' || s === 'SER' || s === 'SECR' || s === 'ECOR' || s === 'ECR' || s.includes('EAST')) {
+    return 'EAST';
+  }
   return 'NORTH';
 }
 
 function readState(): StaticFleetState {
   if (typeof window === 'undefined' || !window.localStorage) {
-    return { added: {}, edited: {}, deleted: [] };
+    return { trains: {} };
   }
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { added: {}, edited: {}, deleted: [] };
+    // Purge legacy v1 mock baseline key if still present in browser storage
+    if (window.localStorage.getItem(LEGACY_FLEET_KEY)) {
+      window.localStorage.removeItem(LEGACY_FLEET_KEY);
+    }
+    const raw = window.localStorage.getItem(FLEET_STORAGE_KEY);
+    if (!raw) return { trains: {} };
     const parsed = JSON.parse(raw);
     return {
-      added: parsed?.added && typeof parsed.added === 'object' ? parsed.added : {},
-      edited: parsed?.edited && typeof parsed.edited === 'object' ? parsed.edited : {},
-      deleted: Array.isArray(parsed?.deleted) ? parsed.deleted : [],
+      trains: parsed?.trains && typeof parsed.trains === 'object' ? parsed.trains : {},
     };
   } catch {
-    return { added: {}, edited: {}, deleted: [] };
+    return { trains: {} };
   }
+}
+
+// Always remove obsolete v1 baseline key on app startup regardless of API vs static mode
+try {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    window.localStorage.removeItem(LEGACY_FLEET_KEY);
+  }
+} catch {
+  // Ignore storage access errors
 }
 
 function writeState(state: StaticFleetState): void {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    window.localStorage.setItem(FLEET_STORAGE_KEY, JSON.stringify(state));
+    window.dispatchEvent(new CustomEvent(FLEET_UPDATED_EVENT));
   } catch {
-    // Ignore storage quota errors gracefully
+    // Ignore storage quota errors cleanly
   }
-}
-
-function buildMergedTrains(): TrainOverviewItem[] {
-  const state = readState();
-  const deletedSet = new Set(state.deleted);
-  const byNumber = new Map<string, TrainOverviewItem>();
-
-  for (const t of BASELINE_TRAINS) {
-    if (!deletedSet.has(t.train_number)) {
-      byNumber.set(t.train_number, { ...t });
-    }
-  }
-  for (const [num, rec] of Object.entries(state.added)) {
-    if (!deletedSet.has(num) && rec?.train) {
-      byNumber.set(num, { ...rec.train });
-    }
-  }
-  for (const [num, patch] of Object.entries(state.edited)) {
-    const cur = byNumber.get(num);
-    if (cur && patch) {
-      byNumber.set(num, { ...cur, ...patch });
-    }
-  }
-  return Array.from(byNumber.values());
 }
 
 export const localFleetStore = {
   hasTrain(trainNumber: string): boolean {
     const clean = (trainNumber || '').trim();
-    return buildMergedTrains().some((t) => t.train_number === clean);
+    const state = readState();
+    return Boolean(clean && state.trains[clean]);
   },
 
   listTrains(region?: string, search?: string): TrainOverviewItem[] {
-    let list = buildMergedTrains();
+    const state = readState();
+    let list = Object.values(state.trains).map((rec) => rec.train);
+
     if (region && region.trim().toUpperCase() !== 'ALL') {
-      const targetReg = normalizeRegionCode(region);
-      list = list.filter((t) => normalizeRegionCode(t.region) === targetReg);
+      const regCode = normalizeRegionCode(region);
+      list = list.filter((t) => normalizeRegionCode(t.region) === regCode);
     }
+
     if (search && search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(
         (t) =>
           t.train_number.toLowerCase().includes(q) ||
-          (t.name || '').toLowerCase().includes(q)
+          t.name.toLowerCase().includes(q)
       );
     }
-    return list;
+
+    return list.sort((a, b) => a.train_number.localeCompare(b.train_number));
   },
 
   getRegionsSummary(): RegionSummary[] {
-    const trains = buildMergedTrains();
+    const trains = this.listTrains();
     return Object.entries(REGION_META).map(([regKey, meta]) => {
       const regTrains = trains.filter((t) => normalizeRegionCode(t.region) === regKey);
       return {
@@ -174,10 +125,10 @@ export const localFleetStore = {
         name: meta.name,
         code: meta.code,
         configuredTrains: regTrains.length,
-        coaches: regTrains.reduce((acc, t) => acc + (t.coaches_count || 0), 0),
-        tanks: regTrains.reduce((acc, t) => acc + (t.tanks_count || 0), 0),
+        coaches: regTrains.reduce((sum, t) => sum + (t.coaches_count || 0), 0),
+        tanks: regTrains.reduce((sum, t) => sum + (t.tanks_count || 0), 0),
         onlineTrains: regTrains.filter((t) => t.is_online).length,
-        status: 'All Normal',
+        status: regTrains.some((t) => t.active_alarms > 0) ? 'Warning' : 'All Normal',
         trains: regTrains,
       };
     });
@@ -185,31 +136,41 @@ export const localFleetStore = {
 
   createTrain(payload: TrainCreatePayload): { success: boolean; train_number: string; coaches_created: number } {
     const num = (payload.train_number || '').trim();
-    if (!num || !payload.name?.trim()) {
-      const err: any = new Error('Train number and train name are required.');
-      err.status = 422;
-      throw err;
+    if (!num) {
+      throw new Error('Train number is required.');
     }
-    if (this.hasTrain(num)) {
+    const state = readState();
+    if (state.trains[num]) {
       const err: any = new Error(`Train ${num} is already registered in the fleet.`);
       err.status = 409;
       throw err;
     }
 
     const reg = normalizeRegionCode(payload.region);
-    const capacity = payload.tank_capacity && payload.tank_capacity > 0 ? payload.tank_capacity : 20.0;
-    const rawCoaches =
+    const coachSpecs =
       payload.coaches && payload.coaches.length > 0
         ? payload.coaches
-        : [{ coach_number: (payload.coach_number || 'B1').trim().toUpperCase() || 'B1', coach_category: 'AC 3-Tier', coach_type: '3A' }];
+        : payload.coach_number?.trim()
+        ? [{ coach_number: payload.coach_number.trim().toUpperCase(), coach_category: 'General' }]
+        : [{ coach_number: 'C1', coach_category: 'General' }];
 
-    const coaches = rawCoaches.map((c) => {
-      const cNum = (c.coach_number || 'B1').trim().toUpperCase();
+    const seen = new Set<string>();
+    const uniqueSpecs = coachSpecs.filter((c) => {
+      const cn = (c.coach_number || '').trim().toUpperCase();
+      if (!cn || seen.has(cn)) return false;
+      seen.add(cn);
+      return true;
+    });
+
+    const capacity = payload.tank_capacity || 500;
+    const coaches: CoachConsist[] = uniqueSpecs.map((spec) => {
+      const cNum = spec.coach_number.trim().toUpperCase();
       return {
         coach_number: cNum,
-        device_uid: `STATIC-${num}-${cNum}`,
+        coach_category: spec.coach_category || 'Coach',
+        device_uid: `PANORAMA-${num}-${cNum}`,
         is_online: false,
-        hardware_version: 'v2.2.0',
+        hardware_version: 'Standard WLI Node',
         tanks: [
           {
             id: `tank-${num}-${cNum}-1`,
@@ -277,10 +238,7 @@ export const localFleetStore = {
       last_verified_at: trainItem.last_verified_at,
     };
 
-    const state = readState();
-    state.deleted = state.deleted.filter((d) => d !== num);
-    delete state.edited[num];
-    state.added[num] = { train: trainItem, consist };
+    state.trains[num] = { train: trainItem, consist };
     writeState(state);
 
     return { success: true, train_number: num, coaches_created: coaches.length };
@@ -289,18 +247,23 @@ export const localFleetStore = {
   updateTrain(trainNumber: string, data: { name?: string; region?: string; type?: string }): { success: boolean } {
     const clean = (trainNumber || '').trim();
     const state = readState();
-    const patch: Partial<TrainOverviewItem> = {};
-    if (data.name !== undefined) patch.name = data.name;
-    if (data.region !== undefined) patch.region = normalizeRegionCode(data.region);
-    if (data.type !== undefined) patch.type = data.type;
+    const rec = state.trains[clean];
+    if (!rec) {
+      throw new Error(`Train ${clean} not found.`);
+    }
 
-    if (state.added[clean]) {
-      state.added[clean].train = { ...state.added[clean].train, ...patch };
-      if (data.name !== undefined) state.added[clean].consist.name = data.name;
-      if (data.region !== undefined) state.added[clean].consist.region = normalizeRegionCode(data.region);
-      if (data.type !== undefined) state.added[clean].consist.train_type = data.type;
-    } else {
-      state.edited[clean] = { ...(state.edited[clean] || {}), ...patch };
+    if (data.name !== undefined) {
+      rec.train.name = data.name;
+      rec.consist.name = data.name;
+    }
+    if (data.region !== undefined) {
+      const reg = normalizeRegionCode(data.region);
+      rec.train.region = reg;
+      rec.consist.region = reg;
+    }
+    if (data.type !== undefined) {
+      rec.train.type = data.type;
+      rec.consist.train_type = data.type;
     }
     writeState(state);
     return { success: true };
@@ -309,11 +272,10 @@ export const localFleetStore = {
   deleteTrain(trainNumber: string): { success: boolean; message: string; trainId: string } {
     const clean = (trainNumber || '').trim();
     const state = readState();
-    delete state.added[clean];
-    delete state.edited[clean];
-    if (!state.deleted.includes(clean)) {
-      state.deleted.push(clean);
+    if (!state.trains[clean]) {
+      throw new Error(`Train ${clean} was not found.`);
     }
+    delete state.trains[clean];
     writeState(state);
     return { success: true, message: `Train ${clean} deleted successfully.`, trainId: clean };
   },
@@ -321,11 +283,43 @@ export const localFleetStore = {
   getTrainConsist(trainNumber: string): TrainConsist | null {
     const clean = (trainNumber || '').trim();
     const state = readState();
-    if (state.deleted.includes(clean)) return null;
-    if (state.added[clean]?.consist) {
-      return state.added[clean].consist;
+    return state.trains[clean]?.consist ?? null;
+  },
+
+  listAllTanks(): TankLiveStatus[] {
+    const state = readState();
+    const tanks: TankLiveStatus[] = [];
+    for (const { consist } of Object.values(state.trains)) {
+      for (const coach of consist.coaches || []) {
+        for (const t of coach.tanks || []) {
+          tanks.push({
+            tankId: t.id,
+            deviceId: coach.device_uid,
+            deviceUid: coach.device_uid,
+            trainNumber: consist.train_number,
+            coachNumber: coach.coach_number,
+            tankName: t.name,
+            tankIndex: t.tank_index,
+            levelPercent: null,
+            rawLevelPercent: null,
+            volumeLiters: null,
+            heightCm: null,
+            capacityLiters: t.capacity_liters,
+            maxHeightCm: 150.0,
+            crossSectionalAreaM2: 0.33,
+            rank: 'N/A',
+            alarmStatus: 'AWAITING_TELEMETRY',
+            batteryVoltage: null,
+            isOnline: coach.is_online,
+            hasTelemetry: false,
+            isStale: !coach.is_online,
+            lastUpdate: null,
+            latitude: null,
+            longitude: null,
+          });
+        }
+      }
     }
-    return null;
+    return tanks;
   },
 };
-

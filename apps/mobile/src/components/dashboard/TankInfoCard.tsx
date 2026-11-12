@@ -25,7 +25,7 @@ export const TankInfoCard: React.FC<TankInfoCardProps> = ({
   const device = tank?.deviceUid || tank?.deviceId || 'DEV-WLI-01';
   const trainCoach = tank?.trainNumber
     ? `${tank.trainNumber}${tank.coachNumber ? ` / ${tank.coachNumber}` : ''}`
-    : '12002 / C1';
+    : 'No Active Train';
 
   const voltage = isTelemetryAvailable && tank?.batteryVoltage != null
     ? `${tank.batteryVoltage.toFixed(2)} V`

@@ -41,6 +41,7 @@ export const SettingsScreen: React.FC = () => {
     connectionStatus,
     selectedTrainNumber,
     setSelectedTrainNumber,
+    configuredTrains,
     alertConfig,
     updateAlertConfig,
     alertHistory,
@@ -165,7 +166,6 @@ export const SettingsScreen: React.FC = () => {
   const [defaultCorridor, setDefaultCorridor] = useState('HOWRAH_ASANSOL');
   const [defaultMapEngine, setDefaultMapEngine] = useState<'OSM' | 'ESRI'>('OSM');
   const [gnssPollRate, setGnssPollRate] = useState(4);
-  const [simFallback, setSimFallback] = useState(true);
 
   // Section 6: Notifications & Alerts
   const [alarmWarning, setAlarmWarning] = useState(20.0);
@@ -834,10 +834,15 @@ export const SettingsScreen: React.FC = () => {
                   backgroundColor: '#FFFFFF',
                 }}
               >
-                <option value="12002">Train 12002 (Shatabdi Express — Northern/Central)</option>
-                <option value="12301">Train 12301 (Howrah Rajdhani — Eastern Railway)</option>
-                <option value="12951">Train 12951 (Mumbai Rajdhani — Western Railway)</option>
-                <option value="12431">Train 12431 (Rajdhani Express — Southern Railway)</option>
+                {configuredTrains.length === 0 ? (
+                  <option value="">No trains configured</option>
+                ) : (
+                  configuredTrains.map((t) => (
+                    <option key={t.train_number} value={t.train_number}>
+                      Train {t.train_number} ({t.name})
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
@@ -1778,22 +1783,6 @@ export const SettingsScreen: React.FC = () => {
                   fontSize: '13px',
                 }}
               />
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '24px' }}>
-              <input
-                type="checkbox"
-                id="sim-fallback-checkbox"
-                checked={simFallback}
-                onChange={(e) => {
-                  setSimFallback(e.target.checked);
-                  setHasUnsavedChanges(true);
-                }}
-                style={{ width: 16, height: 16, accentColor: colors.primary }}
-              />
-              <label htmlFor="sim-fallback-checkbox" style={{ fontSize: '13px', fontWeight: 600, color: colors.textPrimary, cursor: 'pointer' }}>
-                Auto-demonstrate corridor simulation when physical GPS is unavailable
-              </label>
             </div>
           </div>
         </div>

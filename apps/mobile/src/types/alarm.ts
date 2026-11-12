@@ -10,6 +10,8 @@ export interface AlarmItem {
   tank_id?: string;
   coachNumber?: string;
   coach_number?: string;
+  trainNumber?: string;
+  train_number?: string;
   alarmType?: AlarmType;
   alarm_type?: AlarmType;
   severity: AlarmSeverity;

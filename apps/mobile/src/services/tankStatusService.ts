@@ -19,7 +19,7 @@
  * Invariant: Total Tanks = Online Tanks + Offline Tanks.
  */
 
-import { LiveTelemetryPayload, MqttConnectionStatus, TankLiveStatus } from '../types';
+import { LiveTelemetryPayload, MqttConnectionStatus, TankLiveStatus, TrainConsist, TrainOverviewItem } from '../types';
 import { ManagedDevice } from './deviceRegistry';
 
 export const DEFAULT_TELEMETRY_TIMEOUT_SECONDS = 120;
@@ -126,6 +126,8 @@ export function setTelemetryTimeoutSeconds(seconds: number): void {
  */
 export function computeConsistData(params: {
   trainNumber: string;
+  configuredTrains?: TrainOverviewItem[];
+  activeConsist?: TrainConsist | null;
   totalCoaches?: number;
   managedDevices: ManagedDevice[];
   liveTelemetry: LiveTelemetryPayload | null;
@@ -139,7 +141,9 @@ export function computeConsistData(params: {
 } {
   const {
     trainNumber,
-    totalCoaches = 24,
+    configuredTrains,
+    activeConsist,
+    totalCoaches: explicitTotalCoaches,
     managedDevices,
     liveTelemetry,
     mqttStatus,
@@ -151,7 +155,38 @@ export function computeConsistData(params: {
   const timeoutMs = timeoutSeconds * 1000;
   const isMqttActive = mqttStatus !== 'DISCONNECTED';
 
-  const cleanTrainNumber = (trainNumber || '225256').trim();
+  const cleanTrainNumber = (trainNumber || '').trim();
+  const matchedTrain = configuredTrains
+    ? configuredTrains.find((t) => t.train_number.trim() === cleanTrainNumber)
+    : undefined;
+
+  if (!cleanTrainNumber || (configuredTrains !== undefined && !matchedTrain)) {
+    return {
+      metrics: {
+        trainNumber: '',
+        totalCoaches: 0,
+        totalTanks: 0,
+        onlineTanks: 0,
+        offlineTanks: 0,
+        unmappedTanks: 0,
+        onlineCoaches: 0,
+        offlineCoaches: 0,
+        timeoutSeconds,
+      },
+      coaches: [],
+      tanks: [],
+    };
+  }
+
+  // Derive coaches ONLY from the authoritative train consist / count (never synthetic 24-coach fallbacks)
+  const consistForTrain =
+    activeConsist && activeConsist.train_number.trim() === cleanTrainNumber
+      ? activeConsist
+      : null;
+
+  const targetCount = consistForTrain?.coaches?.length
+    ? consistForTrain.coaches.length
+    : explicitTotalCoaches ?? matchedTrain?.coaches_count ?? 0;
 
   // Find all devices engaged with this specific train
   const engagedDevices = managedDevices.filter(
@@ -163,30 +198,29 @@ export function computeConsistData(params: {
   const coaches: ConsistCoachItem[] = [];
   const tanks: ConsistTankItem[] = [];
 
-  for (let i = 1; i <= totalCoaches; i++) {
-    const defaultCoachNum = `C${i}`;
+  for (let i = 1; i <= targetCount; i++) {
+    const consistCoach = consistForTrain?.coaches?.[i - 1];
+    const coachNum = (consistCoach?.coach_number || `C${i}`).trim();
     const typeIndex = (i - 1) % coachTypes.length;
-    const coachType = coachTypes[typeIndex];
+    const coachType = consistCoach?.coach_category || coachTypes[typeIndex];
 
-    // Check if live telemetry matches this train & coach
-    const isLiveMatch =
+    // Check if live telemetry matches this specific train & coach
+    const isLiveMatch = Boolean(
       liveTelemetry &&
       isMqttActive &&
       !liveTelemetry.isStale &&
       liveTelemetry.trno?.trim().toLowerCase() === cleanTrainNumber.toLowerCase() &&
-      (liveTelemetry.chno?.trim().toLowerCase() === defaultCoachNum.toLowerCase() ||
-        (i === 1 && liveTelemetry.chno));
-
-    const coachNum = isLiveMatch && liveTelemetry ? liveTelemetry.chno : defaultCoachNum;
+      liveTelemetry.chno?.trim().toLowerCase() === coachNum.toLowerCase()
+    );
 
     // Check if this coach has a mapped device in the registry
     const mappedDevice = engagedDevices.find(
       (d) => d.coachNumber?.trim().toLowerCase() === coachNum.toLowerCase()
     );
 
-    // Determine device mapping
-    let deviceUid: string | null = null;
-    let isMapped = false;
+    // Determine device mapping (use mapped hardware UID or configured node UID when present)
+    let deviceUid: string | null = consistCoach?.device_uid || null;
+    let isMapped = Boolean(mappedDevice || (consistCoach?.device_uid && !consistCoach.device_uid.startsWith('PANORAMA-')));
     let hasTelemetry = false;
     let lastSeenTimestamp: number | null = null;
     let lastSeenTimeStr: string | null = null;
@@ -367,7 +401,7 @@ export function computeConsistData(params: {
 
   const metrics: ConsistMetrics = {
     trainNumber: cleanTrainNumber,
-    totalCoaches,
+    totalCoaches: coaches.length,
     totalTanks,
     onlineTanks,
     offlineTanks,

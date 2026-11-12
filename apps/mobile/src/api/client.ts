@@ -15,7 +15,8 @@ import {
   TrainConsist,
   UserProfile,
   EmployeeRegistrationPayload,
-  TrainLocation
+  TrainLocation,
+  DEFAULT_CORRIDOR_STATIONS
 } from '../types';
 import { TrainLookupResult, TrainCreatePayload } from '../types/train';
 import { deviceRegistry } from '../services/deviceRegistry';
@@ -581,11 +582,8 @@ export class ApiClient {
     if (!API_BASE) {
       return localFleetStore.getRegionsSummary();
     }
-    try {
-      const res = await this.request<RegionSummary[]>('/trains/regions');
-      if (Array.isArray(res) && res.length > 0) return res;
-    } catch {}
-    return localFleetStore.getRegionsSummary();
+    const res = await this.request<RegionSummary[]>('/trains/regions');
+    return Array.isArray(res) ? res : [];
   }
 
   static async fetchTrains(region?: string, search?: string): Promise<TrainOverviewItem[]> {
@@ -600,55 +598,16 @@ export class ApiClient {
   }
 
   static async fetchTrainConsist(trainNumber: string): Promise<TrainConsist> {
-    if (!API_BASE) {
-      const localConsist = localFleetStore.getTrainConsist(trainNumber);
-      if (localConsist) return localConsist;
-    } else {
-      try {
-        const res = await this.request<TrainConsist>(`/trains/${trainNumber}/consist`);
-        if (res && res.train_number) return res;
-      } catch {}
+    const clean = (trainNumber || '').trim();
+    if (!clean) {
+      throw new Error('Train number is required.');
     }
-    const coaches = Array.from({ length: 24 }, (_, idx) => {
-      const pos = idx + 1;
-      const cNum = pos === 1 ? 'CR123456' : `S${pos}`;
-      return {
-        coach_number: cNum,
-        device_uid: pos === 1 ? '0023004D4B42501120353332' : `DEV-${trainNumber}-${cNum}`,
-        is_online: false,
-        hardware_version: 'v2.2.0',
-        tanks: [
-          {
-            id: `tank-${trainNumber}-${cNum}-1`,
-            tank_index: 1,
-            name: 'Arrival Side (Tank 1)',
-            capacity_liters: 500,
-            current_level_percent: 0.0,
-            current_volume_liters: 0.0,
-            status: 'NORMAL' as const,
-          },
-          {
-            id: `tank-${trainNumber}-${cNum}-2`,
-            tank_index: 2,
-            name: 'Departure Side (Tank 2)',
-            capacity_liters: 500,
-            current_level_percent: 0.0,
-            current_volume_liters: 0.0,
-            status: 'NORMAL' as const,
-          },
-        ],
-      };
-    });
-    return {
-      train_number: trainNumber,
-      name: trainNumber === '12301' ? 'Rajdhani Express' : trainNumber === '225256' ? 'Express Fleet' : `Train ${trainNumber}`,
-      region: 'EAST',
-      coaches_count: 24,
-      tanks_count: 48,
-      online_status: false,
-      active_alarms_count: 0,
-      coaches,
-    };
+    if (!API_BASE) {
+      const localConsist = localFleetStore.getTrainConsist(clean);
+      if (localConsist) return localConsist;
+      throw new Error(`Train ${clean} not found.`);
+    }
+    return this.request<TrainConsist>(`/trains/${encodeURIComponent(clean)}/consist`);
   }
 
   static async lookupTrain(
@@ -662,24 +621,36 @@ export class ApiClient {
     });
   }
 
-  static async createTrain(data: TrainCreatePayload): Promise<any> {
-    if (!API_BASE) {
-      return localFleetStore.createTrain(data);
+  private static notifyCrossTabFleetSync(): void {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('panorama_fleet_sync_ts', String(Date.now()));
+      }
+    } catch {
+      // Ignore storage access errors in restricted contexts
     }
-    return this.request('/trains', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  }
+
+  static async createTrain(data: TrainCreatePayload): Promise<any> {
+    const res = !API_BASE
+      ? localFleetStore.createTrain(data)
+      : await this.request('/trains', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        });
+    this.notifyCrossTabFleetSync();
+    return res;
   }
 
   static async updateTrain(trainNumber: string, data: { name?: string; region?: string; type?: string }): Promise<any> {
-    if (!API_BASE) {
-      return localFleetStore.updateTrain(trainNumber, data);
-    }
-    return this.request(`/trains/${trainNumber}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
+    const res = !API_BASE
+      ? localFleetStore.updateTrain(trainNumber, data)
+      : await this.request(`/trains/${trainNumber}`, {
+          method: 'PUT',
+          body: JSON.stringify(data),
+        });
+    this.notifyCrossTabFleetSync();
+    return res;
   }
 
   static async deleteTrain(trainNumber: string): Promise<{ success?: boolean; message: string; trainId?: string }> {
@@ -687,60 +658,42 @@ export class ApiClient {
     if (!clean) {
       throw new Error('Train number is required for deletion.');
     }
-    if (!API_BASE) {
-      return localFleetStore.deleteTrain(trainNumber);
-    }
-    return this.request(`/trains/${clean}`, {
-      method: 'DELETE',
-    });
+    const res = !API_BASE
+      ? localFleetStore.deleteTrain(trainNumber)
+      : await this.request<{ success?: boolean; message: string; trainId?: string }>(`/trains/${clean}`, {
+          method: 'DELETE',
+        });
+    deviceRegistry.detachTrain(trainNumber);
+    this.notifyCrossTabFleetSync();
+    return res;
   }
 
   // Location and GPS Tracking
   static async fetchLocations(trainNumber?: string): Promise<TrainLocation[]> {
+    if (!API_BASE) return [];
     const query = trainNumber ? `?train_number=${trainNumber}` : '';
     return this.request<TrainLocation[]>(`/location${query}`);
   }
 
   static async fetchCorridorStations(): Promise<import('../types').CorridorStation[]> {
+    if (!API_BASE) return DEFAULT_CORRIDOR_STATIONS;
     return this.request<import('../types').CorridorStation[]>('/location/corridor');
   }
 
   // Tanks
   static async fetchTanks(): Promise<TankLiveStatus[]> {
-    try {
-      const res = await this.request<TankLiveStatus[]>('/tanks');
-      if (Array.isArray(res) && res.length > 0) return res;
-    } catch {}
-    return [
-      {
-        tankId: 'tank-12301-S1-1',
-        tankName: 'Toilet Front',
-        tankIndex: 1,
-        deviceUid: 'DEV-12301-S1',
-        deviceId: 'DEV-12301-S1',
-        trainNumber: '12301',
-        coachNumber: 'S1',
-        levelPercent: null,
-        rawLevelPercent: null,
-        volumeLiters: null,
-        heightCm: null,
-        capacityLiters: 20.0,
-        maxHeightCm: 50.0,
-        crossSectionalAreaM2: 0.04,
-        rank: 'MODERATE',
-        alarmStatus: 'NORMAL',
-        batteryVoltage: null,
-        isOnline: false,
-        hasTelemetry: false,
-        isStale: true,
-        lastUpdate: null,
-        latitude: null,
-        longitude: null,
-      },
-    ];
+    if (!API_BASE) {
+      return localFleetStore.listAllTanks();
+    }
+    const res = await this.request<TankLiveStatus[]>('/tanks');
+    return Array.isArray(res) ? res : [];
   }
 
-  static async fetchLiveTank(): Promise<TankLiveStatus> {
+  static async fetchLiveTank(): Promise<TankLiveStatus | null> {
+    if (!API_BASE) {
+      const list = localFleetStore.listAllTanks();
+      return list[0] ?? null;
+    }
     return this.request<TankLiveStatus>('/tanks/live');
   }
 

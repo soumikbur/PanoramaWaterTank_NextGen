@@ -1216,7 +1216,7 @@ Rectangle {
                 }
 
                 Text {
-                    text: "Current Location"
+                    text: "Live Train Position"
                     font.pixelSize: 11
                     font.weight: Font.DemiBold
                     color: root.selectedCode === "DEVICE_T01" ? Theme.colors.primary : Theme.colors.textPrimary

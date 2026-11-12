@@ -23,6 +23,10 @@ export interface LiveTelemetryPayload {
   uid: string;
   lat: number | null;
   long: number | null;
+  alt?: number | null;
+  sats?: number | null;
+  accuracy?: number | null;
+  gpsFix?: boolean;
   speed: number;
   time: string;
   cm1: number;
@@ -36,6 +40,20 @@ export interface LiveTelemetryPayload {
   trno: string;
   receivedAt: number;
   isStale?: boolean;
+}
+
+export interface MqttGpsFix {
+  lat: number;
+  long: number;
+  alt: number | null;
+  speed: number;
+  sats: number | null;
+  accuracy: number | null;
+  time: string;
+  receivedAt: number;
+  uid: string;
+  trno: string;
+  chno: string;
 }
 
 export type MqttConnectionStatus = 'CONNECTED' | 'CONNECTING' | 'STALE' | 'DISCONNECTED';

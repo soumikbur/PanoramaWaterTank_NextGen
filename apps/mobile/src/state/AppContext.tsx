@@ -11,7 +11,10 @@ import {
   UserProfile,
   RegionSummary,
   LiveTelemetryPayload,
-  MqttConnectionStatus
+  MqttConnectionStatus,
+  MqttGpsFix,
+  TrainOverviewItem,
+  TrainConsist
 } from '../types';
 import { ApiClient } from '../api/client';
 import { wsService } from '../services/websocket';
@@ -19,6 +22,7 @@ import { mqttService } from '../services/mqttService';
 import { DisplayPreferencesService, ScalePreset } from '../services/displayPreferencesService';
 import { AppRouter } from '../services/router';
 import { deviceRegistry, ManagedDevice } from '../services/deviceRegistry';
+import { FLEET_STORAGE_KEY, FLEET_UPDATED_EVENT } from '../services/localFleetStore';
 import {
   computeConsistData,
   getTelemetryTimeoutSeconds,
@@ -71,6 +75,8 @@ interface AppContextType {
   mqttBrokerStatus: 'CONNECTED' | 'DISCONNECTED' | 'UNKNOWN';
   mqttConnectionStatus: MqttConnectionStatus;
   liveTelemetry: LiveTelemetryPayload | null;
+  lastValidGps: MqttGpsFix | null;
+  gpsWaypoints: MqttGpsFix[];
   currentTime: string;
   currentDate: string;
   currentUser: UserProfile | null;
@@ -93,6 +99,8 @@ interface AppContextType {
   selectedStationCode: string | null;
   setSelectedStationCode: (code: string | null) => void;
   regions: RegionSummary[];
+  configuredTrains: TrainOverviewItem[];
+  activeConsist: TrainConsist | null;
   displayScale: string;
   setDisplayScale: (scale: string) => void;
   resetDisplayScale: () => void;
@@ -166,18 +174,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [mqttBrokerStatus, setMqttBrokerStatus] = useState<'CONNECTED' | 'DISCONNECTED' | 'UNKNOWN'>('UNKNOWN');
   const [mqttConnectionStatus, setMqttConnectionStatus] = useState<MqttConnectionStatus>('DISCONNECTED');
   const [liveTelemetry, setLiveTelemetry] = useState<LiveTelemetryPayload | null>(null);
+  const [lastValidGps, setLastValidGps] = useState<MqttGpsFix | null>(() => mqttService.getLastValidGps());
+  const [gpsWaypoints, setGpsWaypoints] = useState<MqttGpsFix[]>(() => mqttService.getGpsWaypoints());
   const [currentTime, setCurrentTime] = useState<string>('');
   const [currentDate, setCurrentDate] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
   const toggleMobileNav = () => setIsMobileNavOpen((prev) => !prev);
-  const [selectedTrainNumber, setSelectedTrainNumber] = useState<string>('225256');
-  const [selectedCoachNumber, setSelectedCoachNumber] = useState<string>('CR123456');
+  const [selectedTrainNumber, setSelectedTrainNumber] = useState<string>('');
+  const [selectedCoachNumber, setSelectedCoachNumber] = useState<string>('');
   const [selectedTankId, setSelectedTankId] = useState<string | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [selectedStationCode, setSelectedStationCode] = useState<string | null>(null);
   const [regions, setRegions] = useState<RegionSummary[]>([]);
+  const [activeConsist, setActiveConsist] = useState<TrainConsist | null>(null);
+  const regionsLoadedRef = useRef<boolean>(false);
 
   const [telemetryTimeoutSec, setTelemetryTimeoutSec] = useState<number>(() => getTelemetryTimeoutSeconds());
   const [telemetryTick, setTelemetryTick] = useState<number>(0);
@@ -271,17 +283,91 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setTelemetryTimeoutSec(seconds);
   };
 
+  const configuredTrains: TrainOverviewItem[] = useMemo(() => {
+    const seen = new Set<string>();
+    const list: TrainOverviewItem[] = [];
+    for (const reg of regions) {
+      for (const t of reg.trains || []) {
+        const num = (t.train_number || '').trim();
+        if (num && !seen.has(num)) {
+          seen.add(num);
+          list.push({ ...t, region: t.region || reg.region });
+        }
+      }
+    }
+    return list;
+  }, [regions]);
+
+  const configuredTrainSetRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    configuredTrainSetRef.current = new Set(configuredTrains.map((t) => t.train_number.trim()));
+  }, [configuredTrains]);
+
+  // Keep selected train/coach, active consist, URL params, and local caches strictly synced with configuredTrains
+  useEffect(() => {
+    if (!regionsLoadedRef.current) return;
+
+    const validSet = new Set(configuredTrains.map((t) => t.train_number.trim()));
+    if (configuredTrains.length === 0) {
+      if (selectedTrainNumber) setSelectedTrainNumber('');
+      if (selectedCoachNumber) setSelectedCoachNumber('');
+      if (selectedTankId) setSelectedTankId(null);
+      if (activeConsist) setActiveConsist(null);
+      if (liveTank) setLiveTank(null);
+      if (tanks.length > 0) setTanks([]);
+      if (liveTelemetry) setLiveTelemetry(null);
+      if (lastValidGps) setLastValidGps(null);
+      if (gpsWaypoints.length > 0) setGpsWaypoints([]);
+      const parsed = AppRouter.parseCurrentRoute();
+      if (parsed.trainNumber || parsed.coachNumber) {
+        AppRouter.navigate(activeScreen);
+      }
+      return;
+    }
+
+    if (!selectedTrainNumber || !validSet.has(selectedTrainNumber.trim())) {
+      const nextTrain = configuredTrains[0].train_number.trim();
+      setSelectedTrainNumber(nextTrain);
+      setSelectedCoachNumber('');
+      const parsed = AppRouter.parseCurrentRoute();
+      if (parsed.trainNumber && !validSet.has(parsed.trainNumber.trim())) {
+        AppRouter.navigate(activeScreen, nextTrain);
+      }
+    }
+  }, [configuredTrains, selectedTrainNumber, activeScreen]);
+
+  // Fetch authoritative consist whenever selectedTrainNumber changes or fleet refreshes
+  useEffect(() => {
+    const clean = (selectedTrainNumber || '').trim();
+    if (!clean || !configuredTrains.some((t) => t.train_number.trim() === clean)) {
+      setActiveConsist(null);
+      return;
+    }
+    let cancelled = false;
+    ApiClient.fetchTrainConsist(clean)
+      .then((c) => {
+        if (!cancelled) setActiveConsist(c);
+      })
+      .catch(() => {
+        if (!cancelled) setActiveConsist(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTrainNumber, configuredTrains]);
+
   const consistData = useMemo(() => {
     return computeConsistData({
-      trainNumber: selectedTrainNumber || '225256',
-      totalCoaches: 24,
+      trainNumber: selectedTrainNumber,
+      configuredTrains,
+      activeConsist,
       managedDevices,
       liveTelemetry,
       mqttStatus: mqttConnectionStatus,
       timeoutSeconds: telemetryTimeoutSec,
       now: Date.now(),
     });
-  }, [selectedTrainNumber, managedDevices, liveTelemetry, mqttConnectionStatus, telemetryTimeoutSec, telemetryTick]);
+  }, [selectedTrainNumber, configuredTrains, activeConsist, managedDevices, liveTelemetry, mqttConnectionStatus, telemetryTimeoutSec, telemetryTick]);
 
   // Monitor mapped coaches for real-time disconnect & reconnect transitions (timeout / MQTT drop / recovery)
   const prevCoachOnlineMapRef = useRef<Map<string, boolean>>(new Map());
@@ -507,7 +593,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const refreshRegions = async () => {
     try {
       const data = await ApiClient.fetchRegionsSummary();
-      setRegions(Array.isArray(data) ? data : []);
+      const regs = Array.isArray(data) ? data : [];
+      regionsLoadedRef.current = true;
+      setRegions(regs);
+
+      const validTrains = new Set<string>();
+      regs.forEach((r) => (r.trains || []).forEach((t) => {
+        if (t.train_number) validTrains.add(t.train_number.trim());
+      }));
+
+      // Synchronize tanks, active alarms, and live telemetry when trains are removed
+      const allTanks = await ApiClient.fetchTanks().catch(() => []);
+      const filteredTanks = (Array.isArray(allTanks) ? allTanks : []).filter(
+        (t) => t.trainNumber && validTrains.has(t.trainNumber.trim())
+      );
+      setTanks(filteredTanks);
+      setLiveTank((prev) => (prev && prev.trainNumber && validTrains.has(prev.trainNumber.trim()) ? prev : filteredTanks[0] ?? null));
+      setLiveTelemetry((prev) => (prev && prev.trno && validTrains.has(prev.trno.trim()) ? prev : null));
+      setActiveAlarms((prev) =>
+        prev.filter((a) => !a.trainNumber || validTrains.has(a.trainNumber.trim()))
+      );
+      if (validTrains.size === 0) {
+        setLastValidGps(null);
+        setGpsWaypoints([]);
+      }
     } catch (e) {
       console.warn('[AppContext] Error fetching regions:', e);
     }
@@ -526,12 +635,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         ApiClient.fetchHealth().catch(() => null),
       ]);
 
-      if (tank) setLiveTank(tank);
-      if (allTanks && allTanks.length > 0) setTanks(allTanks);
+      const safeRegs = Array.isArray(regs) ? regs : [];
+      regionsLoadedRef.current = true;
+      setRegions(safeRegs);
+
+      const validTrains = new Set<string>();
+      safeRegs.forEach((r) => (r.trains || []).forEach((t) => {
+        if (t.train_number) validTrains.add(t.train_number.trim());
+      }));
+
+      const filteredTanks = (Array.isArray(allTanks) ? allTanks : []).filter(
+        (t) => t.trainNumber && validTrains.has(t.trainNumber.trim())
+      );
+      setTanks(filteredTanks);
+      setLiveTank(
+        tank && tank.trainNumber && validTrains.has(tank.trainNumber.trim())
+          ? tank
+          : filteredTanks[0] ?? null
+      );
       setDevices(devList);
-      setActiveAlarms(alarms);
+      setActiveAlarms(
+        (Array.isArray(alarms) ? alarms : []).filter(
+          (a) => !a.trainNumber || validTrains.has(a.trainNumber.trim())
+        )
+      );
       setAlarmStats(stats);
-      if (Array.isArray(regs) && regs.length > 0) setRegions(regs);
       if (health?.mqttBroker) {
         setMqttBrokerStatus(health.mqttBroker === 'CONNECTED' ? 'CONNECTED' : 'DISCONNECTED');
       }
@@ -542,6 +670,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   useEffect(() => {
     refreshData();
+    if (typeof window === 'undefined') return;
+    const onStorageSync = (e: StorageEvent) => {
+      if (e.key === FLEET_STORAGE_KEY || e.key === 'panorama_fleet_sync_ts' || e.key === null) {
+        refreshRegions();
+      }
+    };
+    const onLocalFleetEvent = () => {
+      refreshRegions();
+    };
+    window.addEventListener('storage', onStorageSync);
+    window.addEventListener(FLEET_UPDATED_EVENT, onLocalFleetEvent);
+    return () => {
+      window.removeEventListener('storage', onStorageSync);
+      window.removeEventListener(FLEET_UPDATED_EVENT, onLocalFleetEvent);
+    };
   }, []);
 
   // Setup WebSocket stream
@@ -567,14 +710,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
 
     const unsubTelemetry = wsService.addEventListener('TELEMETRY_UPDATE', (data: any) => {
+      const evtTrain = String(data.trainNumber || '').trim();
+      if (!evtTrain || !configuredTrainSetRef.current.has(evtTrain)) {
+        return;
+      }
       setMqttBrokerStatus('CONNECTED');
       setLiveTank((prev) => {
         const base = prev || {
           tankId: data.tankId || 'primary-tank',
           deviceId: data.deviceId || '',
           deviceUid: data.deviceUid || 'DEV-WLI-01',
-          trainNumber: data.trainNumber || '12002',
-          coachNumber: data.coachNumber || 'C1',
+          trainNumber: evtTrain,
+          coachNumber: data.coachNumber || '',
           tankName: data.tankName || 'Primary Storage Tank',
           capacityLiters: 20.0,
           maxHeightCm: 50.0,
@@ -638,8 +785,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         alertNotificationService.evaluateWaterLevel({
           tankId: data.tankId || `${data.deviceUid || 'DEV-WLI-01'}-arrival`,
           tankName: data.tankName || 'Primary Storage Tank',
-          trainNumber: data.trainNumber || '12002',
-          coachNumber: data.coachNumber || 'C1',
+          trainNumber: evtTrain,
+          coachNumber: data.coachNumber || '',
           levelPercent: Number(data.primaryLevel),
           isOnline: data.isOnline ?? true,
         });
@@ -648,8 +795,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         alertNotificationService.evaluateWaterLevel({
           tankId: data.secondaryTankId || `${data.deviceUid || 'DEV-WLI-01'}-departure`,
           tankName: data.secondaryTankName || 'Departure Side (Tank 2)',
-          trainNumber: data.trainNumber || '12002',
-          coachNumber: data.coachNumber || 'C1',
+          trainNumber: evtTrain,
+          coachNumber: data.coachNumber || '',
           levelPercent: Number(data.secondaryLevel),
           isOnline: data.isOnline ?? true,
         });
@@ -700,15 +847,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
 
     const unsubMqttTelemetry = mqttService.onTelemetry((telemetry) => {
+      const mappedDev = deviceRegistry.getDeviceByUid(telemetry.uid);
+      const activeTrno = (
+        (mappedDev?.assignmentStatus === 'ENGAGED' && mappedDev.trainNumber)
+          ? mappedDev.trainNumber
+          : (telemetry.trno || '')
+      ).trim();
+
+      // Reject or ignore telemetry for unconfigured or deleted trains (never recreate deleted trains/coaches)
+      if (!activeTrno || !configuredTrainSetRef.current.has(activeTrno)) {
+        console.info('[AppContext] Ignoring telemetry for unconfigured/deleted train:', activeTrno || '<none>');
+        return;
+      }
+
       setLiveTelemetry(telemetry);
+      setLastValidGps(mqttService.getLastValidGps());
+      setGpsWaypoints(mqttService.getGpsWaypoints());
       setMqttBrokerStatus('CONNECTED');
       setConnectionStatus('CONNECTED');
 
-      // Record / update discovered device in registry without duplicates
+      // Record / update discovered hardware device only for verified configured trains
       deviceRegistry.recordDiscoveredDevice(telemetry);
-      const mappedDev = deviceRegistry.getDeviceByUid(telemetry.uid);
-      const activeTrno = mappedDev?.trainNumber || telemetry.trno;
-      const activeChno = mappedDev?.coachNumber || telemetry.chno;
+      const activeChno = (mappedDev?.coachNumber || telemetry.chno || '').trim();
 
       // 1. Calculate water level percentages based on configured maximum height (150 cm)
       const configuredMaxHeightCm = 150.0;
@@ -946,9 +1106,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return [updatedDevice, ...prev];
       });
 
-      // 3. Dynamic train & coach selection
-      setSelectedTrainNumber((prev) => (!prev || prev === '12841' ? telemetry.trno : prev));
-      setSelectedCoachNumber((prev) => (!prev || prev === 'C4' ? telemetry.chno : prev));
+      // 3. Select train & coach only if not already set to a valid configured train
+      setSelectedTrainNumber((prev) => (prev && configuredTrainSetRef.current.has(prev) ? prev : activeTrno));
+      setSelectedCoachNumber((prev) => (prev || telemetry.chno));
     });
 
     return () => {
@@ -1074,6 +1234,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         mqttBrokerStatus,
         mqttConnectionStatus,
         liveTelemetry,
+        lastValidGps,
+        gpsWaypoints,
         currentTime,
         currentDate,
         currentUser,
@@ -1096,6 +1258,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         selectedStationCode,
         setSelectedStationCode,
         regions,
+        configuredTrains,
+        activeConsist,
         displayScale,
         setDisplayScale,
         resetDisplayScale,

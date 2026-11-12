@@ -35,28 +35,29 @@ export const CoachDetailsScreen: React.FC = () => {
     connectionStatus,
     refreshData,
     liveTelemetry,
+    configuredTrains,
     mqttConnectionStatus,
     telemetryTimeoutSeconds,
   } = useApp();
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const trainNum = liveTelemetry?.trno || selectedTrainNumber || '225256';
-  const coachNum = (selectedCoachNumber || liveTelemetry?.chno || 'CR123456').toUpperCase();
+  const trainNum = (selectedTrainNumber || configuredTrains[0]?.train_number || '').trim();
+  const coachNum = (selectedCoachNumber || '').toUpperCase();
 
-  // Known train names mapping
-  const trainNames: Record<string, { name: string; from: string; to: string; region: string }> = {
-    '225256': { name: 'Special Express (225256)', from: 'Live Corridor', to: 'In Service', region: 'Eastern' },
-    '12002': { name: 'Shatabdi Express', from: 'New Delhi (NDLS)', to: 'Bhopal (BPL)', region: 'Northern' },
-    '12951': { name: 'Mumbai Rajdhani', from: 'Mumbai Central (MMCT)', to: 'New Delhi (NDLS)', region: 'Western' },
-    '12301': { name: 'Howrah Rajdhani', from: 'Howrah (HWH)', to: 'New Delhi (NDLS)', region: 'Eastern' },
-  };
-
-  const trainMeta = trainNames[trainNum] || {
-    name: `Superfast Express (${trainNum})`,
-    from: 'Origin Station',
-    to: 'Terminus Station',
-    region: 'Railway Division',
-  };
+  const matchedConfiguredTrain = configuredTrains.find((t) => t.train_number === trainNum);
+  const trainMeta = matchedConfiguredTrain
+    ? {
+        name: matchedConfiguredTrain.name,
+        from: matchedConfiguredTrain.source_station || 'Origin Station',
+        to: matchedConfiguredTrain.destination_station || 'Terminus Station',
+        region: matchedConfiguredTrain.railway_zone || matchedConfiguredTrain.region || 'Railway Division',
+      }
+    : {
+        name: trainNum ? `Train ${trainNum}` : 'No Train Configured',
+        from: 'Origin Station',
+        to: 'Terminus Station',
+        region: 'Railway Division',
+      };
 
   // Extract coach index (1..24) if formatted as C1..C24
   const coachIndexMatch = coachNum.match(/^C?(\d+)$/i);
@@ -186,8 +187,8 @@ export const CoachDetailsScreen: React.FC = () => {
     }
   };
 
-  // If coach is completely invalid
-  if (!isValidCoach) {
+  // If no train is configured or coach is invalid
+  if (!trainNum || configuredTrains.length === 0 || !isValidCoach) {
     return (
       <div
         style={{
@@ -195,7 +196,7 @@ export const CoachDetailsScreen: React.FC = () => {
           margin: '40px auto',
           backgroundColor: '#FFFFFF',
           borderRadius: '10px',
-          border: '1px solid #FECACA',
+          border: '1px solid #E2E8F0',
           padding: '32px 24px',
           textAlign: 'center',
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
@@ -206,8 +207,8 @@ export const CoachDetailsScreen: React.FC = () => {
             width: '52px',
             height: '52px',
             borderRadius: '50%',
-            backgroundColor: '#FEE2E2',
-            color: '#DC2626',
+            backgroundColor: '#F1F5F9',
+            color: '#475569',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -217,7 +218,9 @@ export const CoachDetailsScreen: React.FC = () => {
           <AlertCircle size={28} />
         </div>
         <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#0F172A', margin: '0 0 8px 0' }}>
-          Invalid Coach Identifier: {coachNum}
+          {!trainNum || configuredTrains.length === 0
+            ? 'No trains configured. Please add a train to begin monitoring.'
+            : `Invalid Coach Identifier: ${coachNum}`}
         </h2>
         <p style={{ fontSize: '13px', color: '#64748B', margin: '0 0 20px 0' }}>
           Coach identifier must be in the standard railway range <strong>C1 to C24</strong> for Train {trainNum} ({trainMeta.name}).

@@ -16,6 +16,7 @@ from app.services.calculator import VolumeCalculator
 from app.services.alarm_service import AlarmService
 from app.api.v1.auth import get_current_admin_user
 from app.models.user import User
+from app.models.train import Train
 
 router = APIRouter(prefix="/tanks", tags=["Tanks"])
 
@@ -90,21 +91,23 @@ async def list_all_tanks(db: AsyncSession = Depends(get_db)):
 
     tanks = await tank_repo.list_all()
     if not tanks:
-        # Auto-provision default tank & device if fresh
-        device = await device_repo.create_or_update(
-            uid=settings.DEFAULT_DEVICE_UID,
-            train_number=settings.DEFAULT_TRAIN_NUMBER,
-            coach_number=settings.DEFAULT_COACH_NUMBER,
-            name="Shatabdi Coach B4 Water System"
-        )
-        tank1 = await tank_repo.get_by_device_and_index(device.id, 1)
-        await db.commit()
-        tanks = [tank1] if tank1 else []
+        return []
+
+    configured_trains = set(
+        (await db.execute(select(Train.train_number))).scalars().all()
+    )
+    if not configured_trains:
+        return []
 
     results = []
     for tank in tanks:
         device = await device_repo.get_by_id(tank.device_id)
-        if not device or not device.train_number or device.train_number.upper() == "UNASSIGNED":
+        if (
+            not device
+            or not device.train_number
+            or device.train_number.upper() == "UNASSIGNED"
+            or device.train_number not in configured_trains
+        ):
             continue
         latest = await telemetry_repo.get_latest_for_tank(tank.id)
         active_alarms = await alarm_repo.list_alarms(status="ACTIVE", device_id=tank.device_id) if device else []
@@ -113,28 +116,35 @@ async def list_all_tanks(db: AsyncSession = Depends(get_db)):
     return results
 
 
-@router.get("/live", response_model=TankLiveStatus)
+@router.get("/live", response_model=Optional[TankLiveStatus])
 async def get_live_tank_status(db: AsyncSession = Depends(get_db)):
-    """Retrieve real-time telemetry, volume calculations, and status for the primary tank."""
+    """Retrieve real-time telemetry, volume calculations, and status for the primary tank of an active configured train."""
     tank_repo = TankRepository(db)
     device_repo = DeviceRepository(db)
     telemetry_repo = TelemetryRepository(db)
     alarm_repo = AlarmRepository(db)
 
-    tank = await tank_repo.get_first_primary()
-    if not tank:
-        device = await device_repo.create_or_update(
-            uid=settings.DEFAULT_DEVICE_UID,
-            train_number=settings.DEFAULT_TRAIN_NUMBER,
-            coach_number=settings.DEFAULT_COACH_NUMBER,
-            name="Shatabdi Coach B4 Water System"
-        )
-        tank = await tank_repo.get_by_device_and_index(device.id, 1)
-        await db.commit()
+    configured_trains = set((await db.execute(select(Train.train_number))).scalars().all())
+    if not configured_trains:
+        return None
 
-    device = await device_repo.get_by_id(tank.device_id) if tank else None
-    latest = await telemetry_repo.get_latest_for_tank(tank.id) if tank else None
-    active_alarms = await alarm_repo.list_alarms(status="ACTIVE", device_id=device.id) if device else []
+    tanks = await tank_repo.list_all()
+    tank = None
+    device = None
+    for t in tanks:
+        if t.tank_index != 1:
+            continue
+        dev = await device_repo.get_by_id(t.device_id)
+        if dev and dev.train_number and dev.train_number.upper() != "UNASSIGNED" and dev.train_number in configured_trains:
+            tank = t
+            device = dev
+            break
+
+    if not tank or not device:
+        return None
+
+    latest = await telemetry_repo.get_latest_for_tank(tank.id)
+    active_alarms = await alarm_repo.list_alarms(status="ACTIVE", device_id=device.id)
 
     return _calculate_tank_status(tank, device, latest, active_alarms)
 

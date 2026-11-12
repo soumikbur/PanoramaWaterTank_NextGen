@@ -46,20 +46,35 @@ async def test_rbac_mutation_endpoints_enforcement():
         emp_headers = {"Authorization": f"Bearer {emp_token}"}
 
         # --- A. Tanks Mutation (PUT /tanks/{id}) ---
+        await client.delete("/api/v1/trains/98991", headers=admin_headers)
+        created_tmp_train = False
         tank_live = await client.get("/api/v1/tanks/live")
+        if tank_live.json() is None:
+            post_res = await client.post(
+                "/api/v1/trains",
+                headers=admin_headers,
+                json={"train_number": "98991", "name": "RBAC Tank Audit", "region": "EAST", "coach_number": "B1"},
+            )
+            assert post_res.status_code in (200, 201), post_res.text
+            created_tmp_train = True
+            tank_live = await client.get("/api/v1/tanks/live")
         tank_id = tank_live.json()["tankId"]
 
-        # Unauthenticated -> 401
-        res = await client.put(f"/api/v1/tanks/{tank_id}", json={"capacityLiters": 25.0})
-        assert res.status_code == 401
+        try:
+            # Unauthenticated -> 401
+            res = await client.put(f"/api/v1/tanks/{tank_id}", json={"capacityLiters": 25.0})
+            assert res.status_code == 401
 
-        # Employee -> 403 Forbidden
-        res = await client.put(f"/api/v1/tanks/{tank_id}", json={"capacityLiters": 25.0}, headers=emp_headers)
-        assert res.status_code == 403
+            # Employee -> 403 Forbidden
+            res = await client.put(f"/api/v1/tanks/{tank_id}", json={"capacityLiters": 25.0}, headers=emp_headers)
+            assert res.status_code == 403
 
-        # Admin -> 200 Success
-        res = await client.put(f"/api/v1/tanks/{tank_id}", json={"capacityLiters": 20.0}, headers=admin_headers)
-        assert res.status_code == 200
+            # Admin -> 200 Success
+            res = await client.put(f"/api/v1/tanks/{tank_id}", json={"capacityLiters": 20.0}, headers=admin_headers)
+            assert res.status_code == 200
+        finally:
+            if created_tmp_train:
+                await client.delete("/api/v1/trains/98991", headers=admin_headers)
 
         # --- B. Devices Mutation (POST, PUT, DELETE /devices) ---
         test_uid = "AUDIT-DEV-001"

@@ -306,7 +306,7 @@ app.whenReady().then(async () => {
     assert(controls.hasWorldView, 'World View control button (#map-worldview-btn) is present');
     assert(controls.hasFitCorridor, 'Fit Corridor control button (#map-fitcorridor-btn) is present');
     assert(controls.hasCenterTrain, 'Center Train control button (#map-centertrain-btn) is present');
-    assert(controls.hasCurrentLoc, 'Current Location control button (#map-currentloc-btn) is present');
+    assert(controls.hasCurrentLoc, 'Live Train Position control button (#map-currentloc-btn) is present');
     assert(controls.hasSatellite, 'Satellite mode toggle button (#map-satellite-btn) is present');
     assert(controls.hasGoogleMaps, 'Google Maps Live link (#map-googlemaps-btn) is present');
     assert(controls.hasExpand, 'Expand Map button (#map-expand-btn) is present');

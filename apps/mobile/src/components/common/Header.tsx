@@ -213,30 +213,13 @@ export const Header: React.FC = () => {
 
     const matches: SearchResultItem[] = [];
 
-    // 1. Search Trains (from regions and AppContext)
+    // 1. Search Trains (from authoritative regions in AppContext)
     const trainMap = new Map<string, { train: TrainOverviewItem; regionName: string }>();
     (regions || []).forEach((reg) => {
       (reg.trains || []).forEach((tr) => {
         trainMap.set(tr.train_number, { train: tr, regionName: reg.name });
       });
     });
-
-    // Fallback if train 12002 is loaded by default
-    if (trainMap.size === 0) {
-      trainMap.set('12002', {
-        train: {
-          train_number: '12002',
-          name: 'Bhopal Shatabdi Express',
-          type: 'Shatabdi Express',
-          coaches_count: 8,
-          tanks_count: 16,
-          is_online: true,
-          status: 'RUNNING',
-          active_alarms: 0,
-        },
-        regionName: 'Northern Railway',
-      });
-    }
 
     trainMap.forEach(({ train, regionName }) => {
       const matchNum = train.train_number.toLowerCase().includes(term);
@@ -262,14 +245,14 @@ export const Header: React.FC = () => {
       }
     });
 
-    // 2. Search Coaches (from tanks, devices, trains)
+    // 2. Search Coaches (only for configured trains)
     const coachMap = new Map<string, { coachNumber: string; trainNumber: string; isOnline: boolean; tankCount: number; deviceUid?: string }>();
     (tanks || []).forEach((t) => {
-      if (t.coachNumber) {
-        const key = `${t.trainNumber || '12002'}-${t.coachNumber}`;
+      if (t.coachNumber && t.trainNumber && trainMap.has(t.trainNumber)) {
+        const key = `${t.trainNumber}-${t.coachNumber}`;
         const existing = coachMap.get(key) || {
           coachNumber: t.coachNumber,
-          trainNumber: t.trainNumber || '12002',
+          trainNumber: t.trainNumber,
           isOnline: false,
           tankCount: 0,
           deviceUid: t.deviceUid,
@@ -280,11 +263,11 @@ export const Header: React.FC = () => {
       }
     });
     (devices || []).forEach((d) => {
-      if (d.coachNumber) {
-        const key = `${d.trainNumber || '12002'}-${d.coachNumber}`;
+      if (d.coachNumber && d.trainNumber && trainMap.has(d.trainNumber)) {
+        const key = `${d.trainNumber}-${d.coachNumber}`;
         const existing = coachMap.get(key) || {
           coachNumber: d.coachNumber,
-          trainNumber: d.trainNumber || '12002',
+          trainNumber: d.trainNumber,
           isOnline: false,
           tankCount: 0,
           deviceUid: d.uid,

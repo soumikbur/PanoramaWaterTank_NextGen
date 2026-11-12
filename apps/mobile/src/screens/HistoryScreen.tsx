@@ -58,10 +58,10 @@ export interface GpsHistoryRow {
 }
 
 export const HistoryScreen: React.FC = () => {
-  const { liveTank, selectedTrainNumber, setSelectedTrainNumber, liveTelemetry } = useApp();
+  const { liveTank, selectedTrainNumber, setSelectedTrainNumber, liveTelemetry, configuredTrains } = useApp();
 
   const [activeTab, setActiveTab] = useState<'water' | 'gps' | 'battery'>('water');
-  const [activeTrain, setActiveTrain] = useState<string>(selectedTrainNumber || '225256');
+  const [activeTrain, setActiveTrain] = useState<string>(selectedTrainNumber || '');
   const [selectedRange, setSelectedRange] = useState<'12h' | '24h' | '7d'>('12h');
   const [coachFilter, setCoachFilter] = useState<string>('ALL');
   const [tankFilter, setTankFilter] = useState<'ALL' | 'ARRIVAL' | 'DEPARTURE'>('ALL');
@@ -104,7 +104,7 @@ export const HistoryScreen: React.FC = () => {
     // 1. Telemetry records buffered from real MQTT stream
     const mqttHistory = mqttService.getTelemetryHistory();
     const relevant = mqttHistory.filter(
-      (item) => !activeTrain || item.trno === activeTrain || activeTrain === '225256'
+      (item) => activeTrain && item.trno === activeTrain
     );
 
     if (relevant.length > 0) {
@@ -125,7 +125,7 @@ export const HistoryScreen: React.FC = () => {
     }
 
     // 2. Active live telemetry packet snapshot
-    if (liveTelemetry && (activeTrain === liveTelemetry.trno || activeTrain === '225256')) {
+    if (liveTelemetry && activeTrain && activeTrain === liveTelemetry.trno) {
       const arr = typeof liveTelemetry.cm1 === 'number' ? Number(((liveTelemetry.cm1 / 150.0) * 100).toFixed(1)) : liveTelemetry.wlp1;
       const dep = typeof liveTelemetry.cm2 === 'number' ? Number(((liveTelemetry.cm2 / 150.0) * 100).toFixed(1)) : liveTelemetry.wlp2;
       return [
@@ -149,7 +149,7 @@ export const HistoryScreen: React.FC = () => {
   const gpsHistoryRows: GpsHistoryRow[] = useMemo(() => {
     const mqttHistory = mqttService.getTelemetryHistory();
     const relevant = mqttHistory.filter(
-      (item) => (!activeTrain || item.trno === activeTrain || activeTrain === '225256') && item.lat != null && item.long != null
+      (item) => activeTrain && item.trno === activeTrain && item.lat != null && item.long != null
     );
 
     if (relevant.length > 0) {
@@ -164,7 +164,7 @@ export const HistoryScreen: React.FC = () => {
       }));
     }
 
-    if (liveTelemetry && (activeTrain === liveTelemetry.trno || activeTrain === '225256') && liveTelemetry.lat != null && liveTelemetry.long != null) {
+    if (liveTelemetry && activeTrain && activeTrain === liveTelemetry.trno && liveTelemetry.lat != null && liveTelemetry.long != null) {
       return [
         {
           timestamp: new Date(liveTelemetry.receivedAt).toLocaleTimeString(),
@@ -284,9 +284,15 @@ export const HistoryScreen: React.FC = () => {
                 cursor: 'pointer',
               }}
             >
-              <option value="225256">225256 &bull; Express Fleet</option>
-              <option value="12002">12002 &bull; Shatabdi Express</option>
-              <option value="12951">12951 &bull; Mumbai Rajdhani</option>
+              {configuredTrains.length === 0 ? (
+                <option value="">No trains configured</option>
+              ) : (
+                configuredTrains.map((t) => (
+                  <option key={t.train_number} value={t.train_number}>
+                    {t.train_number} &bull; {t.name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 

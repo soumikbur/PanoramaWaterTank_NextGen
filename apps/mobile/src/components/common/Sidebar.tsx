@@ -51,6 +51,7 @@ export const Sidebar: React.FC = () => {
     activeAlarms,
     managedAlerts,
     selectedTrainNumber,
+    configuredTrains,
     currentUser,
     logout,
     liveTelemetry,
@@ -120,9 +121,12 @@ export const Sidebar: React.FC = () => {
     }
   };
 
+  const activeConfiguredTrain = configuredTrains.find((t) => t.train_number === selectedTrainNumber) || configuredTrains[0];
   const trainDisplayTitle = liveTelemetry
     ? `${liveTelemetry.trno} - Live Consist`
-    : (selectedTrainNumber ? `${selectedTrainNumber} - Express Fleet` : '12301 - Rajdhani Express');
+    : activeConfiguredTrain
+    ? `${activeConfiguredTrain.train_number} - ${activeConfiguredTrain.name}`
+    : 'No Train Configured';
 
   return (
     <>

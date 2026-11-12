@@ -23,10 +23,10 @@ export type EmployeeReportType =
   | 'gps_history';
 
 export const ReportsScreen: React.FC = () => {
-  const { liveTank, selectedTrainNumber, devices, tanks, liveTelemetry } = useApp();
+  const { liveTank, selectedTrainNumber, devices, tanks, liveTelemetry, configuredTrains } = useApp();
 
   const [reportType, setReportType] = useState<EmployeeReportType>('train_water');
-  const [selectedTrain, setSelectedTrain] = useState<string>(selectedTrainNumber || '225256');
+  const [selectedTrain, setSelectedTrain] = useState<string>(selectedTrainNumber || '');
   const [timeRange, setTimeRange] = useState<string>('24h');
   const [dateFilter, setDateFilter] = useState<string>(new Date().toISOString().slice(0, 10));
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
@@ -113,17 +113,7 @@ export const ReportsScreen: React.FC = () => {
           },
         ];
       }
-      return [
-        {
-          coach: 'CR123456',
-          type: 'Standard Coach',
-          arrivalLvl: '—',
-          departureLvl: '—',
-          arrivalCm: '—',
-          departureCm: '—',
-          alert: 'Awaiting Telemetry',
-        },
-      ];
+      return [];
     } else if (reportType === 'battery_status') {
       if (liveTelemetry) {
         return [
@@ -137,25 +127,16 @@ export const ReportsScreen: React.FC = () => {
           },
         ];
       }
-      return devices.length > 0
-        ? devices.map((d) => ({
-            device: d.uid,
-            coach: d.coachNumber || '—',
-            battery: d.batteryPercent != null ? `${d.batteryPercent}%` : '—',
-            voltage: d.batteryVoltage != null ? `${d.batteryVoltage} V` : '—',
-            status: d.isOnline ? 'Nominal' : 'Offline',
-            alert: d.batteryPercent != null && d.batteryPercent < 40 ? 'LOW BATTERY (<40%)' : 'None',
-          }))
-        : [
-            {
-              device: '0023004D4B42501120353332',
-              coach: 'CR123456',
-              battery: '—',
-              voltage: '—',
-              status: 'Standby',
-              alert: 'Awaiting Telemetry',
-            },
-          ];
+      return devices
+        .filter((d) => !selectedTrain || d.trainNumber === selectedTrain)
+        .map((d) => ({
+          device: d.uid,
+          coach: d.coachNumber || '—',
+          battery: d.batteryPercent != null ? `${d.batteryPercent}%` : '—',
+          voltage: d.batteryVoltage != null ? `${d.batteryVoltage} V` : '—',
+          status: d.isOnline ? 'Nominal' : 'Offline',
+          alert: d.batteryPercent != null && d.batteryPercent < 40 ? 'LOW BATTERY (<40%)' : 'None',
+        }));
     } else if (reportType === 'device_status') {
       if (liveTelemetry) {
         return [
@@ -170,27 +151,15 @@ export const ReportsScreen: React.FC = () => {
           },
         ];
       }
-      return devices.length > 0
-        ? devices.map((d) => ({
-            device: d.uid,
-            train: d.trainNumber || selectedTrain,
-            coach: d.coachNumber || '—',
-            assignment: d.coachNumber ? 'ENGAGED' : 'FREE POOL',
-            online: d.isOnline ? 'Online' : 'Offline',
-            uptime: '99.9%',
-            lastComms: d.lastHeartbeat ? new Date(d.lastHeartbeat).toLocaleTimeString() : 'Depot',
-          }))
-        : [
-            {
-              device: '0023004D4B42501120353332',
-              train: selectedTrain,
-              coach: 'CR123456',
-              assignment: 'ENGAGED',
-              online: 'Standby',
-              uptime: '—',
-              lastComms: 'Awaiting Stream',
-            },
-          ];
+      return devices.map((d) => ({
+        device: d.uid,
+        train: d.trainNumber || 'UNASSIGNED',
+        coach: d.coachNumber || '—',
+        assignment: d.coachNumber ? 'ENGAGED' : 'FREE POOL',
+        online: d.isOnline ? 'Online' : 'Offline',
+        uptime: '99.9%',
+        lastComms: d.lastHeartbeat ? new Date(d.lastHeartbeat).toLocaleTimeString() : 'Depot',
+      }));
     } else {
       // GPS History Report
       if (liveTelemetry && liveTelemetry.lat != null && liveTelemetry.long != null) {
@@ -290,9 +259,15 @@ export const ReportsScreen: React.FC = () => {
                 cursor: 'pointer',
               }}
             >
-              <option value="225256">225256 - Express Fleet</option>
-              <option value="12002">12002 - Shatabdi Express</option>
-              <option value="12951">12951 - Mumbai Rajdhani</option>
+              {configuredTrains.length === 0 ? (
+                <option value="">No trains configured</option>
+              ) : (
+                configuredTrains.map((t) => (
+                  <option key={t.train_number} value={t.train_number}>
+                    {t.train_number} - {t.name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
 

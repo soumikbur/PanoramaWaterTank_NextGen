@@ -22,7 +22,9 @@ from app.repositories.telemetry_repo import TelemetryRepository
 from app.repositories.alarm_repo import AlarmRepository
 from app.services.calculator import VolumeCalculator
 from app.services.alarm_service import AlarmService
+from sqlalchemy import select
 from app.models.telemetry import TelemetryReading
+from app.models.train import Train
 from app.websocket.manager import ws_manager
 
 logger = logging.getLogger("panorama.mqtt")
@@ -137,10 +139,32 @@ class MqttService:
                 telemetry_repo = TelemetryRepository(session)
                 alarm_repo = AlarmRepository(session)
 
-                # 1. Update/Create Device
+                # Validate target train exists before associating telemetry to prevent phantom/deleted train recreation
+                clean_trno = (payload.trno or "").strip()
+                train_row = None
+                if clean_trno and clean_trno.upper() != "UNASSIGNED":
+                    train_row = (
+                        await session.execute(select(Train).where(Train.train_number == clean_trno))
+                    ).scalar_one_or_none()
+
+                if train_row is None:
+                    existing_dev = await device_repo.get_by_uid(payload.uid)
+                    if existing_dev and existing_dev.train_number != "UNASSIGNED":
+                        existing_dev.train_number = "UNASSIGNED"
+                        existing_dev.coach_number = "UNASSIGNED"
+                        existing_dev.is_online = False
+                        await session.commit()
+                    logger.info(
+                        "Ignoring telemetry train assignment for unconfigured or deleted train '%s' (uid=%s)",
+                        clean_trno,
+                        payload.uid,
+                    )
+                    return
+
+                # 1. Update/Create Device attached to verified configured train
                 device = await device_repo.create_or_update(
                     uid=payload.uid,
-                    train_number=payload.trno,
+                    train_number=clean_trno,
                     coach_number=payload.chno
                 )
 

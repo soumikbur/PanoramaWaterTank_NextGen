@@ -76,13 +76,20 @@ async def test_auth_login():
 async def test_tank_live_status():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
+        trains_resp = await client.get("/api/v1/trains")
+        assert trains_resp.status_code == 200
+        configured = {t["train_number"] for t in trains_resp.json()}
+
         response = await client.get("/api/v1/tanks/live")
         assert response.status_code == 200
         data = response.json()
-        assert data["trainNumber"] in ["12002", "225256"]
-        assert data["coachNumber"] == "B4"
-        assert "capacityLiters" in data
-        assert "rank" in data
+        if not configured:
+            assert data is None
+        elif data is not None:
+            assert data["trainNumber"] in configured
+            assert data["trainNumber"] != "UNASSIGNED"
+            assert "capacityLiters" in data
+            assert "rank" in data
 
 
 @pytest.mark.asyncio

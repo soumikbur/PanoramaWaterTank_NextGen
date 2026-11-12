@@ -135,6 +135,7 @@ export interface TankConsist {
 
 export interface CoachConsist {
   coach_number: string;
+  coach_category?: string | null;
   device_uid: string;
   is_online: boolean;
   hardware_version: string;

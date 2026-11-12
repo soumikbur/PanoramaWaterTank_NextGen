@@ -419,6 +419,25 @@ export const TrainManagementScreen: React.FC = () => {
             </p>
           </div>
 
+          {regions.every((r) => !r.trains || r.trains.length === 0) && (
+            <div
+              data-testid="trains-empty-banner"
+              style={{
+                backgroundColor: '#F8FAFC',
+                border: '1px dashed #CBD5E1',
+                borderRadius: '8px',
+                padding: '14px 16px',
+                marginBottom: '14px',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: '#475569',
+                textAlign: 'center',
+              }}
+            >
+              No trains configured. Please add a train to begin monitoring.
+            </div>
+          )}
+
           {/* Region Cards Grid (Responsive auto-fit) */}
           <div
             style={{
@@ -675,7 +694,7 @@ export const TrainManagementScreen: React.FC = () => {
 
             {(!activeRegionObj?.trains || activeRegionObj.trains.length === 0) && (
               <div style={{ padding: '30px', textAlign: 'center', color: '#94A3B8', fontSize: '13px' }}>
-                No trains registered in {activeRegionObj?.name}. Click "+ Add Train" above to configure.
+                No trains configured. Please add a train to begin monitoring.
               </div>
             )}
 

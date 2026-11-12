@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 
 export const WaterTankScreen: React.FC = () => {
-  const { tanks, liveTank, managedDevices, connectionStatus, refreshData, selectedTankId: contextTankId, setSelectedTankId: setContextTankId, setActiveScreen, consistTanks, consistMetrics } = useApp();
+  const { tanks, liveTank, managedDevices, connectionStatus, refreshData, selectedTankId: contextTankId, setSelectedTankId: setContextTankId, setActiveScreen, consistTanks, consistMetrics, configuredTrains } = useApp();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<CoachTankFilterMode>('ALL');
@@ -39,13 +39,17 @@ export const WaterTankScreen: React.FC = () => {
     }
   }, [contextTankId]);
 
-  // Use consist tanks directly as verified single source of truth (48 configured tanks)
+  // Use authoritative configured train consist tanks (empty when 0 trains configured)
   const allTanks: TankLiveStatus[] = useMemo(() => {
+    if (configuredTrains.length === 0) {
+      return [];
+    }
     if (consistTanks && consistTanks.length > 0) {
       return consistTanks;
     }
-    return tanks;
-  }, [consistTanks, tanks]);
+    const validSet = new Set(configuredTrains.map((t) => t.train_number));
+    return tanks.filter((t) => t.trainNumber && validSet.has(t.trainNumber));
+  }, [configuredTrains, consistTanks, tanks]);
 
   // Filter and search logic (shared model-level filtering: ALL shows online items only)
   const filteredTanks = useMemo(() => {
@@ -351,16 +355,20 @@ export const WaterTankScreen: React.FC = () => {
           <div style={{ padding: '48px', textAlign: 'center', backgroundColor: '#FFFFFF', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
             <Droplets size={36} color="#94A3B8" style={{ margin: '0 auto 8px auto' }} />
             <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', color: '#0F172A' }}>
-              {(activeFilter === 'ALL' || activeFilter === 'ONLINE') && onlineTanks === 0
-                ? 'No coaches are currently online.'
-                : activeFilter === 'OFFLINE' && searchQuery.trim().length === 0
-                  ? 'No offline coaches'
-                  : 'No coaches match your search or filter'}
+              {configuredTrains.length === 0
+                ? 'No trains configured. Please add a train to begin monitoring.'
+                : (activeFilter === 'ALL' || activeFilter === 'ONLINE') && onlineTanks === 0
+                  ? 'No coaches are currently online.'
+                  : activeFilter === 'OFFLINE' && searchQuery.trim().length === 0
+                    ? 'No offline coaches'
+                    : 'No coaches match your search or filter'}
             </h3>
             <p style={{ margin: 0, fontSize: '13px', color: '#64748B' }}>
-              {(activeFilter === 'ALL' || activeFilter === 'ONLINE') && onlineTanks === 0
-                ? 'Connected coaches will appear here automatically once live telemetry is received.'
-                : 'Try adjusting your filters or search terms.'}
+              {configuredTrains.length === 0
+                ? 'Add a train in Train Management to configure coaches and water tanks.'
+                : (activeFilter === 'ALL' || activeFilter === 'ONLINE') && onlineTanks === 0
+                  ? 'Connected coaches will appear here automatically once live telemetry is received.'
+                  : 'Try adjusting your filters or search terms.'}
             </p>
           </div>
         ) : viewMode === 'grid' ? (
