@@ -7,382 +7,332 @@
         "message": "Electron Security Warning (Disabled webSecurity) This renderer process has \"webSecurity\" disabled. This\n  exposes users of this app to severe security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
         "line": 0,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/",
-        "timestamp": "2026-11-13T22:40:08.915Z"
+        "timestamp": "2026-11-13T22:46:26.793Z"
       },
       {
         "level": 2,
         "message": "Electron Security Warning (allowRunningInsecureContent) This renderer process has \"allowRunningInsecureContent\"\n  enabled. This exposes users of this app to severe security risks.\n\n  \nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
         "line": 0,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/",
-        "timestamp": "2026-11-13T22:40:08.915Z"
+        "timestamp": "2026-11-13T22:46:26.794Z"
       },
       {
         "level": 2,
         "message": "Electron Security Warning (Insecure Content-Security-Policy) This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
         "line": 0,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/",
-        "timestamp": "2026-11-13T22:40:08.915Z"
+        "timestamp": "2026-11-13T22:46:26.794Z"
       },
       {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/tanks failed (404): Not Found\n",
-        "line": 8,
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.516Z] [API] [ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/health returned 404: API error 404 [object Object]",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.321Z"
+        "timestamp": "2026-11-13T22:46:27.516Z"
       },
       {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/alarms?status=ACTIVE failed (404): Not Found\n",
-        "line": 8,
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.516Z] [API] [ApiClient] Network request to https://panorama-water-tank-backend.onrender.com/api/v1/health failed: API error 404",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.326Z"
+        "timestamp": "2026-11-13T22:46:27.516Z"
       },
       {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/regions failed (404): Not Found\n",
-        "line": 8,
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.516Z] [API] [ApiClient] fetchHealth failed, falling back to local status [object Object]",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.326Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/tanks/live failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.329Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/alarms/stats failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.329Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/health failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.421Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/devices failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.573Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/alarms?status=ACTIVE failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.595Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/regions failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.605Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/tanks failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.609Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/tanks/live failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.611Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/alarms/stats failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.689Z"
+        "timestamp": "2026-11-13T22:46:27.516Z"
       },
       {
         "level": 2,
-        "message": "[WebSocket] Connection error: [object Event]",
-        "line": 8,
+        "message": "[2026-11-13T22:46:27.535Z] [WEBSOCKET] [WebSocketService] Backend health probe failed at https://panorama-water-tank-backend.onrender.com/api/v1/health. Postponing WebSocket handshake.",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.732Z"
+        "timestamp": "2026-11-13T22:46:27.535Z"
       },
       {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/health failed (404): Not Found\n",
-        "line": 8,
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.549Z] [API] [ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/alarms?status=ACTIVE returned 404: API error 404 [object Object]",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.098Z"
+        "timestamp": "2026-11-13T22:46:27.550Z"
       },
       {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/12841/consist failed (404): Not Found\n",
-        "line": 8,
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.550Z] [API] [ApiClient] Network request to https://panorama-water-tank-backend.onrender.com/api/v1/alarms?status=ACTIVE failed: API error 404",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.247Z"
+        "timestamp": "2026-11-13T22:46:27.550Z"
       },
       {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/devices failed (404): Not Found\n",
-        "line": 8,
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.550Z] [API] [ApiClient] fetchAlarms failed, falling back to alertNotificationService [object Object]",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.275Z"
+        "timestamp": "2026-11-13T22:46:27.550Z"
       },
       {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/regions failed (404): Not Found\n",
-        "line": 8,
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.550Z] [API] [ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/tanks/live returned 404: API error 404 [object Object]",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.297Z"
+        "timestamp": "2026-11-13T22:46:27.550Z"
       },
       {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/tanks failed (404): Not Found\n",
-        "line": 8,
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.550Z] [API] [ApiClient] Network request to https://panorama-water-tank-backend.onrender.com/api/v1/tanks/live failed: API error 404",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.303Z"
+        "timestamp": "2026-11-13T22:46:27.550Z"
       },
       {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/12841/consist failed (404): Not Found\n",
-        "line": 8,
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.550Z] [API] [ApiClient] fetchLiveTank failed, falling back to local tank [object Object]",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.507Z"
+        "timestamp": "2026-11-13T22:46:27.550Z"
       },
       {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/regions failed (404): Not Found\n",
-        "line": 8,
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.553Z] [API] [ApiClient] fetchRegionsSummary failed, falling back to cached local fleet [object Object]",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.551Z"
+        "timestamp": "2026-11-13T22:46:27.553Z"
       },
       {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/tanks failed (404): Not Found\n",
-        "line": 8,
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.554Z] [API] [ApiClient] fetchTanks failed, falling back to local fleet tanks [object Object]",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.572Z"
+        "timestamp": "2026-11-13T22:46:27.554Z"
       },
       {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/12841/consist failed (404): Not Found\n",
-        "line": 8,
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.554Z] [API] [ApiClient] fetchRegionsSummary failed, falling back to cached local fleet [object Object]",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.774Z"
+        "timestamp": "2026-11-13T22:46:27.554Z"
       },
       {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/12841/consist failed (404): Not Found\n",
-        "line": 8,
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.554Z] [API] [ApiClient] fetchLiveTank failed, falling back to local tank [object Object]",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:11.037Z"
+        "timestamp": "2026-11-13T22:46:27.554Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.554Z] [API] [ApiClient] fetchTanks failed, falling back to local fleet tanks [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.555Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.554Z] [API] [ApiClient] fetchAlarms failed, falling back to alertNotificationService [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.555Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.555Z] [API] [ApiClient] fetchAlarmStats failed, falling back to local alert stats [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.555Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.555Z] [API] [ApiClient] fetchRegionsSummary failed, falling back to cached local fleet [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.555Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.555Z] [API] [ApiClient] fetchHealth failed, falling back to local status [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.555Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.555Z] [API] [ApiClient] fetchTanks failed, falling back to local fleet tanks [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.555Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.557Z] [API] [ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/devices returned 404: API error 404 [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.558Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.558Z] [API] [ApiClient] Network request to https://panorama-water-tank-backend.onrender.com/api/v1/devices failed: API error 404",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.558Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.558Z] [API] [ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/regions returned 404: API error 404 [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.558Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.558Z] [API] [ApiClient] Network request to https://panorama-water-tank-backend.onrender.com/api/v1/trains/regions failed: API error 404",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.558Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.563Z] [API] [ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/alarms/stats returned 404: API error 404 [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.563Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.563Z] [API] [ApiClient] Network request to https://panorama-water-tank-backend.onrender.com/api/v1/alarms/stats failed: API error 404",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.563Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.563Z] [API] [ApiClient] fetchAlarmStats failed, falling back to local alert stats [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.563Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.585Z] [API] [ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/tanks returned 404: API error 404 [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.586Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.585Z] [API] [ApiClient] Network request to https://panorama-water-tank-backend.onrender.com/api/v1/tanks failed: API error 404",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.586Z"
+      },
+      {
+        "level": 1,
+        "message": "[MQTT] Connected to broker.hivemq.com:8884. Subscribing to topics...",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.946Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.946Z] [API] [ApiClient] fetchLiveTank failed, falling back to local tank [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.947Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.946Z] [API] [ApiClient] fetchAlarms failed, falling back to alertNotificationService [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.947Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.947Z] [API] [ApiClient] fetchAlarmStats failed, falling back to local alert stats [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.947Z"
+      },
+      {
+        "level": 0,
+        "message": "[2026-11-13T22:46:27.947Z] [API] [ApiClient] fetchHealth failed, falling back to local status [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:27.947Z"
+      },
+      {
+        "level": 1,
+        "message": "[MQTT] Central fleet state frame received",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:28.113Z"
+      },
+      {
+        "level": 1,
+        "message": "[AppContext] Received MQTT central fleet sync broadcast: [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:28.114Z"
+      },
+      {
+        "level": 1,
+        "message": "[MQTT] Central device state frame received",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:28.453Z"
+      },
+      {
+        "level": 1,
+        "message": "[AppContext] Received MQTT central device sync broadcast: [object Object]",
+        "line": 9,
+        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
+        "timestamp": "2026-11-13T22:46:28.455Z"
       },
       {
         "level": 2,
-        "message": "[WebSocket] Connection error: [object Event]",
-        "line": 8,
+        "message": "[2026-11-13T22:46:29.570Z] [WEBSOCKET] [WebSocketService] Backend health probe failed at https://panorama-water-tank-backend.onrender.com/api/v1/health. Postponing WebSocket handshake.",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:12.053Z"
+        "timestamp": "2026-11-13T22:46:29.570Z"
       }
     ],
-    "errors": [
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/tanks failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.321Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/alarms?status=ACTIVE failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.326Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/regions failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.326Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/tanks/live failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.329Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/alarms/stats failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.329Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/health failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.421Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/devices failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.573Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/alarms?status=ACTIVE failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.595Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/regions failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.605Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/tanks failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.609Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/tanks/live failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.611Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/alarms/stats failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.689Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/health failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.098Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/12841/consist failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.247Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/devices failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.275Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/regions failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.297Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/tanks failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.303Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/12841/consist failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.507Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/regions failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.551Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/tanks failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.572Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/12841/consist failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:10.774Z"
-      },
-      {
-        "level": 3,
-        "message": "[ApiClient] GET https://panorama-water-tank-backend.onrender.com/api/v1/trains/12841/consist failed (404): Not Found\n",
-        "line": 8,
-        "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:11.037Z"
-      }
-    ],
+    "errors": [],
     "warnings": [
       {
         "level": 2,
         "message": "Electron Security Warning (Disabled webSecurity) This renderer process has \"webSecurity\" disabled. This\n  exposes users of this app to severe security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
         "line": 0,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/",
-        "timestamp": "2026-11-13T22:40:08.915Z"
+        "timestamp": "2026-11-13T22:46:26.793Z"
       },
       {
         "level": 2,
         "message": "Electron Security Warning (allowRunningInsecureContent) This renderer process has \"allowRunningInsecureContent\"\n  enabled. This exposes users of this app to severe security risks.\n\n  \nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
         "line": 0,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/",
-        "timestamp": "2026-11-13T22:40:08.915Z"
+        "timestamp": "2026-11-13T22:46:26.794Z"
       },
       {
         "level": 2,
         "message": "Electron Security Warning (Insecure Content-Security-Policy) This renderer process has either no Content Security\n  Policy set or a policy with \"unsafe-eval\" enabled. This exposes users of\n  this app to unnecessary security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
         "line": 0,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/",
-        "timestamp": "2026-11-13T22:40:08.915Z"
+        "timestamp": "2026-11-13T22:46:26.794Z"
       },
       {
         "level": 2,
-        "message": "[WebSocket] Connection error: [object Event]",
-        "line": 8,
+        "message": "[2026-11-13T22:46:27.535Z] [WEBSOCKET] [WebSocketService] Backend health probe failed at https://panorama-water-tank-backend.onrender.com/api/v1/health. Postponing WebSocket handshake.",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:09.732Z"
+        "timestamp": "2026-11-13T22:46:27.535Z"
       },
       {
         "level": 2,
-        "message": "[WebSocket] Connection error: [object Event]",
-        "line": 8,
+        "message": "[2026-11-13T22:46:29.570Z] [WEBSOCKET] [WebSocketService] Backend health probe failed at https://panorama-water-tank-backend.onrender.com/api/v1/health. Postponing WebSocket handshake.",
+        "line": 9,
         "sourceId": "https://soumikbur.github.io/PanoramaWaterTank_NextGen/assets/index.js",
-        "timestamp": "2026-11-13T22:40:12.053Z"
+        "timestamp": "2026-11-13T22:46:29.570Z"
       }
     ],
     "failedRequests": [],
@@ -391,7 +341,8 @@
     "pageInfo": {
       "title": "Panorama Water Tank Monitor — Railway SCADA/HMI",
       "localStorageKeys": [
-        "panorama_static_fleet_v2"
+        "panorama_static_fleet_v2",
+        "panorama_device_registry"
       ],
       "theme": "light",
       "bodyLength": 9353,
@@ -406,35 +357,35 @@
         "message": "Electron Security Warning (Disabled webSecurity) This renderer process has \"webSecurity\" disabled. This\n  exposes users of this app to severe security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
         "line": 0,
         "sourceId": "http://127.0.0.1:8000/",
-        "timestamp": "2026-11-13T22:40:14.048Z"
+        "timestamp": "2026-11-13T22:46:31.929Z"
       },
       {
         "level": 2,
         "message": "Electron Security Warning (allowRunningInsecureContent) This renderer process has \"allowRunningInsecureContent\"\n  enabled. This exposes users of this app to severe security risks.\n\n  \nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
         "line": 0,
         "sourceId": "http://127.0.0.1:8000/",
-        "timestamp": "2026-11-13T22:40:14.049Z"
+        "timestamp": "2026-11-13T22:46:31.929Z"
       },
       {
         "level": 1,
-        "message": "[2026-11-13T22:40:14.095Z] [WEBSOCKET] [WebSocketService] WebSocket connected successfully to ws://127.0.0.1:8000/api/v1/ws/live",
+        "message": "[2026-11-13T22:46:31.973Z] [WEBSOCKET] [WebSocketService] WebSocket connected successfully to ws://127.0.0.1:8000/api/v1/ws/live",
         "line": 9,
         "sourceId": "http://127.0.0.1:8000/assets/index.js",
-        "timestamp": "2026-11-13T22:40:14.095Z"
+        "timestamp": "2026-11-13T22:46:31.974Z"
       },
       {
         "level": 0,
-        "message": "[2026-11-13T22:40:17.114Z] [API] [ApiClient] Network request to http://127.0.0.1:8000/api/v1/tanks/live failed: Invalid non-JSON response from http://127.0.0.1:8000/api/v1/tanks/live",
+        "message": "[2026-11-13T22:46:34.293Z] [API] [ApiClient] Network request to http://127.0.0.1:8000/api/v1/tanks/live failed: Invalid non-JSON response from http://127.0.0.1:8000/api/v1/tanks/live",
         "line": 9,
         "sourceId": "http://127.0.0.1:8000/assets/index.js",
-        "timestamp": "2026-11-13T22:40:17.114Z"
+        "timestamp": "2026-11-13T22:46:34.293Z"
       },
       {
         "level": 0,
-        "message": "[2026-11-13T22:40:17.114Z] [API] [ApiClient] fetchLiveTank failed, falling back to local tank [object Object]",
+        "message": "[2026-11-13T22:46:34.293Z] [API] [ApiClient] fetchLiveTank failed, falling back to local tank [object Object]",
         "line": 9,
         "sourceId": "http://127.0.0.1:8000/assets/index.js",
-        "timestamp": "2026-11-13T22:40:17.114Z"
+        "timestamp": "2026-11-13T22:46:34.293Z"
       }
     ],
     "errors": [],
@@ -444,14 +395,14 @@
         "message": "Electron Security Warning (Disabled webSecurity) This renderer process has \"webSecurity\" disabled. This\n  exposes users of this app to severe security risks.\n\nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
         "line": 0,
         "sourceId": "http://127.0.0.1:8000/",
-        "timestamp": "2026-11-13T22:40:14.048Z"
+        "timestamp": "2026-11-13T22:46:31.929Z"
       },
       {
         "level": 2,
         "message": "Electron Security Warning (allowRunningInsecureContent) This renderer process has \"allowRunningInsecureContent\"\n  enabled. This exposes users of this app to severe security risks.\n\n  \nFor more information and help, consult\nhttps://electronjs.org/docs/tutorial/security.\nThis warning will not show up\nonce the app is packaged.",
         "line": 0,
         "sourceId": "http://127.0.0.1:8000/",
-        "timestamp": "2026-11-13T22:40:14.049Z"
+        "timestamp": "2026-11-13T22:46:31.929Z"
       }
     ],
     "failedRequests": [],
