@@ -234,7 +234,7 @@ export const CoachManagementScreen: React.FC = () => {
     const patch: Partial<CoachRecord> = {
       coachNumber: editCoachNum.trim() || coachToEdit.coachNumber,
       coachType: editCoachType,
-      deviceId: editCoachDev.trim() || 'Not Mapped',
+      deviceId: coachToEdit.deviceId || 'Not Mapped',
     };
 
     setCoachOverrides((prev) => ({
@@ -1502,25 +1502,7 @@ export const CoachManagementScreen: React.FC = () => {
                 </select>
               </div>
 
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                  Assigned Device
-                </label>
-                <input
-                  type="text"
-                  value={editCoachDev}
-                  onChange={(e) => setEditCoachDev(e.target.value)}
-                  style={{
-                    width: '100%',
-                    height: '34px',
-                    padding: '0 10px',
-                    borderRadius: '6px',
-                    border: '1px solid #CBD5E1',
-                    fontSize: '12px',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
+
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                 <button

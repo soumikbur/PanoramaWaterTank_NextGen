@@ -16,6 +16,11 @@ if (fs.existsSync(src)) {
   fs.mkdirSync(backendStatic, { recursive: true });
   fs.cpSync(src, backendStatic, { recursive: true, force: true });
   console.log('Successfully synced apps/mobile/dist to backend/static');
+
+  const capWww = path.resolve(__dirname, '../PanoramaWaterTank_Capacitor/www');
+  fs.mkdirSync(capWww, { recursive: true });
+  fs.cpSync(src, capWww, { recursive: true, force: true });
+  console.log('Successfully synced apps/mobile/dist to PanoramaWaterTank_Capacitor/www');
 } else {
   console.warn('Source dist not found at:', src);
 }

@@ -23,6 +23,7 @@ import {
   ArrowRight,
   RefreshCw,
   Sliders,
+  GripVertical,
 } from 'lucide-react';
 
 interface ManageCoachModalProps {
@@ -112,6 +113,11 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
   // Status & Feedback message
   const [statusFeedback, setStatusFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Drag-and-Drop Reordering state
+  const [draggedCoachNumber, setDraggedCoachNumber] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [isReordering, setIsReordering] = useState(false);
 
   // Clear feedback after 4 seconds
   useEffect(() => {
@@ -319,7 +325,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
         tank_2_height_cm: Number(formData.tank2HeightCm) || 50,
         tank_1_geometry: formData.tank1Geometry,
         tank_2_geometry: formData.tank2Geometry,
-        device_uid: formData.deviceUid.trim(),
+        device_uid: targetCoach.device_uid || '', // Preserve existing hardware device UID untouched
       };
 
       await updateCoach(effectiveTrainNumber, targetCoach.coach_number, payload);
@@ -387,26 +393,124 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
     }
   };
 
-  // Move Coach Position Up / Down in Consist
-  const handleMovePosition = async (coachNumber: string, direction: 'UP' | 'DOWN') => {
-    if (!isAdmin) return;
+  // Execute coach sequence reordering with backend persistence & real-time sync
+  const executeReorder = async (coachNumber: string, targetIndex: number) => {
+    if (!isAdmin || isReordering) return;
+    const cleanNum = coachNumber.trim().toUpperCase();
+    const sourceIndex = rawCoaches.findIndex(
+      (c) => c.coach_number.toUpperCase() === cleanNum
+    );
 
-    const index = rawCoaches.findIndex((c) => c.coach_number.toUpperCase() === coachNumber.toUpperCase());
-    if (index === -1) return;
-
-    const newIndex = direction === 'UP' ? index - 1 : index + 1;
-    if (newIndex < 0 || newIndex >= rawCoaches.length) return;
+    if (
+      sourceIndex === -1 ||
+      targetIndex < 0 ||
+      targetIndex >= rawCoaches.length ||
+      sourceIndex === targetIndex
+    ) {
+      setDraggedCoachNumber(null);
+      setDragOverIndex(null);
+      return;
+    }
 
     const copy = [...rawCoaches];
-    const [moved] = copy.splice(index, 1);
-    copy.splice(newIndex, 0, moved);
+    const [moved] = copy.splice(sourceIndex, 1);
+    copy.splice(targetIndex, 0, moved);
 
     const reorderedNumbers = copy.map((c) => c.coach_number);
+    setDraggedCoachNumber(null);
+    setDragOverIndex(null);
+    setIsReordering(true);
+
     try {
       await reorderCoaches(effectiveTrainNumber, reorderedNumbers);
+      setStatusFeedback({
+        type: 'success',
+        message: `Coach ${cleanNum} reordered to position ${targetIndex + 1} of ${copy.length}.`,
+      });
     } catch (err: any) {
-      setStatusFeedback({ type: 'error', message: err?.message || 'Failed to reorder coaches.' });
+      setStatusFeedback({
+        type: 'error',
+        message: err?.message || 'Failed to reorder coaches.',
+      });
+    } finally {
+      setIsReordering(false);
     }
+  };
+
+  // HTML5 Drag Events for Desktop Mouse
+  const handleDragStart = (e: React.DragEvent, coachNumber: string) => {
+    if (!isAdmin) {
+      e.preventDefault();
+      return;
+    }
+    setDraggedCoachNumber(coachNumber);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', coachNumber);
+  };
+
+  const handleDragOver = (e: React.DragEvent, targetIndex: number) => {
+    if (!isAdmin || !draggedCoachNumber) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverIndex !== targetIndex) {
+      setDragOverIndex(targetIndex);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedCoachNumber(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (!isAdmin || !draggedCoachNumber) return;
+    executeReorder(draggedCoachNumber, targetIndex);
+  };
+
+  // Touch Events for Mobile Web and Capacitor Android touchscreens
+  const handleTouchStart = (coachNumber: string, index: number) => {
+    if (!isAdmin) return;
+    setDraggedCoachNumber(coachNumber);
+    setDragOverIndex(index);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isAdmin || !draggedCoachNumber) return;
+    if (e.cancelable) e.preventDefault();
+    const touch = e.touches[0];
+    if (!touch) return;
+    const elem = document.elementFromPoint(touch.clientX, touch.clientY);
+    const row = elem?.closest('tr[data-coach-index]');
+    if (row) {
+      const idx = parseInt(row.getAttribute('data-coach-index') || '-1', 10);
+      if (idx >= 0 && idx < rawCoaches.length && idx !== dragOverIndex) {
+        setDragOverIndex(idx);
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!isAdmin || !draggedCoachNumber) {
+      setDraggedCoachNumber(null);
+      setDragOverIndex(null);
+      return;
+    }
+    if (dragOverIndex !== null) {
+      executeReorder(draggedCoachNumber, dragOverIndex);
+    } else {
+      setDraggedCoachNumber(null);
+      setDragOverIndex(null);
+    }
+  };
+
+  // Backwards compatibility helper
+  const handleMovePosition = async (coachNumber: string, direction: 'UP' | 'DOWN') => {
+    if (!isAdmin) return;
+    const index = rawCoaches.findIndex((c) => c.coach_number.toUpperCase() === coachNumber.toUpperCase());
+    if (index === -1) return;
+    const newIndex = direction === 'UP' ? index - 1 : index + 1;
+    executeReorder(coachNumber, newIndex);
   };
 
   // Select Coach and Navigate to details
@@ -832,73 +936,87 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                   const t1Pct = Math.round(t1?.current_level_percent ?? 0);
                   const t2Pct = Math.round(t2?.current_level_percent ?? 0);
 
+                  const isBeingDragged = draggedCoachNumber?.toUpperCase() === coach.coach_number.toUpperCase();
+                  const isTargetInsertion = dragOverIndex === index && !isBeingDragged;
+
                   return (
                     <tr
                       key={coach.coach_number}
+                      data-coach-index={index}
+                      data-coach-number={coach.coach_number}
+                      onDragOver={(e) => handleDragOver(e, index)}
+                      onDrop={(e) => handleDrop(e, index)}
                       style={{
-                        backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
-                        border: isSelected ? '1px solid #93C5FD' : '1px solid #E2E8F0',
+                        backgroundColor: isBeingDragged
+                          ? '#EFF6FF'
+                          : isTargetInsertion
+                          ? '#F0FDF4'
+                          : isSelected
+                          ? '#EFF6FF'
+                          : '#FFFFFF',
+                        border: isBeingDragged
+                          ? '2px dashed #2563EB'
+                          : isTargetInsertion
+                          ? '2px solid #16A34A'
+                          : isSelected
+                          ? '1px solid #93C5FD'
+                          : '1px solid #E2E8F0',
                         borderRadius: '8px',
-                        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
-                        transition: 'background-color 0.15s ease',
+                        boxShadow: isBeingDragged
+                          ? '0 10px 20px -3px rgba(37, 99, 235, 0.25)'
+                          : isTargetInsertion
+                          ? '0 0 0 2px rgba(22, 163, 74, 0.25)'
+                          : '0 1px 3px rgba(0, 0, 0, 0.04)',
+                        opacity: isBeingDragged ? 0.45 : 1,
+                        transform: isBeingDragged ? 'scale(0.985)' : 'scale(1)',
+                        transition: 'transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease',
                       }}
                     >
-                      {/* POS (Position & Sequence Reordering) */}
+                      {/* POS (Position & Drag Handle) */}
                       <td style={{ padding: '10px 8px', textAlign: 'center', borderTopLeftRadius: '8px', borderBottomLeftRadius: '8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                          <button
+                            type="button"
+                            data-testid={`drag-handle-${coach.coach_number}`}
+                            aria-label={`Drag to reorder coach ${coach.coach_number}`}
+                            title={isAdmin ? `Drag to reorder coach ${coach.coach_number}` : 'Administrator authorization required to reorder'}
+                            draggable={isAdmin}
+                            onDragStart={(e) => handleDragStart(e, coach.coach_number)}
+                            onDragEnd={handleDragEnd}
+                            onTouchStart={() => handleTouchStart(coach.coach_number, index)}
+                            onTouchMove={handleTouchMove}
+                            onTouchEnd={handleTouchEnd}
+                            style={{
+                              cursor: isAdmin ? (isBeingDragged ? 'grabbing' : 'grab') : 'not-allowed',
+                              touchAction: 'none',
+                              userSelect: 'none',
+                              WebkitUserSelect: 'none',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '26px',
+                              height: '26px',
+                              padding: 0,
+                              borderRadius: '4px',
+                              backgroundColor: isBeingDragged ? '#DBEAFE' : '#F1F5F9',
+                              border: `1px solid ${isBeingDragged ? '#93C5FD' : '#CBD5E1'}`,
+                              color: isAdmin ? (isBeingDragged ? '#1D4ED8' : '#64748B') : '#CBD5E1',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            <GripVertical size={14} />
+                          </button>
                           <span
                             style={{
                               fontSize: '12px',
                               fontWeight: 800,
-                              color: '#64748B',
-                              width: '20px',
+                              color: '#475569',
+                              minWidth: '20px',
                               textAlign: 'center',
                             }}
                           >
                             {index + 1}
                           </span>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                            <button
-                              onClick={() => handleMovePosition(coach.coach_number, 'UP')}
-                              disabled={!isAdmin || index === 0}
-                              title={!isAdmin ? 'Administrator authorization required to reorder' : index === 0 ? 'First coach' : 'Move Up in Consist'}
-                              style={{
-                                width: '24px',
-                                height: '18px',
-                                background: '#F1F5F9',
-                                border: '1px solid #CBD5E1',
-                                borderRadius: '3px',
-                                cursor: !isAdmin || index === 0 ? 'not-allowed' : 'pointer',
-                                color: !isAdmin || index === 0 ? '#CBD5E1' : '#334155',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                padding: 0,
-                              }}
-                            >
-                              <ArrowUp size={11} />
-                            </button>
-                            <button
-                              onClick={() => handleMovePosition(coach.coach_number, 'DOWN')}
-                              disabled={!isAdmin || index === rawCoaches.length - 1}
-                              title={!isAdmin ? 'Administrator authorization required to reorder' : index === rawCoaches.length - 1 ? 'Last coach' : 'Move Down in Consist'}
-                              style={{
-                                width: '24px',
-                                height: '18px',
-                                background: '#F1F5F9',
-                                border: '1px solid #CBD5E1',
-                                borderRadius: '3px',
-                                cursor: !isAdmin || index === rawCoaches.length - 1 ? 'not-allowed' : 'pointer',
-                                color: !isAdmin || index === rawCoaches.length - 1 ? '#CBD5E1' : '#334155',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                padding: 0,
-                              }}
-                            >
-                              <ArrowDown size={11} />
-                            </button>
-                          </div>
                         </div>
                       </td>
 
@@ -1485,50 +1603,52 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                 </div>
               </div>
 
-              {/* Device Assignment */}
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
-                  Assigned Hardware Device UID
-                </label>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <input
-                    type="text"
-                    placeholder={`PANORAMA-${effectiveTrainNumber}-${formData.coachNumber || 'C1'}`}
-                    value={formData.deviceUid}
-                    onChange={(e) => setFormData({ ...formData, deviceUid: e.target.value.toUpperCase() })}
-                    style={{
-                      flex: 1,
-                      padding: '6px 8px',
-                      borderRadius: '5px',
-                      border: '1px solid #CBD5E1',
-                      fontSize: '11.5px',
-                      fontFamily: 'monospace',
-                    }}
-                  />
-                  {availableDevices.length > 0 && (
-                    <select
-                      onChange={(e) => e.target.value && setFormData({ ...formData, deviceUid: e.target.value })}
+              {/* Device Assignment - Displayed ONLY during Add Coach, completely absent in Edit Coach */}
+              {activeSubModal === 'ADD' && (
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Assigned Hardware Device UID
+                  </label>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <input
+                      type="text"
+                      placeholder={`PANORAMA-${effectiveTrainNumber}-${formData.coachNumber || 'C1'}`}
+                      value={formData.deviceUid}
+                      onChange={(e) => setFormData({ ...formData, deviceUid: e.target.value.toUpperCase() })}
                       style={{
+                        flex: 1,
                         padding: '6px 8px',
                         borderRadius: '5px',
                         border: '1px solid #CBD5E1',
-                        fontSize: '11px',
-                        color: '#334155',
+                        fontSize: '11.5px',
+                        fontFamily: 'monospace',
                       }}
-                    >
-                      <option value="">Choose Unassigned Node</option>
-                      {availableDevices.map((d) => (
-                        <option key={d.uid} value={d.uid}>
-                          {d.uid} ({d.hardwareModel})
-                        </option>
-                      ))}
-                    </select>
-                  )}
+                    />
+                    {availableDevices.length > 0 && (
+                      <select
+                        onChange={(e) => e.target.value && setFormData({ ...formData, deviceUid: e.target.value })}
+                        style={{
+                          padding: '6px 8px',
+                          borderRadius: '5px',
+                          border: '1px solid #CBD5E1',
+                          fontSize: '11px',
+                          color: '#334155',
+                        }}
+                      >
+                        <option value="">Choose Unassigned Node</option>
+                        {availableDevices.map((d) => (
+                          <option key={d.uid} value={d.uid}>
+                            {d.uid} ({d.hardwareModel})
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#64748B', marginTop: '3px' }}>
+                    MQTT Telemetry Topic: <code>0023004D4B42501120353332</code> (UID matching device header)
+                  </div>
                 </div>
-                <div style={{ fontSize: '10px', color: '#64748B', marginTop: '3px' }}>
-                  MQTT Telemetry Topic: <code>0023004D4B42501120353332</code> (UID matching device header)
-                </div>
-              </div>
+              )}
 
               {/* Action Buttons */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
