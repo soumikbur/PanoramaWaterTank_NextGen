@@ -196,6 +196,12 @@ export class ApiClient {
 
   private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const base = resolveApiBase();
+    if (!base) {
+      const noBaseErr: any = new Error(`No backend configured; bypassing network call for ${endpoint}`);
+      noBaseErr.status = 503;
+      noBaseErr.code = 'NO_BACKEND';
+      throw noBaseErr;
+    }
     const url = `${base}${endpoint}`;
 
     if (this.isRemoteUnreachable() && (options.method === 'GET' || !options.method)) {
@@ -1280,19 +1286,21 @@ export class ApiClient {
 
   // Devices
   static async fetchDevices(search?: string, isOnline?: boolean): Promise<Device[]> {
-    try {
-      const params = new URLSearchParams();
-      if (search) params.append('search', search);
-      if (isOnline !== undefined) params.append('is_online', String(isOnline));
-      const query = params.toString() ? `?${params.toString()}` : '';
-      const remote = await this.request<Device[]>(`/devices${query}`);
-      if (Array.isArray(remote) && remote.length > 0) {
-        // Reconcile into local persistent registry without triggering mutation publication storms
-        deviceRegistry.reconcileRemoteDevices(remote);
-        return remote;
+    if (API_BASE) {
+      try {
+        const params = new URLSearchParams();
+        if (search) params.append('search', search);
+        if (isOnline !== undefined) params.append('is_online', String(isOnline));
+        const query = params.toString() ? `?${params.toString()}` : '';
+        const remote = await this.request<Device[]>(`/devices${query}`);
+        if (Array.isArray(remote) && remote.length > 0) {
+          // Reconcile into local persistent registry without triggering mutation publication storms
+          deviceRegistry.reconcileRemoteDevices(remote);
+          return remote;
+        }
+      } catch {
+        // Offline / GitHub Pages fallback
       }
-    } catch {
-      // Offline / GitHub Pages fallback
     }
 
     const managed = deviceRegistry.getDevices();
@@ -1482,6 +1490,23 @@ export class ApiClient {
 
   // Alarms
   static async fetchAlarms(status?: string): Promise<AlarmItem[]> {
+    if (!API_BASE) {
+      const alerts = alertNotificationService.getActiveAlerts();
+      return alerts.map((a: any) => ({
+        id: a.id,
+        tankId: a.tankId || a.coachNumber || 'TANK-01',
+        tankName: a.title || 'Water Tank',
+        type: a.type || 'LEVEL',
+        severity: a.severity || 'WARNING',
+        message: a.message,
+        value: a.data?.waterLevel ?? 0,
+        threshold: 20,
+        triggeredAt: a.timestamp ? new Date(a.timestamp).toISOString() : new Date().toISOString(),
+        status: a.status || 'ACTIVE',
+        acknowledgedBy: a.acknowledgedBy,
+        acknowledgedAt: a.acknowledgedAt,
+      }));
+    }
     const query = status ? `?status=${status}` : '';
     try {
       return await this.request<AlarmItem[]>(`/alarms${query}`);
@@ -1506,6 +1531,18 @@ export class ApiClient {
   }
 
   static async fetchAlarmStats(): Promise<AlarmStats> {
+    if (!API_BASE) {
+      const alerts = alertNotificationService.getActiveAlerts();
+      const critical = alerts.filter(a => a.severity === 'CRITICAL' || a.severity === 'critical').length;
+      const warning = alerts.filter(a => a.severity === 'WARNING' || a.severity === 'warning').length;
+      return {
+        total_active: alerts.length,
+        critical,
+        warning,
+        info: alerts.length - (critical + warning),
+        acknowledged: 0,
+      };
+    }
     try {
       return await this.request<AlarmStats>('/alarms/stats');
     } catch (err) {
@@ -1545,6 +1582,16 @@ export class ApiClient {
     mqttBroker: string;
     activeWebSockets: number;
   }> {
+    if (!API_BASE) {
+      return {
+        status: 'nominal',
+        app: 'Panorama Water Tank Monitor',
+        version: 'v2.2.0',
+        database: 'client-cache-active',
+        mqttBroker: mqttService.isConnected() ? 'connected' : 'connecting',
+        activeWebSockets: 0,
+      };
+    }
     try {
       return await this.request('/health');
     } catch (err) {
