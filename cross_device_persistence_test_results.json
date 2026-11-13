@@ -1,0 +1,95 @@
+{
+  "timestamp": "2026-11-13T20:57:03.163Z",
+  "allPassed": true,
+  "testResults": [
+    {
+      "testId": "TEST_1",
+      "name": "Register Train on Device A with Central Persistence",
+      "status": "PASSED",
+      "details": {
+        "clientPostStatus": 201,
+        "databaseTrain": "Bhopal Shatabdi Express",
+        "coachesCount": 2,
+        "tanksCount": 4
+      }
+    },
+    {
+      "testId": "TEST_2",
+      "name": "Open Another Device (Device B reads train from central DB without local creation)",
+      "status": "PASSED",
+      "details": {
+        "totalTrainsOnDeviceB": 3,
+        "foundTrain": {
+          "number": "12002",
+          "name": "Bhopal Shatabdi Express",
+          "coaches": 2
+        }
+      }
+    },
+    {
+      "testId": "TEST_3",
+      "name": "Logout and Subsequent Login (Data remains intact)",
+      "status": "PASSED",
+      "details": {
+        "trainNumber": "12002",
+        "consistName": "Bhopal Shatabdi Express"
+      }
+    },
+    {
+      "testId": "TEST_4",
+      "name": "Browser Cache Clear (Central database restores fleet automatically)",
+      "status": "PASSED",
+      "details": {
+        "restoredFromCentralDb": true,
+        "trainName": "Bhopal Shatabdi Express"
+      }
+    },
+    {
+      "testId": "TEST_5",
+      "name": "Central Database Disk Persistence (SQLite database holds permanent records)",
+      "status": "PASSED",
+      "details": {
+        "databasePath": "C:\\Users\\soumi\\OneDrive\\Documents\\Antigravity\\PanoramaWaterTank_NextGen\\backend\\panorama_dev.db",
+        "databaseSizeBytes": 1667072,
+        "authoritativeTrainNumber": "12002"
+      }
+    },
+    {
+      "testId": "TEST_6",
+      "name": "Temporary Network Failure Resilience (No destructive fleet wipe, stable resync)",
+      "status": "PASSED",
+      "details": {
+        "simulatedOfflineErrorHandled": true,
+        "trainRetainedAfterReconnect": true,
+        "reconnectedTrainCount": 3
+      }
+    },
+    {
+      "testId": "TEST_7",
+      "name": "Explicit Authorized Deletion (Real-time sync to Device B, devices released, audit logged)",
+      "status": "PASSED",
+      "details": {
+        "deleteResponse": {
+          "success": true,
+          "message": "Train 12002 deleted successfully",
+          "trainId": "12002",
+          "train_number": "12002",
+          "unassigned_devices": 2,
+          "resolved_alarms": 0
+        },
+        "presentOnDeviceB": false,
+        "hardwareReleasedToUnassignedPool": true,
+        "unassignedCount": 2
+      }
+    },
+    {
+      "testId": "TEST_8",
+      "name": "Concurrent Modification (Device B receives updated details without collision or overwrite)",
+      "status": "PASSED",
+      "details": {
+        "modifiedNameOnDeviceA": "Lucknow Shatabdi Superfast",
+        "receivedNameOnDeviceB": "Lucknow Shatabdi Superfast"
+      }
+    }
+  ]
+}

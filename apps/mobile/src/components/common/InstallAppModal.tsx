@@ -1,28 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Smartphone,
   Download,
   CheckCircle2,
-  AlertTriangle,
   X,
-  ExternalLink,
   ShieldCheck,
-  Cpu,
-  Radio,
-  BellRing,
-  HelpCircle,
   Apple,
-  Globe,
   HardDriveDownload,
-  QrCode,
-  Copy,
-  Check,
-  FileDown,
   Loader2,
-  Info,
 } from 'lucide-react';
 import panoramaLogoIcon from '../../assets/panorama_logo_icon.png';
 import { APP_DISTRIBUTION } from '../../config/appDistribution';
+import { isNativeCapacitorApp } from '../../services/nativeBridge';
 
 interface InstallAppModalProps {
   isOpen: boolean;
@@ -30,40 +19,13 @@ interface InstallAppModalProps {
 }
 
 export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'android' | 'pwa' | 'ios'>('android');
-  const [canInstallPwa, setCanInstallPwa] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [pwaInstalled, setPwaInstalled] = useState(false);
-  
+  const isIos = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent || '');
+  const [activeTab, setActiveTab] = useState<'android' | 'ios'>(() => (isIos ? 'ios' : 'android'));
+
   // Download simulation and tracking state
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloadComplete, setIsDownloadComplete] = useState(false);
-  const [isCopied, setIsCopied] = useState(false);
-
-  useEffect(() => {
-    const handleBeforeInstall = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      setCanInstallPwa(true);
-    };
-
-    const handleAppInstalled = () => {
-      setPwaInstalled(true);
-      setCanInstallPwa(false);
-      setDeferredPrompt(null);
-    };
-
-    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-      window.addEventListener('beforeinstallprompt', handleBeforeInstall);
-      window.addEventListener('appinstalled', handleAppInstalled);
-
-      return () => {
-        window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
-        window.removeEventListener('appinstalled', handleAppInstalled);
-      };
-    }
-  }, []);
 
   const handleDownloadApk = () => {
     if (isDownloading) return;
@@ -79,7 +41,7 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
     downloadLink.click();
     document.body.removeChild(downloadLink);
 
-    // Simulate progress smoothly from 8% to 100% over ~1.6 seconds
+    // Smooth progress indicator from 8% to 100%
     let progress = 8;
     const interval = setInterval(() => {
       progress += Math.floor(Math.random() * 15) + 12;
@@ -95,32 +57,12 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
     }, 150);
   };
 
-  const handleCopyLink = () => {
-    const fullUrl = window.location.origin + '/downloads/' + APP_DISTRIBUTION.apkFileName;
-    navigator.clipboard?.writeText(fullUrl).then(() => {
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2500);
-    }).catch(() => {
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2500);
-    });
-  };
-
-  const handlePwaInstall = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setPwaInstalled(true);
-    }
-    setDeferredPrompt(null);
-    setCanInstallPwa(false);
-  };
-
-  if (!isOpen) return null;
+  // Do not display modal if not open or running inside native Capacitor environment
+  if (!isOpen || isNativeCapacitorApp()) return null;
 
   return (
     <div
+      id="install-app-modal-overlay"
       style={{
         position: 'fixed',
         inset: 0,
@@ -138,9 +80,13 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
       }}
     >
       <div
+        id="install-app-modal-container"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Install Panorama SCADA App"
         style={{
           width: '100%',
-          maxWidth: '580px',
+          maxWidth: '520px',
           maxHeight: '90vh',
           backgroundColor: '#FFFFFF',
           borderRadius: '12px',
@@ -202,6 +148,7 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
           </div>
           <button
             type="button"
+            id="install-modal-close-btn"
             onClick={onClose}
             aria-label="Close modal"
             style={{
@@ -220,20 +167,25 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
           </button>
         </div>
 
-        {/* Tab Selector */}
+        {/* Tab Selector: Android APK and iOS / Safari ONLY */}
         <div
+          role="tablist"
           style={{
             display: 'flex',
             borderBottom: '1px solid #E2E8F0',
             backgroundColor: '#FFFFFF',
             padding: '0 16px',
+            gap: '8px',
           }}
         >
           <button
             type="button"
+            role="tab"
+            aria-selected={activeTab === 'android'}
+            id="modal-tab-android"
             onClick={() => setActiveTab('android')}
             style={{
-              padding: '12px 14px',
+              padding: '12px 18px',
               border: 'none',
               borderBottom: activeTab === 'android' ? '2px solid #2563EB' : '2px solid transparent',
               background: 'transparent',
@@ -253,31 +205,12 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
 
           <button
             type="button"
-            onClick={() => setActiveTab('pwa')}
-            style={{
-              padding: '12px 14px',
-              border: 'none',
-              borderBottom: activeTab === 'pwa' ? '2px solid #2563EB' : '2px solid transparent',
-              background: 'transparent',
-              color: activeTab === 'pwa' ? '#2563EB' : '#64748B',
-              fontWeight: activeTab === 'pwa' ? 700 : 500,
-              fontSize: '13px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <Globe size={16} />
-            <span>Web App (PWA)</span>
-          </button>
-
-          <button
-            type="button"
+            role="tab"
+            aria-selected={activeTab === 'ios'}
+            id="modal-tab-ios"
             onClick={() => setActiveTab('ios')}
             style={{
-              padding: '12px 14px',
+              padding: '12px 18px',
               border: 'none',
               borderBottom: activeTab === 'ios' ? '2px solid #2563EB' : '2px solid transparent',
               background: 'transparent',
@@ -299,7 +232,7 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
         {/* Modal Scrollable Body */}
         <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
           {activeTab === 'android' && (
-            <div>
+            <div id="tab-panel-android">
               {/* Highlight Card */}
               <div
                 style={{
@@ -444,108 +377,6 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
                 </div>
               </div>
 
-              {/* Side-Loading Desktop QR Code & Share Card */}
-              <div
-                style={{
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '8px',
-                  padding: '12px',
-                  backgroundColor: '#FAFAFA',
-                  marginBottom: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '14px',
-                }}
-              >
-                {/* Visual Vector QR Code */}
-                <div
-                  style={{
-                    width: '92px',
-                    height: '92px',
-                    backgroundColor: '#FFFFFF',
-                    border: '1px solid #CBD5E1',
-                    borderRadius: '6px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '4px',
-                    flexShrink: 0,
-                  }}
-                  title="Scan with Android device to download APK"
-                >
-                  <svg viewBox="0 0 100 100" width="84" height="84" style={{ display: 'block' }}>
-                    {/* Finder Pattern Top-Left */}
-                    <rect x="5" y="5" width="28" height="28" fill="#0F172A" rx="2" />
-                    <rect x="9" y="9" width="20" height="20" fill="#FFFFFF" rx="1" />
-                    <rect x="13" y="13" width="12" height="12" fill="#2563EB" rx="1" />
-                    {/* Finder Pattern Top-Right */}
-                    <rect x="67" y="5" width="28" height="28" fill="#0F172A" rx="2" />
-                    <rect x="71" y="9" width="20" height="20" fill="#FFFFFF" rx="1" />
-                    <rect x="75" y="13" width="12" height="12" fill="#2563EB" rx="1" />
-                    {/* Finder Pattern Bottom-Left */}
-                    <rect x="5" y="67" width="28" height="28" fill="#0F172A" rx="2" />
-                    <rect x="9" y="71" width="20" height="20" fill="#FFFFFF" rx="1" />
-                    <rect x="13" y="75" width="12" height="12" fill="#2563EB" rx="1" />
-                    {/* Timing rows */}
-                    <rect x="37" y="17" width="4" height="4" fill="#0F172A" />
-                    <rect x="45" y="17" width="4" height="4" fill="#0F172A" />
-                    <rect x="53" y="17" width="4" height="4" fill="#0F172A" />
-                    <rect x="17" y="37" width="4" height="4" fill="#0F172A" />
-                    <rect x="17" y="45" width="4" height="4" fill="#0F172A" />
-                    <rect x="17" y="53" width="4" height="4" fill="#0F172A" />
-                    {/* Data modules */}
-                    <rect x="37" y="37" width="7" height="7" fill="#2563EB" />
-                    <rect x="48" y="37" width="5" height="5" fill="#0F172A" />
-                    <rect x="57" y="37" width="6" height="6" fill="#0F172A" />
-                    <rect x="37" y="48" width="5" height="5" fill="#0F172A" />
-                    <rect x="46" y="46" width="8" height="8" fill="#1E40AF" />
-                    <rect x="58" y="48" width="5" height="5" fill="#2563EB" />
-                    <rect x="37" y="57" width="6" height="6" fill="#0F172A" />
-                    <rect x="47" y="58" width="6" height="6" fill="#0F172A" />
-                    <rect x="57" y="57" width="7" height="7" fill="#2563EB" />
-                    {/* Alignment & corners */}
-                    <rect x="72" y="40" width="8" height="8" fill="#0F172A" />
-                    <rect x="74" y="42" width="4" height="4" fill="#FFFFFF" />
-                    <rect x="84" y="44" width="4" height="4" fill="#0F172A" />
-                    <rect x="40" y="72" width="8" height="8" fill="#0F172A" />
-                    <rect x="42" y="74" width="4" height="4" fill="#FFFFFF" />
-                    <rect x="72" y="72" width="6" height="6" fill="#0F172A" />
-                    <rect x="82" y="80" width="6" height="6" fill="#2563EB" />
-                  </svg>
-                </div>
-
-                {/* Sideload description & copy link */}
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <QrCode size={14} color="#2563EB" />
-                    <span>Scan with Mobile to Download Directly</span>
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#64748B', lineHeight: '15px', marginBottom: '8px' }}>
-                    Point your Android camera or barcode reader at this code to download the APK directly to your phone.
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCopyLink}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '5px',
-                      padding: '4px 8px',
-                      backgroundColor: '#FFFFFF',
-                      border: '1px solid #CBD5E1',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      color: isCopied ? '#16A34A' : '#334155',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {isCopied ? <Check size={12} color="#16A34A" /> : <Copy size={12} />}
-                    <span>{isCopied ? 'Link Copied to Clipboard!' : 'Copy Direct APK Link'}</span>
-                  </button>
-                </div>
-              </div>
-
               {/* Step-by-Step Installation Instructions */}
               <h5 style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 700, color: '#334155' }}>
                 How to Install the APK on Android:
@@ -553,7 +384,7 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', color: '#475569' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                   <span style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#E2E8F0', color: '#0F172A', fontWeight: 700, fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>1</span>
-                  <span>Tap <strong>Download Android APK</strong> above or scan the QR code to save <code>{APP_DISTRIBUTION.apkFileName}</code>.</span>
+                  <span>Tap <strong>Download Android APK</strong> above to save <code>{APP_DISTRIBUTION.apkFileName}</code>.</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                   <span style={{ width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#E2E8F0', color: '#0F172A', fontWeight: 700, fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>2</span>
@@ -571,98 +402,8 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
             </div>
           )}
 
-          {activeTab === 'pwa' && (
-            <div>
-              <div
-                style={{
-                  backgroundColor: '#F0FDF4',
-                  border: '1px solid #BBF7D0',
-                  borderRadius: '8px',
-                  padding: '14px',
-                  marginBottom: '16px',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '12px',
-                }}
-              >
-                <CheckCircle2 size={22} color="#16A34A" style={{ flexShrink: 0, marginTop: '2px' }} />
-                <div>
-                  <h4 style={{ margin: '0 0 3px 0', fontSize: '13px', fontWeight: 700, color: '#166534' }}>
-                    Instant Progressive Web App (PWA)
-                  </h4>
-                  <p style={{ margin: 0, fontSize: '12px', color: '#15803D', lineHeight: '17px' }}>
-                    Run Panorama SCADA directly in your browser with standalone window mode, desktop shortcut, service worker caching, and automatic background updates.
-                  </p>
-                </div>
-              </div>
-
-              {canInstallPwa ? (
-                <button
-                  type="button"
-                  id="modal-install-pwa-btn"
-                  onClick={handlePwaInstall}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '10px',
-                    backgroundColor: '#16A34A',
-                    color: '#FFFFFF',
-                    width: '100%',
-                    padding: '13px 20px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    fontWeight: 700,
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    marginBottom: '16px',
-                    boxShadow: '0 4px 6px -1px rgba(22, 163, 74, 0.25)',
-                  }}
-                >
-                  <HardDriveDownload size={18} />
-                  <span>Install Web App (PWA) Now</span>
-                </button>
-              ) : pwaInstalled ? (
-                <div
-                  style={{
-                    padding: '12px',
-                    backgroundColor: '#F1F5F9',
-                    borderRadius: '6px',
-                    textAlign: 'center',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    color: '#334155',
-                    marginBottom: '16px',
-                  }}
-                >
-                  ✓ App is already installed in this browser!
-                </div>
-              ) : (
-                <div
-                  style={{
-                    backgroundColor: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
-                    padding: '14px',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                    color: '#475569',
-                    marginBottom: '16px',
-                    lineHeight: '19px',
-                  }}
-                >
-                  <strong>Desktop Chrome & Microsoft Edge Installation:</strong>
-                  <ol style={{ margin: '8px 0 0 0', paddingLeft: '18px' }}>
-                    <li>Look at your browser's address bar (top right) and click the <strong>Install</strong> or <strong>App available</strong> icon.</li>
-                    <li>Or click the browser menu (<strong>⋮</strong> or <strong>…</strong>) $\to$ <strong>Save and share</strong> $\to$ <strong>Install Panorama Water Tank Monitor</strong>.</li>
-                    <li>Launch anytime from your Desktop or Start Menu as a dedicated SCADA window.</li>
-                  </ol>
-                </div>
-              )}
-            </div>
-          )}
-
           {activeTab === 'ios' && (
-            <div>
+            <div id="tab-panel-ios">
               <div
                 style={{
                   backgroundColor: '#F8FAFC',
@@ -727,6 +468,7 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
           </div>
           <button
             type="button"
+            id="install-modal-footer-close-btn"
             onClick={onClose}
             style={{
               padding: '6px 14px',

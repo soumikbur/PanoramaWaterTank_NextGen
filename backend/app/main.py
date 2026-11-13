@@ -107,7 +107,7 @@ async def add_security_headers(request: Request, call_next):
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com data:; "
         "img-src 'self' data: https:; "
-        "connect-src 'self' ws: wss: https://broker.hivemq.com:8884 https://industrial.api.ubidots.com;"
+        "connect-src 'self' ws: wss: http: https: https://broker.hivemq.com:8884 https://industrial.api.ubidots.com;"
     )
     return response
 

@@ -18,13 +18,13 @@ import {
   CoachFormInput
 } from '../types';
 import { ApiClient } from '../api/client';
-import { wsService } from '../services/websocket';
+import { wsService, WebSocketStatus } from '../services/websocket';
 import { mqttService } from '../services/mqttService';
 import { syncService, SyncState } from '../services/syncService';
 import { DisplayPreferencesService, ScalePreset } from '../services/displayPreferencesService';
 import { AppRouter } from '../services/router';
 import { deviceRegistry, ManagedDevice } from '../services/deviceRegistry';
-import { FLEET_STORAGE_KEY, FLEET_UPDATED_EVENT } from '../services/localFleetStore';
+import { localFleetStore, FLEET_STORAGE_KEY, FLEET_UPDATED_EVENT } from '../services/localFleetStore';
 import {
   computeConsistData,
   getTelemetryTimeoutSeconds,
@@ -73,7 +73,7 @@ interface AppContextType {
   managedDevices: ManagedDevice[];
   activeAlarms: AlarmItem[];
   alarmStats: AlarmStats;
-  connectionStatus: 'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED';
+  connectionStatus: WebSocketStatus;
   mqttBrokerStatus: 'CONNECTED' | 'DISCONNECTED' | 'UNKNOWN';
   mqttConnectionStatus: MqttConnectionStatus;
   liveTelemetry: LiveTelemetryPayload | null;
@@ -180,7 +180,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   );
   const [activeAlarms, setActiveAlarms] = useState<AlarmItem[]>([]);
   const [alarmStats, setAlarmStats] = useState<AlarmStats>(defaultStats);
-  const [connectionStatus, setConnectionStatus] = useState<'CONNECTED' | 'RECONNECTING' | 'DISCONNECTED'>('DISCONNECTED');
+  const [connectionStatus, setConnectionStatus] = useState<WebSocketStatus>('DISCONNECTED');
   const [mqttBrokerStatus, setMqttBrokerStatus] = useState<'CONNECTED' | 'DISCONNECTED' | 'UNKNOWN'>('UNKNOWN');
   const [mqttConnectionStatus, setMqttConnectionStatus] = useState<MqttConnectionStatus>('DISCONNECTED');
   const [liveTelemetry, setLiveTelemetry] = useState<LiveTelemetryPayload | null>(null);
@@ -324,6 +324,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Keep selected train/coach, active consist, URL params, and local caches strictly synced with configuredTrains
   useEffect(() => {
+    // Authoritative fleet validator registration
+    alertNotificationService.setFleetValidator(() => {
+      const trainNumbers = new Set(configuredTrains.map((t) => t.train_number.trim()));
+      const coachKeys = new Set<string>();
+      for (const t of configuredTrains) {
+        const consist = localFleetStore.getTrainConsist(t.train_number.trim());
+        if (consist?.coaches) {
+          for (const c of consist.coaches) {
+            coachKeys.add(`${t.train_number.trim()}::${c.coach_number.trim().toUpperCase()}`);
+          }
+        }
+      }
+      const deviceUids = new Set<string>();
+      for (const d of managedDevices) {
+        if (d.trainNumber && d.assignmentStatus === 'ENGAGED' && trainNumbers.has(d.trainNumber.trim())) {
+          deviceUids.add(d.uid.trim());
+        }
+      }
+      return { trainNumbers, coachKeys, deviceUids };
+    });
+
     if (!regionsLoadedRef.current) return;
 
     const validSet = new Set(configuredTrains.map((t) => t.train_number.trim()));
@@ -337,12 +358,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (liveTelemetry) setLiveTelemetry(null);
       if (lastValidGps) setLastValidGps(null);
       if (gpsWaypoints.length > 0) setGpsWaypoints([]);
+      setActiveAlarms([]);
+      setAlarmStats((s) => ({ ...s, totalActive: 0, criticalCount: 0, warningCount: 0 }));
+      alertNotificationService.reconcileWithFleet({
+        trainNumbers: new Set(),
+        coachKeys: new Set(),
+        deviceUids: new Set(),
+      });
       const parsed = AppRouter.parseCurrentRoute();
       if (parsed.trainNumber || parsed.coachNumber) {
         AppRouter.navigate(activeScreen);
       }
       return;
     }
+
+    // Filter out active alarms from trains that no longer exist
+    setActiveAlarms((prev) => {
+      const filtered = prev.filter((a) => {
+        const tr = (a.trainNumber || a.train_number || '').trim();
+        return !tr || validSet.has(tr);
+      });
+      return filtered.length === prev.length ? prev : filtered;
+    });
 
     if (!selectedTrainNumber || !validSet.has(selectedTrainNumber.trim())) {
       const nextTrain = configuredTrains[0].train_number.trim();
@@ -353,7 +390,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         AppRouter.navigate(activeScreen, nextTrain);
       }
     }
-  }, [configuredTrains, selectedTrainNumber, activeScreen]);
+  }, [configuredTrains, selectedTrainNumber, activeScreen, managedDevices]);
 
   // Fetch authoritative consist whenever selectedTrainNumber changes or fleet refreshes
   useEffect(() => {
@@ -407,6 +444,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             deviceId: coach.deviceUid,
             coachNumber: coach.coachNumber,
             isOnline: true,
+            trainNumber: selectedTrainNumber,
           });
         }
         continue;
@@ -418,12 +456,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           deviceId: coach.deviceUid,
           coachNumber: coach.coachNumber,
           isOnline: false,
+          trainNumber: selectedTrainNumber,
         });
         const alarmId = `alarm-conn-${coach.deviceUid}`;
         addedDisconnectAlarms.push({
           id: alarmId,
           deviceId: coach.deviceUid,
           coachNumber: coach.coachNumber,
+          trainNumber: selectedTrainNumber,
           alarmType: 'DEVICE_OFFLINE',
           severity: 'WARNING',
           status: 'ACTIVE',
@@ -436,6 +476,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           deviceId: coach.deviceUid,
           coachNumber: coach.coachNumber,
           isOnline: true,
+          trainNumber: selectedTrainNumber,
         });
         reconnectedIds.add(`alarm-conn-${coach.deviceUid}`);
       }
@@ -458,7 +499,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         resolvedToday: stats.resolvedToday + reconnectedIds.size,
       }));
     }
-  }, [consistData.coaches]);
+  }, [consistData.coaches, selectedTrainNumber]);
 
   // Global Display Scaling preferences (delegated to DisplayPreferencesService)
   const [displayScale, setDisplayScaleState] = useState<string>(() => {
@@ -614,12 +655,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const refreshRegions = async () => {
     try {
       const data = await ApiClient.fetchRegionsSummary();
-      const regs = Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) return;
       regionsLoadedRef.current = true;
-      setRegions(regs);
+      setRegions(data);
 
       const validTrains = new Set<string>();
-      regs.forEach((r) => (r.trains || []).forEach((t) => {
+      data.forEach((r) => (r.trains || []).forEach((t) => {
         if (t.train_number) validTrains.add(t.train_number.trim());
       }));
 
@@ -640,7 +681,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
       syncService.setState('SYNCHRONIZED');
     } catch (e) {
-      console.warn('[AppContext] Error fetching regions:', e);
+      console.warn('[AppContext] Error fetching regions, retaining current fleet state:', e);
     }
   };
 
@@ -653,41 +694,49 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         ApiClient.fetchDevices().catch(() => []),
         ApiClient.fetchAlarms('ACTIVE').catch(() => []),
         ApiClient.fetchAlarmStats().catch(() => defaultStats),
-        ApiClient.fetchRegionsSummary().catch(() => []),
+        ApiClient.fetchRegionsSummary().catch(() => null),
         ApiClient.fetchHealth().catch(() => null),
       ]);
 
-      const safeRegs = Array.isArray(regs) ? regs : [];
-      regionsLoadedRef.current = true;
-      setRegions(safeRegs);
+      if (Array.isArray(regs)) {
+        regionsLoadedRef.current = true;
+        setRegions(regs);
 
-      const validTrains = new Set<string>();
-      safeRegs.forEach((r) => (r.trains || []).forEach((t) => {
-        if (t.train_number) validTrains.add(t.train_number.trim());
-      }));
+        const validTrains = new Set<string>();
+        regs.forEach((r) => (r.trains || []).forEach((t) => {
+          if (t.train_number) validTrains.add(t.train_number.trim());
+        }));
 
-      const filteredTanks = (Array.isArray(allTanks) ? allTanks : []).filter(
-        (t) => t.trainNumber && validTrains.has(t.trainNumber.trim())
-      );
-      setTanks(filteredTanks);
-      setLiveTank(
-        tank && tank.trainNumber && validTrains.has(tank.trainNumber.trim())
-          ? tank
-          : filteredTanks[0] ?? null
-      );
-      setDevices(devList);
-      const safeAlarms = (Array.isArray(alarms) ? alarms : []).filter(
-        (a) => !a.trainNumber || validTrains.has(a.trainNumber.trim())
-      );
-      setActiveAlarms(safeAlarms);
-      alertNotificationService.syncWithBackendAlarms(safeAlarms);
-      setAlarmStats(stats);
+        const filteredTanks = (Array.isArray(allTanks) ? allTanks : []).filter(
+          (t) => t.trainNumber && validTrains.has(t.trainNumber.trim())
+        );
+        setTanks(filteredTanks);
+        setLiveTank(
+          tank && tank.trainNumber && validTrains.has(tank.trainNumber.trim())
+            ? tank
+            : filteredTanks[0] ?? null
+        );
+      } else if (Array.isArray(allTanks) && allTanks.length > 0) {
+        setTanks(allTanks);
+        if (tank) setLiveTank(tank);
+      }
+
+      if (Array.isArray(devList) && devList.length > 0) {
+        setDevices(devList);
+      }
+      if (Array.isArray(alarms)) {
+        setActiveAlarms(alarms);
+        alertNotificationService.syncWithBackendAlarms(alarms);
+      }
+      if (stats) {
+        setAlarmStats(stats);
+      }
       if (health?.mqttBroker) {
         setMqttBrokerStatus(health.mqttBroker === 'CONNECTED' ? 'CONNECTED' : 'DISCONNECTED');
       }
       syncService.setState('SYNCHRONIZED');
     } catch (e) {
-      console.warn('[AppContext] Error refreshing data:', e);
+      console.warn('[AppContext] Error refreshing data, retaining current fleet state:', e);
     }
   };
 
@@ -908,11 +957,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       refreshData();
     });
 
-    const unsubFleetSync = wsService.on('FLEET_SYNC', (data: any) => {
-      console.info('[AppContext] Received FLEET_SYNC WebSocket broadcast:', data);
+    const handleFleetChange = (evtName: string) => (data: any) => {
+      console.info(`[AppContext] Received ${evtName} WebSocket broadcast:`, data);
       refreshRegions();
       refreshData();
-    });
+    };
+
+    const unsubFleetSync = wsService.on('FLEET_SYNC', handleFleetChange('FLEET_SYNC'));
+    const unsubTrainCreated = wsService.on('TRAIN_CREATED', handleFleetChange('TRAIN_CREATED'));
+    const unsubTrainUpdated = wsService.on('TRAIN_UPDATED', handleFleetChange('TRAIN_UPDATED'));
+    const unsubTrainDeleted = wsService.on('TRAIN_DELETED', handleFleetChange('TRAIN_DELETED'));
+    const unsubRegionUpdated = wsService.on('REGION_UPDATED', handleFleetChange('REGION_UPDATED'));
+    const unsubCoachCreated = wsService.on('COACH_CREATED', handleFleetChange('COACH_CREATED'));
+    const unsubCoachUpdated = wsService.on('COACH_UPDATED', handleFleetChange('COACH_UPDATED'));
+    const unsubCoachDeleted = wsService.on('COACH_DELETED', handleFleetChange('COACH_DELETED'));
+    const unsubCoachRenamed = wsService.on('COACH_RENAMED', handleFleetChange('COACH_RENAMED'));
+    const unsubCoachReordered = wsService.on('COACH_REORDERED', handleFleetChange('COACH_REORDERED'));
 
     const unsubDeviceSync = wsService.on('DEVICE_SYNC', (data: any) => {
       console.info('[AppContext] Received DEVICE_SYNC WebSocket broadcast:', data);
@@ -925,6 +985,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       unsubAlarmTriggered();
       unsubAlarmResolved();
       unsubFleetSync();
+      unsubTrainCreated();
+      unsubTrainUpdated();
+      unsubTrainDeleted();
+      unsubRegionUpdated();
+      unsubCoachCreated();
+      unsubCoachUpdated();
+      unsubCoachDeleted();
+      unsubCoachRenamed();
+      unsubCoachReordered();
       unsubDeviceSync();
       wsService.disconnect();
     };
@@ -972,22 +1041,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       refreshData();
     });
 
+    let deltaDebounceTimer: any = null;
+    const debouncedRefresh = (isFleet = false) => {
+      clearTimeout(deltaDebounceTimer);
+      deltaDebounceTimer = setTimeout(() => {
+        if (isFleet) refreshRegions();
+        refreshData();
+      }, 400);
+    };
+
     const unsubMqttDeviceSync = mqttService.onDeviceSync((event) => {
       console.info('[AppContext] Received MQTT device sync broadcast:', event);
-      refreshData();
+      debouncedRefresh(false);
     });
 
     const unsubMqttCentralDevice = mqttService.onCentralDeviceSync((event) => {
       console.info('[AppContext] Received MQTT central device sync broadcast:', event);
-      refreshData();
+      debouncedRefresh(false);
     });
 
     const unsubMqttDeltaSync = mqttService.onCentralDeltaSync((event) => {
       console.info('[AppContext] Received MQTT central delta sync broadcast:', event);
-      if (event?.type === 'FLEET_UPDATE') {
-        refreshRegions();
-      }
-      refreshData();
+      debouncedRefresh(event?.type === 'FLEET_UPDATE');
     });
 
     const unsubMqttTelemetry = mqttService.onTelemetry((telemetry) => {
@@ -1407,6 +1482,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const handleDeleteCoach = async (trainNumber: string, coachNumber: string) => {
+    alertNotificationService.resolveAlertsForCoach(trainNumber, coachNumber);
     const res = await ApiClient.deleteCoach(trainNumber, coachNumber);
     await refreshRegions();
     if (selectedTrainNumber.trim() === trainNumber.trim()) {

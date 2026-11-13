@@ -23,12 +23,14 @@ import {
 import { TrainLookupResult, TrainCreatePayload } from '../types/train';
 import { deviceRegistry } from '../services/deviceRegistry';
 import { localFleetStore } from '../services/localFleetStore';
+import { alertNotificationService } from '../services/alertNotificationService';
 import {
   mqttService,
   CENTRAL_SETTINGS_TOPIC,
   CENTRAL_USERS_TOPIC,
   CENTRAL_DELTA_SYNC_TOPIC,
 } from '../services/mqttService';
+import { Logger } from '../services/logger';
 
 const USERS_STORAGE_KEY = 'panorama_users_store';
 const REGISTRATIONS_STORAGE_KEY = 'panorama_registrations_store';
@@ -137,12 +139,19 @@ export function resolveApiBase(): string {
   if (configured && String(configured).trim()) {
     return String(configured).trim().replace(/\/+$/, '');
   }
-  if (typeof window !== 'undefined' && window.location) {
-    const host = window.location.hostname || '';
-    if (host === 'localhost' || host === '127.0.0.1' || host === '10.0.2.2') {
-      const port = window.location.port || '8000';
-      return `http://${host}:${port}/api/v1`;
+  if (typeof window !== 'undefined' && window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
+    const host = window.location.hostname || '127.0.0.1';
+    const port = window.location.port || '';
+    if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0') {
+      if (port === '8000') {
+        return `http://${host}:${port}/api/v1`;
+      }
+      return `http://${host}:8000/api/v1`;
     }
+    if (host.endsWith('github.io') || host.endsWith('vercel.app') || host.endsWith('pages.dev')) {
+      return PRODUCTION_BACKEND_URL;
+    }
+    return `${window.location.origin.replace(/\/+$/, '')}/api/v1`;
   }
   if (typeof window !== 'undefined' && (window as any).Capacitor) {
     return PRODUCTION_BACKEND_URL;
@@ -153,52 +162,133 @@ export function resolveApiBase(): string {
 export const API_BASE = resolveApiBase();
 
 export class ApiClient {
+  private static isBackendAvailable: boolean | null = null;
+  private static lastHealthCheckTime = 0;
+  private static listenersBound = false;
+
   static hasBackend(): boolean {
     return true;
+  }
+
+  private static ensureListeners(): void {
+    if (this.listenersBound || typeof window === 'undefined') return;
+    this.listenersBound = true;
+    window.addEventListener('online', () => {
+      ApiClient.isBackendAvailable = null;
+      ApiClient.lastHealthCheckTime = 0;
+    });
+    window.addEventListener('panorama:backend-url-changed', () => {
+      ApiClient.isBackendAvailable = null;
+      ApiClient.lastHealthCheckTime = 0;
+    });
+  }
+
+  static isRemoteUnreachable(): boolean {
+    this.ensureListeners();
+    if (this.isBackendAvailable === false) {
+      if (Date.now() - this.lastHealthCheckTime < 45000) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const base = resolveApiBase();
     const url = `${base}${endpoint}`;
-    const token = localStorage.getItem('panorama_token');
+
+    if (this.isRemoteUnreachable() && (options.method === 'GET' || !options.method)) {
+      const cachedErr: any = new Error(`Remote backend unreachable at ${base}; using cached local store`);
+      cachedErr.status = 503;
+      cachedErr.code = 'ENOTFOUND';
+      throw cachedErr;
+    }
+
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('panorama_token') : null;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
       ...(options.headers as Record<string, string> || {}),
     };
 
-    const response = await fetch(url, { ...options, headers });
-    const rawText = await response.text();
-    let parsedJson: any = null;
-    if (rawText) {
-      try {
-        parsedJson = JSON.parse(rawText);
-      } catch {
-        parsedJson = null;
+    // Implement AbortController with 10s request timeout
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    let timeoutId: any = null;
+    if (controller) {
+      timeoutId = setTimeout(() => {
+        controller.abort();
+      }, 10000);
+      if (options.signal) {
+        options.signal.addEventListener('abort', () => controller.abort());
       }
     }
 
-    if (!response.ok) {
-      let errorMsg = `API error ${response.status}${response.statusText ? `: ${response.statusText}` : ''}`;
-      if (parsedJson && (parsedJson.message || parsedJson.detail)) {
-        errorMsg = String(parsedJson.detail || parsedJson.message);
-      } else if (response.status === 405) {
-        errorMsg = 'HTTP 405 Method Not Allowed: API endpoint does not accept this request or is routed to static hosting.';
-      }
-      console.error(`[ApiClient] ${options.method || 'GET'} ${url} failed (${response.status}):`, parsedJson || rawText.slice(0, 200));
-      const err: any = new Error(errorMsg);
-      err.status = response.status;
-      if (parsedJson?.code) err.code = parsedJson.code;
-      throw err;
-    }
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller ? controller.signal : options.signal,
+      });
 
-    if (parsedJson !== null) {
-      return parsedJson as T;
+      if (timeoutId) clearTimeout(timeoutId);
+
+      const rawText = await response.text();
+      let parsedJson: any = null;
+      if (rawText) {
+        try {
+          parsedJson = JSON.parse(rawText);
+        } catch {
+          parsedJson = null;
+        }
+      }
+
+      if (!response.ok) {
+        if (!url.includes('127.0.0.1') && !url.includes('localhost')) {
+          ApiClient.isBackendAvailable = false;
+          ApiClient.lastHealthCheckTime = Date.now();
+        }
+
+        let errorMsg = `API error ${response.status}${response.statusText ? `: ${response.statusText}` : ''}`;
+        if (parsedJson && (parsedJson.message || parsedJson.detail)) {
+          errorMsg = String(parsedJson.detail || parsedJson.message);
+        } else if (response.status === 405) {
+          errorMsg = 'HTTP 405 Method Not Allowed: API endpoint does not accept this request or is routed to static hosting.';
+        }
+        Logger.debug('API', 'ApiClient', `${options.method || 'GET'} ${url} returned ${response.status}: ${errorMsg}`, 'request', {
+          status: response.status,
+          detail: parsedJson || rawText.slice(0, 150),
+        });
+        const err: any = new Error(errorMsg);
+        err.status = response.status;
+        if (parsedJson?.code) err.code = parsedJson.code;
+        throw err;
+      }
+
+      ApiClient.isBackendAvailable = true;
+
+      if (parsedJson !== null) {
+        return parsedJson as T;
+      }
+      if (response.status === 204 || !rawText.trim()) {
+        return {} as T;
+      }
+      throw new Error(`Invalid non-JSON response from ${url}`);
+    } catch (fetchErr: any) {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (!url.includes('127.0.0.1') && !url.includes('localhost')) {
+        ApiClient.isBackendAvailable = false;
+        ApiClient.lastHealthCheckTime = Date.now();
+      }
+      if (fetchErr.name === 'AbortError') {
+        const timeoutErr: any = new Error(`Request timeout (10s) exceeded while requesting ${url}`);
+        timeoutErr.status = 408;
+        timeoutErr.code = 'ETIMEDOUT';
+        Logger.debug('API', 'ApiClient', `Request timed out for ${url}`, 'timeout');
+        throw timeoutErr;
+      }
+      Logger.debug('API', 'ApiClient', `Network request to ${url} failed: ${fetchErr?.message || fetchErr}`, 'networkFail');
+      throw fetchErr;
     }
-    if (response.status === 204 || !rawText.trim()) {
-      return {} as T;
-    }
-    throw new Error(`Invalid non-JSON response from ${url}`);
   }
 
   // Auth
@@ -868,8 +958,13 @@ export class ApiClient {
     }
     try {
       const res = await this.request<RegionSummary[]>('/trains/regions');
-      return Array.isArray(res) ? res : localFleetStore.getRegionsSummary();
-    } catch {
+      if (Array.isArray(res)) {
+        localFleetStore.syncFromAuthoritativeRegions(res);
+        return res;
+      }
+      return localFleetStore.getRegionsSummary();
+    } catch (err) {
+      Logger.debug('API', 'ApiClient', 'fetchRegionsSummary failed, falling back to cached local fleet', 'fetchRegionsSummary', err);
       return localFleetStore.getRegionsSummary();
     }
   }
@@ -900,7 +995,14 @@ export class ApiClient {
       throw new Error(`Train ${clean} not found.`);
     }
     try {
-      return await this.request<TrainConsist>(`/trains/${encodeURIComponent(clean)}/consist`);
+      const consist = await this.request<TrainConsist>(`/trains/${encodeURIComponent(clean)}/consist`);
+      if (consist) {
+        localFleetStore.syncTrainConsist(clean, consist);
+        return consist;
+      }
+      const localConsist = localFleetStore.getTrainConsist(clean);
+      if (localConsist) return localConsist;
+      throw new Error(`Train ${clean} not found.`);
     } catch {
       const localConsist = localFleetStore.getTrainConsist(clean);
       if (localConsist) return localConsist;
@@ -931,7 +1033,7 @@ export class ApiClient {
 
   static async createTrain(data: TrainCreatePayload): Promise<any> {
     let res: any;
-    try {
+    if (API_BASE) {
       res = await this.request('/trains', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -939,8 +1041,7 @@ export class ApiClient {
       try {
         localFleetStore.createTrain(data);
       } catch {}
-    } catch (err: any) {
-      console.warn('[ApiClient] createTrain server error, saving locally:', err);
+    } else {
       res = localFleetStore.createTrain(data);
     }
     try {
@@ -952,16 +1053,15 @@ export class ApiClient {
 
   static async updateTrain(trainNumber: string, data: { name?: string; region?: string; type?: string }): Promise<any> {
     let res: any;
-    try {
-      res = await this.request(`/trains/${trainNumber}`, {
+    if (API_BASE) {
+      res = await this.request(`/trains/${encodeURIComponent(trainNumber)}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       });
       try {
         localFleetStore.updateTrain(trainNumber, data);
       } catch {}
-    } catch (err: any) {
-      console.warn('[ApiClient] updateTrain server error, saving locally:', err);
+    } else {
       res = localFleetStore.updateTrain(trainNumber, data);
     }
     try {
@@ -977,18 +1077,20 @@ export class ApiClient {
       throw new Error('Train number is required for deletion.');
     }
     let res: any;
-    try {
+    if (API_BASE) {
       res = await this.request<{ success?: boolean; message: string; trainId?: string }>(`/trains/${clean}`, {
         method: 'DELETE',
       });
       try {
         localFleetStore.deleteTrain(trainNumber);
       } catch {}
-    } catch (err: any) {
-      console.warn('[ApiClient] deleteTrain server error, saving locally:', err);
+    } else {
       res = localFleetStore.deleteTrain(trainNumber);
     }
     deviceRegistry.detachTrain(trainNumber);
+    try {
+      alertNotificationService.resolveAlertsForTrain(trainNumber);
+    } catch {}
     try {
       mqttService.publish('panorama/fleet/sync', { action: 'delete_train', train_number: trainNumber.trim() });
     } catch {}
@@ -1001,7 +1103,7 @@ export class ApiClient {
     const cleanTrain = (trainNumber || '').trim();
     if (!cleanTrain) throw new Error('Train number is required.');
     let res: any;
-    try {
+    if (API_BASE) {
       res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches`, {
         method: 'POST',
         body: JSON.stringify(data),
@@ -1009,8 +1111,7 @@ export class ApiClient {
       try {
         localFleetStore.addCoach(cleanTrain, data);
       } catch {}
-    } catch (err: any) {
-      console.warn('[ApiClient] addCoach server error, saving locally:', err);
+    } else {
       res = localFleetStore.addCoach(cleanTrain, data);
     }
     try {
@@ -1025,7 +1126,7 @@ export class ApiClient {
     const cleanCoach = (coachNumber || '').trim();
     if (!cleanTrain || !cleanCoach) throw new Error('Train number and Coach number are required.');
     let res: any;
-    try {
+    if (API_BASE) {
       res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(cleanCoach)}`, {
         method: 'PUT',
         body: JSON.stringify(data),
@@ -1033,8 +1134,7 @@ export class ApiClient {
       try {
         localFleetStore.updateCoach(cleanTrain, cleanCoach, data);
       } catch {}
-    } catch (err: any) {
-      console.warn('[ApiClient] updateCoach server error, saving locally:', err);
+    } else {
       res = localFleetStore.updateCoach(cleanTrain, cleanCoach, data);
     }
     try {
@@ -1050,7 +1150,7 @@ export class ApiClient {
     const newCoach = (newCoachNumber || '').trim().toUpperCase();
     if (!cleanTrain || !oldCoach || !newCoach) throw new Error('Train number, old coach number, and new coach number are required.');
     let res: any;
-    try {
+    if (API_BASE) {
       res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(oldCoach)}/rename`, {
         method: 'PUT',
         body: JSON.stringify({ new_coach_number: newCoach }),
@@ -1058,8 +1158,7 @@ export class ApiClient {
       try {
         localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach);
       } catch {}
-    } catch (err: any) {
-      console.warn('[ApiClient] renameCoach server error, saving locally:', err);
+    } else {
       res = localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach);
     }
     try {
@@ -1074,18 +1173,20 @@ export class ApiClient {
     const cleanCoach = (coachNumber || '').trim();
     if (!cleanTrain || !cleanCoach) throw new Error('Train number and coach number are required.');
     let res: any;
-    try {
+    if (API_BASE) {
       res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(cleanCoach)}`, {
         method: 'DELETE',
       });
       try {
         localFleetStore.deleteCoach(cleanTrain, cleanCoach);
       } catch {}
-    } catch (err: any) {
-      console.warn('[ApiClient] deleteCoach server error, saving locally:', err);
+    } else {
       res = localFleetStore.deleteCoach(cleanTrain, cleanCoach);
     }
     deviceRegistry.unassignCoachDevice(cleanTrain, cleanCoach);
+    try {
+      alertNotificationService.resolveAlertsForCoach(cleanTrain, cleanCoach);
+    } catch {}
     try {
       mqttService.publish('panorama/fleet/sync', { action: 'coach_change', train_number: cleanTrain });
     } catch {}
@@ -1097,7 +1198,7 @@ export class ApiClient {
     const cleanTrain = (trainNumber || '').trim();
     if (!cleanTrain) throw new Error('Train number is required.');
     let res: any;
-    try {
+    if (API_BASE) {
       res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/reorder`, {
         method: 'PUT',
         body: JSON.stringify({ coach_numbers: coachNumbers }),
@@ -1105,8 +1206,7 @@ export class ApiClient {
       try {
         localFleetStore.reorderCoaches(cleanTrain, coachNumbers);
       } catch {}
-    } catch (err: any) {
-      console.warn('[ApiClient] reorderCoaches server error, saving locally:', err);
+    } else {
       res = localFleetStore.reorderCoaches(cleanTrain, coachNumbers);
     }
     try {
@@ -1134,7 +1234,12 @@ export class ApiClient {
   static async fetchCorridorStations(trainNumber?: string): Promise<import('../types').CorridorStation[]> {
     if (!API_BASE) return [];
     const query = trainNumber ? `?train_number=${encodeURIComponent(trainNumber)}` : '';
-    return this.request<import('../types').CorridorStation[]>(`/location/corridor${query}`);
+    try {
+      return await this.request<import('../types').CorridorStation[]>(`/location/corridor${query}`);
+    } catch (err) {
+      Logger.debug('API', 'ApiClient', 'fetchCorridorStations failed, returning empty list', 'fetchCorridorStations', err);
+      return [];
+    }
   }
 
   // Tanks
@@ -1142,8 +1247,13 @@ export class ApiClient {
     if (!API_BASE) {
       return localFleetStore.listAllTanks();
     }
-    const res = await this.request<TankLiveStatus[]>('/tanks');
-    return Array.isArray(res) ? res : [];
+    try {
+      const res = await this.request<TankLiveStatus[]>('/tanks');
+      return Array.isArray(res) ? res : [];
+    } catch (err) {
+      Logger.debug('API', 'ApiClient', 'fetchTanks failed, falling back to local fleet tanks', 'fetchTanks', err);
+      return localFleetStore.listAllTanks();
+    }
   }
 
   static async fetchLiveTank(): Promise<TankLiveStatus | null> {
@@ -1151,7 +1261,13 @@ export class ApiClient {
       const list = localFleetStore.listAllTanks();
       return list[0] ?? null;
     }
-    return this.request<TankLiveStatus>('/tanks/live');
+    try {
+      return await this.request<TankLiveStatus>('/tanks/live');
+    } catch (err) {
+      Logger.debug('API', 'ApiClient', 'fetchLiveTank failed, falling back to local tank', 'fetchLiveTank', err);
+      const list = localFleetStore.listAllTanks();
+      return list[0] ?? null;
+    }
   }
 
   static async updateTankGeometry(tankId: string, geometry: any): Promise<any> {
@@ -1170,15 +1286,8 @@ export class ApiClient {
       const query = params.toString() ? `?${params.toString()}` : '';
       const remote = await this.request<Device[]>(`/devices${query}`);
       if (Array.isArray(remote) && remote.length > 0) {
-        // Reconcile into local persistent registry
-        remote.forEach((d) => {
-          deviceRegistry.registerDevice(d.uid, {
-            name: d.name,
-            trainNumber: d.trainNumber || d.train_number || null,
-            coachNumber: d.coachNumber || d.coach_number || null,
-            hardwareModel: d.hardwareVersion || d.hardware_version || 'WLI EC200U-CN',
-          });
-        });
+        // Reconcile into local persistent registry without triggering mutation publication storms
+        deviceRegistry.reconcileRemoteDevices(remote);
         return remote;
       }
     } catch {
@@ -1351,17 +1460,66 @@ export class ApiClient {
   static async fetchTelemetryHistory(tankId?: string, range: string = '24h'): Promise<TelemetryHistory> {
     const params = new URLSearchParams({ range });
     if (tankId) params.append('tank_id', tankId);
-    return this.request<TelemetryHistory>(`/telemetry/history?${params.toString()}`);
+    try {
+      return await this.request<TelemetryHistory>(`/telemetry/history?${params.toString()}`);
+    } catch (err) {
+      Logger.debug('API', 'ApiClient', 'fetchTelemetryHistory failed, returning empty history', 'fetchTelemetryHistory', err);
+      return {
+        tank_id: tankId || 'TANK-01',
+        range,
+        data_points: [],
+        statistics: {
+          min_level: 0,
+          max_level: 0,
+          avg_level: 0,
+          consumption_rate: 0,
+          total_fills: 0,
+        },
+      };
+    }
   }
 
   // Alarms
   static async fetchAlarms(status?: string): Promise<AlarmItem[]> {
     const query = status ? `?status=${status}` : '';
-    return this.request<AlarmItem[]>(`/alarms${query}`);
+    try {
+      return await this.request<AlarmItem[]>(`/alarms${query}`);
+    } catch (err) {
+      Logger.debug('API', 'ApiClient', 'fetchAlarms failed, falling back to alertNotificationService', 'fetchAlarms', err);
+      const alerts = alertNotificationService.getActiveAlerts();
+      return alerts.map((a: any) => ({
+        id: a.id,
+        tankId: a.tankId || a.coachNumber || 'TANK-01',
+        tankName: a.title || 'Water Tank',
+        type: a.type || 'LEVEL',
+        severity: a.severity || 'WARNING',
+        message: a.message,
+        value: a.data?.waterLevel ?? 0,
+        threshold: 20,
+        triggeredAt: a.timestamp ? new Date(a.timestamp).toISOString() : new Date().toISOString(),
+        status: a.status || 'ACTIVE',
+        acknowledgedBy: a.acknowledgedBy,
+        acknowledgedAt: a.acknowledgedAt,
+      }));
+    }
   }
 
   static async fetchAlarmStats(): Promise<AlarmStats> {
-    return this.request<AlarmStats>('/alarms/stats');
+    try {
+      return await this.request<AlarmStats>('/alarms/stats');
+    } catch (err) {
+      Logger.debug('API', 'ApiClient', 'fetchAlarmStats failed, falling back to local alert stats', 'fetchAlarmStats', err);
+      const alerts = alertNotificationService.getActiveAlerts();
+      const critical = alerts.filter(a => a.severity === 'CRITICAL' || a.severity === 'critical').length;
+      const warning = alerts.filter(a => a.severity === 'WARNING' || a.severity === 'warning').length;
+      return {
+        total_active: alerts.length,
+        critical,
+        warning,
+        info: alerts.length - (critical + warning),
+        acknowledged: 0,
+      };
+    }
   }
 
   static async acknowledgeAlarm(alarmId: string, comment?: string): Promise<AlarmItem> {
@@ -1386,12 +1544,29 @@ export class ApiClient {
     mqttBroker: string;
     activeWebSockets: number;
   }> {
-    return this.request('/health');
+    try {
+      return await this.request('/health');
+    } catch (err) {
+      Logger.debug('API', 'ApiClient', 'fetchHealth failed, falling back to local status', 'fetchHealth', err);
+      return {
+        status: 'degraded',
+        app: 'Panorama Water Tank Monitor',
+        version: 'v2.2.0',
+        database: 'client-cache-active',
+        mqttBroker: mqttService.isConnected() ? 'connected' : 'connecting',
+        activeWebSockets: 0,
+      };
+    }
   }
 
   // Settings
   static async fetchSettings(): Promise<SettingItem[]> {
-    return this.request<SettingItem[]>('/settings');
+    try {
+      return await this.request<SettingItem[]>('/settings');
+    } catch (err) {
+      Logger.debug('API', 'ApiClient', 'fetchSettings failed, returning local default settings', 'fetchSettings', err);
+      return [];
+    }
   }
 
   static async fetchUnifiedConfig(): Promise<any> {
@@ -1437,7 +1612,51 @@ export class ApiClient {
         alarm_voltage_enabled: true,
       };
     }
-    return this.request('/settings/config');
+    try {
+      return await this.request('/settings/config');
+    } catch (err) {
+      Logger.debug('API', 'ApiClient', 'fetchUnifiedConfig failed, returning cached or default config', 'fetchUnifiedConfig', err);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem('panorama_system_config');
+        if (saved) {
+          try {
+            return JSON.parse(saved);
+          } catch {}
+        }
+      }
+      return {
+        mqtt_broker: 'broker.hivemq.com',
+        mqtt_port: 8884,
+        mqtt_use_tls: true,
+        mqtt_topic: '0023004D4B42501120353332',
+        device_host: '192.168.4.1',
+        device_port: 80,
+        device_refresh_interval: 3.0,
+        ubidots_host: 'https://industrial.api.ubidots.com',
+        ubidots_device_label: 'wli',
+        ubidots_token: 'BBUS-sample-token-live-telemetry',
+        tank_shape: 'CYLINDRICAL',
+        tank_height_cm: 50.0,
+        tank_diameter_cm: 22.56,
+        tank_capacity_liters: 20.0,
+        tank_area_m2: 0.04,
+        sensor_type: 'HYDROSTATIC_4_20MA',
+        sensor_zero_offset_cm: 0.0,
+        sensor_span_cm: 50.0,
+        sensor_filter_constant_sec: 1.0,
+        sensor_invert: false,
+        alarm_warning_percent: 20.0,
+        alarm_critical_percent: 10.0,
+        alarm_overflow_percent: 100.0,
+        alarm_master_enabled: true,
+        alarm_low_water_enabled: true,
+        alarm_sensor_fault_enabled: true,
+        alarm_device_offline_enabled: true,
+        alarm_modem_failure_enabled: true,
+        alarm_overflow_enabled: true,
+        alarm_voltage_enabled: true,
+      };
+    }
   }
 
   static async applyUnifiedConfig(config: any): Promise<any> {

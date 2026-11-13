@@ -14,6 +14,7 @@ import {
   TrainLocation,
 } from '../types';
 import { deviceRegistry } from './deviceRegistry';
+import { alertNotificationService } from './alertNotificationService';
 import {
   mqttService,
   CENTRAL_FLEET_TOPIC,
@@ -297,7 +298,7 @@ function readState(): StaticFleetState {
     }
     const parsed = JSON.parse(raw);
     const trains =
-      parsed?.trains && typeof parsed.trains === 'object' && Object.keys(parsed.trains).length > 0
+      parsed?.trains && typeof parsed.trains === 'object'
         ? parsed.trains
         : DEFAULT_INITIAL_STATE.trains;
     const deletedTrainNumbers =
@@ -556,6 +557,10 @@ export const localFleetStore = {
     state.deletedTrainNumbers[clean] = Date.now();
     delete state.trains[clean];
     writeState(state);
+    try {
+      deviceRegistry.detachTrain(clean);
+      alertNotificationService.resolveAlertsForTrain(clean);
+    } catch {}
     return { success: true, message: `Train ${clean} deleted successfully.`, trainId: clean };
   },
 
@@ -621,6 +626,102 @@ export const localFleetStore = {
     const clean = (trainNumber || '').trim();
     const state = readState();
     return state.trains[clean]?.consist ?? null;
+  },
+
+  syncFromAuthoritativeRegions(regions: RegionSummary[]): void {
+    if (!Array.isArray(regions)) return;
+    const state = readState();
+    const authoritativeTrains: Record<string, TrainOverviewItem> = {};
+    const authoritativeNumbers = new Set<string>();
+
+    for (const reg of regions) {
+      if (!reg || !Array.isArray(reg.trains)) continue;
+      for (const t of reg.trains) {
+        const num = (t.train_number || '').trim();
+        if (num) {
+          authoritativeTrains[num] = t;
+          authoritativeNumbers.add(num);
+        }
+      }
+    }
+
+    let modified = false;
+
+    // 1. Un-delete any train that exists in central authoritative response
+    if (state.deletedTrainNumbers) {
+      for (const num of authoritativeNumbers) {
+        if (state.deletedTrainNumbers[num]) {
+          delete state.deletedTrainNumbers[num];
+          modified = true;
+        }
+      }
+    }
+
+    // 2. Insert or update authoritative trains in local store
+    for (const [num, authTrain] of Object.entries(authoritativeTrains)) {
+      const existing = state.trains[num];
+      if (!existing) {
+        state.trains[num] = {
+          train: authTrain,
+          consist: {
+            train_number: num,
+            name: authTrain.name,
+            region: normalizeRegionCode(authTrain.region),
+            coaches_count: authTrain.coaches_count || 0,
+            tanks_count: authTrain.tanks_count || 0,
+            online_status: Boolean(authTrain.is_online),
+            active_alarms_count: authTrain.active_alarms || 0,
+            coaches: [],
+            source_station: authTrain.source_station,
+            source_code: authTrain.source_code,
+            destination_station: authTrain.destination_station,
+            destination_code: authTrain.destination_code,
+            railway_zone: authTrain.railway_zone,
+            train_type: authTrain.type,
+            running_days: authTrain.running_days,
+            total_coaches: authTrain.total_coaches,
+            has_official_composition: Boolean(authTrain.has_official_composition),
+            api_provider: authTrain.api_provider,
+            last_verified_at: authTrain.last_verified_at,
+          },
+        };
+        modified = true;
+      } else {
+        state.trains[num].train = { ...existing.train, ...authTrain };
+        state.trains[num].consist.name = authTrain.name;
+        state.trains[num].consist.region = normalizeRegionCode(authTrain.region);
+        state.trains[num].consist.coaches_count = authTrain.coaches_count || existing.consist.coaches_count;
+        state.trains[num].consist.tanks_count = authTrain.tanks_count || existing.consist.tanks_count;
+        state.trains[num].consist.online_status = Boolean(authTrain.is_online);
+      }
+    }
+
+    // 3. Purge stale local ghost records that no longer exist centrally
+    for (const num of Object.keys(state.trains)) {
+      if (!authoritativeNumbers.has(num)) {
+        delete state.trains[num];
+        modified = true;
+      }
+    }
+
+    if (modified) {
+      writeState(state, { skipPublish: true });
+    }
+  },
+
+  syncTrainConsist(trainNumber: string, consist: TrainConsist): void {
+    const num = (trainNumber || '').trim();
+    if (!num || !consist) return;
+    const state = readState();
+    if (state.trains[num]) {
+      state.trains[num].consist = consist;
+      state.trains[num].train.coaches_count = consist.coaches?.length || consist.coaches_count || 0;
+      state.trains[num].train.tanks_count =
+        consist.coaches?.reduce((sum, c) => sum + (c.tanks?.length || 0), 0) ||
+        consist.tanks_count ||
+        0;
+      writeState(state, { skipPublish: true });
+    }
   },
 
   addCoach(trainNumber: string, input: CoachFormInput): { success: boolean; coach: CoachConsist } {
@@ -845,6 +946,9 @@ export const localFleetStore = {
     if (deletedCoach.device_uid) {
       deviceRegistry.unassignDevice(deletedCoach.device_uid);
     }
+    try {
+      alertNotificationService.resolveAlertsForCoach(num, cNum);
+    } catch {}
 
     writeState(state);
     return { success: true, message: `Coach ${cNum} deleted successfully from Train ${num}.`, coachNumber: cNum };

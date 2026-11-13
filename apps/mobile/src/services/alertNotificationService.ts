@@ -3,7 +3,7 @@
  *
  * Implements real-time alert evaluation, state-change transition tracking,
  * strict deduplication, native Browser/ServiceWorker popup notifications,
- * independent persistent 30s reminders, acknowledgement/recovery stopping,
+ * independent persistent 30-minute reminders, acknowledgement/recovery stopping,
  * and persistent alert history.
  */
 
@@ -116,6 +116,11 @@ class AlertNotificationService {
   private reminderTimer: ReturnType<typeof setInterval> | null = null;
   private reminderIntervalOverrideMs: number | null = null;
   private visibilityBound = false;
+  private registeredFleetValidator: (() => {
+    trainNumbers: Set<string>;
+    coachKeys: Set<string>;
+    deviceUids: Set<string>;
+  }) | null = null;
 
   constructor() {
     this.loadConfig();
@@ -306,6 +311,247 @@ class AlertNotificationService {
       .map((a) => ({ ...a }));
   }
 
+  /**
+   * Set authoritative fleet validator to gate alert generation and reconcile active alerts.
+   */
+  public setFleetValidator(
+    validator: () => {
+      trainNumbers: Set<string>;
+      coachKeys: Set<string>;
+      deviceUids: Set<string>;
+    }
+  ): void {
+    this.registeredFleetValidator = validator;
+    try {
+      const fleet = validator();
+      this.reconcileWithFleet(fleet);
+    } catch {}
+  }
+
+  public isTrainRegistered(trainNumber?: string): boolean {
+    if (!this.registeredFleetValidator) return true;
+    const clean = (trainNumber || '').trim();
+    if (!clean) return false;
+    const fleet = this.registeredFleetValidator();
+    return fleet.trainNumbers.has(clean);
+  }
+
+  public isDeviceRegisteredAndAssigned(
+    deviceId: string,
+    trainNumber?: string,
+    coachNumber?: string
+  ): boolean {
+    if (!this.registeredFleetValidator) return true;
+    const cleanDev = (deviceId || '').trim();
+    if (!cleanDev || cleanDev === 'UNASSIGNED') return false;
+
+    const fleet = this.registeredFleetValidator();
+    if (fleet.trainNumbers.size === 0) return false;
+
+    if (trainNumber) {
+      const cleanTr = trainNumber.trim();
+      if (!fleet.trainNumbers.has(cleanTr)) return false;
+    }
+    if (trainNumber && coachNumber) {
+      const coachKey = `${trainNumber.trim()}::${coachNumber.trim().toUpperCase()}`;
+      if (!fleet.coachKeys.has(coachKey)) return false;
+    }
+    if (fleet.deviceUids.size > 0 && !fleet.deviceUids.has(cleanDev)) {
+      return false;
+    }
+    return true;
+  }
+
+  public extractDeviceUidFromAlert(alert: {
+    deviceId?: string;
+    alertKey?: string;
+    id?: string;
+    title?: string;
+    message?: string;
+  }): string | null {
+    if (alert.deviceId && alert.deviceId !== 'UNASSIGNED') return alert.deviceId;
+    const key = alert.alertKey || '';
+    if (key.startsWith('conn-')) return key.replace('conn-', '');
+    if (key.startsWith('sensor-s1-')) return key.replace('sensor-s1-', '');
+    if (key.startsWith('sensor-s2-')) return key.replace('sensor-s2-', '');
+    if (key.startsWith('modem-')) return key.replace('modem-', '');
+
+    const text = `${alert.title || ''} ${alert.message || ''} ${alert.id || ''}`;
+    const match = text.match(/PANORAMA-[A-Za-z0-9_-]+/);
+    if (match) return match[0];
+    return null;
+  }
+
+  /**
+   * Reconciles all active and acknowledged alerts against authoritative fleet state.
+   * Auto-resolves alerts whose train, coach, or device is no longer registered.
+   */
+  public reconcileWithFleet(registeredFleet: {
+    trainNumbers: Set<string>;
+    coachKeys: Set<string>;
+    deviceUids: Set<string>;
+  }): { resolvedCount: number } {
+    let resolvedCount = 0;
+    const nowIso = new Date().toISOString();
+    const hasAnyTrains = registeredFleet.trainNumbers.size > 0;
+
+    for (const alert of this.managedAlerts) {
+      if (alert.status === 'RESOLVED') continue;
+
+      let isOrphaned = false;
+
+      if (!hasAnyTrains) {
+        // When 0 trains are registered, all fleet/device alerts are orphaned
+        isOrphaned = true;
+      } else {
+        // 1. Check train validity
+        if (alert.trainNumber) {
+          const cleanTr = alert.trainNumber.trim();
+          if (!registeredFleet.trainNumbers.has(cleanTr)) {
+            isOrphaned = true;
+          }
+        }
+
+        // 2. Check coach validity
+        if (!isOrphaned && alert.trainNumber && alert.coachNumber) {
+          const coachKey = `${alert.trainNumber.trim()}::${alert.coachNumber.trim().toUpperCase()}`;
+          if (!registeredFleet.coachKeys.has(coachKey)) {
+            isOrphaned = true;
+          }
+        }
+
+        // 3. Check device validity if device is present in alert
+        if (!isOrphaned) {
+          const devUid = this.extractDeviceUidFromAlert(alert);
+          if (devUid) {
+            const m = devUid.match(/^PANORAMA-([A-Za-z0-9_-]+)-/);
+            if (m && m[1] && !registeredFleet.trainNumbers.has(m[1].trim())) {
+              isOrphaned = true;
+            } else if (registeredFleet.deviceUids.size > 0 && !registeredFleet.deviceUids.has(devUid)) {
+              isOrphaned = true;
+            }
+          }
+        }
+      }
+
+      if (isOrphaned) {
+        alert.status = 'RESOLVED';
+        alert.resolvedAt = nowIso;
+        resolvedCount++;
+        this.stateCache.delete(alert.alertKey);
+        this.updateHistoryStatus(
+          (h) => h.id === alert.id || (h.alertKey === alert.alertKey && h.status === 'Active'),
+          { status: 'Resolved', resolvedAt: nowIso }
+        );
+      }
+    }
+
+    if (resolvedCount > 0) {
+      this.saveManagedAlerts();
+      this.emitAlertsChange();
+    }
+
+    return { resolvedCount };
+  }
+
+  /**
+   * Resolve all active alerts associated with a deleted or unconfigured train.
+   */
+  public resolveAlertsForTrain(trainNumber: string, reason?: string): number {
+    const clean = (trainNumber || '').trim();
+    if (!clean) return 0;
+    const nowIso = new Date().toISOString();
+    let count = 0;
+
+    for (const alert of this.managedAlerts) {
+      if (alert.status === 'RESOLVED') continue;
+      const tr = (alert.trainNumber || '').trim();
+      const textMatches = (alert.title + ' ' + alert.message + ' ' + alert.alertKey + ' ' + alert.id).includes(clean);
+      if (tr === clean || textMatches) {
+        alert.status = 'RESOLVED';
+        alert.resolvedAt = nowIso;
+        count++;
+        this.stateCache.delete(alert.alertKey);
+        this.updateHistoryStatus(
+          (h) => h.id === alert.id || (h.alertKey === alert.alertKey && h.status === 'Active'),
+          { status: 'Resolved', resolvedAt: nowIso }
+        );
+      }
+    }
+
+    if (count > 0) {
+      this.saveManagedAlerts();
+      this.emitAlertsChange();
+    }
+    return count;
+  }
+
+  /**
+   * Resolve all active alerts associated with a deleted or unconfigured coach.
+   */
+  public resolveAlertsForCoach(trainNumber: string, coachNumber: string, reason?: string): number {
+    const cleanTr = (trainNumber || '').trim();
+    const cleanCh = (coachNumber || '').trim().toUpperCase();
+    if (!cleanTr || !cleanCh) return 0;
+    const nowIso = new Date().toISOString();
+    let count = 0;
+
+    for (const alert of this.managedAlerts) {
+      if (alert.status === 'RESOLVED') continue;
+      const tr = (alert.trainNumber || '').trim();
+      const ch = (alert.coachNumber || '').trim().toUpperCase();
+      const keyMatches = (alert.alertKey.includes(cleanTr) && alert.alertKey.includes(cleanCh)) ||
+                         (alert.title.includes(cleanTr) && alert.title.includes(cleanCh));
+      if ((tr === cleanTr && ch === cleanCh) || keyMatches) {
+        alert.status = 'RESOLVED';
+        alert.resolvedAt = nowIso;
+        count++;
+        this.stateCache.delete(alert.alertKey);
+        this.updateHistoryStatus(
+          (h) => h.id === alert.id || (h.alertKey === alert.alertKey && h.status === 'Active'),
+          { status: 'Resolved', resolvedAt: nowIso }
+        );
+      }
+    }
+
+    if (count > 0) {
+      this.saveManagedAlerts();
+      this.emitAlertsChange();
+    }
+    return count;
+  }
+
+  /**
+   * Resolve all active alerts associated with an unassigned or deleted device.
+   */
+  public resolveAlertsForDevice(deviceId: string, reason?: string): number {
+    const clean = (deviceId || '').trim();
+    if (!clean) return 0;
+    const nowIso = new Date().toISOString();
+    let count = 0;
+
+    for (const alert of this.managedAlerts) {
+      if (alert.status === 'RESOLVED') continue;
+      const devUid = this.extractDeviceUidFromAlert(alert);
+      if (devUid === clean || alert.alertKey.includes(clean) || alert.id.includes(clean)) {
+        alert.status = 'RESOLVED';
+        alert.resolvedAt = nowIso;
+        count++;
+        this.stateCache.delete(alert.alertKey);
+        this.updateHistoryStatus(
+          (h) => h.id === alert.id || (h.alertKey === alert.alertKey && h.status === 'Active'),
+          { status: 'Resolved', resolvedAt: nowIso }
+        );
+      }
+    }
+
+    if (count > 0) {
+      this.saveManagedAlerts();
+      this.emitAlertsChange();
+    }
+    return count;
+  }
+
   private formatConsoleTimestamp(): string {
     const now = new Date();
     const pad = (n: number) => String(n).padStart(2, '0');
@@ -421,7 +667,7 @@ class AlertNotificationService {
     );
     const intervalSec = Math.round(this.getReminderIntervalMs() / 1000);
     const intervalDesc =
-      intervalSec >= 60 ? `${Math.round(intervalSec / 60)} minutes (${intervalSec}s)` : `${intervalSec}s`;
+      intervalSec >= 60 ? `${Math.round(intervalSec / 60)} minutes` : `${intervalSec}s`;
     const reminderLine = isReminder
       ? `Reminder #${alert.reminderCount} (unacknowledged — repeats every ${intervalDesc})`
       : null;
@@ -507,7 +753,7 @@ class AlertNotificationService {
   }
 
   /**
-   * Open or update an active alert with persistent 30s reminder scheduling
+   * Open or update an active alert with persistent 30-minute reminder scheduling
    * and immediate native browser popup dispatch.
    */
   private triggerManagedAlert(params: {
@@ -812,6 +1058,7 @@ class AlertNotificationService {
 
     const { tankId, coachNumber, levelPercent, isOnline, trainNumber, tankName } = params;
     if (!isOnline || levelPercent === null || levelPercent === undefined) return;
+    if (trainNumber && !this.isTrainRegistered(trainNumber)) return;
 
     const cacheKey = `level-${tankId}`;
     const previous = this.stateCache.get(cacheKey);
@@ -959,6 +1206,13 @@ class AlertNotificationService {
     if (!this.config.masterEnabled || !this.config.deviceOfflineEnabled) return;
 
     const { deviceId, coachNumber, isOnline, trainNumber } = params;
+    if (!deviceId || deviceId === 'UNASSIGNED') return;
+
+    // Never generate alerts for unregistered devices or devices belonging to deleted/unregistered trains
+    if (!this.isDeviceRegisteredAndAssigned(deviceId, trainNumber, coachNumber)) {
+      return;
+    }
+
     const cacheKey = `conn-${deviceId}`;
     const previous = this.stateCache.get(cacheKey);
 
@@ -980,11 +1234,12 @@ class AlertNotificationService {
         alertKey: cacheKey,
         alertType: 'DEVICE_OFFLINE',
         severity: 'WARNING',
-        title: `Device Offline (${coachNumber || deviceId})`,
-        message: `Communication lost with telemetry unit ${deviceId}.`,
+        title: `Device Offline (${coachNumber ? `Coach ${coachNumber}` : deviceId})`,
+        message: `Communication lost with telemetry unit ${deviceId}${trainNumber ? ` on Train ${trainNumber}` : ''}.`,
         timestamp: isoTime,
         trainNumber,
         coachNumber,
+        deviceId,
         tankName: `Unit ${deviceId}`,
         autoDismissMs: 6000,
       });
@@ -1024,6 +1279,7 @@ class AlertNotificationService {
     if (!this.config.masterEnabled || !this.config.sensorFaultEnabled) return;
 
     const { sensorId, coachNumber, isValid, sensorName, trainNumber, tankId, tankName, levelPercent } = params;
+    if (trainNumber && !this.isTrainRegistered(trainNumber)) return;
     const cacheKey = `sensor-${sensorId}`;
     const previous = this.stateCache.get(cacheKey);
 
@@ -1090,6 +1346,9 @@ class AlertNotificationService {
     if (!this.config.masterEnabled || !this.config.modemFailureEnabled) return;
 
     const { deviceId, coachNumber, modemOk, trainNumber } = params;
+    if (!deviceId || deviceId === 'UNASSIGNED') return;
+    if (!this.isDeviceRegisteredAndAssigned(deviceId, trainNumber, coachNumber)) return;
+
     const cacheKey = `modem-${deviceId}`;
     const previous = this.stateCache.get(cacheKey);
 
@@ -1207,6 +1466,7 @@ class AlertNotificationService {
     if (!this.config.masterEnabled || !this.config.deviceOfflineEnabled) return;
 
     const { channel, isHealthy, reason, trainNumber, coachNumber } = params;
+    if (trainNumber && !this.isTrainRegistered(trainNumber)) return;
     const cacheKey = `comm-${channel}`;
     const previous = this.stateCache.get(cacheKey);
 

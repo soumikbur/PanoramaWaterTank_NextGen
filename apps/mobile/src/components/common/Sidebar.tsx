@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { typography } from '../../theme';
 import { useApp, ScreenName } from '../../state/AppContext';
 import panoramaLogoIcon from '../../assets/panorama_logo_icon.png';
@@ -120,7 +120,23 @@ export const Sidebar: React.FC = () => {
   const offlineTanksCount = consistMetrics.offlineTanks;
   const totalAlertsCount = unackedAlertCount;
 
-  const isCollapsed = sidebarMode === 'collapsed' || sidebarMode === 'iconOnly' || sidebarCollapsed;
+  const [isTabletViewport, setIsTabletViewport] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth >= 768 && window.innerWidth < 1024;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const checkViewport = () => {
+      const w = window.innerWidth;
+      setIsTabletViewport(w >= 768 && w < 1024);
+    };
+    checkViewport();
+    window.addEventListener('resize', checkViewport);
+    return () => window.removeEventListener('resize', checkViewport);
+  }, []);
+
+  const isCollapsed = isTabletViewport || sidebarMode === 'collapsed' || sidebarMode === 'iconOnly' || sidebarCollapsed;
   const sidebarWidth = isCollapsed ? '68px' : '240px';
 
   const handleToggle = () => {
@@ -141,7 +157,7 @@ export const Sidebar: React.FC = () => {
   return (
     <>
       <aside
-      className="sidebar-container sidebar-desktop"
+      className={`sidebar-container sidebar-desktop ${isCollapsed ? 'is-collapsed collapsed' : ''}`}
       style={{
         width: sidebarWidth,
         minWidth: sidebarWidth,

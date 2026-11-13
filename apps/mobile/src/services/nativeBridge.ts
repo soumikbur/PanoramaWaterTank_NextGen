@@ -207,3 +207,34 @@ class NativeBridge {
 
 export const nativeBridge = NativeBridge.getInstance();
 
+/**
+ * Reliable Capacitor native platform detector.
+ * Returns true ONLY when running inside native Android or iOS Capacitor wrapper.
+ * Returns false on standard desktop browsers, mobile Chrome, and Safari.
+ */
+export function isNativeCapacitorApp(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const cap = (window as any).Capacitor;
+    if (cap) {
+      if (typeof cap.isNativePlatform === 'function') {
+        const isNative = cap.isNativePlatform();
+        if (typeof isNative === 'boolean') return isNative;
+      }
+      if (typeof cap.getPlatform === 'function') {
+        const platform = cap.getPlatform();
+        if (platform === 'android' || platform === 'ios') return true;
+        if (platform === 'web') return false;
+      }
+      if (cap.platform === 'android' || cap.platform === 'ios') return true;
+    }
+    if (window.location && window.location.protocol === 'capacitor:') {
+      return true;
+    }
+    return nativeBridge.isNativeApp();
+  } catch {
+    return false;
+  }
+}
+
+

@@ -51,6 +51,8 @@ async def broadcast_sync_event(
     # 1. Broadcast over WebSocket to all connected clients
     try:
         await ws_manager.broadcast(event_type, envelope)
+        if "TRAIN_" in event_type or "COACH_" in event_type or event_type == "REGION_UPDATED":
+            await ws_manager.broadcast("FLEET_SYNC", envelope)
     except Exception as e:
         logger.warning(f"WebSocket broadcast failed for {event_type}: {e}")
 

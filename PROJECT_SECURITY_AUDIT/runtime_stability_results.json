@@ -1,0 +1,28 @@
+{
+  "timestamp": "2026-11-13T22:40:41.569Z",
+  "allPassed": true,
+  "unexpectedErrorsCount": 0,
+  "unexpectedErrors": [],
+  "moduleTestResults": {
+    "WebSocket_Connected": true,
+    "dashboard": true,
+    "trains": true,
+    "coaches": true,
+    "coach-details": true,
+    "watertank": true,
+    "devices": true,
+    "location": true,
+    "monitoring": true,
+    "alerts": true,
+    "history": true,
+    "reports": true,
+    "settings": true,
+    "users": true,
+    "logs": true,
+    "Offline_Resilience": true,
+    "Online_Recovery": true,
+    "Preflight_Probe_Handled": true
+  },
+  "totalWarnings": 5,
+  "totalInfo": 52
+}

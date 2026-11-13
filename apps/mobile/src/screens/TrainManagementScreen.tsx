@@ -320,26 +320,28 @@ export const TrainManagementScreen: React.FC = () => {
             REGIONS
           </button>
 
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            style={{
-              backgroundColor: '#2563EB',
-              border: 'none',
-              color: '#FFFFFF',
-              borderRadius: '6px',
-              padding: '6px 16px',
-              fontSize: '12px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              boxShadow: '0 1px 2px rgba(37, 99, 235, 0.2)',
-            }}
-          >
-            <span>+</span>
-            <span>Add Train</span>
-          </button>
+          {currentUser?.role === 'ADMIN' && (
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              style={{
+                backgroundColor: '#2563EB',
+                border: 'none',
+                color: '#FFFFFF',
+                borderRadius: '6px',
+                padding: '6px 16px',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 1px 2px rgba(37, 99, 235, 0.2)',
+              }}
+            >
+              <span>+</span>
+              <span>Add Train</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -443,10 +445,8 @@ export const TrainManagementScreen: React.FC = () => {
 
           {/* Region Cards Grid (Responsive auto-fit) */}
           <div
+            className="railway-regions-grid"
             style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
-              gap: '14px',
               alignItems: 'stretch',
             }}
           >

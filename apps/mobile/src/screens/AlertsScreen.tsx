@@ -57,6 +57,8 @@ export const AlertsScreen: React.FC = () => {
     setSelectedTrainNumber,
     setSelectedCoachNumber,
     setSelectedTankId,
+    configuredTrains,
+    selectedTrainNumber,
   } = useApp();
 
   const [waterLevelAlertAcked, setWaterLevelAlertAcked] = useState(false);
@@ -122,13 +124,28 @@ export const AlertsScreen: React.FC = () => {
 
   // Active & acknowledged non-resolved alerts list from notification engine + backend
   const activeAlertsList: AlertItemData[] = useMemo(() => {
+    // If no trains are configured, no active alerts should ever be displayed
+    if (!configuredTrains || configuredTrains.length === 0) {
+      return [];
+    }
+
+    const trainSet = new Set(configuredTrains.map((t) => t.train_number.trim()));
     const list: AlertItemData[] = [];
     const seenIds = new Set<string>();
     const nowTime = currentTime || 'Just now';
 
-    // 1. Primary persistent alerts managed by AlertNotificationService (supports 30s reminders & per-alert ack)
+    // 1. Primary persistent alerts managed by AlertNotificationService (supports 30-minute reminders & per-alert ack)
     managedAlerts
-      .filter((m) => m.status !== 'RESOLVED')
+      .filter((m) => {
+        if (m.status === 'RESOLVED') return false;
+        if (m.trainNumber && !trainSet.has(m.trainNumber.trim())) return false;
+        const devUid = alertNotificationService.extractDeviceUidFromAlert(m);
+        if (devUid) {
+          const match = devUid.match(/^PANORAMA-([A-Za-z0-9_-]+)-/);
+          if (match && match[1] && !trainSet.has(match[1].trim())) return false;
+        }
+        return true;
+      })
       .forEach((m) => {
         const isCrit = m.severity === 'CRITICAL';
         const isAcked = m.status === 'ACKNOWLEDGED';
@@ -182,6 +199,8 @@ export const AlertsScreen: React.FC = () => {
     if (activeAlarms && activeAlarms.length > 0) {
       activeAlarms.forEach((a) => {
         if (seenIds.has(a.id)) return;
+        if (a.trainNumber && !trainSet.has(a.trainNumber.trim())) return;
+        if (a.train_number && !trainSet.has(a.train_number.trim())) return;
         const alreadyInManaged = managedAlerts.some(
           (m) =>
             m.status !== 'RESOLVED' &&
@@ -215,88 +234,8 @@ export const AlertsScreen: React.FC = () => {
       });
     }
 
-    if (list.length > 0) {
-      return list;
-    }
-
-    // Direct telemetry condition evaluation if real telemetry is active
-    if (hasData && fillPct != null) {
-      if (fillPct >= 100.0) {
-        list.push({
-          id: 'ALT-WLI-OVERFLOW',
-          severity: 'CRITICAL',
-          badgeColor: '#EF4444',
-          bgColor: '#FEF2F2',
-          borderColor: '#FECACA',
-          textColor: '#991B1B',
-          title: 'Tank Level Overflow Condition',
-          description: `Measured water level reaches or exceeds maximum configured safe height (${maxHeight.toFixed(1)} cm). Shut off pump immediately.`,
-          currentValue: `${fillPct.toFixed(2)}% (${waterHeight != null ? waterHeight.toFixed(1) : 'N/A'} cm)`,
-          threshold: `≥ 100.0% (${maxHeight.toFixed(1)} cm)`,
-          timestamp: nowTime,
-          acknowledged: waterLevelAlertAcked,
-          statusText: waterLevelAlertAcked ? 'Acknowledged' : 'Active Overflow',
-          type: 'level',
-        });
-      } else if (fillPct < 10.0) {
-        list.push({
-          id: 'ALT-WLI-CRIT',
-          severity: 'CRITICAL',
-          badgeColor: '#EF4444',
-          bgColor: '#FEF2F2',
-          borderColor: '#FECACA',
-          textColor: '#991B1B',
-          title: 'Water Level Critically Low',
-          description: 'Measured level is below the 10% critical threshold (3 kHz buzzer / RGB blinking). Immediate refill required.',
-          currentValue: `${fillPct.toFixed(2)}% (${waterHeight != null ? waterHeight.toFixed(1) : 'N/A'} cm)`,
-          threshold: `< 10.0% (${(maxHeight * 0.1).toFixed(1)} cm)`,
-          timestamp: nowTime,
-          acknowledged: waterLevelAlertAcked,
-          statusText: waterLevelAlertAcked ? 'Acknowledged' : 'Active Alarm',
-          type: 'level',
-        });
-      } else if (fillPct < 20.0) {
-        list.push({
-          id: 'ALT-WLI-WARN',
-          severity: 'WARNING',
-          badgeColor: '#F59E0B',
-          bgColor: '#FFFBEB',
-          borderColor: '#FDE68A',
-          textColor: '#92400E',
-          title: 'Water Level Low Warning',
-          description: 'Measured level is below the 20% warning threshold (2 kHz buzzer / RGB solid ON).',
-          currentValue: `${fillPct.toFixed(2)}% (${waterHeight != null ? waterHeight.toFixed(1) : 'N/A'} cm)`,
-          threshold: `< 20.0% (${(maxHeight * 0.2).toFixed(1)} cm)`,
-          timestamp: nowTime,
-          acknowledged: waterLevelAlertAcked,
-          statusText: waterLevelAlertAcked ? 'Acknowledged' : 'Active Warning',
-          type: 'level',
-        });
-      }
-    }
-
-    // Sensor Disconnection / Offline
-    if (isOffline) {
-      list.push({
-        id: 'ALT-SNS-FAULT',
-        severity: 'WARNING',
-        badgeColor: '#F59E0B',
-        bgColor: '#FFFBEB',
-        borderColor: '#FDE68A',
-        textColor: '#92400E',
-        title: 'Broker Disconnection / Offline Alert',
-        description: 'MQTT client disconnected from broker. Telemetry ingestion inactive.',
-        currentValue: 'Offline',
-        threshold: 'Connection Lost',
-        timestamp: nowTime,
-        acknowledged: sensorAlertAcked,
-        statusText: sensorAlertAcked ? 'Acknowledged' : 'Active Warning',
-        type: 'sensor',
-      });
-    }
-
     return list;
-  }, [activeAlarms, managedAlerts, nowMs, hasData, fillPct, waterHeight, maxHeight, isOffline, currentTime, waterLevelAlertAcked, sensorAlertAcked]);
+  }, [activeAlarms, managedAlerts, nowMs, currentTime, configuredTrains, selectedTrainNumber]);
 
   const unacknowledgedCount = activeAlertsList.filter((a) => !a.acknowledged).length;
   const criticalCount = activeAlertsList.filter((a) => a.severity === 'CRITICAL').length;
@@ -705,7 +644,7 @@ export const AlertsScreen: React.FC = () => {
                       {!alert.acknowledged ? (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#B45309', fontWeight: 600 }}>
                           <Clock size={12} />
-                          Auto-reminder every {NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS >= 60 ? `${Math.round(NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS / 60)} min` : `${NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS}s`} (sent {alert.reminderCount ?? 0}×)
+                          Auto-reminder every {NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS >= 60 ? `${Math.round(NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS / 60)} minutes` : `${NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS}s`} (sent {alert.reminderCount ?? 0}×)
                         </span>
                       ) : (
                         <span style={{ color: '#3730A3', fontWeight: 600 }}>

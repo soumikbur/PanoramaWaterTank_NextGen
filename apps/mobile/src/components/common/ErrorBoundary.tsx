@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { Logger } from '../../services/logger';
 
 interface Props {
   children: ReactNode;
@@ -25,10 +26,16 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[ErrorBoundary caught error]: ' + (error ? (error.name + ': ' + error.message + ' | stack: ' + error.stack) : 'unknown error'));
-    if (errorInfo && errorInfo.componentStack) {
-      console.error('[ErrorBoundary componentStack]: ' + errorInfo.componentStack);
-    }
+    Logger.error(
+      'RUNTIME',
+      'ErrorBoundary',
+      error ? `${error.name}: ${error.message}` : 'Unknown React render exception',
+      'componentDidCatch',
+      {
+        stack: error?.stack,
+        componentStack: errorInfo?.componentStack,
+      }
+    );
     this.setState({ error, errorInfo });
   }
 

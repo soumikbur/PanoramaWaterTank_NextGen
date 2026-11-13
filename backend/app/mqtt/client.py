@@ -92,7 +92,7 @@ class MqttService:
             logger.warning("MQTT client not available for publish.")
             return False
         try:
-            body = json.dumps(payload) if not isinstance(payload, (str, bytes)) else payload
+            body = json.dumps(payload, default=str) if not isinstance(payload, (str, bytes)) else payload
             res = self.client.publish(topic, body, qos=qos, retain=retain)
             return res.rc == mqtt.MQTT_ERR_SUCCESS
         except Exception as e:

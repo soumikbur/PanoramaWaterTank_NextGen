@@ -599,6 +599,25 @@ async def create_train(
                 aux_tank.height_cm = tank_h
                 aux_tank.capacity_liters = tank_c
 
+    # Record persistent audit event
+    db.add(
+        AuditEvent(
+            user_id=admin.id,
+            action="CREATE_TRAIN",
+            target_type="TRAIN",
+            target_id=train_number,
+            details=json.dumps({
+                "created_by": admin.username,
+                "name": data.name.strip(),
+                "region": reg,
+                "train_type": (data.train_type or "Express").strip(),
+                "coaches_count": len(coaches_to_create),
+                "tank_capacity_liters": tank_c,
+                "tank_height_cm": tank_h,
+            }),
+        )
+    )
+
     await db.commit()
 
     sync_event = {
@@ -665,6 +684,21 @@ async def update_train(
     if db_train and data.railway_zone is not None:
         db_train.railway_zone = data.railway_zone.strip().upper() or None
 
+    db.add(
+        AuditEvent(
+            user_id=admin.id,
+            action="UPDATE_TRAIN",
+            target_type="TRAIN",
+            target_id=train_number,
+            details=json.dumps({
+                "updated_by": admin.username,
+                "name": data.name,
+                "region": data.region,
+                "train_type": data.type,
+            }),
+        )
+    )
+
     await db.commit()
 
     sync_event = {
@@ -699,7 +733,11 @@ async def delete_train(
         await db.execute(select(Train).where(Train.train_number == cleaned))
     ).scalar_one_or_none()
     assigned_devices = (
-        await db.execute(select(Device).where(Device.train_number == cleaned))
+        await db.execute(
+            select(Device).where(
+                Device.train_number == cleaned
+            )
+        )
     ).scalars().all()
     in_metadata = cleaned in TRAIN_METADATA
 
@@ -751,6 +789,17 @@ async def delete_train(
                 device.is_online = False
                 device.updated_at = now
 
+        # Capture archival snapshot of train metadata prior to removal
+        train_snapshot = {
+            "name": db_train.name if db_train else TRAIN_METADATA.get(cleaned, {}).get("name"),
+            "region": db_train.region if db_train else TRAIN_METADATA.get(cleaned, {}).get("region"),
+            "train_type": db_train.train_type if db_train else TRAIN_METADATA.get(cleaned, {}).get("type"),
+            "source_station": db_train.source_station if db_train else None,
+            "destination_station": db_train.destination_station if db_train else None,
+            "coaches_count": len(assigned_devices),
+            "unassigned_devices": [d.uid for d in assigned_devices],
+        }
+
         if db_train is not None:
             await db.execute(delete(Train).where(Train.train_number == cleaned))
 
@@ -764,7 +813,8 @@ async def delete_train(
                 details=json.dumps(
                     {
                         "deleted_by": admin.username,
-                        "unassigned_devices": len(assigned_devices),
+                        "snapshot": train_snapshot,
+                        "unassigned_devices_count": len(assigned_devices),
                         "resolved_alarms": resolved_alarms,
                     }
                 ),
@@ -1027,8 +1077,7 @@ async def reorder_coaches(
         "action": "coach_change",
         "train_number": tr_clean,
     }
-    await ws_manager.broadcast("FLEET_SYNC", sync_event)
-    mqtt_service.publish("panorama/fleet/sync", sync_event)
+    await broadcast_sync_event("COACH_REORDERED", sync_event)
 
     return {
         "success": True,
@@ -1280,17 +1329,16 @@ async def delete_coach(
     tr_clean = train_number.strip()
     c_clean = coach_number.strip().upper()
 
-    dev = (
+    devs = (
         await db.execute(
             select(Device).where(
-                Device.train_number == tr_clean,
-                Device.coach_number == c_clean,
-            ).order_by(Device.updated_at.desc())
+                (Device.train_number == tr_clean) & (Device.coach_number == c_clean)
+            )
         )
-    ).scalars().first()
+    ).scalars().all()
 
     now = utc_now()
-    if dev:
+    for dev in devs:
         # Resolve active alarms for this device
         open_alarms = (
             await db.execute(

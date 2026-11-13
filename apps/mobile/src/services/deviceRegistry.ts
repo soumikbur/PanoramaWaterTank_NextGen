@@ -6,6 +6,7 @@
  */
 
 import { LiveTelemetryPayload } from '../types';
+import { alertNotificationService } from './alertNotificationService';
 import {
   mqttService,
   CENTRAL_DEVICES_TOPIC,
@@ -158,7 +159,17 @@ class DeviceRegistryService {
           updatedAt: this.updatedAt,
         });
       }
-    } catch (e) {
+    } catch (e: any) {
+      if (e?.name === 'QuotaExceededError' || e?.code === 22) {
+        try {
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const k = localStorage.key(i);
+            if (k && (k.startsWith('Sent:') || k.startsWith('Received:'))) {
+              localStorage.removeItem(k);
+            }
+          }
+        } catch {}
+      }
       console.warn('[DeviceRegistry] Error writing to storage:', e);
     }
   }
@@ -312,7 +323,7 @@ class DeviceRegistryService {
       };
 
       this.devices.set(uid, updated);
-      this.saveToStorage();
+      this.saveToStorage({ skipPublish: true });
       this.notify();
       return updated;
     }
@@ -346,9 +357,59 @@ class DeviceRegistryService {
     };
 
     this.devices.set(uid, newDevice);
-    this.saveToStorage();
+    this.saveToStorage({ skipPublish: true });
     this.notify();
     return newDevice;
+  }
+
+  /**
+   * Reconcile remote backend devices into local registry without triggering mutations or MQTT publication storms.
+   */
+  public reconcileRemoteDevices(devices: any[]): void {
+    if (!Array.isArray(devices) || devices.length === 0) return;
+    const now = Date.now();
+    devices.forEach((d) => {
+      if (!d || !d.uid) return;
+      const existing = this.devices.get(d.uid);
+      const train = (d.trainNumber || d.train_number || '').trim() || null;
+      const coach = (d.coachNumber || d.coach_number || '').trim() || null;
+      const isEngaged = Boolean(train && coach);
+      const base: ManagedDevice = existing || {
+        uid: d.uid,
+        name: d.name || `Node (${d.uid.slice(-6)})`,
+        trainNumber: train,
+        coachNumber: coach,
+        registrationStatus: 'REGISTERED',
+        assignmentStatus: isEngaged ? 'ENGAGED' : 'AVAILABLE',
+        isOnline: Boolean(d.isOnline || d.is_online),
+        batteryPercent: 85,
+        batteryVoltage: 3.8,
+        tank1Level: 0,
+        tank1HeightCm: 0,
+        tank2Level: 0,
+        tank2HeightCm: 0,
+        valve1Normal: true,
+        valve2Normal: true,
+        latitude: null,
+        longitude: null,
+        speedKmh: 0,
+        lastSeen: new Date().toLocaleTimeString('en-US', { hour12: false }),
+        lastSeenTimestamp: now,
+        firstDiscovered: new Date().toISOString(),
+        hardwareModel: d.hardwareVersion || d.hardware_version || 'WLI EC200U-CN',
+      };
+      this.devices.set(d.uid, {
+        ...base,
+        name: d.name || base.name,
+        trainNumber: train,
+        coachNumber: coach,
+        assignmentStatus: isEngaged ? 'ENGAGED' : 'AVAILABLE',
+        registrationStatus: 'REGISTERED',
+        hardwareModel: d.hardwareVersion || d.hardware_version || base.hardwareModel,
+      });
+    });
+    this.saveToStorage({ skipPublish: true });
+    this.notify();
   }
 
   /**
@@ -458,6 +519,9 @@ class DeviceRegistryService {
     this.devices.set(uid, unassigned);
     this.saveToStorage();
     this.notify();
+    try {
+      alertNotificationService.resolveAlertsForDevice(uid, 'Device unassigned');
+    } catch {}
 
     if (API_BASE) {
       const token = typeof window !== 'undefined' ? localStorage.getItem('panorama_token') : null;
@@ -500,6 +564,9 @@ class DeviceRegistryService {
       this.saveToStorage();
       this.notify();
     }
+    try {
+      alertNotificationService.resolveAlertsForTrain(trainNumber, 'Train detached');
+    } catch {}
     return count;
   }
 
@@ -512,6 +579,9 @@ class DeviceRegistryService {
     if (deleted) {
       this.saveToStorage();
       this.notify();
+      try {
+        alertNotificationService.resolveAlertsForDevice(uid, 'Device deleted');
+      } catch {}
     }
     return deleted;
   }

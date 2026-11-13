@@ -203,10 +203,22 @@
   box-sizing: border-box;
 }
 
-/* Header & Sidebar responsive adaptivity */
+/* ========================================================================= */
+/* INTELLIGENT RESPONSIVE SYSTEM (4-TIER ARCHITECTURE)                       */
+/* Tier 1: Large Desktop (1440px+)                                           */
+/* Tier 2: Standard Desktop (1024px - 1439px)                                */
+/* Tier 3: Small Laptop / Tablet Landscape (768px - 1023px)                  */
+/* Tier 4: Mobile (< 768px)                                                  */
+/* ========================================================================= */
+
+/* Tier 1 & Tier 2: Desktop Environments (>= 1024px) */
 @media (min-width: 1024px) {
   .app-layout header {
-    height: var(--header-height, 68px) !important;
+    height: var(--header-height, 58px) !important;
+    min-height: 54px !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    overflow: visible !important;
   }
 
   .app-layout aside.sidebar-desktop {
@@ -230,14 +242,58 @@
   .hide-on-desktop {
     display: none !important;
   }
+
+  .hide-on-mobile {
+    display: flex !important;
+  }
 }
 
-@media (max-width: 1023px) {
+/* Tier 3: Small Laptop / Tablet Landscape (768px - 1023px) */
+@media (min-width: 768px) and (max-width: 1023px) {
   .app-layout header {
-    height: 62px !important;
-    min-height: 62px !important;
-    padding-left: 12px !important;
-    padding-right: 12px !important;
+    height: 56px !important;
+    min-height: 56px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+    overflow: visible !important;
+  }
+
+  /* Tablet: Collapsible navigation with icons (68px) */
+  .app-layout aside.sidebar-desktop {
+    display: flex !important;
+    width: 68px !important;
+    min-width: 68px !important;
+    max-width: 68px !important;
+  }
+
+  .sidebar-mobile-drawer-portal,
+  .mobile-drawer-backdrop,
+  .mobile-drawer-sheet {
+    display: none !important;
+  }
+
+  .show-on-mobile,
+  .show-on-mobile-flex {
+    display: none !important;
+  }
+
+  .hide-on-desktop {
+    display: none !important;
+  }
+
+  .hide-on-mobile {
+    display: flex !important;
+  }
+}
+
+/* Tier 4: Mobile Viewport (< 768px) */
+@media (max-width: 767px) {
+  .app-layout header {
+    height: 56px !important;
+    min-height: 56px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    overflow: visible !important;
   }
 
   .app-layout aside.sidebar-desktop {
@@ -252,7 +308,7 @@
   }
 
   .app-layout main {
-    padding: 12px 12px 28px 12px !important;
+    padding: 10px 10px 24px 10px !important;
   }
 
   .hide-on-mobile {
@@ -275,6 +331,145 @@
     -webkit-appearance: none;
     appearance: none;
     display: none;
+  }
+}
+
+/* ========================================================================= */
+/* TOP NAVIGATION BAR DYNAMIC FLUIDITY & NO-OVERFLOW CONTROLS                */
+/* ========================================================================= */
+
+/* Large Desktop (1440px and above): Full spacing & complete indicators */
+@media (min-width: 1440px) {
+  .header-left-zone {
+    gap: 12px !important;
+  }
+  .header-search-container {
+    max-width: 380px !important;
+    margin-left: 14px !important;
+    margin-right: 14px !important;
+  }
+  .header-right-zone {
+    gap: 8px !important;
+  }
+}
+
+/* Standard Desktop (1024px - 1439px): Reduce gaps, dynamic search, keep Settings & Logout */
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .header-left-zone {
+    gap: 8px !important;
+  }
+  .header-search-container {
+    max-width: 260px !important;
+    margin-left: 6px !important;
+    margin-right: 6px !important;
+  }
+  .header-right-zone {
+    gap: 5px !important;
+  }
+  .header-clock-date {
+    display: none !important;
+  }
+}
+
+/* Compact Laptop / Tablet Landscape (768px - 1023px): Streamline branding & secondary pills */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .header-left-zone {
+    gap: 6px !important;
+  }
+  .header-branding-subtitle {
+    display: none !important;
+  }
+  .header-page-subtitle {
+    display: none !important;
+  }
+  .header-search-container {
+    max-width: 160px !important;
+    margin-left: 4px !important;
+    margin-right: 4px !important;
+  }
+  .header-right-zone {
+    gap: 4px !important;
+  }
+  .header-install-text {
+    display: none !important;
+  }
+  .header-clock-block {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1280px) {
+  .header-page-subtitle {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  .header-branding-subtitle {
+    display: none !important;
+  }
+  .header-install-text {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  .header-clock-block {
+    display: none !important;
+  }
+}
+
+/* Ensure Settings and Logout buttons NEVER shrink or disappear */
+#header-settings-btn,
+#header-signout-btn,
+#header-install-app-btn {
+  flex-shrink: 0 !important;
+}
+
+/* ========================================================================= */
+/* RAILWAY REGIONS RESPONSIVE GRID (SPECIFICATION MATRIX)                    */
+/* 1600px+: 4 columns                                                        */
+/* 1200px–1599px: 2 or 4 columns (auto-fit minmax 280px)                     */
+/* 768px–1199px: 2 columns                                                   */
+/* 480px–767px: 1 column                                                     */
+/* Below 480px: 1 compact column                                             */
+/* ========================================================================= */
+.railway-regions-grid {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  align-items: stretch;
+}
+
+@media (min-width: 1600px) {
+  .railway-regions-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1200px) and (max-width: 1599px) {
+  .railway-regions-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+  .railway-regions-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 480px) and (max-width: 767px) {
+  .railway-regions-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+}
+
+@media (max-width: 479px) {
+  .railway-regions-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
   }
 }
 

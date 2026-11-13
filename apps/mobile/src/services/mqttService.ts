@@ -659,7 +659,7 @@ export class MqttService {
       const str = typeof payload === 'string' ? payload : JSON.stringify(payload);
       const msg = new MessageConstructor(str);
       msg.destinationName = topic;
-      msg.qos = 1;
+      msg.qos = 0;
       if (retained) {
         msg.retained = true;
       }

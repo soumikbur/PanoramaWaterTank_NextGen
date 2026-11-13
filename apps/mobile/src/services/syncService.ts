@@ -111,7 +111,11 @@ class SyncService {
   public handleInboundSyncEvent(rawEnvelope: any, source: 'WS' | 'MQTT'): void {
     if (!rawEnvelope || typeof rawEnvelope !== 'object') return;
 
-    const eventId = rawEnvelope.event_id || rawEnvelope.mutationId || rawEnvelope.id;
+    const eventId =
+      rawEnvelope.event_id ||
+      rawEnvelope.mutationId ||
+      rawEnvelope.id ||
+      (rawEnvelope.type && rawEnvelope.version ? `${rawEnvelope.type}-${rawEnvelope.version}-${rawEnvelope.updatedAt || ''}` : null);
     if (eventId) {
       if (this.seenEventIds.has(eventId)) {
         // Discard duplicate event already processed from another transport

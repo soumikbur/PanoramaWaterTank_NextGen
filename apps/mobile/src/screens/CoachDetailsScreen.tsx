@@ -44,7 +44,10 @@ export const CoachDetailsScreen: React.FC = () => {
     activeConsist,
     mqttConnectionStatus,
     telemetryTimeoutSeconds,
+    currentUser,
   } = useApp();
+
+  const isAdmin = currentUser?.role === 'ADMIN';
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isManageCoachOpen, setIsManageCoachOpen] = useState<boolean>(false);
@@ -307,27 +310,30 @@ export const CoachDetailsScreen: React.FC = () => {
             <span>Consist</span>
           </button>
 
-          <button
-            onClick={() => setIsManageCoachOpen(true)}
-            title="Edit Coaches & Consist"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              padding: '5px 10px',
-              backgroundColor: '#EFF6FF',
-              border: '1px solid #BFDBFE',
-              borderRadius: '6px',
-              color: '#2563EB',
-              fontSize: '11px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              transition: 'all 0.12s ease',
-            }}
-          >
-            <SlidersHorizontal size={13} />
-            <span>Edit Coach</span>
-          </button>
+          {isAdmin && (
+            <button
+              id="coach-details-manage-coach-btn"
+              onClick={() => setIsManageCoachOpen(true)}
+              title="Manage Coach Fleet & Consist"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '5px 10px',
+                backgroundColor: '#EFF6FF',
+                border: '1px solid #BFDBFE',
+                borderRadius: '6px',
+                color: '#2563EB',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.12s ease',
+              }}
+            >
+              <SlidersHorizontal size={13} />
+              <span>Manage Coach</span>
+            </button>
+          )}
 
           <button
             onClick={() => setIsAddDeviceOpen(true)}

@@ -88,6 +88,13 @@ class BrowserNotificationBridge {
 
   public async registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
     if (
+      typeof window !== 'undefined' &&
+      (window.location.protocol === 'file:' || !window.isSecureContext)
+    ) {
+      return null;
+    }
+
+    if (
       typeof navigator === 'undefined' ||
       !('serviceWorker' in navigator) ||
       !navigator.serviceWorker ||

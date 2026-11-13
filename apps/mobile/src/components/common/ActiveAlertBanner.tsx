@@ -11,14 +11,27 @@ export const ActiveAlertBanner: React.FC = () => {
     requestNotificationPermission,
     setActiveScreen,
     activeScreen,
+    configuredTrains,
   } = useApp();
 
-  const unackedManaged = managedAlerts.filter((a) => a.status === 'ACTIVE');
-  const unackedBackend = activeAlarms.filter(
-    (a) =>
-      a.status === 'ACTIVE' &&
-      !managedAlerts.some((m) => m.id === a.id && m.status !== 'ACTIVE')
-  );
+  const trainSet = new Set((configuredTrains || []).map((t) => t.train_number.trim()));
+  const unackedManaged = (!configuredTrains || configuredTrains.length === 0)
+    ? []
+    : managedAlerts.filter((a) => {
+        if (a.status !== 'ACTIVE') return false;
+        if (a.trainNumber && !trainSet.has(a.trainNumber.trim())) return false;
+        return true;
+      });
+
+  const unackedBackend = (!configuredTrains || configuredTrains.length === 0)
+    ? []
+    : activeAlarms.filter(
+        (a) =>
+          a.status === 'ACTIVE' &&
+          (!a.trainNumber || trainSet.has(a.trainNumber.trim())) &&
+          (!a.train_number || trainSet.has(a.train_number.trim())) &&
+          !managedAlerts.some((m) => m.id === a.id && m.status !== 'ACTIVE')
+      );
 
   // Deduplicate overlapping count while preserving both sources
   const activeCount = Math.max(unackedManaged.length, unackedBackend.length);

@@ -33,6 +33,7 @@ import {
   Download,
 } from 'lucide-react';
 import { InstallAppModal } from './InstallAppModal';
+import { isNativeCapacitorApp } from '../../services/nativeBridge';
 
 interface SearchResultItem {
   id: string;
@@ -88,16 +89,23 @@ export const Header: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
-  // Profile menu state
+  // Profile and Account menu states
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isMobileAccountMenuOpen, setIsMobileAccountMenuOpen] = useState(false);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
+  const [isNativeApp, setIsNativeApp] = useState(() => isNativeCapacitorApp());
+
+  useEffect(() => {
+    setIsNativeApp(isNativeCapacitorApp());
+  }, []);
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const profileContainerRef = useRef<HTMLDivElement>(null);
+  const mobileAccountMenuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const mobileInputRef = useRef<HTMLInputElement>(null);
 
-  // Outside click listener to dismiss search panel and profile menu
+  // Outside click listener to dismiss search panel, profile menu and mobile account menu
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
@@ -105,6 +113,9 @@ export const Header: React.FC = () => {
       }
       if (profileContainerRef.current && !profileContainerRef.current.contains(e.target as Node)) {
         setIsProfileOpen(false);
+      }
+      if (mobileAccountMenuRef.current && !mobileAccountMenuRef.current.contains(e.target as Node)) {
+        setIsMobileAccountMenuOpen(false);
       }
     };
     if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
@@ -1083,28 +1094,30 @@ export const Header: React.FC = () => {
 
             {/* Right: Quick actions (Search, Connection, Alerts) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-              {/* Install App Button */}
-              <button
-                type="button"
-                id="mobile-install-app-btn"
-                onClick={() => setIsInstallModalOpen(true)}
-                aria-label="Install Android App"
-                title="Install Android App / PWA"
-                className="touch-target-44"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#2563EB',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '8px',
-                  borderRadius: '6px',
-                }}
-              >
-                <Download size={18} />
-              </button>
+              {/* Install App Button (Hidden on native Capacitor apps) */}
+              {!isNativeApp && (
+                <button
+                  type="button"
+                  id="mobile-install-app-btn"
+                  onClick={() => setIsInstallModalOpen(true)}
+                  aria-label="Install Android App"
+                  title="Install Android APK / iOS Setup"
+                  className="touch-target-44"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#2563EB',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '8px',
+                    borderRadius: '6px',
+                  }}
+                >
+                  <Download size={18} />
+                </button>
+              )}
 
               {/* Search Toggle Button */}
               <button
@@ -1281,6 +1294,194 @@ export const Header: React.FC = () => {
                   </span>
                 )}
               </button>
+
+              {/* Direct Mobile Settings Button */}
+              <button
+                type="button"
+                id="mobile-header-settings-btn"
+                onClick={() => setActiveScreen('settings')}
+                aria-label="Open Settings"
+                title="Settings & Display Preferences"
+                className="touch-target-44"
+                style={{
+                  background: activeScreen === 'settings' ? '#EFF6FF' : 'transparent',
+                  border: activeScreen === 'settings' ? '1px solid #BFDBFE' : 'none',
+                  color: activeScreen === 'settings' ? '#2563EB' : '#475569',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '8px',
+                  borderRadius: '6px',
+                }}
+              >
+                <SettingsIcon size={18} />
+              </button>
+
+              {/* Mobile Dedicated Account & Session Menu */}
+              {currentUser && (
+                <div ref={mobileAccountMenuRef} style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    id="mobile-account-menu-btn"
+                    onClick={() => setIsMobileAccountMenuOpen((prev) => !prev)}
+                    aria-label="User Account Menu"
+                    title={`${currentUser.full_name || currentUser.username} (${isAdmin ? 'Admin' : 'Employee'})`}
+                    className="touch-target-44"
+                    style={{
+                      background: isMobileAccountMenuOpen ? '#EFF6FF' : '#F8FAFC',
+                      border: `1px solid ${isMobileAccountMenuOpen ? '#BFDBFE' : '#CBD5E1'}`,
+                      color: isAdmin ? '#2563EB' : '#1E293B',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '4px 6px',
+                      borderRadius: '6px',
+                      gap: '2px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                    }}
+                  >
+                    <span>{isAdmin ? 'ADM' : 'EMP'}</span>
+                    <ChevronDown size={11} style={{ opacity: 0.7 }} />
+                  </button>
+
+                  {/* Mobile Account Dropdown Menu */}
+                  {isMobileAccountMenuOpen && (
+                    <div
+                      id="mobile-account-dropdown"
+                      className="dialog-content"
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 8px)',
+                        right: 0,
+                        width: '240px',
+                        backgroundColor: '#FFFFFF',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: '8px',
+                        boxShadow: '0 10px 25px rgba(0,0,0,0.18)',
+                        padding: '12px',
+                        zIndex: 10000,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                      }}
+                    >
+                      {/* User Info Header */}
+                      <div style={{ borderBottom: '1px solid #E2E8F0', paddingBottom: '8px' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                          {currentUser.full_name || currentUser.username}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#64748B' }}>
+                          {currentUser.designation || (isAdmin ? 'System Administrator' : 'Station Operator')}
+                        </div>
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            marginTop: '4px',
+                            fontSize: '9px',
+                            fontWeight: 700,
+                            color: isAdmin ? '#2563EB' : '#475569',
+                            backgroundColor: isAdmin ? '#EFF6FF' : '#F1F5F9',
+                            border: `1px solid ${isAdmin ? '#BFDBFE' : '#CBD5E1'}`,
+                            padding: '1px 6px',
+                            borderRadius: '4px',
+                          }}
+                        >
+                          {isAdmin ? 'ADMINISTRATOR' : 'EMPLOYEE'}
+                        </span>
+                      </div>
+
+                      {/* Settings Item */}
+                      <button
+                        type="button"
+                        id="mobile-menu-settings-btn"
+                        onClick={() => {
+                          setActiveScreen('settings');
+                          setIsMobileAccountMenuOpen(false);
+                        }}
+                        style={{
+                          padding: '8px 10px',
+                          borderRadius: '6px',
+                          backgroundColor: activeScreen === 'settings' ? '#EFF6FF' : '#F8FAFC',
+                          border: '1px solid #CBD5E1',
+                          color: '#0F172A',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          textAlign: 'left',
+                          width: '100%',
+                        }}
+                      >
+                        <SettingsIcon size={14} color="#2563EB" />
+                        <span>Settings & Display</span>
+                      </button>
+
+                      {/* Install App Item (if web) */}
+                      {!isNativeApp && (
+                        <button
+                          type="button"
+                          id="mobile-menu-install-btn"
+                          onClick={() => {
+                            setIsInstallModalOpen(true);
+                            setIsMobileAccountMenuOpen(false);
+                          }}
+                          style={{
+                            padding: '8px 10px',
+                            borderRadius: '6px',
+                            backgroundColor: '#EFF6FF',
+                            border: '1px solid #BFDBFE',
+                            color: '#2563EB',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            textAlign: 'left',
+                            width: '100%',
+                          }}
+                        >
+                          <Download size={14} />
+                          <span>Install Panorama App</span>
+                        </button>
+                      )}
+
+                      {/* Logout Item */}
+                      <button
+                        type="button"
+                        id="mobile-menu-logout-btn"
+                        onClick={() => {
+                          setIsMobileAccountMenuOpen(false);
+                          logout();
+                        }}
+                        style={{
+                          padding: '8px 10px',
+                          borderRadius: '6px',
+                          backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                          border: '1px solid rgba(239, 68, 68, 0.25)',
+                          color: '#EF4444',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          textAlign: 'left',
+                          width: '100%',
+                        }}
+                      >
+                        <LogOut size={14} />
+                        <span>Sign Out Session</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </>
         )}
@@ -1290,7 +1491,7 @@ export const Header: React.FC = () => {
       {/* DESKTOP HEADER (>= 1024px)                                        */}
       {/* ================================================================= */}
       {/* Left: Panorama Logo, Compact Branding, Home Button, Divider, and Page Title/Subtitle */}
-      <div className="hide-on-mobile" style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+      <div className="hide-on-mobile header-left-zone" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0, minWidth: 0 }}>
         {/* Official Panorama Logo and Compact Two-Line Branding */}
         <div
           onClick={() => {
@@ -1300,9 +1501,10 @@ export const Header: React.FC = () => {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '10px',
+            gap: '8px',
             cursor: 'pointer',
             paddingRight: '2px',
+            flexShrink: 0,
           }}
           title="Panorama Water Tank Monitor — Go to Dashboard"
         >
@@ -1314,9 +1516,10 @@ export const Header: React.FC = () => {
               height: '28px',
               objectFit: 'contain',
               borderRadius: '6px',
+              flexShrink: 0,
             }}
           />
-          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.15' }}>
+          <div className="header-branding-text" style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.15' }}>
             <span
               style={{
                 fontSize: '13px',
@@ -1324,17 +1527,20 @@ export const Header: React.FC = () => {
                 color: '#0F172A',
                 letterSpacing: '0.4px',
                 fontFamily: typography.fontFamily,
+                whiteSpace: 'nowrap',
               }}
             >
               PANORAMA WATER
             </span>
             <span
+              className="header-branding-subtitle"
               style={{
                 fontSize: '10px',
                 fontWeight: 700,
                 color: '#2563EB',
                 letterSpacing: '0.6px',
                 fontFamily: typography.fontFamily,
+                whiteSpace: 'nowrap',
               }}
             >
               TANK MONITOR
@@ -1342,7 +1548,7 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        {/* Home Button (Qt-style 34x34 rounded button) */}
+        {/* Home Button (Qt-style 32x32 rounded button) */}
         <button
           onClick={() => {
             setActiveScreen('dashboard');
@@ -1350,8 +1556,8 @@ export const Header: React.FC = () => {
           }}
           title="Home — Go to Dashboard"
           style={{
-            width: '34px',
-            height: '34px',
+            width: '32px',
+            height: '32px',
             borderRadius: '6px',
             backgroundColor: activeScreen === 'dashboard' ? '#EFF6FF' : '#FFFFFF',
             border: activeScreen === 'dashboard' ? '1px solid #2563EB' : '1px solid #DCE3EA',
@@ -1361,6 +1567,7 @@ export const Header: React.FC = () => {
             cursor: 'pointer',
             color: activeScreen === 'dashboard' ? '#2563EB' : '#334155',
             transition: 'all 0.15s ease',
+            flexShrink: 0,
           }}
           onMouseEnter={(e) => {
             if (activeScreen !== 'dashboard') {
@@ -1375,26 +1582,29 @@ export const Header: React.FC = () => {
             }
           }}
         >
-          <Home size={17} strokeWidth={1.8} />
+          <Home size={16} strokeWidth={1.8} />
         </button>
 
         {/* Vertical Divider */}
-        <div style={{ width: '1px', height: '24px', backgroundColor: '#DCE3EA', margin: '0 2px' }} />
+        <div style={{ width: '1px', height: '22px', backgroundColor: '#DCE3EA', margin: '0 1px', flexShrink: 0 }} />
 
         {/* Page Title & Subtitle Column */}
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="header-title-column" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
             <h1
               data-testid="header-page-title"
               style={{
                 margin: 0,
-                fontSize: '16px',
+                fontSize: '15px',
                 fontWeight: 700,
                 color: '#0F172A',
                 fontFamily: typography.fontFamily,
-                lineHeight: '20px',
+                lineHeight: '18px',
                 letterSpacing: '-0.2px',
                 whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: 'clamp(110px, 16vw, 220px)',
               }}
             >
               {currentInfo.title}
@@ -1418,13 +1628,17 @@ export const Header: React.FC = () => {
           </div>
           {currentInfo.subtitle && (
             <span
+              className="header-page-subtitle"
               style={{
                 fontSize: '11px',
                 fontWeight: 400,
                 color: '#64748B',
                 fontFamily: typography.fontFamily,
-                lineHeight: '14px',
+                lineHeight: '13px',
                 whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: 'clamp(110px, 16vw, 240px)',
               }}
             >
               {currentInfo.subtitle}
@@ -1433,18 +1647,18 @@ export const Header: React.FC = () => {
         </div>
       </div>
 
-      {/* Center: Global Search Bar (Qt SearchBar.qml style) */}
+      {/* Center: Global Search Bar (Fluid Dynamic Adaptivity) */}
       <div
         ref={searchContainerRef}
-        className="hide-on-mobile"
+        className="hide-on-mobile header-search-container"
         style={{
           display: 'flex',
           alignItems: 'center',
-          flex: 1,
-          maxWidth: '440px',
-          minWidth: '140px',
-          marginLeft: '16px',
-          marginRight: '16px',
+          flex: '1 1 120px',
+          maxWidth: '320px',
+          minWidth: '90px',
+          marginLeft: '8px',
+          marginRight: '8px',
           position: 'relative',
         }}
       >
@@ -1555,10 +1769,10 @@ export const Header: React.FC = () => {
       </div>
 
       {/* Right Controls: Role Badge, Status Pill, Settings, Logout, Live Clock */}
-      <div className="hide-on-mobile" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+      <div className="hide-on-mobile header-right-zone" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
         {/* Interactive User Profile Badge & Dropdown (Qt Header Role Badge) */}
         {currentUser && (
-          <div ref={profileContainerRef} style={{ position: 'relative' }}>
+          <div ref={profileContainerRef} style={{ position: 'relative', flexShrink: 0 }}>
             <div
               onClick={() => setIsProfileOpen((prev) => !prev)}
               style={{
@@ -1682,16 +1896,18 @@ export const Header: React.FC = () => {
           </div>
         )}
 
-        {/* Connection Status Pill (Qt Header style: [● ONLINE]) */}
+        {/* Connection Status Pill (Qt Header style: [● LIVE]) */}
         <div
           id="header-mqtt-status-pill"
+          className="header-pill-mqtt"
           style={{
             height: '28px',
-            padding: '0 12px',
+            padding: '0 8px',
             borderRadius: '14px',
             display: 'flex',
             alignItems: 'center',
             gap: '5px',
+            flexShrink: 0,
             backgroundColor:
               mqttConnectionStatus === 'CONNECTED'
                 ? '#E8F8EE'
@@ -1740,12 +1956,13 @@ export const Header: React.FC = () => {
                   ? '#2563EB'
                   : '#DC2626',
               letterSpacing: '0.4px',
+              whiteSpace: 'nowrap',
             }}
           >
             {mqttConnectionStatus === 'CONNECTED'
-              ? (liveTelemetry ? 'MQTT LIVE' : 'ONLINE')
+              ? (liveTelemetry ? 'LIVE' : 'ONLINE')
               : mqttConnectionStatus === 'STALE'
-              ? 'STALE DATA'
+              ? 'STALE'
               : mqttConnectionStatus === 'CONNECTING'
               ? 'CONNECTING'
               : 'OFFLINE'}
@@ -1755,14 +1972,16 @@ export const Header: React.FC = () => {
         {/* Central Database & Fleet Synchronization Indicator */}
         <div
           id="header-sync-status-indicator"
+          className="header-pill-sync"
           onClick={() => triggerSync()}
           style={{
             height: '28px',
-            padding: '0 10px',
+            padding: '0 8px',
             borderRadius: '14px',
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
+            gap: '5px',
+            flexShrink: 0,
             backgroundColor:
               syncState === 'SYNCHRONIZED'
                 ? '#E8F8EE'
@@ -1805,6 +2024,7 @@ export const Header: React.FC = () => {
             }}
           />
           <span
+            className="header-sync-pill-text"
             style={{
               fontSize: '10px',
               fontWeight: 700,
@@ -1815,92 +2035,94 @@ export const Header: React.FC = () => {
                   ? '#D97706'
                   : '#DC2626',
               letterSpacing: '0.3px',
+              whiteSpace: 'nowrap',
             }}
           >
             {syncState === 'SYNCHRONIZED'
-              ? `SYNCED ${
-                  lastSyncTime
-                    ? lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-                    : ''
-                }`
+              ? 'SYNCED'
               : syncState === 'SYNCHRONIZING'
               ? 'SYNCING...'
               : 'OFFLINE'}
           </span>
         </div>
 
-        {/* Install App Button (Desktop Header) */}
-        <button
-          id="header-install-app-btn"
-          onClick={() => setIsInstallModalOpen(true)}
-          title="Install Mobile App (Android APK & PWA)"
-          style={{
-            height: '28px',
-            padding: '0 10px',
-            borderRadius: '4px',
-            backgroundColor: '#EFF6FF',
-            border: '1px solid #BFDBFE',
-            cursor: 'pointer',
-            fontSize: '11px',
-            fontWeight: 700,
-            color: '#2563EB',
-            fontFamily: typography.fontFamily,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            transition: 'all 0.15s ease',
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#DBEAFE';
-            (e.currentTarget as HTMLButtonElement).style.borderColor = '#93C5FD';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#EFF6FF';
-            (e.currentTarget as HTMLButtonElement).style.borderColor = '#BFDBFE';
-          }}
-        >
-          <Download size={13} />
-          <span>Install App</span>
-          <ChevronDown size={11} style={{ opacity: 0.7 }} />
-        </button>
+        {/* Install App Button (Desktop Header - Hidden on native Capacitor apps) */}
+        {!isNativeApp && (
+          <button
+            id="header-install-app-btn"
+            className="header-btn-install"
+            onClick={() => setIsInstallModalOpen(true)}
+            title="Install Mobile App (Android APK & iOS Setup)"
+            style={{
+              height: '28px',
+              padding: '0 8px',
+              borderRadius: '4px',
+              backgroundColor: '#EFF6FF',
+              border: '1px solid #BFDBFE',
+              cursor: 'pointer',
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#2563EB',
+              fontFamily: typography.fontFamily,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              transition: 'all 0.15s ease',
+              flexShrink: 0,
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#DBEAFE';
+              (e.currentTarget as HTMLButtonElement).style.borderColor = '#93C5FD';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#EFF6FF';
+              (e.currentTarget as HTMLButtonElement).style.borderColor = '#BFDBFE';
+            }}
+          >
+            <Download size={13} />
+            <span className="header-install-text">Install App</span>
+          </button>
+        )}
 
-        {/* Settings Shortcut Button (Qt Header 32x32 rounded button) */}
+        {/* Settings Shortcut Button (ALWAYS VISIBLE & ACCESSIBLE) */}
         <button
+          id="header-settings-btn"
           onClick={() => setActiveScreen('settings')}
           title={isAdmin ? 'Open System & Display Settings' : 'Open Display Settings'}
           style={{
-            width: '32px',
-            height: '32px',
+            width: '30px',
+            height: '30px',
             borderRadius: '6px',
-            backgroundColor: activeScreen === 'settings' ? '#F8FAFC' : 'transparent',
-            border: `1px solid ${activeScreen === 'settings' ? '#CBD5E1' : '#E2E8F0'}`,
+            backgroundColor: activeScreen === 'settings' ? '#EFF6FF' : '#FFFFFF',
+            border: `1px solid ${activeScreen === 'settings' ? '#2563EB' : '#CBD5E1'}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
-            color: '#64748B',
+            color: activeScreen === 'settings' ? '#2563EB' : '#475569',
             transition: 'all 0.15s ease',
+            flexShrink: 0,
           }}
           onMouseEnter={(e) => {
             (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#F8FAFC';
             (e.currentTarget as HTMLButtonElement).style.borderColor = '#CBD5E1';
           }}
           onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.backgroundColor = activeScreen === 'settings' ? '#F8FAFC' : 'transparent';
-            (e.currentTarget as HTMLButtonElement).style.borderColor = activeScreen === 'settings' ? '#CBD5E1' : '#E2E8F0';
+            (e.currentTarget as HTMLButtonElement).style.backgroundColor = activeScreen === 'settings' ? '#EFF6FF' : '#FFFFFF';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = activeScreen === 'settings' ? '#2563EB' : '#CBD5E1';
           }}
         >
           <SettingsIcon size={15} />
         </button>
 
-        {/* Logout Button (Qt Header outline button) */}
+        {/* Logout Button (ALWAYS VISIBLE & ACCESSIBLE) */}
         <button
           id="header-signout-btn"
           onClick={logout}
           title="Sign out of console"
           style={{
             height: '28px',
-            padding: '0 12px',
+            padding: '0 10px',
             borderRadius: '4px',
             backgroundColor: '#FFFFFF',
             border: '1px solid #CBD5E1',
@@ -1913,6 +2135,7 @@ export const Header: React.FC = () => {
             alignItems: 'center',
             gap: '4px',
             transition: 'all 0.15s ease',
+            flexShrink: 0,
           }}
           onMouseEnter={(e) => {
             (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#FEE2E2';
@@ -1929,28 +2152,31 @@ export const Header: React.FC = () => {
           <span>Logout</span>
         </button>
 
-        <div style={{ width: '1px', height: '20px', backgroundColor: '#E2E8F0', margin: '0 2px' }} />
+        <div style={{ width: '1px', height: '18px', backgroundColor: '#E2E8F0', margin: '0 1px', flexShrink: 0 }} />
 
-        {/* Live Date / Time Block (Qt Header Stacked) */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: '92px' }}>
+        {/* Live Date / Time Block */}
+        <div className="header-clock-block" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: '55px', flexShrink: 0 }}>
           <span
             style={{
               color: '#0F172A',
               fontFamily: typography.fontFamily,
-              fontSize: '12px',
+              fontSize: '11px',
               fontWeight: 700,
-              lineHeight: '15px',
+              lineHeight: '14px',
+              whiteSpace: 'nowrap',
             }}
           >
             {currentTime || '--:--:--'}
           </span>
           <span
+            className="header-clock-date"
             style={{
               color: '#64748B',
               fontFamily: typography.fontFamily,
-              fontSize: '10px',
+              fontSize: '9px',
               fontWeight: 500,
-              lineHeight: '13px',
+              lineHeight: '12px',
+              whiteSpace: 'nowrap',
             }}
           >
             {currentDate || '07 November 2026'}
@@ -1958,11 +2184,13 @@ export const Header: React.FC = () => {
         </div>
       </div>
 
-      {/* Install App Modal */}
-      <InstallAppModal
-        isOpen={isInstallModalOpen}
-        onClose={() => setIsInstallModalOpen(false)}
-      />
+      {/* Install App Modal (Hidden on native Capacitor apps) */}
+      {!isNativeApp && (
+        <InstallAppModal
+          isOpen={isInstallModalOpen}
+          onClose={() => setIsInstallModalOpen(false)}
+        />
+      )}
     </header>
   );
 };
