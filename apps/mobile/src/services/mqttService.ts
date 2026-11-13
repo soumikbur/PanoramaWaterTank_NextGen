@@ -185,7 +185,7 @@ export class MqttService {
             this.handleDeviceSync(payloadStr);
             return;
           }
-          this.handleIncomingPayload(payloadStr);
+          this.handleIncomingPayload(payloadStr, destination);
         } catch (e) {
           console.error('[MQTT] Error processing message frame:', e);
         }
@@ -201,7 +201,15 @@ export class MqttService {
           this.setStatus('CONNECTED');
           console.info(`[MQTT] Connected to ${this.brokerHost}:${this.brokerPort}. Subscribing to topics...`);
           try {
+            // Subscribe to primary configuration topic and telemetry stream (/s)
             this.client.subscribe(this.topic, { qos: 1 });
+            this.client.subscribe(`${this.topic}/s`, { qos: 1 });
+            this.client.subscribe(`${this.topic}/#`, { qos: 1 });
+            if (this.topic !== DEFAULT_MQTT_TOPIC) {
+              this.client.subscribe(DEFAULT_MQTT_TOPIC, { qos: 1 });
+              this.client.subscribe(`${DEFAULT_MQTT_TOPIC}/s`, { qos: 1 });
+              this.client.subscribe(`${DEFAULT_MQTT_TOPIC}/#`, { qos: 1 });
+            }
             this.client.subscribe(CENTRAL_FLEET_TOPIC, { qos: 1 });
             this.client.subscribe(CENTRAL_DEVICES_TOPIC, { qos: 1 });
             this.client.subscribe(CENTRAL_SETTINGS_TOPIC, { qos: 1 });
@@ -234,7 +242,7 @@ export class MqttService {
   /**
    * Parse, validate, and dispatch incoming telemetry payload.
    */
-  handleIncomingPayload(rawString: string): LiveTelemetryPayload | null {
+  handleIncomingPayload(rawString: string, topicName?: string): LiveTelemetryPayload | null {
     if (!rawString || typeof rawString !== 'string') {
       console.warn('[MQTT] Discarding invalid non-string payload');
       return null;
@@ -256,7 +264,8 @@ export class MqttService {
     // Validate and sanitize required fields according to contract:
     // {"uid":"0023004D4B42501120353332","lat":22.557279,"long":88.352432,"speed":3.4,"time":"12:15:39",
     //  "cm1":120.8,"cm2":0.0,"wlp1":12.1,"wlp2":0.0,"wlv1":true,"wlv2":false,"bat":83.6,"chno":"CR123456","trno":"225256"}
-    const uid = String(parsed.uid || parsed.deviceId || DEFAULT_DEVICE_UID).trim();
+    const topicUid = topicName ? topicName.split('/')[0].trim() : '';
+    const uid = String(parsed.uid || parsed.deviceId || topicUid || DEFAULT_DEVICE_UID).trim();
     const trno = String(parsed.trno || parsed.trainNumber || '').trim();
     const chno = String(parsed.chno || parsed.coachNumber || '').trim();
 
