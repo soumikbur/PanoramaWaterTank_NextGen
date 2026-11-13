@@ -86,7 +86,10 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
     tank2Name: string;
     tank1Capacity: number;
     tank2Capacity: number;
-    tankHeightCm: number;
+    tank1HeightCm: number;
+    tank2HeightCm: number;
+    tank1Geometry: 'CYLINDRICAL' | 'RECTANGULAR';
+    tank2Geometry: 'CYLINDRICAL' | 'RECTANGULAR';
     deviceUid: string;
   }>({
     coachNumber: '',
@@ -96,7 +99,10 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
     tank2Name: 'Departure Side (Tank 2)',
     tank1Capacity: 500,
     tank2Capacity: 500,
-    tankHeightCm: 150,
+    tank1HeightCm: 50,
+    tank2HeightCm: 50,
+    tank1Geometry: 'CYLINDRICAL',
+    tank2Geometry: 'CYLINDRICAL',
     deviceUid: '',
   });
 
@@ -186,7 +192,10 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
       tank2Name: 'Departure Side (Tank 2)',
       tank1Capacity: 500,
       tank2Capacity: 500,
-      tankHeightCm: 150,
+      tank1HeightCm: 50,
+      tank2HeightCm: 50,
+      tank1Geometry: 'CYLINDRICAL',
+      tank2Geometry: 'CYLINDRICAL',
       deviceUid: `PANORAMA-${effectiveTrainNumber}-${nextNum}`,
     });
     setActiveSubModal('ADD');
@@ -201,15 +210,25 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
     setTargetCoach(coach);
     const t1 = coach.tanks.find((t) => t.tank_index === 1) || coach.tanks[0];
     const t2 = coach.tanks.find((t) => t.tank_index === 2) || coach.tanks[1];
+    const h1 = t1?.height_cm || 50;
+    const h2 = t2?.height_cm || 50;
+    const geom1 = (t1?.geometry || t1?.tank_type || 'CYLINDRICAL').toUpperCase() === 'RECTANGULAR' ? 'RECTANGULAR' : 'CYLINDRICAL';
+    const geom2 = (t2?.geometry || t2?.tank_type || 'CYLINDRICAL').toUpperCase() === 'RECTANGULAR' ? 'RECTANGULAR' : 'CYLINDRICAL';
+    const cap1 = t1?.capacity_liters || 500;
+    const cap2 = t2?.capacity_liters || 500;
+
     setFormData({
       coachNumber: coach.coach_number,
       coachName: coach.coach_name || `Coach ${coach.coach_number}`,
       coachCategory: coach.coach_category || 'AC 3-Tier (3A)',
       tank1Name: t1?.name || 'Arrival Side (Tank 1)',
       tank2Name: t2?.name || 'Departure Side (Tank 2)',
-      tank1Capacity: t1?.capacity_liters || 500,
-      tank2Capacity: t2?.capacity_liters || 500,
-      tankHeightCm: 150,
+      tank1Capacity: cap1,
+      tank2Capacity: cap2,
+      tank1HeightCm: h1,
+      tank2HeightCm: h2,
+      tank1Geometry: geom1,
+      tank2Geometry: geom2,
       deviceUid: coach.device_uid || '',
     });
     setActiveSubModal('EDIT');
@@ -263,7 +282,10 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
         tank_2_name: formData.tank2Name.trim() || 'Departure Side (Tank 2)',
         tank_1_capacity: Number(formData.tank1Capacity) || 500,
         tank_2_capacity: Number(formData.tank2Capacity) || 500,
-        tank_height_cm: Number(formData.tankHeightCm) || 150,
+        tank_1_height_cm: Number(formData.tank1HeightCm) || 50,
+        tank_2_height_cm: Number(formData.tank2HeightCm) || 50,
+        tank_1_geometry: formData.tank1Geometry,
+        tank_2_geometry: formData.tank2Geometry,
         device_uid: formData.deviceUid.trim() || `PANORAMA-${effectiveTrainNumber}-${cNum}`,
       };
 
@@ -293,7 +315,10 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
         tank_2_name: formData.tank2Name.trim(),
         tank_1_capacity: Number(formData.tank1Capacity) || 500,
         tank_2_capacity: Number(formData.tank2Capacity) || 500,
-        tank_height_cm: Number(formData.tankHeightCm) || 150,
+        tank_1_height_cm: Number(formData.tank1HeightCm) || 50,
+        tank_2_height_cm: Number(formData.tank2HeightCm) || 50,
+        tank_1_geometry: formData.tank1Geometry,
+        tank_2_geometry: formData.tank2Geometry,
         device_uid: formData.deviceUid.trim(),
       };
 
@@ -464,7 +489,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                     color: '#0F172A',
                   }}
                 >
-                  Coach Fleet &amp; Consist Management
+                  Coach Fleet &amp; Consist Editing
                 </h2>
                 <span
                   style={{
@@ -523,7 +548,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
           <button
             onClick={onClose}
             aria-label="Close"
-            title="Close Coach Management Panel"
+            title="Close Coach Editing Panel"
             style={{
               width: '34px',
               height: '34px',
@@ -913,7 +938,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                               {t1?.name || 'Tank 1'}
                             </div>
                             <div style={{ fontSize: '11px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span>{t1?.capacity_liters || 500} L</span>
+                              <span>{t1?.capacity_liters || 500} L &bull; {t1?.height_cm || 50} cm ({(t1?.geometry || t1?.tank_type || 'CYL').substring(0, 3)})</span>
                               <span
                                 style={{
                                   fontSize: '10px',
@@ -940,7 +965,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                               {t2?.name || 'Tank 2'}
                             </div>
                             <div style={{ fontSize: '11px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span>{t2?.capacity_liters || 500} L</span>
+                              <span>{t2?.capacity_liters || 500} L &bull; {t2?.height_cm || 50} cm ({(t2?.geometry || t2?.tank_type || 'CYL').substring(0, 3)})</span>
                               <span
                                 style={{
                                   fontSize: '10px',
@@ -1314,10 +1339,15 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                   marginBottom: '10px',
                 }}
               >
-                <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#1E293B', marginBottom: '8px' }}>
-                  Tank 1: Arrival Side (Primary)
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#1E293B' }}>
+                    Tank 1: Arrival Side (Primary)
+                  </div>
+                  <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>
+                    Height: {formData.tank1HeightCm || 50} cm &bull; {formData.tank1Geometry}
+                  </span>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
                       Name
@@ -1326,8 +1356,40 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                       type="text"
                       value={formData.tank1Name}
                       onChange={(e) => setFormData({ ...formData, tank1Name: e.target.value })}
-                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px' }}
+                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
                     />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
+                      Height (cm) *
+                    </label>
+                    <input
+                      type="number"
+                      min={10}
+                      max={500}
+                      value={formData.tank1HeightCm}
+                      onChange={(e) => {
+                        const h = parseFloat(e.target.value) || 50;
+                        setFormData({
+                          ...formData,
+                          tank1HeightCm: h,
+                        });
+                      }}
+                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
+                      Geometry
+                    </label>
+                    <select
+                      value={formData.tank1Geometry}
+                      onChange={(e) => setFormData({ ...formData, tank1Geometry: e.target.value as any })}
+                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', backgroundColor: '#FFFFFF', boxSizing: 'border-box' }}
+                    >
+                      <option value="CYLINDRICAL">Cylindrical</option>
+                      <option value="RECTANGULAR">Rectangular</option>
+                    </select>
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
@@ -1335,11 +1397,11 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                     </label>
                     <input
                       type="number"
-                      min={100}
+                      min={1}
                       max={5000}
                       value={formData.tank1Capacity}
-                      onChange={(e) => setFormData({ ...formData, tank1Capacity: parseInt(e.target.value, 10) || 500 })}
-                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px' }}
+                      onChange={(e) => setFormData({ ...formData, tank1Capacity: parseFloat(e.target.value) || 20 })}
+                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
                     />
                   </div>
                 </div>
@@ -1355,10 +1417,15 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                   marginBottom: '10px',
                 }}
               >
-                <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#1E293B', marginBottom: '8px' }}>
-                  Tank 2: Departure Side (Secondary)
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#1E293B' }}>
+                    Tank 2: Departure Side (Secondary)
+                  </div>
+                  <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>
+                    Height: {formData.tank2HeightCm || 50} cm &bull; {formData.tank2Geometry}
+                  </span>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
                       Name
@@ -1367,8 +1434,40 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                       type="text"
                       value={formData.tank2Name}
                       onChange={(e) => setFormData({ ...formData, tank2Name: e.target.value })}
-                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px' }}
+                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
                     />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
+                      Height (cm)
+                    </label>
+                    <input
+                      type="number"
+                      min={10}
+                      max={500}
+                      value={formData.tank2HeightCm}
+                      onChange={(e) => {
+                        const h = parseFloat(e.target.value) || 50;
+                        setFormData({
+                          ...formData,
+                          tank2HeightCm: h,
+                        });
+                      }}
+                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
+                      Geometry
+                    </label>
+                    <select
+                      value={formData.tank2Geometry}
+                      onChange={(e) => setFormData({ ...formData, tank2Geometry: e.target.value as any })}
+                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', backgroundColor: '#FFFFFF', boxSizing: 'border-box' }}
+                    >
+                      <option value="CYLINDRICAL">Cylindrical</option>
+                      <option value="RECTANGULAR">Rectangular</option>
+                    </select>
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
@@ -1376,11 +1475,11 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                     </label>
                     <input
                       type="number"
-                      min={100}
+                      min={1}
                       max={5000}
                       value={formData.tank2Capacity}
-                      onChange={(e) => setFormData({ ...formData, tank2Capacity: parseInt(e.target.value, 10) || 500 })}
-                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px' }}
+                      onChange={(e) => setFormData({ ...formData, tank2Capacity: parseFloat(e.target.value) || 20 })}
+                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
                     />
                   </div>
                 </div>

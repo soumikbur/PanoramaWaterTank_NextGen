@@ -163,6 +163,17 @@ export const UsersScreen: React.FC = () => {
     fetchRegistrationsList();
   }, [selectedRegStatus, activeTab]);
 
+  useEffect(() => {
+    const onUsersUpdated = () => {
+      fetchUsersList();
+      fetchRegistrationsList();
+    };
+    window.addEventListener('panorama:users-updated', onUsersUpdated);
+    return () => {
+      window.removeEventListener('panorama:users-updated', onUsersUpdated);
+    };
+  }, []);
+
   const handleApproveRegistration = async (reg: UserProfile) => {
     if (!window.confirm(`Approve registration request for ${reg.full_name} (${reg.employee_id || reg.username})?`)) {
       return;

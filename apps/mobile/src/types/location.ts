@@ -13,7 +13,13 @@ export interface GPSWaypoint {
 
 export interface TrainLocation {
   train_number: string;
-  coach_number: string;
+  train_name?: string;
+  region?: string;
+  source_station?: string;
+  destination_station?: string;
+  coach_number?: string;
+  total_coaches?: number;
+  connected_devices?: number;
   is_online: boolean;
   has_gps?: boolean;
   is_simulated?: boolean;
@@ -22,6 +28,7 @@ export interface TrainLocation {
   current_altitude?: number | null;
   current_speed_kmh?: number | null;
   satellites?: number | null;
+  nearest_station?: string | null;
   last_update?: string | null;
   waypoints: GPSWaypoint[];
 }

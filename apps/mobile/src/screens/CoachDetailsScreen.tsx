@@ -3,6 +3,7 @@ import { useApp } from '../state/AppContext';
 import { CoachDualTankCard } from '../components/tank/CoachDualTankCard';
 import { CoachMiniMap } from '../components/location/CoachMiniMap';
 import { ManageCoachModal } from '../components/coach/ManageCoachModal';
+import { AddDeviceModal } from '../components/device/AddDeviceModal';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -22,6 +23,7 @@ import {
   Radio,
   CheckCircle2,
   SlidersHorizontal,
+  Plus,
 } from 'lucide-react';
 
 export const CoachDetailsScreen: React.FC = () => {
@@ -46,6 +48,7 @@ export const CoachDetailsScreen: React.FC = () => {
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isManageCoachOpen, setIsManageCoachOpen] = useState<boolean>(false);
+  const [isAddDeviceOpen, setIsAddDeviceOpen] = useState<boolean>(false);
   const trainNum = (selectedTrainNumber || configuredTrains[0]?.train_number || '').trim();
   const coachNum = (selectedCoachNumber || '').toUpperCase();
 
@@ -110,18 +113,22 @@ export const CoachDetailsScreen: React.FC = () => {
   const batteryPercent = hasLiveTelemetry && liveTelemetry ? liveTelemetry.bat : (matchingDevice?.batteryPercent ?? null);
   const isBatteryLow = batteryPercent != null && batteryPercent < 40;
 
-  // Dual Tank Telemetry values: formula (heightCm / 150.0) * 100
-  const arrivalPercent = hasLiveTelemetry && liveTelemetry && typeof liveTelemetry.cm1 === 'number'
-    ? Number(((liveTelemetry.cm1 / 150.0) * 100).toFixed(1))
-    : (matchingDevice?.primaryLevel ?? null);
-  const arrivalHeight = hasLiveTelemetry && liveTelemetry ? liveTelemetry.cm1 : (arrivalPercent != null ? (arrivalPercent / 100) * 150.0 : null);
-  const arrivalVolume = arrivalPercent != null ? (arrivalPercent / 100) * 500.0 : null;
+  // Configured tank geometry dynamically derived from train / consist settings
+  const configuredMaxHeight = (activeConsist?.train_number === trainNum && activeConsist?.tank_height_cm) || matchedConfiguredTrain?.tank_height_cm || 50.0;
+  const configuredMaxCapacity = (activeConsist?.train_number === trainNum && activeConsist?.tank_capacity_liters) || matchedConfiguredTrain?.tank_capacity_liters || 20.0;
 
-  const departurePercent = hasLiveTelemetry && liveTelemetry && typeof liveTelemetry.cm2 === 'number'
-    ? Number(((liveTelemetry.cm2 / 150.0) * 100).toFixed(1))
+  // Dual Tank Telemetry values: formula (heightCm / configuredMaxHeight) * 100
+  const arrivalPercent = hasLiveTelemetry && liveTelemetry && typeof liveTelemetry.cm1 === 'number' && configuredMaxHeight > 0
+    ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm1 / configuredMaxHeight) * 100)).toFixed(1))
+    : (matchingDevice?.primaryLevel ?? null);
+  const arrivalHeight = hasLiveTelemetry && liveTelemetry ? liveTelemetry.cm1 : (arrivalPercent != null ? (arrivalPercent / 100) * configuredMaxHeight : null);
+  const arrivalVolume = arrivalPercent != null ? Number(((arrivalPercent / 100) * configuredMaxCapacity).toFixed(1)) : null;
+
+  const departurePercent = hasLiveTelemetry && liveTelemetry && typeof liveTelemetry.cm2 === 'number' && configuredMaxHeight > 0
+    ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm2 / configuredMaxHeight) * 100)).toFixed(1))
     : (matchingDevice?.secondaryLevel ?? null);
-  const departureHeight = hasLiveTelemetry && liveTelemetry ? liveTelemetry.cm2 : (departurePercent != null ? (departurePercent / 100) * 150.0 : null);
-  const departureVolume = departurePercent != null ? (departurePercent / 100) * 500.0 : null;
+  const departureHeight = hasLiveTelemetry && liveTelemetry ? liveTelemetry.cm2 : (departurePercent != null ? (departurePercent / 100) * configuredMaxHeight : null);
+  const departureVolume = departurePercent != null ? Number(((departurePercent / 100) * configuredMaxCapacity).toFixed(1)) : null;
 
   const availableCoaches = useMemo(() => {
     if (activeConsist?.train_number === trainNum && activeConsist.coaches?.length) {
@@ -302,7 +309,7 @@ export const CoachDetailsScreen: React.FC = () => {
 
           <button
             onClick={() => setIsManageCoachOpen(true)}
-            title="Manage Coaches & Consist"
+            title="Edit Coaches & Consist"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -319,7 +326,29 @@ export const CoachDetailsScreen: React.FC = () => {
             }}
           >
             <SlidersHorizontal size={13} />
-            <span>Manage Coach</span>
+            <span>Edit Coach</span>
+          </button>
+
+          <button
+            onClick={() => setIsAddDeviceOpen(true)}
+            title="Register & Assign Device to this Coach"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '5px 10px',
+              backgroundColor: '#EFF6FF',
+              border: '1px solid #BFDBFE',
+              borderRadius: '6px',
+              color: '#2563EB',
+              fontSize: '11px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.12s ease',
+            }}
+          >
+            <Plus size={13} />
+            <span>Add Device</span>
           </button>
 
           <div style={{ height: '20px', width: '1px', backgroundColor: '#E2E8F0' }} />
@@ -472,31 +501,56 @@ export const CoachDetailsScreen: React.FC = () => {
             padding: '10px 12px',
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'space-between',
             gap: '10px',
             boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)',
           }}
         >
-          <div
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+            <div
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '6px',
+                backgroundColor: '#F8FAFC',
+                color: '#0F172A',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <Cpu size={18} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>ASSIGNED DEVICE</div>
+              <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {deviceId}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsAddDeviceOpen(true)}
+            title="Register / Assign Device to this Coach"
             style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '6px',
-              backgroundColor: '#F8FAFC',
-              color: '#0F172A',
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
-              justifyContent: 'center',
+              gap: '4px',
+              padding: '4px 8px',
+              backgroundColor: '#EFF6FF',
+              border: '1px solid #BFDBFE',
+              borderRadius: '6px',
+              color: '#2563EB',
+              fontSize: '11px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
               flexShrink: 0,
             }}
           >
-            <Cpu size={18} />
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>ASSIGNED DEVICE</div>
-            <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {deviceId}
-            </div>
-          </div>
+            <Plus size={12} />
+            <span>Add Device</span>
+          </button>
         </div>
 
         {/* Card 3: Device Connectivity Status */}
@@ -779,6 +833,15 @@ export const CoachDetailsScreen: React.FC = () => {
         isOpen={isManageCoachOpen}
         onClose={() => setIsManageCoachOpen(false)}
         trainNumber={trainNum}
+      />
+
+      {/* Add Device Modal (Available to both Admin and Employee) */}
+      <AddDeviceModal
+        isOpen={isAddDeviceOpen}
+        onClose={() => setIsAddDeviceOpen(false)}
+        presetTrainNumber={trainNum}
+        presetCoachNumber={coachNum}
+        onSuccess={() => refreshData()}
       />
     </div>
   );

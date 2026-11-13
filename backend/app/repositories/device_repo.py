@@ -51,7 +51,16 @@ class DeviceRepository:
         uid: str,
         train_number: str = "12002",
         coach_number: str = "B4",
-        name: str = "Coach Water Monitor"
+        name: str = "Coach Water Monitor",
+        hardware_version: str = "Standard WLI Node",
+        firmware_version: str = "2.0.0",
+        device_type: str = "Quectel EC200U 4G LTE",
+        protocol: str = "MQTT over TLS/WSS",
+        mqtt_client_id: Optional[str] = None,
+        mqtt_topic: Optional[str] = None,
+        tank_assignment: str = "BOTH",
+        description: Optional[str] = None,
+        status: str = "AVAILABLE",
     ) -> Device:
         device = await self.get_by_uid(uid)
         if not device:
@@ -60,6 +69,15 @@ class DeviceRepository:
                 train_number=train_number,
                 coach_number=coach_number,
                 name=name,
+                hardware_version=hardware_version,
+                firmware_version=firmware_version,
+                device_type=device_type,
+                protocol=protocol,
+                mqtt_client_id=mqtt_client_id or f"panorama-wli-{uid}",
+                mqtt_topic=mqtt_topic or f"panorama/telemetry/{uid}",
+                tank_assignment=tank_assignment,
+                description=description,
+                status=status,
                 is_online=True,
                 last_seen_at=datetime.now(timezone.utc)
             )
@@ -87,6 +105,16 @@ class DeviceRepository:
             if not device.is_online or not last or (now - last).total_seconds() > 5:
                 device.train_number = train_number
                 device.coach_number = coach_number
+                device.name = name
+                device.hardware_version = hardware_version
+                device.firmware_version = firmware_version
+                device.device_type = device_type
+                device.protocol = protocol
+                if mqtt_client_id: device.mqtt_client_id = mqtt_client_id
+                if mqtt_topic: device.mqtt_topic = mqtt_topic
+                if tank_assignment: device.tank_assignment = tank_assignment
+                if description: device.description = description
+                if status: device.status = status
                 device.is_online = True
                 device.last_seen_at = now
                 await self.session.flush()

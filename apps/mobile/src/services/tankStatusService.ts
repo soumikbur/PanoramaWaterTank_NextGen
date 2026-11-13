@@ -204,6 +204,21 @@ export function computeConsistData(params: {
     const typeIndex = (i - 1) % coachTypes.length;
     const coachType = consistCoach?.coach_category || coachTypes[typeIndex];
 
+    const t1Obj = consistCoach?.tanks?.find((t) => t.tank_index === 1) || consistCoach?.tanks?.[0];
+    const t2Obj = consistCoach?.tanks?.find((t) => t.tank_index === 2) || consistCoach?.tanks?.[1];
+
+    const coachHeightCm =
+      t1Obj?.height_cm ||
+      consistForTrain?.tank_height_cm ||
+      matchedTrain?.tank_height_cm ||
+      50.0;
+
+    const coachCapacityLiters =
+      t1Obj?.capacity_liters ||
+      consistForTrain?.tank_capacity_liters ||
+      matchedTrain?.tank_capacity_liters ||
+      20.0;
+
     // Check if live telemetry matches this specific train & coach
     const isLiveMatch = Boolean(
       liveTelemetry &&
@@ -266,8 +281,12 @@ export function computeConsistData(params: {
       valve2Normal = liveTelemetry.wlv2;
       tank1HeightCm = liveTelemetry.cm1;
       tank2HeightCm = liveTelemetry.cm2;
-      tank1Level = liveTelemetry.cm1 != null ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm1 / 150.0) * 100)).toFixed(1)) : liveTelemetry.wlp1;
-      tank2Level = liveTelemetry.cm2 != null ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm2 / 150.0) * 100)).toFixed(1)) : liveTelemetry.wlp2;
+      tank1Level = liveTelemetry.cm1 != null && coachHeightCm > 0
+        ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm1 / coachHeightCm) * 100)).toFixed(1))
+        : liveTelemetry.wlp1;
+      tank2Level = liveTelemetry.cm2 != null && coachHeightCm > 0
+        ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm2 / coachHeightCm) * 100)).toFixed(1))
+        : liveTelemetry.wlp2;
       latitude = liveTelemetry.lat;
       longitude = liveTelemetry.long;
     }
@@ -299,7 +318,7 @@ export function computeConsistData(params: {
 
     // Tank 1: Arrival Side
     const tank1Id = `${cleanTrainNumber}-${coachNum}-tank-1`;
-    const tank1Volume = tank1Level != null ? Number(((tank1Level / 100) * 500).toFixed(1)) : null;
+    const tank1Volume = tank1Level != null ? Number(((tank1Level / 100) * coachCapacityLiters).toFixed(1)) : null;
     const tank1Status: ConsistTankItem = {
       tankId: tank1Id,
       tankName: 'Arrival Side (Tank 1)',
@@ -318,8 +337,8 @@ export function computeConsistData(params: {
       rawLevelPercent: tank1Level,
       volumeLiters: tank1Volume,
       heightCm: tank1HeightCm,
-      capacityLiters: 500,
-      maxHeightCm: 150.0,
+      capacityLiters: coachCapacityLiters,
+      maxHeightCm: coachHeightCm,
       crossSectionalAreaM2: 0.33,
       rank: tank1Level && tank1Level > 70 ? 'GOOD' : tank1Level && tank1Level > 30 ? 'MODERATE' : 'LOW',
       alarmStatus: !valve1Normal ? 'VALVE_ALERT' : tank1Level != null && tank1Level < 10 ? 'CRITICAL_LOW' : 'NORMAL',
@@ -334,7 +353,7 @@ export function computeConsistData(params: {
 
     // Tank 2: Departure Side
     const tank2Id = `${cleanTrainNumber}-${coachNum}-tank-2`;
-    const tank2Volume = tank2Level != null ? Number(((tank2Level / 100) * 500).toFixed(1)) : null;
+    const tank2Volume = tank2Level != null ? Number(((tank2Level / 100) * coachCapacityLiters).toFixed(1)) : null;
     const tank2Status: ConsistTankItem = {
       tankId: tank2Id,
       tankName: 'Departure Side (Tank 2)',
@@ -353,8 +372,8 @@ export function computeConsistData(params: {
       rawLevelPercent: tank2Level,
       volumeLiters: tank2Volume,
       heightCm: tank2HeightCm,
-      capacityLiters: 500,
-      maxHeightCm: 150.0,
+      capacityLiters: coachCapacityLiters,
+      maxHeightCm: coachHeightCm,
       crossSectionalAreaM2: 0.33,
       rank: tank2Level && tank2Level > 70 ? 'GOOD' : tank2Level && tank2Level > 30 ? 'MODERATE' : 'LOW',
       alarmStatus: !valve2Normal ? 'VALVE_ALERT' : tank2Level != null && tank2Level < 10 ? 'CRITICAL_LOW' : 'NORMAL',

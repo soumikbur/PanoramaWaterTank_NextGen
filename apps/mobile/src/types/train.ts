@@ -129,6 +129,10 @@ export interface TankConsist {
   tank_index: number;
   name: string;
   capacity_liters: number;
+  height_cm?: number;
+  tank_type?: string;
+  geometry?: string;
+  current_height_cm?: number | null;
   current_level_percent: number;
   current_volume_liters: number;
   status: 'NORMAL' | 'WARNING' | 'CRITICAL';
@@ -154,6 +158,10 @@ export interface CoachFormInput {
   tank_2_name?: string | null;
   tank_1_capacity?: number | null;
   tank_2_capacity?: number | null;
+  tank_1_height_cm?: number | null;
+  tank_2_height_cm?: number | null;
+  tank_1_geometry?: string | null;
+  tank_2_geometry?: string | null;
   tank_height_cm?: number | null;
   device_uid?: string | null;
 }

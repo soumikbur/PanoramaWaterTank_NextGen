@@ -7,8 +7,10 @@ from app.core.database import get_db
 from app.repositories.device_repo import DeviceRepository
 from app.repositories.telemetry_repo import TelemetryRepository
 from app.schemas.device import DeviceOut, DeviceDiagnostics, DeviceCreate, DeviceUpdate
-from app.api.v1.auth import get_current_admin_user
+from app.api.v1.auth import get_current_admin_user, get_current_user
 from app.models.user import User
+from app.websocket.manager import ws_manager
+from app.mqtt.client import mqtt_service
 
 router = APIRouter(prefix="/devices", tags=["Devices"])
 
@@ -36,6 +38,13 @@ async def list_devices(
             name=d.name,
             hardware_version=d.hardware_version,
             firmware_version=d.firmware_version,
+            device_type=d.device_type,
+            protocol=d.protocol,
+            mqtt_client_id=d.mqtt_client_id,
+            mqtt_topic=d.mqtt_topic,
+            tank_assignment=d.tank_assignment,
+            description=d.description,
+            status=d.status,
             is_online=d.is_online,
             last_seen_at=d.last_seen_at,
             created_at=d.created_at,
@@ -81,30 +90,35 @@ async def get_device_diagnostics(
 @router.post("", response_model=DeviceOut, status_code=201)
 async def create_device(
     payload: DeviceCreate,
-    admin: User = Depends(get_current_admin_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Register a new edge monitoring device and auto-provision associated tanks (Admin Only)."""
+    """Register a new edge monitoring device and auto-provision associated tanks (Admin & Employee)."""
     repo = DeviceRepository(db)
     existing = await repo.get_by_uid(payload.uid)
     if existing:
         raise HTTPException(status_code=400, detail=f"Device with UID '{payload.uid}' already exists")
 
     device = await repo.create_or_update(
-        uid=payload.uid,
-        train_number=payload.trainNumber,
-        coach_number=payload.coachNumber,
-        name=payload.name
+        uid=payload.uid.strip(),
+        train_number=payload.trainNumber.strip(),
+        coach_number=payload.coachNumber.strip(),
+        name=payload.name.strip(),
+        hardware_version=payload.hardwareVersion or "Standard WLI Node",
+        firmware_version=payload.firmwareVersion or "2.0.0",
+        device_type=payload.deviceType or "Quectel EC200U 4G LTE",
+        protocol=payload.protocol or "MQTT over TLS/WSS",
+        mqtt_client_id=payload.mqttClientId or f"panorama-wli-{payload.uid.strip()}",
+        mqtt_topic=payload.mqttTopic or f"panorama/telemetry/{payload.uid.strip()}",
+        tank_assignment=payload.tankAssignment or "BOTH",
+        description=payload.description,
+        status=payload.status or "AVAILABLE",
     )
-    if payload.hardwareVersion:
-        device.hardware_version = payload.hardwareVersion
-    if payload.firmwareVersion:
-        device.firmware_version = payload.firmwareVersion
 
     await db.commit()
     await db.refresh(device)
 
-    return DeviceOut(
+    out = DeviceOut(
         id=device.id,
         uid=device.uid,
         train_number=device.train_number,
@@ -112,6 +126,13 @@ async def create_device(
         name=device.name,
         hardware_version=device.hardware_version,
         firmware_version=device.firmware_version,
+        device_type=device.device_type,
+        protocol=device.protocol,
+        mqtt_client_id=device.mqtt_client_id,
+        mqtt_topic=device.mqtt_topic,
+        tank_assignment=device.tank_assignment,
+        description=device.description,
+        status=device.status,
         is_online=device.is_online,
         last_seen_at=device.last_seen_at,
         created_at=device.created_at,
@@ -121,28 +142,53 @@ async def create_device(
         has_active_alarm=False
     )
 
+    sync_payload = {
+        "action": "create_device",
+        "device": out.model_dump(by_alias=True)
+    }
+    await ws_manager.broadcast("DEVICE_SYNC", sync_payload)
+    mqtt_service.publish("panorama/devices/sync", sync_payload)
+
+    return out
+
 
 @router.put("/{device_id}", response_model=DeviceOut)
 async def update_device(
     device_id: str,
     payload: DeviceUpdate,
-    admin: User = Depends(get_current_admin_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Update device metadata, train/coach assignment, and firmware version (Admin Only)."""
+    """Update device metadata, train/coach assignment, and parameters (Admin & Employee)."""
     repo = DeviceRepository(db)
     device = await repo.get_by_id(device_id) or await repo.get_by_uid(device_id)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
 
     if payload.name is not None:
-        device.name = payload.name
+        device.name = payload.name.strip()
     if payload.trainNumber is not None:
-        device.train_number = payload.trainNumber
+        device.train_number = payload.trainNumber.strip()
     if payload.coachNumber is not None:
-        device.coach_number = payload.coachNumber
+        device.coach_number = payload.coachNumber.strip()
     if payload.firmwareVersion is not None:
-        device.firmware_version = payload.firmwareVersion
+        device.firmware_version = payload.firmwareVersion.strip()
+    if payload.hardwareVersion is not None:
+        device.hardware_version = payload.hardwareVersion.strip()
+    if payload.deviceType is not None:
+        device.device_type = payload.deviceType.strip()
+    if payload.protocol is not None:
+        device.protocol = payload.protocol.strip()
+    if payload.mqttClientId is not None:
+        device.mqtt_client_id = payload.mqttClientId.strip()
+    if payload.mqttTopic is not None:
+        device.mqtt_topic = payload.mqttTopic.strip()
+    if payload.tankAssignment is not None:
+        device.tank_assignment = payload.tankAssignment.strip()
+    if payload.description is not None:
+        device.description = payload.description.strip()
+    if payload.status is not None:
+        device.status = payload.status.strip()
 
     await db.commit()
     await db.refresh(device)
@@ -150,7 +196,7 @@ async def update_device(
     telemetry_repo = TelemetryRepository(db)
     latest = await telemetry_repo.get_latest_for_device(device.id)
 
-    return DeviceOut(
+    out = DeviceOut(
         id=device.id,
         uid=device.uid,
         train_number=device.train_number,
@@ -158,6 +204,13 @@ async def update_device(
         name=device.name,
         hardware_version=device.hardware_version,
         firmware_version=device.firmware_version,
+        device_type=device.device_type,
+        protocol=device.protocol,
+        mqtt_client_id=device.mqtt_client_id,
+        mqtt_topic=device.mqtt_topic,
+        tank_assignment=device.tank_assignment,
+        description=device.description,
+        status=device.status,
         is_online=device.is_online,
         last_seen_at=device.last_seen_at,
         created_at=device.created_at,
@@ -166,6 +219,15 @@ async def update_device(
         secondary_level=None,
         has_active_alarm=False
     )
+
+    sync_payload = {
+        "action": "update_device",
+        "device": out.model_dump(by_alias=True)
+    }
+    await ws_manager.broadcast("DEVICE_SYNC", sync_payload)
+    mqtt_service.publish("panorama/devices/sync", sync_payload)
+
+    return out
 
 
 @router.delete("/{device_id}", status_code=200)
@@ -177,9 +239,21 @@ async def delete_device(
     """Delete a device and its associated tanks (Admin Only)."""
     repo = DeviceRepository(db)
     target = await repo.get_by_id(device_id) or await repo.get_by_uid(device_id)
-    success = await repo.delete(target.id) if target else False
+    if not target:
+        raise HTTPException(status_code=404, detail="Device not found")
+    uid = target.uid
+    success = await repo.delete(target.id)
     if not success:
         raise HTTPException(status_code=404, detail="Device not found")
     await db.commit()
-    return {"message": "Device deleted successfully", "id": target.id}
+
+    sync_payload = {
+        "action": "delete_device",
+        "id": device_id,
+        "uid": uid
+    }
+    await ws_manager.broadcast("DEVICE_SYNC", sync_payload)
+    mqtt_service.publish("panorama/devices/sync", sync_payload)
+
+    return {"message": "Device deleted successfully", "id": target.id, "uid": uid}
 

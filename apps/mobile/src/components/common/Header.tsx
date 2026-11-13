@@ -29,7 +29,10 @@ import {
   ChevronDown,
   Menu,
   Bell,
+  Smartphone,
+  Download,
 } from 'lucide-react';
+import { InstallAppModal } from './InstallAppModal';
 
 interface SearchResultItem {
   id: string;
@@ -84,6 +87,7 @@ export const Header: React.FC = () => {
 
   // Profile menu state
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const profileContainerRef = useRef<HTMLDivElement>(null);
@@ -119,7 +123,7 @@ export const Header: React.FC = () => {
       subtitle: 'Railway Fleet Operations & Consist Management',
     },
     coaches: {
-      title: 'Coach Management',
+      title: 'Coach Editing',
       subtitle: 'Consist coach status, 24-coach graphical layout & dual water tanks',
     },
     'coach-details': {
@@ -178,7 +182,7 @@ export const Header: React.FC = () => {
     login: 'Sign In',
     dashboard: 'Dashboard',
     trains: 'Train Management',
-    coaches: 'Coach Management',
+    coaches: 'Coach Editing',
     'coach-details': 'Coach Details',
     watertank: 'All Tanks',
     devices: 'Devices',
@@ -1074,6 +1078,29 @@ export const Header: React.FC = () => {
 
             {/* Right: Quick actions (Search, Connection, Alerts) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+              {/* Install App Button */}
+              <button
+                type="button"
+                id="mobile-install-app-btn"
+                onClick={() => setIsInstallModalOpen(true)}
+                aria-label="Install Android App"
+                title="Install Android App / PWA"
+                className="touch-target-44"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#2563EB',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '8px',
+                  borderRadius: '6px',
+                }}
+              >
+                <Download size={18} />
+              </button>
+
               {/* Search Toggle Button */}
               <button
                 type="button"
@@ -1663,6 +1690,41 @@ export const Header: React.FC = () => {
           </span>
         </div>
 
+        {/* Install App Button (Desktop Header) */}
+        <button
+          id="header-install-app-btn"
+          onClick={() => setIsInstallModalOpen(true)}
+          title="Install Mobile App (Android APK & PWA)"
+          style={{
+            height: '28px',
+            padding: '0 10px',
+            borderRadius: '4px',
+            backgroundColor: '#EFF6FF',
+            border: '1px solid #BFDBFE',
+            cursor: 'pointer',
+            fontSize: '11px',
+            fontWeight: 700,
+            color: '#2563EB',
+            fontFamily: typography.fontFamily,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            transition: 'all 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#DBEAFE';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = '#93C5FD';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#EFF6FF';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = '#BFDBFE';
+          }}
+        >
+          <Download size={13} />
+          <span>Install App</span>
+          <ChevronDown size={11} style={{ opacity: 0.7 }} />
+        </button>
+
         {/* Settings Shortcut Button (Qt Header 32x32 rounded button) */}
         <button
           onClick={() => setActiveScreen('settings')}
@@ -1756,6 +1818,12 @@ export const Header: React.FC = () => {
           </span>
         </div>
       </div>
+
+      {/* Install App Modal */}
+      <InstallAppModal
+        isOpen={isInstallModalOpen}
+        onClose={() => setIsInstallModalOpen(false)}
+      />
     </header>
   );
 };

@@ -56,7 +56,6 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
   const [railwayZone, setRailwayZone] = useState('NR');
   const [trainType, setTrainType] = useState('Express');
   const [initialCoach, setInitialCoach] = useState('B1');
-  const [tankCapacity, setTankCapacity] = useState('20');
   const [useOfficialConsist, setUseOfficialConsist] = useState(true);
 
   const [lookupLoading, setLookupLoading] = useState(false);
@@ -83,7 +82,6 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
   const resetForm = () => {
     setTrainNumber('');
     clearPopulatedMetadata();
-    setTankCapacity('20');
     setUseOfficialConsist(true);
     setLookupLoading(false);
     setLookupResult(null);
@@ -276,7 +274,6 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
         has_official_composition: hasOfficial,
         api_provider: lookupResult.provider || 'DataMeet OpenData',
         last_verified_at: lookupResult.verified_at || new Date().toISOString(),
-        tank_capacity: parseFloat(tankCapacity) || 20.0,
         ...(hasOfficial
           ? {
               coaches: lookupResult.coach_composition.map((c) => ({
@@ -718,7 +715,7 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px' }}>
             <div style={{ minWidth: 0 }}>
               <label style={{ display: 'flex', alignItems: 'center', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
                 Railway Region * {autoTag('region')}
@@ -752,21 +749,6 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
                   ...inputStyle,
                   backgroundColor: isVerified && autoFilledFields.has('zone') ? '#F8FAFC' : '#FFFFFF',
                 }}
-              />
-            </div>
-
-            <div style={{ minWidth: 0 }}>
-              <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                Tank Capacity (L)
-              </label>
-              <input
-                data-testid="train-capacity-input"
-                type="number"
-                step="0.5"
-                min="1"
-                value={tankCapacity}
-                onChange={(e) => setTankCapacity(e.target.value)}
-                style={inputStyle}
               />
             </div>
           </div>

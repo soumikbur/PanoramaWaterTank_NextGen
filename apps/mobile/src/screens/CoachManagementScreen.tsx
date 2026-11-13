@@ -5,6 +5,7 @@ import { ApiClient } from '../api/client';
 import { TankLiveStatus, Device, AlarmStatus } from '../types';
 import { filterConsistCoaches, CoachTankFilterMode } from '../services/tankStatusService';
 import { TankVisualization } from '../components/tank/TankVisualization';
+import { ManageCoachModal } from '../components/coach/ManageCoachModal';
 import {
   Layers,
   Train,
@@ -68,6 +69,7 @@ export const CoachManagementScreen: React.FC = () => {
   const [selectedCoach, setSelectedCoach] = useState<CoachRecord | null>(null);
   const [isAddCoachOpen, setIsAddCoachOpen] = useState(false);
   const [isEditCoachOpen, setIsEditCoachOpen] = useState(false);
+  const [isManageCoachOpen, setIsManageCoachOpen] = useState(false);
   const [coachToEdit, setCoachToEdit] = useState<CoachRecord | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
@@ -500,6 +502,28 @@ export const CoachManagementScreen: React.FC = () => {
               <span>Grid View</span>
             </button>
           </div>
+
+          <button
+            onClick={() => setIsManageCoachOpen(true)}
+            title="Edit Coaches & Consist"
+            style={{
+              height: '34px',
+              padding: '0 12px',
+              backgroundColor: '#EFF6FF',
+              color: '#2563EB',
+              border: '1px solid #BFDBFE',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+            }}
+          >
+            <SlidersHorizontal size={14} />
+            <span>Edit Coaches</span>
+          </button>
 
           <button
             onClick={handleOpenAddCoach}
@@ -1533,6 +1557,17 @@ export const CoachManagementScreen: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {activeTrain && (
+        <ManageCoachModal
+          isOpen={isManageCoachOpen}
+          onClose={() => {
+            setIsManageCoachOpen(false);
+            refreshData();
+          }}
+          trainNumber={activeTrain}
+        />
       )}
     </div>
   );

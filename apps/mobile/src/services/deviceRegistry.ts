@@ -6,6 +6,16 @@
  */
 
 import { LiveTelemetryPayload } from '../types';
+import {
+  mqttService,
+  CENTRAL_DEVICES_TOPIC,
+  CENTRAL_DELTA_SYNC_TOPIC,
+} from './mqttService';
+
+const centralChannel: BroadcastChannel | null =
+  typeof window !== 'undefined' && typeof (window as any).BroadcastChannel === 'function'
+    ? new BroadcastChannel('panorama_central_sync')
+    : null;
 
 function resolveRegistryApiBase(): string | null {
   const configured =
@@ -62,6 +72,9 @@ class DeviceRegistryService {
   private devices: Map<string, ManagedDevice> = new Map();
   private listeners: Set<(devices: ManagedDevice[]) => void> = new Set();
   private isInitialized = false;
+  private deletedUids: Set<string> = new Set();
+  private version: number = 1;
+  private updatedAt: number = 1700000000000;
 
   private constructor() {
     this.loadFromStorage();
@@ -116,14 +129,104 @@ class DeviceRegistryService {
   /**
    * Save current devices map to localStorage.
    */
-  private saveToStorage(): void {
+  private saveToStorage(options?: { skipPublish?: boolean }): void {
     if (typeof window === 'undefined' || !window.localStorage) return;
     try {
+      if (!options?.skipPublish) {
+        this.version += 1;
+        this.updatedAt = Date.now();
+      }
       const list = Array.from(this.devices.values());
+      const stateObj = {
+        version: this.version,
+        updatedAt: this.updatedAt,
+        devices: list,
+        deletedUids: Array.from(this.deletedUids),
+      };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+
+      centralChannel?.postMessage({
+        type: 'DEVICE_SYNC',
+        payload: stateObj,
+      });
+
+      if (!options?.skipPublish) {
+        mqttService.publish(CENTRAL_DEVICES_TOPIC, stateObj, true);
+        mqttService.publish(CENTRAL_DELTA_SYNC_TOPIC, {
+          type: 'DEVICE_UPDATE',
+          version: this.version,
+          updatedAt: this.updatedAt,
+        });
+      }
     } catch (e) {
       console.warn('[DeviceRegistry] Error writing to storage:', e);
     }
+  }
+
+  public handleCentralSync(remote: any): boolean {
+    if (!remote) return false;
+    const rawDevices: ManagedDevice[] = Array.isArray(remote)
+      ? remote
+      : Array.isArray(remote.devices)
+      ? remote.devices
+      : [];
+    if (!rawDevices && !remote.deletedUids) return false;
+
+    const remoteUpdatedAt = typeof remote.updatedAt === 'number' ? remote.updatedAt : 0;
+    const remoteVersion = typeof remote.version === 'number' ? remote.version : 0;
+    const remoteDeleted: string[] = Array.isArray(remote.deletedUids) ? remote.deletedUids : [];
+
+    remoteDeleted.forEach((uid) => this.deletedUids.add(uid));
+
+    // Remove any locally held devices that were deleted remotely
+    this.deletedUids.forEach((uid) => {
+      this.devices.delete(uid);
+    });
+
+    const now = Date.now();
+    rawDevices.forEach((remoteDev) => {
+      if (!remoteDev || !remoteDev.uid || this.deletedUids.has(remoteDev.uid)) return;
+      const existing = this.devices.get(remoteDev.uid);
+      if (existing) {
+        // Keep active local telemetry if local timestamp is newer, but adopt remote administrative mapping
+        const useLocalTelemetry = existing.lastSeenTimestamp > (remoteDev.lastSeenTimestamp || 0);
+        this.devices.set(remoteDev.uid, {
+          ...remoteDev,
+          name: remoteDev.name || existing.name,
+          trainNumber: remoteDev.trainNumber !== undefined ? remoteDev.trainNumber : existing.trainNumber,
+          coachNumber: remoteDev.coachNumber !== undefined ? remoteDev.coachNumber : existing.coachNumber,
+          registrationStatus: remoteDev.registrationStatus || existing.registrationStatus,
+          assignmentStatus: remoteDev.assignmentStatus || existing.assignmentStatus,
+          hardwareModel: remoteDev.hardwareModel || existing.hardwareModel,
+          // Telemetry
+          isOnline: useLocalTelemetry ? existing.isOnline : ((remoteDev.lastSeenTimestamp ? (now - remoteDev.lastSeenTimestamp) < STALE_TIMEOUT_MS : false)),
+          batteryPercent: useLocalTelemetry ? existing.batteryPercent : remoteDev.batteryPercent,
+          batteryVoltage: useLocalTelemetry ? existing.batteryVoltage : remoteDev.batteryVoltage,
+          tank1Level: useLocalTelemetry ? existing.tank1Level : remoteDev.tank1Level,
+          tank1HeightCm: useLocalTelemetry ? existing.tank1HeightCm : remoteDev.tank1HeightCm,
+          tank2Level: useLocalTelemetry ? existing.tank2Level : remoteDev.tank2Level,
+          tank2HeightCm: useLocalTelemetry ? existing.tank2HeightCm : remoteDev.tank2HeightCm,
+          latitude: useLocalTelemetry ? existing.latitude : remoteDev.latitude,
+          longitude: useLocalTelemetry ? existing.longitude : remoteDev.longitude,
+          speedKmh: useLocalTelemetry ? existing.speedKmh : remoteDev.speedKmh,
+          lastSeen: useLocalTelemetry ? existing.lastSeen : remoteDev.lastSeen,
+          lastSeenTimestamp: Math.max(existing.lastSeenTimestamp || 0, remoteDev.lastSeenTimestamp || 0),
+        });
+      } else {
+        const isOnline = remoteDev.lastSeenTimestamp ? (now - remoteDev.lastSeenTimestamp) < STALE_TIMEOUT_MS : false;
+        this.devices.set(remoteDev.uid, {
+          ...remoteDev,
+          isOnline,
+        });
+      }
+    });
+
+    this.version = Math.max(this.version, remoteVersion);
+    this.updatedAt = Math.max(this.updatedAt, remoteUpdatedAt, Date.now());
+
+    this.saveToStorage({ skipPublish: true });
+    this.notify();
+    return true;
   }
 
   private notify(): void {
@@ -404,6 +507,7 @@ class DeviceRegistryService {
    * Delete device from registry.
    */
   public deleteDevice(uid: string): boolean {
+    this.deletedUids.add(uid);
     const deleted = this.devices.delete(uid);
     if (deleted) {
       this.saveToStorage();
@@ -414,3 +518,15 @@ class DeviceRegistryService {
 }
 
 export const deviceRegistry = DeviceRegistryService.getInstance();
+
+if (typeof window !== 'undefined') {
+  mqttService.onCentralDeviceSync((data) => {
+    deviceRegistry.handleCentralSync(data);
+  });
+
+  centralChannel?.addEventListener('message', (event) => {
+    if (event.data?.type === 'DEVICE_SYNC' && event.data.payload) {
+      deviceRegistry.handleCentralSync(event.data.payload);
+    }
+  });
+}

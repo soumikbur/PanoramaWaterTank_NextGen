@@ -271,6 +271,13 @@ const AdminSystemSettings: React.FC = () => {
 
   useEffect(() => {
     loadConfig();
+    const onSettingsUpdated = () => {
+      loadConfig();
+    };
+    window.addEventListener('panorama:settings-updated', onSettingsUpdated);
+    return () => {
+      window.removeEventListener('panorama:settings-updated', onSettingsUpdated);
+    };
   }, []);
 
   const handleDimensionChange = (height: number, diameter: number) => {

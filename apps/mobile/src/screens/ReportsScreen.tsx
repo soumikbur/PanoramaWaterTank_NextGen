@@ -23,7 +23,7 @@ export type EmployeeReportType =
   | 'gps_history';
 
 export const ReportsScreen: React.FC = () => {
-  const { liveTank, selectedTrainNumber, devices, tanks, liveTelemetry, configuredTrains } = useApp();
+  const { liveTank, selectedTrainNumber, devices, tanks, liveTelemetry, configuredTrains, activeConsist } = useApp();
 
   const [reportType, setReportType] = useState<EmployeeReportType>('train_water');
   const [selectedTrain, setSelectedTrain] = useState<string>(selectedTrainNumber || '');
@@ -68,18 +68,31 @@ export const ReportsScreen: React.FC = () => {
   const reportData = useMemo(() => {
     if (reportType === 'train_water') {
       if (liveTelemetry) {
-        const arrPct = typeof liveTelemetry.cm1 === 'number' ? Number(((liveTelemetry.cm1 / 150.0) * 100).toFixed(1)) : liveTelemetry.wlp1;
-        const depPct = typeof liveTelemetry.cm2 === 'number' ? Number(((liveTelemetry.cm2 / 150.0) * 100).toFixed(1)) : liveTelemetry.wlp2;
-        const volArr = ((arrPct / 100) * 500);
-        const volDep = ((depPct / 100) * 500);
+        const trainItem = configuredTrains.find((t) => t.train_number.trim() === liveTelemetry.trno.trim());
+        const configuredHeight = (activeConsist && activeConsist.train_number.trim() === liveTelemetry.trno.trim() && activeConsist.tank_height_cm)
+          ? activeConsist.tank_height_cm
+          : (trainItem?.tank_height_cm ?? 50.0);
+        const configuredCap = (activeConsist && activeConsist.train_number.trim() === liveTelemetry.trno.trim() && activeConsist.tank_capacity_liters)
+          ? activeConsist.tank_capacity_liters
+          : (trainItem?.tank_capacity_liters ?? 20.0);
+
+        const arrPct = typeof liveTelemetry.cm1 === 'number' && configuredHeight > 0
+          ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm1 / configuredHeight) * 100)).toFixed(1))
+          : liveTelemetry.wlp1;
+        const depPct = typeof liveTelemetry.cm2 === 'number' && configuredHeight > 0
+          ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm2 / configuredHeight) * 100)).toFixed(1))
+          : liveTelemetry.wlp2;
+        const volArr = ((arrPct / 100) * configuredCap);
+        const volDep = ((depPct / 100) * configuredCap);
         const totalVol = volArr + volDep;
+        const totalCap = configuredCap * 2;
         const avgPct = ((arrPct + depPct) / 2).toFixed(1);
         return [
           {
             train: liveTelemetry.trno,
             name: `Special Express (${liveTelemetry.trno})`,
             region: 'Eastern',
-            totalCapacity: '1000 L',
+            totalCapacity: `${totalCap.toFixed(0)} L`,
             currentVolume: `${totalVol.toFixed(1)} L`,
             avgLevel: `${avgPct}%`,
             status: !liveTelemetry.isStale ? 'Active' : 'Stale',
@@ -99,8 +112,16 @@ export const ReportsScreen: React.FC = () => {
       ];
     } else if (reportType === 'coach_water') {
       if (liveTelemetry) {
-        const arrPct = typeof liveTelemetry.cm1 === 'number' ? Number(((liveTelemetry.cm1 / 150.0) * 100).toFixed(1)) : liveTelemetry.wlp1;
-        const depPct = typeof liveTelemetry.cm2 === 'number' ? Number(((liveTelemetry.cm2 / 150.0) * 100).toFixed(1)) : liveTelemetry.wlp2;
+        const trainItem = configuredTrains.find((t) => t.train_number.trim() === liveTelemetry.trno.trim());
+        const configuredHeight = (activeConsist && activeConsist.train_number.trim() === liveTelemetry.trno.trim() && activeConsist.tank_height_cm)
+          ? activeConsist.tank_height_cm
+          : (trainItem?.tank_height_cm ?? 50.0);
+        const arrPct = typeof liveTelemetry.cm1 === 'number' && configuredHeight > 0
+          ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm1 / configuredHeight) * 100)).toFixed(1))
+          : liveTelemetry.wlp1;
+        const depPct = typeof liveTelemetry.cm2 === 'number' && configuredHeight > 0
+          ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm2 / configuredHeight) * 100)).toFixed(1))
+          : liveTelemetry.wlp2;
         return [
           {
             coach: liveTelemetry.chno,

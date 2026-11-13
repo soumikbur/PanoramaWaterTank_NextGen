@@ -1,0 +1,32 @@
+{
+  "name": "panorama-water-tank-capacitor",
+  "version": "1.0.0",
+  "description": "Panorama Water Tank Monitor â€” Production Capacitor Mobile App for Android",
+  "private": true,
+  "scripts": {
+    "build:web": "node scripts/build-web.cjs",
+    "sync": "cap sync android",
+    "copy": "cap copy android",
+    "cap:add:android": "cap add android",
+    "build:debug": "npm run build:web && npx cap sync android && node scripts/build-apk.cjs debug",
+    "build:release": "npm run build:web && npx cap sync android && node scripts/build-apk.cjs release",
+    "build:bundle": "npm run build:web && npx cap sync android && node scripts/build-apk.cjs bundle"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/app": "^6.0.3",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/geolocation": "^6.1.0",
+    "@capacitor/local-notifications": "^6.1.1",
+    "@capacitor/network": "^6.0.4",
+    "@capacitor/preferences": "^6.0.3",
+    "@capacitor/splash-screen": "^6.0.3",
+    "@capacitor/status-bar": "^6.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.4.5"
+  }
+}
+

@@ -36,7 +36,8 @@ class TankRepository:
         name: str = "Primary Water Tank",
         capacity_liters: float = 20.0,
         height_cm: float = 50.0,
-        area_m2: float = 0.04
+        area_m2: float = 0.04,
+        tank_type: str = "CYLINDRICAL",
     ) -> Tank:
         tank = Tank(
             device_id=device_id,
@@ -45,6 +46,7 @@ class TankRepository:
             capacity_liters=capacity_liters,
             height_cm=height_cm,
             area_m2=area_m2,
+            tank_type=tank_type,
         )
         self.session.add(tank)
         await self.session.flush()

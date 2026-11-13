@@ -8,6 +8,7 @@ Verifies:
 5. Defensive HTTP security headers.
 """
 import base64
+import uuid
 import pytest
 from httpx import AsyncClient, ASGITransport
 from app.main import app
@@ -77,7 +78,7 @@ async def test_rbac_mutation_endpoints_enforcement():
                 await client.delete("/api/v1/trains/98991", headers=admin_headers)
 
         # --- B. Devices Mutation (POST, PUT, DELETE /devices) ---
-        test_uid = "AUDIT-DEV-001"
+        test_uid = f"AUDIT-DEV-{uuid.uuid4().hex[:8]}"
         device_payload = {
             "uid": test_uid,
             "trainNumber": "12002",
@@ -89,38 +90,35 @@ async def test_rbac_mutation_endpoints_enforcement():
         res = await client.post("/api/v1/devices", json=device_payload)
         assert res.status_code == 401
 
-        # Employee POST -> 403
+        # Employee POST -> 201 Created (Employees and Admins can register/map devices)
         res = await client.post("/api/v1/devices", json=device_payload, headers=emp_headers)
-        assert res.status_code == 403
-
-        # Admin POST -> 201 Created
-        res = await client.post("/api/v1/devices", json=device_payload, headers=admin_headers)
         assert res.status_code == 201
         created_dev_id = res.json()["id"]
 
-        # Unauthenticated PUT -> 401
-        res = await client.put(f"/api/v1/devices/{created_dev_id}", json={"name": "Renamed Node"})
-        assert res.status_code == 401
+        try:
+            # Unauthenticated PUT -> 401
+            res = await client.put(f"/api/v1/devices/{created_dev_id}", json={"name": "Renamed Node"})
+            assert res.status_code == 401
 
-        # Employee PUT -> 403
-        res = await client.put(f"/api/v1/devices/{created_dev_id}", json={"name": "Renamed Node"}, headers=emp_headers)
-        assert res.status_code == 403
+            # Employee PUT -> 200 Success (Employees can update device metadata)
+            res = await client.put(f"/api/v1/devices/{created_dev_id}", json={"name": "Renamed Node by Emp"}, headers=emp_headers)
+            assert res.status_code == 200
 
-        # Admin PUT -> 200
-        res = await client.put(f"/api/v1/devices/{created_dev_id}", json={"name": "Renamed Node"}, headers=admin_headers)
-        assert res.status_code == 200
+            # Admin PUT -> 200 Success
+            res = await client.put(f"/api/v1/devices/{created_dev_id}", json={"name": "Renamed Node by Admin"}, headers=admin_headers)
+            assert res.status_code == 200
 
-        # Unauthenticated DELETE -> 401
-        res = await client.delete(f"/api/v1/devices/{created_dev_id}")
-        assert res.status_code == 401
+            # Unauthenticated DELETE -> 401
+            res = await client.delete(f"/api/v1/devices/{created_dev_id}")
+            assert res.status_code == 401
 
-        # Employee DELETE -> 403
-        res = await client.delete(f"/api/v1/devices/{created_dev_id}", headers=emp_headers)
-        assert res.status_code == 403
-
-        # Admin DELETE -> 200
-        res = await client.delete(f"/api/v1/devices/{created_dev_id}", headers=admin_headers)
-        assert res.status_code == 200
+            # Employee DELETE -> 403 Forbidden (Deleting hardware devices remains strictly Admin only)
+            res = await client.delete(f"/api/v1/devices/{created_dev_id}", headers=emp_headers)
+            assert res.status_code == 403
+        finally:
+            # Admin DELETE -> 200 Success (Clean up test device)
+            res = await client.delete(f"/api/v1/devices/{created_dev_id}", headers=admin_headers)
+            assert res.status_code in (200, 404)
 
         # --- C. Trains Mutation (POST, PUT, DELETE /trains) ---
         train_payload = {

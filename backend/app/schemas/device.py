@@ -11,6 +11,13 @@ class DeviceBase(BaseModel):
     name: str = "Coach Water Monitor"
     hardwareVersion: Optional[str] = Field("Standard WLI Node", alias="hardware_version")
     firmwareVersion: Optional[str] = Field("2.0.0", alias="firmware_version")
+    deviceType: Optional[str] = Field("Quectel EC200U 4G LTE", alias="device_type")
+    protocol: Optional[str] = Field("MQTT over TLS/WSS", alias="protocol")
+    mqttClientId: Optional[str] = Field(None, alias="mqtt_client_id")
+    mqttTopic: Optional[str] = Field(None, alias="mqtt_topic")
+    tankAssignment: Optional[str] = Field("BOTH", alias="tank_assignment")
+    description: Optional[str] = Field(None, alias="description")
+    status: Optional[str] = Field("AVAILABLE", alias="status")
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -21,9 +28,19 @@ class DeviceCreate(DeviceBase):
 
 class DeviceUpdate(BaseModel):
     name: Optional[str] = None
-    trainNumber: Optional[str] = None
-    coachNumber: Optional[str] = None
-    firmwareVersion: Optional[str] = None
+    trainNumber: Optional[str] = Field(None, alias="train_number")
+    coachNumber: Optional[str] = Field(None, alias="coach_number")
+    firmwareVersion: Optional[str] = Field(None, alias="firmware_version")
+    hardwareVersion: Optional[str] = Field(None, alias="hardware_version")
+    deviceType: Optional[str] = Field(None, alias="device_type")
+    protocol: Optional[str] = None
+    mqttClientId: Optional[str] = Field(None, alias="mqtt_client_id")
+    mqttTopic: Optional[str] = Field(None, alias="mqtt_topic")
+    tankAssignment: Optional[str] = Field(None, alias="tank_assignment")
+    description: Optional[str] = None
+    status: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class DeviceOut(DeviceBase):

@@ -1,0 +1,43 @@
+import type { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'com.panorama.watertankmonitor',
+  appName: 'Panorama Water Tank Monitor',
+  webDir: 'www',
+  bundledWebRuntime: false,
+  server: {
+    androidScheme: 'https',
+    cleartext: true,
+    allowNavigation: [
+      'broker.hivemq.com',
+      '*.hivemq.com',
+      '*.tile.openstreetmap.org',
+      'localhost',
+      '127.0.0.1',
+      '10.0.2.2'
+    ]
+  },
+  plugins: {
+    StatusBar: {
+      style: 'DARK',
+      backgroundColor: '#FFFFFF',
+      overlaysWebView: false
+    },
+    SplashScreen: {
+      launchShowDuration: 1800,
+      launchAutoHide: true,
+      backgroundColor: '#FFFFFF',
+      androidSplashResourceName: 'splash',
+      androidScaleType: 'CENTER_CROP',
+      showSpinner: false
+    },
+    LocalNotifications: {
+      smallIcon: 'ic_stat_panorama',
+      iconColor: '#2563EB',
+      sound: 'beep.wav'
+    }
+  }
+};
+
+export default config;
+

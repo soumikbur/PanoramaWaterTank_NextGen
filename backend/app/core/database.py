@@ -92,6 +92,33 @@ def _sync_schema_migration(sync_conn) -> None:
             for col_name, col_type in new_columns:
                 if col_name not in existing_cols:
                     sync_conn.exec_driver_sql(f"ALTER TABLE users ADD COLUMN {col_name} {col_type}")
+
+            # Trains table migration
+            res_trains = sync_conn.exec_driver_sql("PRAGMA table_info(trains)").fetchall()
+            train_cols = {row[1] for row in res_trains}
+            train_columns = [
+                ("tank_height_cm", "REAL DEFAULT 50.0"),
+                ("tank_capacity_liters", "REAL DEFAULT 20.0"),
+            ]
+            for col_name, col_type in train_columns:
+                if col_name not in train_cols:
+                    sync_conn.exec_driver_sql(f"ALTER TABLE trains ADD COLUMN {col_name} {col_type}")
+
+            # Devices table migration
+            res_devs = sync_conn.exec_driver_sql("PRAGMA table_info(devices)").fetchall()
+            dev_cols = {row[1] for row in res_devs}
+            dev_columns = [
+                ("device_type", "VARCHAR(64) DEFAULT 'Quectel EC200U 4G LTE'"),
+                ("protocol", "VARCHAR(64) DEFAULT 'MQTT over TLS/WSS'"),
+                ("mqtt_client_id", "VARCHAR(128)"),
+                ("mqtt_topic", "VARCHAR(128)"),
+                ("tank_assignment", "VARCHAR(32) DEFAULT 'BOTH'"),
+                ("description", "VARCHAR(255)"),
+                ("status", "VARCHAR(32) DEFAULT 'AVAILABLE'"),
+            ]
+            for col_name, col_type in dev_columns:
+                if col_name not in dev_cols:
+                    sync_conn.exec_driver_sql(f"ALTER TABLE devices ADD COLUMN {col_name} {col_type}")
         except Exception as e:
             logger.warning(f"Column check notice: {e}")
 

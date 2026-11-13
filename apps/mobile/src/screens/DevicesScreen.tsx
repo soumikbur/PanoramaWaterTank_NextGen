@@ -55,19 +55,31 @@ export const DevicesScreen: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
-  // Add Device Form
+  // Add Device Form (11 fields)
+  const [addName, setAddName] = useState('Coach Water Monitor');
   const [addUid, setAddUid] = useState('');
-  const [addName, setAddName] = useState('');
+  const [addDeviceType, setAddDeviceType] = useState('Quectel EC200U 4G LTE');
+  const [addProtocol, setAddProtocol] = useState('MQTT over TLS/WSS (Port 8884)');
+  const [addMqttClientId, setAddMqttClientId] = useState('');
+  const [addMqttTopic, setAddMqttTopic] = useState('');
   const [addTrainNumber, setAddTrainNumber] = useState('12002');
   const [addCoachNumber, setAddCoachNumber] = useState('B1');
-  const [addHardwareVersion, setAddHardwareVersion] = useState('Standard WLI Node');
-  const [addFirmwareVersion, setAddFirmwareVersion] = useState('2.0.0');
+  const [addTankAssignment, setAddTankAssignment] = useState<'BOTH' | 'Tank 1' | 'Tank 2'>('BOTH');
+  const [addDescription, setAddDescription] = useState('');
+  const [addStatus, setAddStatus] = useState('AVAILABLE');
 
   // Edit Device Form
   const [editName, setEditName] = useState('');
   const [editTrainNumber, setEditTrainNumber] = useState('');
   const [editCoachNumber, setEditCoachNumber] = useState('');
-  const [editFirmwareVersion, setEditFirmwareVersion] = useState('');
+  const [editDeviceType, setEditDeviceType] = useState('Quectel EC200U 4G LTE');
+  const [editProtocol, setEditProtocol] = useState('MQTT over TLS/WSS (Port 8884)');
+  const [editMqttClientId, setEditMqttClientId] = useState('');
+  const [editMqttTopic, setEditMqttTopic] = useState('');
+  const [editTankAssignment, setEditTankAssignment] = useState('BOTH');
+  const [editDescription, setEditDescription] = useState('');
+  const [editStatus, setEditStatus] = useState('AVAILABLE');
+  const [editFirmwareVersion, setEditFirmwareVersion] = useState('2.0.0');
 
   // Live devices mapped strictly from registered backend database devices
   const allDevices: DeviceTelemetry[] = useMemo(() => {
@@ -130,11 +142,22 @@ export const DevicesScreen: React.FC = () => {
     }
   }, [selectedDeviceId, allDevices]);
 
-  const handleOpenAddModal = () => {
-    setAddUid(`PANORAMA-DEV-${Math.floor(1000 + Math.random() * 9000)}`);
-    setAddName('Coach Water Monitor');
-    setAddTrainNumber('12002');
-    setAddCoachNumber('B2');
+  const handleOpenAddModal = (presetTrain?: string, presetCoach?: string) => {
+    const randomHex = Math.random().toString(16).substring(2, 8).toUpperCase();
+    const newUid = `DEV-WLI-${randomHex}`;
+    const tr = presetTrain || selectedTrainNumber || '12002';
+    const ch = presetCoach || selectedCoachNumber || 'B1';
+    setAddUid(newUid);
+    setAddName(`Coach ${ch} Water Monitor`);
+    setAddDeviceType('Quectel EC200U 4G LTE');
+    setAddProtocol('MQTT over TLS/WSS (Port 8884)');
+    setAddMqttClientId(`panorama-wli-${newUid.toLowerCase()}`);
+    setAddMqttTopic(`panorama/telemetry/${newUid}`);
+    setAddTrainNumber(tr);
+    setAddCoachNumber(ch);
+    setAddTankAssignment('BOTH');
+    setAddDescription('Standard hydrostatic pressure telemetry node');
+    setAddStatus('AVAILABLE');
     setFormError(null);
     setIsAddModalOpen(true);
   };
@@ -142,20 +165,32 @@ export const DevicesScreen: React.FC = () => {
   const handleCreateDevice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!addUid.trim() || !addName.trim() || !addTrainNumber.trim() || !addCoachNumber.trim()) {
-      setFormError('All fields are required.');
+      setFormError('Device Name, UID, Train Number, and Coach Number are mandatory.');
+      return;
+    }
+    const cleanUid = addUid.trim();
+    if (devices.some((d) => d.uid.toLowerCase() === cleanUid.toLowerCase())) {
+      setFormError(`Device with UID '${cleanUid}' already exists.`);
       return;
     }
     try {
       await ApiClient.createDevice({
-        uid: addUid.trim(),
+        uid: cleanUid,
         name: addName.trim(),
         train_number: addTrainNumber.trim(),
-        coach_number: addCoachNumber.trim(),
-        hardware_version: addHardwareVersion.trim(),
-        firmware_version: addFirmwareVersion.trim(),
+        coach_number: addCoachNumber.trim().toUpperCase(),
+        device_type: addDeviceType,
+        protocol: addProtocol,
+        mqtt_client_id: addMqttClientId.trim() || `panorama-wli-${cleanUid.toLowerCase()}`,
+        mqtt_topic: addMqttTopic.trim() || `panorama/telemetry/${cleanUid}`,
+        tank_assignment: addTankAssignment,
+        description: addDescription.trim(),
+        status: addStatus,
+        hardware_version: addDeviceType,
+        firmware_version: '2.0.0',
       });
       setIsAddModalOpen(false);
-      setActionFeedback(`Device ${addUid} registered successfully.`);
+      setActionFeedback(`Device ${cleanUid} registered successfully.`);
       setTimeout(() => setActionFeedback(null), 4000);
       await refreshData();
     } catch (err: any) {
@@ -168,7 +203,14 @@ export const DevicesScreen: React.FC = () => {
     setEditName(dev.name);
     setEditTrainNumber(dev.trainNumber);
     setEditCoachNumber(dev.coachNumber);
-    setEditFirmwareVersion(dev.firmwareVersion);
+    setEditDeviceType(dev.sensorType || 'Quectel EC200U 4G LTE');
+    setEditProtocol(dev.connectionType || 'MQTT over TLS/WSS (Port 8884)');
+    setEditMqttClientId(`panorama-wli-${dev.id.toLowerCase()}`);
+    setEditMqttTopic(`panorama/telemetry/${dev.id}`);
+    setEditTankAssignment('BOTH');
+    setEditDescription('');
+    setEditStatus(dev.status === 'Online' ? 'IN_USE' : 'AVAILABLE');
+    setEditFirmwareVersion(dev.firmwareVersion || '2.0.0');
     setFormError(null);
     setIsEditModalOpen(true);
   };
@@ -180,7 +222,14 @@ export const DevicesScreen: React.FC = () => {
       await ApiClient.updateDevice(deviceToEdit.dbId, {
         name: editName.trim(),
         trainNumber: editTrainNumber.trim(),
-        coachNumber: editCoachNumber.trim(),
+        coachNumber: editCoachNumber.trim().toUpperCase(),
+        deviceType: editDeviceType,
+        protocol: editProtocol,
+        mqttClientId: editMqttClientId.trim(),
+        mqttTopic: editMqttTopic.trim(),
+        tankAssignment: editTankAssignment,
+        description: editDescription.trim(),
+        status: editStatus,
         firmwareVersion: editFirmwareVersion.trim(),
       });
       setIsEditModalOpen(false);
@@ -894,7 +943,7 @@ export const DevicesScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Add Device Modal */}
+      {/* Add Device Modal (11-Field Complete Form) */}
       {isAddModalOpen && (
         <div
           className="modal-backdrop"
@@ -914,14 +963,18 @@ export const DevicesScreen: React.FC = () => {
             style={{
               backgroundColor: '#FFFFFF',
               borderRadius: '8px',
-              width: '460px',
+              width: '560px',
               maxWidth: '100%',
+              maxHeight: '90vh',
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
-              overflow: 'hidden',
+              overflowY: 'auto',
             }}
           >
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0F172A' }}>Register New Monitoring Device</h3>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, backgroundColor: '#FFFFFF', zIndex: 10 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0F172A' }}>Register Monitoring Device</h3>
+                <span style={{ fontSize: '11px', color: '#64748B' }}>11-Field Hardware Specification & Consist Provisioning</span>
+              </div>
               <button onClick={() => setIsAddModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
                 <X size={18} />
               </button>
@@ -934,33 +987,90 @@ export const DevicesScreen: React.FC = () => {
                 </div>
               )}
 
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Device Hardware UID *</label>
-                <input
-                  type="text"
-                  value={addUid}
-                  onChange={(e) => setAddUid(e.target.value)}
-                  placeholder="e.g. 0026004D4B42501120353332"
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
-                  required
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Device Display Name *</label>
-                <input
-                  type="text"
-                  value={addName}
-                  onChange={(e) => setAddName(e.target.value)}
-                  placeholder="e.g. Shatabdi Coach B2 Water Monitor"
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
-                  required
-                />
-              </div>
-
+              {/* 1. Name & 2. UID */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Train Number *</label>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>1. Device Display Name *</label>
+                  <input
+                    type="text"
+                    value={addName}
+                    onChange={(e) => setAddName(e.target.value)}
+                    placeholder="e.g. Coach B1 Water Monitor"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>2. Hardware UID *</label>
+                  <input
+                    type="text"
+                    value={addUid}
+                    onChange={(e) => setAddUid(e.target.value)}
+                    placeholder="e.g. DEV-WLI-A9F3"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', fontFamily: 'monospace' }}
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* 3. Device Type & 4. Protocol */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>3. Hardware Type</label>
+                  <select
+                    value={addDeviceType}
+                    onChange={(e) => setAddDeviceType(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
+                  >
+                    <option value="Quectel EC200U 4G LTE">Quectel EC200U 4G LTE</option>
+                    <option value="ESP32-S3 WLI Edge Node">ESP32-S3 WLI Edge Node</option>
+                    <option value="Standard WLI Telemetry Node">Standard WLI Telemetry Node</option>
+                    <option value="Hydrostatic Pressure Sensor Node">Hydrostatic Pressure Sensor Node</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>4. Protocol</label>
+                  <select
+                    value={addProtocol}
+                    onChange={(e) => setAddProtocol(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
+                  >
+                    <option value="MQTT over TLS/WSS (Port 8884)">MQTT over TLS/WSS (Port 8884)</option>
+                    <option value="MQTT Standard (Port 1883)">MQTT Standard (Port 1883)</option>
+                    <option value="HTTP REST Gateway (/api/status)">HTTP REST Gateway (/api/status)</option>
+                    <option value="Modbus RTU / RS485 Industrial Loop">Modbus RTU / RS485 Industrial Loop</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 5. MQTT Client ID & 6. MQTT Topic */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>5. MQTT Client ID</label>
+                  <input
+                    type="text"
+                    value={addMqttClientId}
+                    onChange={(e) => setAddMqttClientId(e.target.value)}
+                    placeholder="e.g. panorama-wli-a9f3"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', boxSizing: 'border-box', fontFamily: 'monospace' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>6. Telemetry Topic</label>
+                  <input
+                    type="text"
+                    value={addMqttTopic}
+                    onChange={(e) => setAddMqttTopic(e.target.value)}
+                    placeholder="e.g. panorama/telemetry/DEV-WLI-A9F3"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', boxSizing: 'border-box', fontFamily: 'monospace' }}
+                  />
+                </div>
+              </div>
+
+              {/* 7. Train # & 8. Coach # */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>7. Train Number *</label>
                   <input
                     type="text"
                     value={addTrainNumber}
@@ -970,7 +1080,7 @@ export const DevicesScreen: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Coach Number *</label>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>8. Coach Number *</label>
                   <input
                     type="text"
                     value={addCoachNumber}
@@ -981,29 +1091,48 @@ export const DevicesScreen: React.FC = () => {
                 </div>
               </div>
 
+              {/* 9. Tank Assignment & 11. Status */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Device Model</label>
-                  <input
-                    type="text"
-                    value={addHardwareVersion}
-                    onChange={(e) => setAddHardwareVersion(e.target.value)}
-                    placeholder="e.g. Standard WLI Node"
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
-                  />
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>9. Tank Assignment</label>
+                  <select
+                    value={addTankAssignment}
+                    onChange={(e) => setAddTankAssignment(e.target.value as any)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
+                  >
+                    <option value="BOTH">BOTH (Arrival & Departure)</option>
+                    <option value="Tank 1">Tank 1 Only (Arrival Side)</option>
+                    <option value="Tank 2">Tank 2 Only (Departure Side)</option>
+                  </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Firmware Version</label>
-                  <input
-                    type="text"
-                    value={addFirmwareVersion}
-                    onChange={(e) => setAddFirmwareVersion(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
-                  />
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>11. Status</label>
+                  <select
+                    value={addStatus}
+                    onChange={(e) => setAddStatus(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
+                  >
+                    <option value="AVAILABLE">AVAILABLE (In Pool)</option>
+                    <option value="IN_USE">IN_USE (Active Telemetry)</option>
+                    <option value="MAINTENANCE">MAINTENANCE (Workshop)</option>
+                    <option value="DECOMMISSIONED">DECOMMISSIONED</option>
+                  </select>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              {/* 10. Description */}
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>10. Hardware Description & Notes</label>
+                <textarea
+                  value={addDescription}
+                  onChange={(e) => setAddDescription(e.target.value)}
+                  placeholder="e.g. Hydrostatic pressure sensor node mounted on underframe junction box"
+                  rows={2}
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px', paddingTop: '10px', borderTop: '1px solid #E2E8F0' }}>
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
@@ -1013,9 +1142,9 @@ export const DevicesScreen: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '8px 20px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                  style={{ padding: '8px 20px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 2px rgba(37,99,235,0.2)' }}
                 >
-                  Save Device
+                  Register Device
                 </button>
               </div>
             </form>
@@ -1043,13 +1172,14 @@ export const DevicesScreen: React.FC = () => {
             style={{
               backgroundColor: '#FFFFFF',
               borderRadius: '8px',
-              width: '460px',
+              width: '560px',
               maxWidth: '100%',
+              maxHeight: '90vh',
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
-              overflow: 'hidden',
+              overflowY: 'auto',
             }}
           >
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, backgroundColor: '#FFFFFF', zIndex: 10 }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0F172A' }}>Edit Device Assignment</h3>
                 <span style={{ fontSize: '11px', color: '#64748B' }}>UID: {deviceToEdit.id}</span>
@@ -1066,20 +1196,31 @@ export const DevicesScreen: React.FC = () => {
                 </div>
               )}
 
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Device Name *</label>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
-                  required
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Device Name *</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Hardware UID</label>
+                  <input
+                    type="text"
+                    value={deviceToEdit.id}
+                    disabled
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', fontSize: '13px', boxSizing: 'border-box', color: '#64748B', fontFamily: 'monospace' }}
+                  />
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Train Assignment *</label>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Train Assignment *</label>
                   <input
                     type="text"
                     value={editTrainNumber}
@@ -1089,7 +1230,7 @@ export const DevicesScreen: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Coach Assignment *</label>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Coach Assignment *</label>
                   <input
                     type="text"
                     value={editCoachNumber}
@@ -1100,17 +1241,64 @@ export const DevicesScreen: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Firmware Version</label>
-                <input
-                  type="text"
-                  value={editFirmwareVersion}
-                  onChange={(e) => setEditFirmwareVersion(e.target.value)}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Device Model / Type</label>
+                  <select
+                    value={editDeviceType}
+                    onChange={(e) => setEditDeviceType(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
+                  >
+                    <option value="Quectel EC200U 4G LTE">Quectel EC200U 4G LTE</option>
+                    <option value="ESP32-S3 WLI Edge Node">ESP32-S3 WLI Edge Node</option>
+                    <option value="Standard WLI Telemetry Node">Standard WLI Telemetry Node</option>
+                    <option value="Hydrostatic Pressure Sensor Node">Hydrostatic Pressure Sensor Node</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Protocol</label>
+                  <select
+                    value={editProtocol}
+                    onChange={(e) => setEditProtocol(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
+                  >
+                    <option value="MQTT over TLS/WSS (Port 8884)">MQTT over TLS/WSS (Port 8884)</option>
+                    <option value="MQTT Standard (Port 1883)">MQTT Standard (Port 1883)</option>
+                    <option value="HTTP REST Gateway (/api/status)">HTTP REST Gateway (/api/status)</option>
+                    <option value="Modbus RTU / RS485 Industrial Loop">Modbus RTU / RS485 Industrial Loop</option>
+                  </select>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Tank Assignment</label>
+                  <select
+                    value={editTankAssignment}
+                    onChange={(e) => setEditTankAssignment(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
+                  >
+                    <option value="BOTH">BOTH (Arrival & Departure)</option>
+                    <option value="Tank 1">Tank 1 Only (Arrival Side)</option>
+                    <option value="Tank 2">Tank 2 Only (Departure Side)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
+                  >
+                    <option value="AVAILABLE">AVAILABLE (In Pool)</option>
+                    <option value="IN_USE">IN_USE (Active Telemetry)</option>
+                    <option value="MAINTENANCE">MAINTENANCE (Workshop)</option>
+                    <option value="DECOMMISSIONED">DECOMMISSIONED</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px', paddingTop: '10px', borderTop: '1px solid #E2E8F0' }}>
                 <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
@@ -1120,7 +1308,7 @@ export const DevicesScreen: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '8px 20px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                  style={{ padding: '8px 20px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 2px rgba(37,99,235,0.2)' }}
                 >
                   Update Device
                 </button>

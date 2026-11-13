@@ -6,6 +6,7 @@
  */
 
 import { NOTIFICATION_CONFIG } from '../config/notificationConfig';
+import { nativeBridge } from './nativeBridge';
 
 export type BrowserNotificationPermission = 'granted' | 'denied' | 'default' | 'unsupported';
 
@@ -125,6 +126,13 @@ class BrowserNotificationBridge {
   }
 
   public async requestPermission(): Promise<BrowserNotificationPermission> {
+    if (nativeBridge.isNativeApp()) {
+      const granted = await nativeBridge.requestNotificationPermissions();
+      const perm: BrowserNotificationPermission = granted ? 'granted' : 'denied';
+      this.emitPermissionChange(perm);
+      return perm;
+    }
+
     if (!this.isSupported()) {
       this.emitPermissionChange('unsupported');
       return 'unsupported';
@@ -153,6 +161,14 @@ class BrowserNotificationBridge {
   }
 
   public async showNotification(payload: BrowserNotificationPayload): Promise<boolean> {
+    if (nativeBridge.isNativeApp()) {
+      void nativeBridge.scheduleAlarmNotification({
+        title: payload.title,
+        body: payload.body,
+      });
+      return true;
+    }
+
     if (!this.isSupported()) return false;
     const perm = this.getPermission();
     if (perm !== 'granted') {

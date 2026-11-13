@@ -58,7 +58,7 @@ export interface GpsHistoryRow {
 }
 
 export const HistoryScreen: React.FC = () => {
-  const { liveTank, selectedTrainNumber, setSelectedTrainNumber, liveTelemetry, configuredTrains } = useApp();
+  const { liveTank, selectedTrainNumber, setSelectedTrainNumber, liveTelemetry, configuredTrains, activeConsist } = useApp();
 
   const [activeTab, setActiveTab] = useState<'water' | 'gps' | 'battery'>('water');
   const [activeTrain, setActiveTrain] = useState<string>(selectedTrainNumber || '');
@@ -107,10 +107,19 @@ export const HistoryScreen: React.FC = () => {
       (item) => activeTrain && item.trno === activeTrain
     );
 
+    const trainItem = configuredTrains.find((t) => t.train_number.trim() === activeTrain);
+    const configuredHeight = (activeConsist && activeConsist.train_number.trim() === activeTrain && activeConsist.tank_height_cm)
+      ? activeConsist.tank_height_cm
+      : (trainItem?.tank_height_cm ?? 50.0);
+
     if (relevant.length > 0) {
       return relevant.map((item) => {
-        const arr = typeof item.cm1 === 'number' ? Number(((item.cm1 / 150.0) * 100).toFixed(1)) : item.wlp1;
-        const dep = typeof item.cm2 === 'number' ? Number(((item.cm2 / 150.0) * 100).toFixed(1)) : item.wlp2;
+        const arr = typeof item.cm1 === 'number' && configuredHeight > 0
+          ? Number(Math.min(100, Math.max(0, (item.cm1 / configuredHeight) * 100)).toFixed(1))
+          : item.wlp1;
+        const dep = typeof item.cm2 === 'number' && configuredHeight > 0
+          ? Number(Math.min(100, Math.max(0, (item.cm2 / configuredHeight) * 100)).toFixed(1))
+          : item.wlp2;
         return {
           timestamp: new Date(item.receivedAt).toLocaleTimeString(),
           trainNumber: item.trno,

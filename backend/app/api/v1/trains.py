@@ -22,6 +22,8 @@ from app.repositories.tank_repo import TankRepository
 from app.repositories.telemetry_repo import TelemetryRepository
 from app.api.v1.auth import get_current_user, get_current_admin_user
 from app.models.user import User
+from app.websocket.manager import ws_manager
+from app.mqtt.client import mqtt_service
 from app.services.train_lookup_service import (
     TrainLookupResponse,
     REGION_DEFAULT_ZONE,
@@ -100,6 +102,8 @@ def _build_train_meta(train_no: str, db_train: Optional[Train]) -> Dict[str, Any
             "has_official_composition": db_train.has_official_composition,
             "api_provider": db_train.api_provider,
             "last_verified_at": db_train.last_verified_at.isoformat() if db_train.last_verified_at else None,
+            "tank_height_cm": getattr(db_train, "tank_height_cm", 50.0) or 50.0,
+            "tank_capacity_liters": getattr(db_train, "tank_capacity_liters", 20.0) or 20.0,
         }
     return TRAIN_METADATA.get(
         train_no,
@@ -107,6 +111,8 @@ def _build_train_meta(train_no: str, db_train: Optional[Train]) -> Dict[str, Any
             "name": f"Train {train_no}",
             "region": "NORTH",
             "type": "Fleet Consist",
+            "tank_height_cm": 50.0,
+            "tank_capacity_liters": 20.0,
         },
     )
 
@@ -122,6 +128,7 @@ class TrainCreate(BaseModel):
     name: str
     region: str
     coach_number: Optional[str] = "B1"
+    tank_height_cm: Optional[float] = 50.0
     tank_capacity: Optional[float] = 20.0
     source_station: Optional[str] = None
     source_code: Optional[str] = None
@@ -152,8 +159,12 @@ class TankConsistItem(BaseModel):
     tank_index: int
     name: str
     capacity_liters: float
+    height_cm: float = 50.0
+    tank_type: Optional[str] = "CYLINDRICAL"
+    geometry: Optional[str] = "CYLINDRICAL"
     current_level_percent: float
     current_volume_liters: float
+    current_height_cm: Optional[float] = None
     status: str
 
 
@@ -173,6 +184,8 @@ class TrainConsistResponse(BaseModel):
     tanks_count: int
     online_status: bool
     active_alarms_count: int
+    tank_height_cm: Optional[float] = 50.0
+    tank_capacity_liters: Optional[float] = 20.0
     coaches: List[CoachConsistItem]
     source_station: Optional[str] = None
     source_code: Optional[str] = None
@@ -413,13 +426,18 @@ async def get_train_consist(train_number: str, db: AsyncSession = Depends(get_db
             elif level <= t.warning_threshold_percent:
                 status = "WARNING"
 
+            geom = getattr(t, "tank_type", "CYLINDRICAL") or "CYLINDRICAL"
             coach_tanks.append(TankConsistItem(
                 id=t.id,
                 tank_index=t.tank_index,
                 name=t.name,
                 capacity_liters=t.capacity_liters,
+                height_cm=getattr(t, "height_cm", 50.0) or 50.0,
+                tank_type=geom,
+                geometry=geom,
                 current_level_percent=round(level, 1),
                 current_volume_liters=round(vol, 1),
+                current_height_cm=round(latest.water_height_cm, 1) if (latest and latest.water_height_cm is not None) else round((level / 100.0) * (getattr(t, "height_cm", 50.0) or 50.0), 1),
                 status=status
             ))
 
@@ -443,6 +461,8 @@ async def get_train_consist(train_number: str, db: AsyncSession = Depends(get_db
         tanks_count=total_tanks,
         online_status=any_online,
         active_alarms_count=active_alarms_count,
+        tank_height_cm=meta.get("tank_height_cm", 50.0),
+        tank_capacity_liters=meta.get("tank_capacity_liters", 20.0),
         coaches=coaches_list,
         source_station=meta.get("source_station"),
         source_code=meta.get("source_code"),
@@ -485,6 +505,9 @@ async def create_train(
     coaches_spec = data.coaches if data.coaches else []
     coach_json = json.dumps([c.model_dump() for c in coaches_spec]) if coaches_spec else None
 
+    tank_h = float(data.tank_height_cm) if data.tank_height_cm is not None else 50.0
+    tank_c = float(data.tank_capacity) if data.tank_capacity is not None else 20.0
+
     train_row = Train(
         train_number=train_number,
         name=data.name.strip(),
@@ -502,6 +525,8 @@ async def create_train(
         has_official_composition=data.has_official_composition,
         api_provider=data.api_provider,
         last_verified_at=_parse_iso_dt(data.last_verified_at),
+        tank_height_cm=tank_h,
+        tank_capacity_liters=tank_c,
     )
     db.add(train_row)
 
@@ -509,6 +534,8 @@ async def create_train(
         "name": data.name.strip(),
         "region": reg,
         "type": (data.train_type or "Custom Fleet").strip(),
+        "tank_height_cm": tank_h,
+        "tank_capacity_liters": tank_c,
     }
 
     # Provision initial coach devices (either explicit official/selected consist list or single initial coach)
@@ -537,16 +564,35 @@ async def create_train(
                 name=f"{data.name.strip()} Coach {coach}",
             )
             primary_tank = await tank_repo.get_by_device_and_index(device.id, 1)
-            if primary_tank and data.tank_capacity:
-                primary_tank.capacity_liters = data.tank_capacity
+            if primary_tank:
+                primary_tank.height_cm = tank_h
+                primary_tank.capacity_liters = tank_c
+            aux_tank = await tank_repo.get_by_device_and_index(device.id, 2)
+            if aux_tank:
+                aux_tank.height_cm = tank_h
+                aux_tank.capacity_liters = tank_c
 
     await db.commit()
+
+    sync_event = {
+        "action": "create_train",
+        "train_number": train_number,
+        "name": data.name.strip(),
+        "region": reg,
+        "tank_height_cm": tank_h,
+        "tank_capacity_liters": tank_c,
+        "coaches_count": len(coaches_to_create),
+    }
+    await ws_manager.broadcast("FLEET_SYNC", sync_event)
+    mqtt_service.publish("panorama/fleet/sync", sync_event)
 
     return {
         "message": "Train registered successfully",
         "train_number": train_number,
         "region": reg,
         "coaches_created": len(coaches_to_create),
+        "tank_height_cm": tank_h,
+        "tank_capacity_liters": tank_c,
     }
 
 
@@ -592,6 +638,16 @@ async def update_train(
         db_train.railway_zone = data.railway_zone.strip().upper() or None
 
     await db.commit()
+
+    sync_event = {
+        "action": "update_train",
+        "train_number": train_number,
+        "name": data.name.strip() if data.name is not None else (db_train.name if db_train else None),
+        "region": db_train.region if db_train else None,
+    }
+    await ws_manager.broadcast("FLEET_SYNC", sync_event)
+    mqtt_service.publish("panorama/fleet/sync", sync_event)
+
     return {
         "message": "Train updated successfully",
         "train_number": train_number,
@@ -700,6 +756,13 @@ async def delete_train(
 
     TRAIN_METADATA.pop(cleaned, None)
 
+    sync_event = {
+        "action": "delete_train",
+        "train_number": cleaned,
+    }
+    await ws_manager.broadcast("FLEET_SYNC", sync_event)
+    mqtt_service.publish("panorama/fleet/sync", sync_event)
+
     return {
         "success": True,
         "message": f"Train {cleaned} deleted successfully",
@@ -719,7 +782,11 @@ class CoachAddRequest(BaseModel):
     tank_2_name: Optional[str] = "Departure Side (Tank 2)"
     tank_1_capacity: Optional[float] = 500.0
     tank_2_capacity: Optional[float] = 500.0
-    tank_height_cm: Optional[float] = 150.0
+    tank_1_height_cm: Optional[float] = 50.0
+    tank_2_height_cm: Optional[float] = 50.0
+    tank_1_geometry: Optional[str] = "CYLINDRICAL"
+    tank_2_geometry: Optional[str] = "CYLINDRICAL"
+    tank_height_cm: Optional[float] = None
     device_uid: Optional[str] = None
 
 
@@ -731,6 +798,10 @@ class CoachUpdateRequest(BaseModel):
     tank_2_name: Optional[str] = None
     tank_1_capacity: Optional[float] = None
     tank_2_capacity: Optional[float] = None
+    tank_1_height_cm: Optional[float] = None
+    tank_2_height_cm: Optional[float] = None
+    tank_1_geometry: Optional[str] = None
+    tank_2_geometry: Optional[str] = None
     tank_height_cm: Optional[float] = None
     device_uid: Optional[str] = None
 
@@ -797,6 +868,11 @@ async def add_coach_to_train(
         device.updated_at = utc_now()
 
     # Configure Dual Tanks
+    h1 = data.tank_1_height_cm or data.tank_height_cm or 50.0
+    h2 = data.tank_2_height_cm or data.tank_height_cm or 50.0
+    geom1 = (data.tank_1_geometry or "CYLINDRICAL").upper()
+    geom2 = (data.tank_2_geometry or "CYLINDRICAL").upper()
+
     t1 = await tank_repo.get_by_device_and_index(device.id, 1)
     if not t1:
         t1 = await tank_repo.create(
@@ -804,12 +880,14 @@ async def add_coach_to_train(
             tank_index=1,
             name=data.tank_1_name or "Arrival Side (Tank 1)",
             capacity_liters=data.tank_1_capacity or 500.0,
-            max_height_cm=data.tank_height_cm or 150.0,
+            height_cm=h1,
+            tank_type=geom1,
         )
     else:
         t1.name = data.tank_1_name or t1.name
         t1.capacity_liters = data.tank_1_capacity or t1.capacity_liters
-        t1.max_height_cm = data.tank_height_cm or t1.max_height_cm
+        t1.height_cm = h1
+        t1.tank_type = geom1
 
     t2 = await tank_repo.get_by_device_and_index(device.id, 2)
     if not t2:
@@ -818,12 +896,14 @@ async def add_coach_to_train(
             tank_index=2,
             name=data.tank_2_name or "Departure Side (Tank 2)",
             capacity_liters=data.tank_2_capacity or 500.0,
-            max_height_cm=data.tank_height_cm or 150.0,
+            height_cm=h2,
+            tank_type=geom2,
         )
     else:
         t2.name = data.tank_2_name or t2.name
         t2.capacity_liters = data.tank_2_capacity or t2.capacity_liters
-        t2.max_height_cm = data.tank_height_cm or t2.max_height_cm
+        t2.height_cm = h2
+        t2.tank_type = geom2
 
     # Update Train official composition JSON if present
     if db_train:
@@ -850,6 +930,14 @@ async def add_coach_to_train(
         )
     )
     await db.commit()
+
+    sync_event = {
+        "action": "coach_change",
+        "train_number": tr_clean,
+        "coach_number": c_clean,
+    }
+    await ws_manager.broadcast("FLEET_SYNC", sync_event)
+    mqtt_service.publish("panorama/fleet/sync", sync_event)
 
     return {
         "success": True,
@@ -905,6 +993,13 @@ async def reorder_coaches(
     )
     await db.commit()
 
+    sync_event = {
+        "action": "coach_change",
+        "train_number": tr_clean,
+    }
+    await ws_manager.broadcast("FLEET_SYNC", sync_event)
+    mqtt_service.publish("panorama/fleet/sync", sync_event)
+
     return {
         "success": True,
         "message": f"Coaches reordered successfully for Train {tr_clean}.",
@@ -947,8 +1042,21 @@ async def update_coach_details(
             t1.name = data.tank_1_name.strip()
         if data.tank_1_capacity and data.tank_1_capacity > 0:
             t1.capacity_liters = data.tank_1_capacity
-        if data.tank_height_cm and data.tank_height_cm > 0:
-            t1.max_height_cm = data.tank_height_cm
+        h1 = data.tank_1_height_cm or data.tank_height_cm
+        if h1 and h1 > 0:
+            t1.height_cm = h1
+        if data.tank_1_geometry:
+            t1.tank_type = data.tank_1_geometry.strip().upper()
+    else:
+        h1 = data.tank_1_height_cm or data.tank_height_cm or 50.0
+        t1 = await tank_repo.create(
+            device_id=dev.id,
+            tank_index=1,
+            name=data.tank_1_name or "Arrival Side (Tank 1)",
+            capacity_liters=data.tank_1_capacity or 500.0,
+            height_cm=h1,
+            tank_type=(data.tank_1_geometry or "CYLINDRICAL").upper(),
+        )
 
     t2 = await tank_repo.get_by_device_and_index(dev.id, 2)
     if t2:
@@ -956,8 +1064,37 @@ async def update_coach_details(
             t2.name = data.tank_2_name.strip()
         if data.tank_2_capacity and data.tank_2_capacity > 0:
             t2.capacity_liters = data.tank_2_capacity
-        if data.tank_height_cm and data.tank_height_cm > 0:
-            t2.max_height_cm = data.tank_height_cm
+        h2 = data.tank_2_height_cm or data.tank_height_cm
+        if h2 and h2 > 0:
+            t2.height_cm = h2
+        if data.tank_2_geometry:
+            t2.tank_type = data.tank_2_geometry.strip().upper()
+    else:
+        h2 = data.tank_2_height_cm or data.tank_height_cm or 50.0
+        t2 = await tank_repo.create(
+            device_id=dev.id,
+            tank_index=2,
+            name=data.tank_2_name or "Departure Side (Tank 2)",
+            capacity_liters=data.tank_2_capacity or 500.0,
+            height_cm=h2,
+            tank_type=(data.tank_2_geometry or "CYLINDRICAL").upper(),
+        )
+
+    # Update coach category, type and name in train configuration JSON if present
+    db_train = (
+        await db.execute(select(Train).where(Train.train_number == tr_clean))
+    ).scalar_one_or_none()
+    if db_train:
+        comp = _safe_json_loads(db_train.coach_configuration_json, [])
+        for c in comp:
+            if c.get("coach_number", "").upper() == c_clean:
+                if data.coach_category:
+                    c["coach_category"] = data.coach_category
+                if data.coach_type:
+                    c["coach_type"] = data.coach_type
+                if data.coach_name:
+                    c["coach_name"] = data.coach_name
+        db_train.coach_configuration_json = json.dumps(comp)
 
     # Handle device reassignment if requested
     if data.device_uid and data.device_uid.strip() and data.device_uid.strip() != dev.uid:
@@ -986,6 +1123,14 @@ async def update_coach_details(
         )
     )
     await db.commit()
+
+    sync_event = {
+        "action": "coach_change",
+        "train_number": tr_clean,
+        "coach_number": c_clean,
+    }
+    await ws_manager.broadcast("FLEET_SYNC", sync_event)
+    mqtt_service.publish("panorama/fleet/sync", sync_event)
 
     return {
         "success": True,
@@ -1069,6 +1214,15 @@ async def rename_coach(
         )
     )
     await db.commit()
+
+    sync_event = {
+        "action": "coach_change",
+        "train_number": tr_clean,
+        "old_coach_number": old_c,
+        "new_coach_number": new_c,
+    }
+    await ws_manager.broadcast("FLEET_SYNC", sync_event)
+    mqtt_service.publish("panorama/fleet/sync", sync_event)
 
     return {
         "success": True,
@@ -1155,6 +1309,14 @@ async def delete_coach(
         )
     )
     await db.commit()
+
+    sync_event = {
+        "action": "coach_change",
+        "train_number": tr_clean,
+        "deleted_coach_number": c_clean,
+    }
+    await ws_manager.broadcast("FLEET_SYNC", sync_event)
+    mqtt_service.publish("panorama/fleet/sync", sync_event)
 
     return {
         "success": True,

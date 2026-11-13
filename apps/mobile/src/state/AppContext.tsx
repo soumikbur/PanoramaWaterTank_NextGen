@@ -305,9 +305,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [regions]);
 
   const configuredTrainSetRef = useRef<Set<string>>(new Set());
+  const configuredTrainsRef = useRef<TrainOverviewItem[]>([]);
   useEffect(() => {
     configuredTrainSetRef.current = new Set(configuredTrains.map((t) => t.train_number.trim()));
+    configuredTrainsRef.current = configuredTrains;
   }, [configuredTrains]);
+
+  const activeConsistRef = useRef<TrainConsist | null>(null);
+  useEffect(() => {
+    activeConsistRef.current = activeConsist;
+  }, [activeConsist]);
 
   // Keep selected train/coach, active consist, URL params, and local caches strictly synced with configuredTrains
   useEffect(() => {
@@ -677,6 +684,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     refreshData();
     if (typeof window === 'undefined') return;
+    const centralChannel =
+      typeof window !== 'undefined' && typeof (window as any).BroadcastChannel === 'function'
+        ? new BroadcastChannel('panorama_central_sync')
+        : null;
+    const onChannelMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'FLEET_SYNC' || e.data?.type === 'FLEET_UPDATE') {
+        refreshRegions();
+        refreshData();
+      } else if (e.data?.type === 'DEVICE_SYNC' || e.data?.type === 'DEVICE_UPDATE') {
+        refreshData();
+      }
+    };
+    centralChannel?.addEventListener('message', onChannelMessage);
+
     const onStorageSync = (e: StorageEvent) => {
       if (e.key === FLEET_STORAGE_KEY || e.key === 'panorama_fleet_sync_ts' || e.key === null) {
         refreshRegions();
@@ -688,6 +709,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     window.addEventListener('storage', onStorageSync);
     window.addEventListener(FLEET_UPDATED_EVENT, onLocalFleetEvent);
     return () => {
+      centralChannel?.removeEventListener('message', onChannelMessage);
+      centralChannel?.close();
       window.removeEventListener('storage', onStorageSync);
       window.removeEventListener(FLEET_UPDATED_EVENT, onLocalFleetEvent);
     };
@@ -817,11 +840,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       refreshData();
     });
 
+    const unsubFleetSync = wsService.addEventListener('FLEET_SYNC', (data: any) => {
+      console.info('[AppContext] Received FLEET_SYNC WebSocket broadcast:', data);
+      refreshRegions();
+      refreshData();
+    });
+
+    const unsubDeviceSync = wsService.addEventListener('DEVICE_SYNC', (data: any) => {
+      console.info('[AppContext] Received DEVICE_SYNC WebSocket broadcast:', data);
+      refreshData();
+    });
+
     return () => {
       unsubStatus();
       unsubTelemetry();
       unsubAlarmTriggered();
       unsubAlarmResolved();
+      unsubFleetSync();
+      unsubDeviceSync();
       wsService.disconnect();
     };
   }, []);
@@ -838,6 +874,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setConnectionStatus('CONNECTED');
         setMqttBrokerStatus('CONNECTED');
         alertNotificationService.evaluateBrokerConnectivity({ isConnected: true });
+        // Real-time synchronization reconciliation on initial connect / reconnect
+        refreshRegions();
+        refreshData();
       } else if (st === 'CONNECTING') {
         mqttAttemptedRef.current = true;
         setConnectionStatus('RECONNECTING');
@@ -850,6 +889,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           });
         }
       }
+    });
+
+    // Real-time multi-client synchronization over MQTT broadcast topics
+    const unsubMqttFleetSync = mqttService.onFleetSync((event) => {
+      console.info('[AppContext] Received MQTT fleet sync broadcast:', event);
+      refreshRegions();
+      refreshData();
+    });
+
+    const unsubMqttCentralFleet = mqttService.onCentralFleetSync((event) => {
+      console.info('[AppContext] Received MQTT central fleet sync broadcast:', event);
+      refreshRegions();
+      refreshData();
+    });
+
+    const unsubMqttDeviceSync = mqttService.onDeviceSync((event) => {
+      console.info('[AppContext] Received MQTT device sync broadcast:', event);
+      refreshData();
+    });
+
+    const unsubMqttCentralDevice = mqttService.onCentralDeviceSync((event) => {
+      console.info('[AppContext] Received MQTT central device sync broadcast:', event);
+      refreshData();
+    });
+
+    const unsubMqttDeltaSync = mqttService.onCentralDeltaSync((event) => {
+      console.info('[AppContext] Received MQTT central delta sync broadcast:', event);
+      if (event?.type === 'FLEET_UPDATE') {
+        refreshRegions();
+      }
+      refreshData();
     });
 
     const unsubMqttTelemetry = mqttService.onTelemetry((telemetry) => {
@@ -876,8 +946,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       deviceRegistry.recordDiscoveredDevice(telemetry);
       const activeChno = (mappedDev?.coachNumber || telemetry.chno || '').trim();
 
-      // 1. Calculate water level percentages based on configured maximum height (150 cm)
-      const configuredMaxHeightCm = 150.0;
+      // 1. Calculate water level percentages based on configured maximum height and capacity
+      const trainItem = configuredTrainsRef.current.find((t) => t.train_number.trim() === activeTrno);
+      const configuredMaxHeightCm = (activeConsistRef.current && activeConsistRef.current.train_number.trim() === activeTrno && activeConsistRef.current.tank_height_cm)
+        ? activeConsistRef.current.tank_height_cm
+        : (trainItem?.tank_height_cm ?? 50.0);
+      const configuredCapacityLiters = (activeConsistRef.current && activeConsistRef.current.train_number.trim() === activeTrno && activeConsistRef.current.tank_capacity_liters)
+        ? activeConsistRef.current.tank_capacity_liters
+        : (trainItem?.tank_capacity_liters ?? 20.0);
+
       const arrivalLevelPct = telemetry.cm1 != null && configuredMaxHeightCm > 0
         ? Number(Math.min(100, Math.max(0, (telemetry.cm1 / configuredMaxHeightCm) * 100)).toFixed(1))
         : (telemetry.wlp1 != null ? Number(telemetry.wlp1.toFixed(1)) : null);
@@ -886,8 +963,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         ? Number(Math.min(100, Math.max(0, (telemetry.cm2 / configuredMaxHeightCm) * 100)).toFixed(1))
         : (telemetry.wlp2 != null ? Number(telemetry.wlp2.toFixed(1)) : null);
 
-      const arrivalVolume = arrivalLevelPct != null ? Number(((arrivalLevelPct / 100) * 500).toFixed(1)) : null;
-      const departureVolume = departureLevelPct != null ? Number(((departureLevelPct / 100) * 500).toFixed(1)) : null;
+      const arrivalVolume = arrivalLevelPct != null ? Number(((arrivalLevelPct / 100) * configuredCapacityLiters).toFixed(1)) : null;
+      const departureVolume = departureLevelPct != null ? Number(((departureLevelPct / 100) * configuredCapacityLiters).toFixed(1)) : null;
 
       // Construct Dual Tanks from validated MQTT telemetry
       const arrivalTank: TankLiveStatus = {
@@ -902,7 +979,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         rawLevelPercent: telemetry.wlp1,
         volumeLiters: arrivalVolume,
         heightCm: telemetry.cm1,
-        capacityLiters: 500,
+        capacityLiters: configuredCapacityLiters,
         maxHeightCm: configuredMaxHeightCm,
         crossSectionalAreaM2: 0.33,
         rank: arrivalLevelPct && arrivalLevelPct > 70 ? 'GOOD' : arrivalLevelPct && arrivalLevelPct > 30 ? 'MODERATE' : 'LOW',
@@ -928,7 +1005,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         rawLevelPercent: telemetry.wlp2,
         volumeLiters: departureVolume,
         heightCm: telemetry.cm2,
-        capacityLiters: 500,
+        capacityLiters: configuredCapacityLiters,
         maxHeightCm: configuredMaxHeightCm,
         crossSectionalAreaM2: 0.33,
         rank: departureLevelPct && departureLevelPct > 70 ? 'GOOD' : departureLevelPct && departureLevelPct > 30 ? 'MODERATE' : 'LOW',
@@ -1119,6 +1196,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     return () => {
       unsubMqttStatus();
+      unsubMqttFleetSync();
+      unsubMqttCentralFleet();
+      unsubMqttDeviceSync();
+      unsubMqttCentralDevice();
+      unsubMqttDeltaSync();
       unsubMqttTelemetry();
       mqttService.disconnect();
     };

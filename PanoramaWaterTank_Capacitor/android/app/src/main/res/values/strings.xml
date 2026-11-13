@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Panorama Water Tank Monitor</string>
+    <string name="title_activity_main">Panorama Water Tank Monitor</string>
+    <string name="package_name">com.panorama.watertankmonitor</string>
+    <string name="custom_url_scheme">com.panorama.watertankmonitor</string>
+</resources>

@@ -3,8 +3,9 @@ import { colors, typography, metrics } from '../theme';
 import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
 import { RegionSummary, TrainOverviewItem, TrainConsist } from '../types';
-import { Train, Plus, Trash2, X, ChevronRight, MapPin, ArrowLeft, ArrowRight, CheckCircle2, Edit3, Layers } from 'lucide-react';
+import { Train, Plus, Trash2, X, ChevronRight, MapPin, ArrowLeft, ArrowRight, CheckCircle2, Edit3, Layers, SlidersHorizontal } from 'lucide-react';
 import { AddTrainModal } from '../components/train/AddTrainModal';
+import { ManageCoachModal } from '../components/coach/ManageCoachModal';
 
 export const TrainManagementScreen: React.FC = () => {
   const {
@@ -67,6 +68,7 @@ export const TrainManagementScreen: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
+  const [isEditCoachOpen, setIsEditCoachOpen] = useState<boolean>(false);
 
   // Add Train Form State
   const [newTrainNumber, setNewTrainNumber] = useState('');
@@ -838,6 +840,27 @@ export const TrainManagementScreen: React.FC = () => {
 
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <button
+                onClick={() => setIsEditCoachOpen(true)}
+                title="Edit Coaches & Consist"
+                style={{
+                  backgroundColor: '#EFF6FF',
+                  border: '1px solid #BFDBFE',
+                  color: '#2563EB',
+                  borderRadius: '6px',
+                  padding: '8px 14px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <SlidersHorizontal size={13} />
+                <span>Edit Coaches</span>
+              </button>
+
+              <button
                 onClick={() => {
                   setSelectedTrainNumber(selectedTrain.train_number);
                   setActiveScreen('coaches');
@@ -1372,6 +1395,22 @@ export const TrainManagementScreen: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {selectedTrain && (
+        <ManageCoachModal
+          isOpen={isEditCoachOpen}
+          onClose={async () => {
+            setIsEditCoachOpen(false);
+            if (selectedTrain) {
+              try {
+                const refreshed = await ApiClient.fetchTrainConsist(selectedTrain.train_number);
+                setSelectedTrain(refreshed);
+              } catch {}
+            }
+          }}
+          trainNumber={selectedTrain.train_number}
+        />
       )}
     </div>
   );

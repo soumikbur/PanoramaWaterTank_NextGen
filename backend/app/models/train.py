@@ -1,5 +1,5 @@
 """SQLAlchemy ORM models for persistent railway train metadata and lookup cache."""
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, Text
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, Text, Float
 from app.core.database import Base
 from app.models.base import generate_uuid, utc_now
 
@@ -24,6 +24,8 @@ class Train(Base):
     has_official_composition = Column(Boolean, nullable=False, default=False)
     api_provider = Column(String(64), nullable=True)
     last_verified_at = Column(DateTime(timezone=True), nullable=True)
+    tank_height_cm = Column(Float, nullable=False, default=50.0)
+    tank_capacity_liters = Column(Float, nullable=False, default=20.0)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 

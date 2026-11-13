@@ -50,6 +50,12 @@ export const DEFAULT_DEVICE_UID = '0023004D4B42501120353332';
 export const DEFAULT_STALE_TIMEOUT_MS = 180000; // 180 seconds (nominal 90s upload task + jitter headroom)
 export const STALE_TIMEOUT_MS = 30000; // Fast watchdog timeout for local/test runner
 
+export const CENTRAL_FLEET_TOPIC = 'panorama/central/fleet/v2';
+export const CENTRAL_DEVICES_TOPIC = 'panorama/central/devices/v2';
+export const CENTRAL_SETTINGS_TOPIC = 'panorama/central/settings/v2';
+export const CENTRAL_USERS_TOPIC = 'panorama/central/users/v2';
+export const CENTRAL_DELTA_SYNC_TOPIC = 'panorama/central/sync/v2';
+
 export type TelemetryCallback = (payload: LiveTelemetryPayload) => void;
 export type MqttStatusCallback = (status: MqttConnectionStatus) => void;
 
@@ -60,12 +66,21 @@ export class MqttService {
   private topicSubscribed = false;
   private telemetryListeners: Set<TelemetryCallback> = new Set();
   private statusListeners: Set<MqttStatusCallback> = new Set();
+  private fleetSyncListeners: Set<(event: any) => void> = new Set();
+  private deviceSyncListeners: Set<(event: any) => void> = new Set();
+  private centralFleetListeners: Set<(event: any) => void> = new Set();
+  private centralDeviceListeners: Set<(event: any) => void> = new Set();
+  private centralSettingsListeners: Set<(event: any) => void> = new Set();
+  private centralUsersListeners: Set<(event: any) => void> = new Set();
+  private centralDeltaListeners: Set<(event: any) => void> = new Set();
   private reconnectTimer: any = null;
   private staleTimer: any = null;
   private reconnectAttempts = 0;
   private lastTelemetry: LiveTelemetryPayload | null = null;
   private lastValidGps: MqttGpsFix | null = null;
   private gpsWaypoints: MqttGpsFix[] = [];
+  private trainGpsFixes: Map<string, MqttGpsFix> = new Map();
+  private trainGpsWaypoints: Map<string, MqttGpsFix[]> = new Map();
   private lastPayloadSignature = '';
   private lastMessageReceivedTime = 0;
   private historyBuffer: LiveTelemetryPayload[] = [];
@@ -140,7 +155,36 @@ export class MqttService {
 
       this.client.onMessageArrived = (message: any) => {
         try {
+          const destination = message.destinationName || message.topic || '';
           const payloadStr = message.payloadString;
+          if (destination === CENTRAL_FLEET_TOPIC) {
+            this.handleCentralFleetSync(payloadStr);
+            return;
+          }
+          if (destination === CENTRAL_DEVICES_TOPIC) {
+            this.handleCentralDeviceSync(payloadStr);
+            return;
+          }
+          if (destination === CENTRAL_SETTINGS_TOPIC) {
+            this.handleCentralSettingsSync(payloadStr);
+            return;
+          }
+          if (destination === CENTRAL_USERS_TOPIC) {
+            this.handleCentralUsersSync(payloadStr);
+            return;
+          }
+          if (destination === CENTRAL_DELTA_SYNC_TOPIC) {
+            this.handleCentralDeltaSync(payloadStr);
+            return;
+          }
+          if (destination === 'panorama/fleet/sync') {
+            this.handleFleetSync(payloadStr);
+            return;
+          }
+          if (destination === 'panorama/devices/sync') {
+            this.handleDeviceSync(payloadStr);
+            return;
+          }
           this.handleIncomingPayload(payloadStr);
         } catch (e) {
           console.error('[MQTT] Error processing message frame:', e);
@@ -155,9 +199,16 @@ export class MqttService {
         onSuccess: () => {
           this.reconnectAttempts = 0;
           this.setStatus('CONNECTED');
-          console.info(`[MQTT] Connected to ${this.brokerHost}:${this.brokerPort}. Subscribing to topic: ${this.topic}`);
+          console.info(`[MQTT] Connected to ${this.brokerHost}:${this.brokerPort}. Subscribing to topics...`);
           try {
             this.client.subscribe(this.topic, { qos: 1 });
+            this.client.subscribe(CENTRAL_FLEET_TOPIC, { qos: 1 });
+            this.client.subscribe(CENTRAL_DEVICES_TOPIC, { qos: 1 });
+            this.client.subscribe(CENTRAL_SETTINGS_TOPIC, { qos: 1 });
+            this.client.subscribe(CENTRAL_USERS_TOPIC, { qos: 1 });
+            this.client.subscribe(CENTRAL_DELTA_SYNC_TOPIC, { qos: 1 });
+            this.client.subscribe('panorama/fleet/sync', { qos: 1 });
+            this.client.subscribe('panorama/devices/sync', { qos: 1 });
             this.topicSubscribed = true;
           } catch (subErr) {
             this.topicSubscribed = false;
@@ -271,6 +322,16 @@ export class MqttService {
         chno,
       };
       this.lastValidGps = fixRecord;
+      if (trno) {
+        this.trainGpsFixes.set(trno.trim(), fixRecord);
+        const trainWps = this.trainGpsWaypoints.get(trno.trim()) || [];
+        const prevTrn = trainWps[trainWps.length - 1];
+        if (!prevTrn || prevTrn.lat !== fixRecord.lat || prevTrn.long !== fixRecord.long) {
+          trainWps.push(fixRecord);
+          if (trainWps.length > 100) trainWps.shift();
+          this.trainGpsWaypoints.set(trno.trim(), trainWps);
+        }
+      }
       const prev = this.gpsWaypoints[this.gpsWaypoints.length - 1];
       if (!prev || prev.lat !== fixRecord.lat || prev.long !== fixRecord.long) {
         this.gpsWaypoints.push(fixRecord);
@@ -372,6 +433,25 @@ export class MqttService {
     return this.lastValidGps;
   }
 
+  getTrainGpsFix(trainNumber: string): MqttGpsFix | null {
+    if (!trainNumber) return null;
+    return this.trainGpsFixes.get(trainNumber.trim()) || null;
+  }
+
+  getAllTrainGpsFixes(): Record<string, MqttGpsFix> {
+    const res: Record<string, MqttGpsFix> = {};
+    this.trainGpsFixes.forEach((val, key) => {
+      res[key] = val;
+    });
+    return res;
+  }
+
+  getTrainGpsWaypoints(trainNumber: string): MqttGpsFix[] {
+    if (!trainNumber) return [];
+    const list = this.trainGpsWaypoints.get(trainNumber.trim());
+    return list ? [...list] : [];
+  }
+
   getGpsWaypoints(): MqttGpsFix[] {
     return [...this.gpsWaypoints];
   }
@@ -391,6 +471,204 @@ export class MqttService {
 
   getTopic(): string {
     return this.topic;
+  }
+
+  private handleFleetSync(rawString: string): void {
+    try {
+      const data = JSON.parse(rawString);
+      console.info('[MQTT] Fleet sync frame received:', data);
+      for (const cb of this.fleetSyncListeners) {
+        try {
+          cb(data);
+        } catch (e) {
+          console.error('[MQTT] Error in fleet sync listener:', e);
+        }
+      }
+    } catch (e) {
+      console.warn('[MQTT] Invalid fleet sync JSON payload:', e);
+    }
+  }
+
+  private handleDeviceSync(rawString: string): void {
+    try {
+      const data = JSON.parse(rawString);
+      console.info('[MQTT] Device sync frame received:', data);
+      for (const cb of this.deviceSyncListeners) {
+        try {
+          cb(data);
+        } catch (e) {
+          console.error('[MQTT] Error in device sync listener:', e);
+        }
+      }
+    } catch (e) {
+      console.warn('[MQTT] Invalid device sync JSON payload:', e);
+    }
+  }
+
+  onFleetSync(cb: (event: any) => void): () => void {
+    this.fleetSyncListeners.add(cb);
+    return () => {
+      this.fleetSyncListeners.delete(cb);
+    };
+  }
+
+  onDeviceSync(cb: (event: any) => void): () => void {
+    this.deviceSyncListeners.add(cb);
+    return () => {
+      this.deviceSyncListeners.delete(cb);
+    };
+  }
+
+  private handleCentralFleetSync(rawString: string): void {
+    try {
+      const data = JSON.parse(rawString);
+      console.info('[MQTT] Central fleet state frame received');
+      for (const cb of this.centralFleetListeners) {
+        try {
+          cb(data);
+        } catch (e) {
+          console.error('[MQTT] Error in central fleet sync listener:', e);
+        }
+      }
+    } catch (e) {
+      console.warn('[MQTT] Invalid central fleet JSON payload:', e);
+    }
+  }
+
+  private handleCentralDeviceSync(rawString: string): void {
+    try {
+      const data = JSON.parse(rawString);
+      console.info('[MQTT] Central device state frame received');
+      for (const cb of this.centralDeviceListeners) {
+        try {
+          cb(data);
+        } catch (e) {
+          console.error('[MQTT] Error in central device sync listener:', e);
+        }
+      }
+    } catch (e) {
+      console.warn('[MQTT] Invalid central device JSON payload:', e);
+    }
+  }
+
+  private handleCentralSettingsSync(rawString: string): void {
+    try {
+      const data = JSON.parse(rawString);
+      console.info('[MQTT] Central settings frame received');
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('panorama_system_config', JSON.stringify(data));
+        window.dispatchEvent(new CustomEvent('panorama:settings-updated', { detail: data }));
+      }
+      for (const cb of this.centralSettingsListeners) {
+        try {
+          cb(data);
+        } catch (e) {
+          console.error('[MQTT] Error in central settings sync listener:', e);
+        }
+      }
+    } catch (e) {
+      console.warn('[MQTT] Invalid central settings JSON payload:', e);
+    }
+  }
+
+  private handleCentralUsersSync(rawString: string): void {
+    try {
+      const data = JSON.parse(rawString);
+      console.info('[MQTT] Central users frame received');
+      if (typeof window !== 'undefined' && window.localStorage) {
+        if (Array.isArray(data.users)) {
+          window.localStorage.setItem('panorama_users_store', JSON.stringify(data.users));
+        }
+        if (Array.isArray(data.registrations)) {
+          window.localStorage.setItem('panorama_registrations_store', JSON.stringify(data.registrations));
+        }
+        window.dispatchEvent(new CustomEvent('panorama:users-updated'));
+      }
+      for (const cb of this.centralUsersListeners) {
+        try {
+          cb(data);
+        } catch (e) {
+          console.error('[MQTT] Error in central users sync listener:', e);
+        }
+      }
+    } catch (e) {
+      console.warn('[MQTT] Invalid central users JSON payload:', e);
+    }
+  }
+
+  private handleCentralDeltaSync(rawString: string): void {
+    try {
+      const data = JSON.parse(rawString);
+      console.info('[MQTT] Central delta sync frame received:', data);
+      for (const cb of this.centralDeltaListeners) {
+        try {
+          cb(data);
+        } catch (e) {
+          console.error('[MQTT] Error in central delta sync listener:', e);
+        }
+      }
+    } catch (e) {
+      console.warn('[MQTT] Invalid central delta sync JSON payload:', e);
+    }
+  }
+
+  onCentralFleetSync(cb: (event: any) => void): () => void {
+    this.centralFleetListeners.add(cb);
+    return () => {
+      this.centralFleetListeners.delete(cb);
+    };
+  }
+
+  onCentralDeviceSync(cb: (event: any) => void): () => void {
+    this.centralDeviceListeners.add(cb);
+    return () => {
+      this.centralDeviceListeners.delete(cb);
+    };
+  }
+
+  onCentralSettingsSync(cb: (event: any) => void): () => void {
+    this.centralSettingsListeners.add(cb);
+    return () => {
+      this.centralSettingsListeners.delete(cb);
+    };
+  }
+
+  onCentralUsersSync(cb: (event: any) => void): () => void {
+    this.centralUsersListeners.add(cb);
+    return () => {
+      this.centralUsersListeners.delete(cb);
+    };
+  }
+
+  onCentralDeltaSync(cb: (event: any) => void): () => void {
+    this.centralDeltaListeners.add(cb);
+    return () => {
+      this.centralDeltaListeners.delete(cb);
+    };
+  }
+
+  publish(topic: string, payload: any, retained: boolean = false): boolean {
+    if (!this.client || !this.client.isConnected || !this.client.isConnected()) {
+      return false;
+    }
+    try {
+      const MessageConstructor =
+        (Paho && (Paho.Message || (Paho as any).default?.Message)) ||
+        (window as any).Paho?.MQTT?.Message;
+      if (!MessageConstructor) return false;
+      const str = typeof payload === 'string' ? payload : JSON.stringify(payload);
+      const msg = new MessageConstructor(str);
+      msg.destinationName = topic;
+      msg.qos = 1;
+      if (retained) {
+        msg.retained = true;
+      }
+      this.client.send(msg);
+      return true;
+    } catch (err) {
+      console.warn('[MQTT] Failed to publish message:', err);
+      return false;
+    }
   }
 
   disconnect(): void {

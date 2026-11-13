@@ -26,6 +26,7 @@ build/
 dist/
 release/
 bin/
+backend/static/downloads/
 *_autogen/
 CMakeFiles/
 CMakeCache.txt
