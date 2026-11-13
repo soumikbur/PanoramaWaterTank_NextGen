@@ -5,6 +5,7 @@ import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
 import { TrainOverviewItem, TankLiveStatus } from '../types';
 import { filterConsistCoaches } from '../services/tankStatusService';
+import { normalizeRegionCode } from '../services/localFleetStore';
 import { useDisplayPreferences } from '../context/DisplayPreferencesContext';
 import { AddTrainModal } from '../components/train/AddTrainModal';
 import {
@@ -76,7 +77,7 @@ export const EmployeeDashboard: React.FC = () => {
 
   const { dashboard } = useDisplayPreferences();
 
-  const [selectedRegion, setSelectedRegion] = useState<string>('South East');
+  const [selectedRegion, setSelectedRegion] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [backendTrains, setBackendTrains] = useState<TrainOverviewItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -108,7 +109,7 @@ export const EmployeeDashboard: React.FC = () => {
   const [newTrainName, setNewTrainName] = useState('');
   const [newTrainSource, setNewTrainSource] = useState('');
   const [newTrainDestination, setNewTrainDestination] = useState('');
-  const [newTrainRegion, setNewTrainRegion] = useState('South East');
+  const [newTrainRegion, setNewTrainRegion] = useState('EAST');
   const [newInitialCoach, setNewInitialCoach] = useState('C1');
 
   // Edit Train Form
@@ -116,7 +117,7 @@ export const EmployeeDashboard: React.FC = () => {
   const [editTrainName, setEditTrainName] = useState('');
   const [editTrainSource, setEditTrainSource] = useState('');
   const [editTrainDestination, setEditTrainDestination] = useState('');
-  const [editTrainRegion, setEditTrainRegion] = useState('South East');
+  const [editTrainRegion, setEditTrainRegion] = useState('EAST');
   const [editTrainStatus, setEditTrainStatus] = useState('Running');
 
   // Load backend trains
@@ -150,17 +151,62 @@ export const EmployeeDashboard: React.FC = () => {
     }
   }, [consistCoaches, activeCoachNum]);
 
-  const availableRegions = [
-    'South East',
-    'Northern',
-    'Western',
-    'Central',
-    'Southern',
-    'Eastern',
-    'ALL',
-  ];
+  const availableRegions = useMemo(
+    () => [
+      { code: 'ALL', label: 'All Regions' },
+      { code: 'EAST', label: 'Eastern Railway (ER)' },
+      { code: 'SOUTH', label: 'Southern Railway (SR)' },
+      { code: 'NORTH', label: 'Northern Railway (NR)' },
+      { code: 'WEST', label: 'Western Railway (WR)' },
+    ],
+    []
+  );
 
-  const hasConfiguredFleet = configuredTrains.length > 0;
+  // Authoritative fleet reconciliation (combines AppContext configuredTrains and backendTrains)
+  const displayTrains = useMemo(() => {
+    const map = new Map<string, TrainOverviewItem>();
+
+    // 1. Authoritative configured trains from AppContext
+    for (const t of configuredTrains) {
+      if (t && t.train_number) {
+        map.set(t.train_number.trim(), t);
+      }
+    }
+
+    // 2. Merge backendTrains (from /api/v1/trains)
+    for (const t of backendTrains) {
+      if (!t || !t.train_number) continue;
+      const key = t.train_number.trim();
+      const existing = map.get(key);
+      if (existing) {
+        map.set(key, { ...existing, ...t });
+      } else {
+        map.set(key, t);
+      }
+    }
+
+    let list = Array.from(map.values());
+
+    // 3. Filter by canonical selectedRegion
+    if (selectedRegion && selectedRegion !== 'ALL') {
+      const canonicalTarget = normalizeRegionCode(selectedRegion);
+      list = list.filter((t) => normalizeRegionCode(t.region) === canonicalTarget);
+    }
+
+    // 4. Filter by searchQuery
+    if (searchQuery && searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter(
+        (t) =>
+          t.train_number.toLowerCase().includes(q) ||
+          (t.name && t.name.toLowerCase().includes(q))
+      );
+    }
+
+    return list.sort((a, b) => a.train_number.localeCompare(b.train_number));
+  }, [configuredTrains, backendTrains, selectedRegion, searchQuery]);
+
+  const hasConfiguredFleet = displayTrains.length > 0 || configuredTrains.length > 0;
 
   // Selected train object derived strictly from authoritative configured trains
   const currentTrain = useMemo(() => {
@@ -182,7 +228,7 @@ export const EmployeeDashboard: React.FC = () => {
       };
     }
 
-    const activePool = backendTrains.length > 0 ? backendTrains : configuredTrains;
+    const activePool = displayTrains.length > 0 ? displayTrains : (configuredTrains.length > 0 ? configuredTrains : backendTrains);
     const targetNo = selectedTrainNumber || activePool[0]?.train_number || '';
     const match =
       activePool.find((t) => t.train_number === targetNo) ||
@@ -212,7 +258,7 @@ export const EmployeeDashboard: React.FC = () => {
         destination: match.destination_station
           ? (match.destination_code ? `${match.destination_station} (${match.destination_code})` : match.destination_station)
           : 'In Service',
-        region: match.railway_zone || match.region || (selectedRegion === 'ALL' ? 'Eastern' : selectedRegion),
+        region: match.railway_zone ? `${match.region} (${match.railway_zone})` : (match.region || '—'),
         status: !matchedLive.isStale ? 'Active' : 'Standby',
         latitude: gpsLat,
         longitude: gpsLon,
@@ -236,8 +282,8 @@ export const EmployeeDashboard: React.FC = () => {
       destination: first.destination_station
         ? (first.destination_code ? `${first.destination_station} (${first.destination_code})` : first.destination_station)
         : (first as any).destination || '—',
-      region: first.railway_zone || first.region || 'Eastern',
-      status: first.is_online ? 'Active' : 'Standby',
+      region: first.railway_zone ? `${first.region} (${first.railway_zone})` : (first.region || '—'),
+      status: first.is_online ? 'Active' : (first.connectivity_status === 'NEVER_CONNECTED' ? 'Never Connected' : 'Standby'),
       latitude: firstLat,
       longitude: firstLon,
       gpsFix: firstLat != null && firstLon != null,
@@ -246,7 +292,7 @@ export const EmployeeDashboard: React.FC = () => {
       lastUpdate: (first as any).last_telemetry || 'Awaiting telemetry',
       totalCoaches: consistMetrics.totalCoaches || first.total_coaches || first.coaches_count || 0,
     };
-  }, [hasConfiguredFleet, liveTelemetry, lastValidGps, selectedTrainNumber, backendTrains, configuredTrains, selectedRegion, consistMetrics.totalCoaches]);
+  }, [hasConfiguredFleet, liveTelemetry, lastValidGps, selectedTrainNumber, displayTrains, backendTrains, configuredTrains, selectedRegion, consistMetrics.totalCoaches]);
 
   // Coaches for current train derived strictly from authoritative consist
   const coaches24: DashboardCoach[] = useMemo(() => {
@@ -385,7 +431,7 @@ export const EmployeeDashboard: React.FC = () => {
     setNewTrainName('');
     setNewTrainSource('');
     setNewTrainDestination('');
-    setNewTrainRegion('South East');
+    setNewTrainRegion('EAST');
     setNewInitialCoach('C1');
     setFormError(null);
     setIsAddModalOpen(true);
@@ -426,7 +472,7 @@ export const EmployeeDashboard: React.FC = () => {
     setEditTrainName(train.name);
     setEditTrainSource(train.source || 'Chennai (MAS)');
     setEditTrainDestination(train.destination || 'Howrah (HWH)');
-    setEditTrainRegion(train.region || 'South East');
+    setEditTrainRegion(train.region || 'EAST');
     setEditTrainStatus(train.operationalStatus || train.type || 'Running');
     setFormError(null);
     setIsEditModalOpen(true);
@@ -833,8 +879,8 @@ export const EmployeeDashboard: React.FC = () => {
                 }}
               >
                 {availableRegions.map((reg) => (
-                  <option key={reg} value={reg}>
-                    {reg}
+                  <option key={reg.code} value={reg.code}>
+                    {reg.label}
                   </option>
                 ))}
               </select>
@@ -943,8 +989,8 @@ export const EmployeeDashboard: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {/* Live Telemetry Train (Dynamic via MQTT Topic 0023004D4B42501120353332) */}
-              {liveTelemetry && (
+              {/* Show live hardware telemetry train if not already present in registered displayTrains */}
+              {liveTelemetry && !displayTrains.some((t) => t.train_number.trim() === liveTelemetry.trno?.trim()) && (
                 <tr
                   onClick={() => handleSelectTrain(liveTelemetry.trno)}
                   style={{
@@ -1034,32 +1080,53 @@ export const EmployeeDashboard: React.FC = () => {
                 </tr>
               )}
 
-              {/* Awaiting telemetry operational state when no live or backend trains exist */}
-              {!liveTelemetry && backendTrains.length === 0 && (
+              {/* Empty state when no registered trains match filter */}
+              {displayTrains.length === 0 && !liveTelemetry && (
                 <tr>
                   <td
                     colSpan={8}
                     style={{
-                      padding: '24px',
+                      padding: '28px',
                       textAlign: 'center',
                       color: 'var(--color-text-secondary, #64748B)',
                       fontSize: '13px',
                     }}
                   >
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                      <Activity size={24} color="#94A3B8" />
-                      <strong>Awaiting Telemetry • No active hardware transmissions detected</strong>
+                      <Train size={24} color="#94A3B8" />
+                      <strong style={{ color: '#475569' }}>No Registered Trains Found</strong>
                       <span style={{ fontSize: '11px', color: '#94A3B8' }}>
-                        Listening on broker topic: <code>0023004D4B42501120353332</code>
+                        {selectedRegion === 'ALL'
+                          ? 'No trains currently registered in the fleet. Register a train in Train Management.'
+                          : `No registered trains found in this region. Switch to "All Regions" or register a new train.`}
                       </span>
                     </div>
                   </td>
                 </tr>
               )}
 
-              {/* Additional Backend Trains */}
-              {backendTrains.map((train) => {
+              {/* Authoritative Registered Fleet Trains */}
+              {displayTrains.map((train) => {
                 const isSelected = currentTrain.trainNumber === train.train_number;
+                const isLiveActive = liveTelemetry && liveTelemetry.trno?.trim() === train.train_number.trim() && !liveTelemetry.isStale;
+                const isOnline = isLiveActive || train.is_online;
+                const isNeverConnected = !isOnline && (!train.connectivity_status || train.connectivity_status === 'NEVER_CONNECTED') && (train.devices_count === 0 || !train.devices_count);
+
+                const statusColor = isOnline
+                  ? 'var(--color-status-success, #16A34A)'
+                  : isNeverConnected
+                  ? '#64748B'
+                  : 'var(--color-status-warning, #D97706)';
+
+                const statusText = isOnline
+                  ? 'Active'
+                  : isNeverConnected
+                  ? 'Never Connected'
+                  : 'Standby';
+
+                const coachCount = train.coaches_count || train.total_coaches || 0;
+                const tankCount = train.tanks_count || (coachCount > 0 ? coachCount * 2 : 0);
+
                 return (
                   <tr
                     key={train.train_number}
@@ -1079,8 +1146,28 @@ export const EmployeeDashboard: React.FC = () => {
                     <td style={{ padding: '10px 14px', fontWeight: 800, color: 'var(--color-primary, #2563EB)' }}>
                       {train.train_number}
                     </td>
-                    <td style={{ padding: '10px 14px', fontWeight: 600, color: 'var(--color-text-primary, #0F172A)' }}>
-                      {train.name}
+                    <td style={{ padding: '10px 14px' }}>
+                      <div style={{ fontWeight: 600, color: 'var(--color-text-primary, #0F172A)' }}>
+                        {train.name}
+                        {isLiveActive && (
+                          <span
+                            style={{
+                              fontSize: '9px',
+                              fontWeight: 700,
+                              backgroundColor: '#DCFCE7',
+                              color: '#16A34A',
+                              padding: '1px 5px',
+                              borderRadius: '4px',
+                              marginLeft: '6px',
+                            }}
+                          >
+                            LIVE MQTT
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
+                        {coachCount > 0 ? `${coachCount} Coaches` : 'Consist Unconfigured'} • {tankCount > 0 ? `${tankCount} Water Tanks` : 'No Tanks'}
+                      </div>
                     </td>
                     <td style={{ padding: '10px 14px', color: 'var(--color-text-secondary, #475569)' }}>
                       {train.source_station
@@ -1102,20 +1189,17 @@ export const EmployeeDashboard: React.FC = () => {
                             width: '7px',
                             height: '7px',
                             borderRadius: '50%',
-                            backgroundColor: train.is_online
-                              ? 'var(--color-status-success, #16A34A)'
-                              : 'var(--color-status-warning, #D97706)',
+                            backgroundColor: statusColor,
                           }}
                         />
                         <span
                           style={{
                             fontWeight: 600,
-                            color: train.is_online
-                              ? 'var(--color-status-success, #16A34A)'
-                              : 'var(--color-status-warning, #D97706)',
+                            color: statusColor,
+                            fontSize: '11px',
                           }}
                         >
-                          {train.is_online ? 'Active' : 'Standby'}
+                          {statusText}
                         </span>
                       </div>
                     </td>
@@ -1137,7 +1221,7 @@ export const EmployeeDashboard: React.FC = () => {
                         fontSize: '11px',
                       }}
                     >
-                      {train.last_telemetry || 'Just now'}
+                      {isLiveActive ? liveTelemetry.time : train.last_seen_at ? new Date(train.last_seen_at).toLocaleTimeString() : (train.last_telemetry || 'Standby')}
                     </td>
                   </tr>
                 );
@@ -1150,8 +1234,8 @@ export const EmployeeDashboard: React.FC = () => {
             MOBILE TRAIN CARDS LIST (< 768px Viewport Architecture)
             ========================================================================= */}
         <div className="dashboard-train-cards-mobile mobile-card-list">
-          {/* Mobile Live Hardware Train Card */}
-          {liveTelemetry && (
+          {/* Mobile Live Hardware Train Card (if not already in registered displayTrains) */}
+          {liveTelemetry && !displayTrains.some((t) => t.train_number.trim() === liveTelemetry.trno?.trim()) && (
             <div
               className={`mobile-train-card ${currentTrain.trainNumber === liveTelemetry.trno ? 'selected' : ''}`}
               onClick={() => handleSelectTrain(liveTelemetry.trno)}
@@ -1189,11 +1273,11 @@ export const EmployeeDashboard: React.FC = () => {
                 </span>
               </div>
 
-              <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', marginTop: '4px' }}>
                 Train {liveTelemetry.trno} &bull; Express Fleet (Live Hardware)
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', color: '#475569' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', color: '#475569', marginTop: '6px' }}>
                 <div>
                   <span style={{ color: '#64748B' }}>Route: </span>
                   <strong>Corridor &rarr; In Service</strong>
@@ -1226,6 +1310,7 @@ export const EmployeeDashboard: React.FC = () => {
                 style={{
                   width: '100%',
                   minHeight: '44px',
+                  marginTop: '10px',
                   backgroundColor: currentTrain.trainNumber === liveTelemetry.trno ? '#2563EB' : '#EFF6FF',
                   color: currentTrain.trainNumber === liveTelemetry.trno ? '#FFFFFF' : '#2563EB',
                   border: `1px solid ${currentTrain.trainNumber === liveTelemetry.trno ? '#1D4ED8' : '#BFDBFE'}`,
@@ -1245,8 +1330,8 @@ export const EmployeeDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* Empty State */}
-          {!liveTelemetry && backendTrains.length === 0 && (
+          {/* Empty State when no registered trains exist for filter */}
+          {displayTrains.length === 0 && !liveTelemetry && (
             <div
               style={{
                 padding: '24px',
@@ -1260,17 +1345,30 @@ export const EmployeeDashboard: React.FC = () => {
                 gap: '8px',
               }}
             >
-              <Activity size={24} color="#94A3B8" />
-              <strong style={{ fontSize: '13px', color: '#475569' }}>Awaiting Telemetry</strong>
+              <Train size={24} color="#94A3B8" />
+              <strong style={{ fontSize: '13px', color: '#475569' }}>No Registered Trains Found</strong>
               <span style={{ fontSize: '11px', color: '#94A3B8' }}>
-                Listening on topic: <code>0023004D4B42501120353332</code>
+                {selectedRegion === 'ALL'
+                  ? 'No trains currently registered in the fleet. Register a train in Train Management.'
+                  : `No registered trains found in this region. Switch to "All Regions" or register a new train.`}
               </span>
             </div>
           )}
 
-          {/* Backend Trains Mobile Cards */}
-          {backendTrains.map((train) => {
+          {/* Authoritative Registered Fleet Mobile Cards */}
+          {displayTrains.map((train) => {
             const isSelected = currentTrain.trainNumber === train.train_number;
+            const isLiveActive = liveTelemetry && liveTelemetry.trno?.trim() === train.train_number.trim() && !liveTelemetry.isStale;
+            const isOnline = isLiveActive || train.is_online;
+            const isNeverConnected = !isOnline && (!train.connectivity_status || train.connectivity_status === 'NEVER_CONNECTED') && (train.devices_count === 0 || !train.devices_count);
+
+            const statusBg = isOnline ? '#DCFCE7' : isNeverConnected ? '#F1F5F9' : '#FEF3C7';
+            const statusTextColor = isOnline ? '#16A34A' : isNeverConnected ? '#64748B' : '#D97706';
+            const statusText = isOnline ? 'Active' : isNeverConnected ? 'Never Connected' : 'Standby';
+
+            const coachCount = train.coaches_count || train.total_coaches || 0;
+            const tankCount = train.tanks_count || (coachCount > 0 ? coachCount * 2 : 0);
+
             return (
               <div
                 key={`mobile-train-${train.train_number}`}
@@ -1283,6 +1381,20 @@ export const EmployeeDashboard: React.FC = () => {
                     <span style={{ fontSize: '15px', fontWeight: 800, color: '#2563EB' }}>
                       {train.train_number}
                     </span>
+                    {isLiveActive && (
+                      <span
+                        style={{
+                          fontSize: '9px',
+                          fontWeight: 700,
+                          backgroundColor: '#DCFCE7',
+                          color: '#16A34A',
+                          padding: '1px 5px',
+                          borderRadius: '4px',
+                        }}
+                      >
+                        LIVE MQTT
+                      </span>
+                    )}
                   </div>
                   <span
                     style={{
@@ -1290,9 +1402,9 @@ export const EmployeeDashboard: React.FC = () => {
                       fontWeight: 700,
                       padding: '3px 9px',
                       borderRadius: '12px',
-                      backgroundColor: train.is_online ? '#DCFCE7' : '#FEF3C7',
-                      color: train.is_online ? '#15803D' : '#B45309',
-                      border: `1px solid ${train.is_online ? '#BBF7D0' : '#FDE68A'}`,
+                      backgroundColor: statusBg,
+                      color: statusTextColor,
+                      border: `1px solid ${isOnline ? '#BBF7D0' : isNeverConnected ? '#E2E8F0' : '#FDE68A'}`,
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '5px',
@@ -1303,25 +1415,29 @@ export const EmployeeDashboard: React.FC = () => {
                         width: '6px',
                         height: '6px',
                         borderRadius: '50%',
-                        backgroundColor: train.is_online ? '#16A34A' : '#D97706',
+                        backgroundColor: isOnline ? '#16A34A' : isNeverConnected ? '#94A3B8' : '#D97706',
                       }}
                     />
-                    {train.is_online ? 'Active' : 'Standby'}
+                    {statusText}
                   </span>
                 </div>
 
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', marginTop: '4px' }}>
                   {train.name}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', color: '#475569' }}>
+                <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
+                  {coachCount > 0 ? `${coachCount} Coaches` : 'Consist Unconfigured'} • {tankCount > 0 ? `${tankCount} Water Tanks` : 'No Tanks'}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', color: '#475569', marginTop: '6px' }}>
                   <div>
                     <span style={{ color: '#64748B' }}>Route: </span>
-                    <strong>{(train as any).source || 'Station A'} &rarr; {(train as any).destination || 'Station B'}</strong>
+                    <strong>{train.source_station || (train as any).source || '—'} &rarr; {train.destination_station || (train as any).destination || '—'}</strong>
                   </div>
                   <div>
                     <span style={{ color: '#64748B' }}>Region: </span>
-                    <strong>{train.region || 'Eastern'}</strong>
+                    <strong>{train.railway_zone ? `${train.region} (${train.railway_zone})` : (train.region || '—')}</strong>
                   </div>
                   <div style={{ gridColumn: 'span 2' }}>
                     <span style={{ color: '#64748B' }}>Location: </span>
@@ -1335,7 +1451,7 @@ export const EmployeeDashboard: React.FC = () => {
                   </div>
                   <div style={{ gridColumn: 'span 2' }}>
                     <span style={{ color: '#64748B' }}>Last Telemetry: </span>
-                    <strong>{train.last_telemetry || 'Just now'}</strong>
+                    <strong>{isLiveActive ? liveTelemetry.time : train.last_seen_at ? new Date(train.last_seen_at).toLocaleTimeString() : (train.last_telemetry || 'Standby')}</strong>
                   </div>
                 </div>
 
@@ -1349,6 +1465,7 @@ export const EmployeeDashboard: React.FC = () => {
                   style={{
                     width: '100%',
                     minHeight: '44px',
+                    marginTop: '10px',
                     backgroundColor: isSelected ? '#2563EB' : '#EFF6FF',
                     color: isSelected ? '#FFFFFF' : '#2563EB',
                     border: `1px solid ${isSelected ? '#1D4ED8' : '#BFDBFE'}`,
@@ -2898,12 +3015,10 @@ export const EmployeeDashboard: React.FC = () => {
                       boxSizing: 'border-box',
                     }}
                   >
-                    <option value="South East">South East</option>
-                    <option value="Northern">Northern</option>
-                    <option value="Western">Western</option>
-                    <option value="Central">Central</option>
-                    <option value="Southern">Southern</option>
-                    <option value="Eastern">Eastern</option>
+                    <option value="EAST">Eastern Railway (ER)</option>
+                    <option value="SOUTH">Southern Railway (SR)</option>
+                    <option value="NORTH">Northern Railway (NR)</option>
+                    <option value="WEST">Western Railway (WR)</option>
                   </select>
                 </div>
                 <div>

@@ -45,23 +45,39 @@ export interface StaticFleetState {
 const REGION_META: Record<string, { name: string; code: string }> = {
   NORTH: { name: 'Northern Railway', code: 'NR' },
   SOUTH: { name: 'Southern Railway', code: 'SR' },
-  EAST: { name: 'Eastern & South East', code: 'ER/SER' },
+  EAST: { name: 'Eastern Railway', code: 'ER' },
   WEST: { name: 'Western Railway', code: 'WR' },
 };
 
 export function normalizeRegionCode(raw?: string | null): 'NORTH' | 'SOUTH' | 'EAST' | 'WEST' {
   const s = (raw || '').trim().toUpperCase();
-  if (s === 'NORTH' || s === 'NR' || s === 'NCR' || s === 'NWR' || s === 'NER' || s.includes('NORTH')) {
+  if (s === 'NORTH') return 'NORTH';
+  if (s === 'SOUTH') return 'SOUTH';
+  if (s === 'EAST') return 'EAST';
+  if (s === 'WEST') return 'WEST';
+
+  // East & South Eastern Railway (ER, SER, SECR, ECOR, ECR)
+  // Check EAST, ER, SER before generic SOUTH so "South East" correctly normalizes to EAST
+  if (
+    s === 'ER' ||
+    s === 'SER' ||
+    s === 'SECR' ||
+    s === 'ECOR' ||
+    s === 'ECR' ||
+    s.includes('EAST') ||
+    s.includes('BENGAL') ||
+    s.includes('ODISHA')
+  ) {
+    return 'EAST';
+  }
+  if (s === 'NR' || s === 'NCR' || s === 'NWR' || s === 'NER' || s.includes('NORTH')) {
     return 'NORTH';
   }
-  if (s === 'SOUTH' || s === 'SR' || s === 'SCR' || s === 'SWR' || s.includes('SOUTH')) {
+  if (s === 'SR' || s === 'SCR' || s === 'SWR' || s.includes('SOUTH')) {
     return 'SOUTH';
   }
-  if (s === 'WEST' || s === 'WR' || s === 'WCR' || s === 'CR' || s.includes('WEST') || s.includes('CENTRAL')) {
+  if (s === 'WR' || s === 'WCR' || s === 'CR' || s === 'KR' || s.includes('WEST') || s.includes('CENTRAL') || s.includes('MUMBAI')) {
     return 'WEST';
-  }
-  if (s === 'EAST' || s === 'ER' || s === 'SER' || s === 'SECR' || s === 'ECOR' || s === 'ECR' || s.includes('EAST')) {
-    return 'EAST';
   }
   return 'NORTH';
 }
@@ -78,9 +94,9 @@ const DEFAULT_INITIAL_STATE: StaticFleetState = {
         name: 'Coromandel Express',
         region: 'EAST',
         type: 'Superfast Express',
-        coaches_count: 22,
-        tanks_count: 44,
-        is_online: true,
+        coaches_count: 6,
+        tanks_count: 12,
+        is_online: false,
         active_alarms: 0,
         status: 'All Normal',
         source_station: 'Howrah Jn',
@@ -88,21 +104,21 @@ const DEFAULT_INITIAL_STATE: StaticFleetState = {
         destination_station: 'MGR Chennai Central',
         destination_code: 'MAS',
         railway_zone: 'SER',
-        total_coaches: 22,
+        total_coaches: 6,
         has_official_composition: true,
         api_provider: 'Standard Fleet Registry',
         last_verified_at: new Date().toISOString(),
         current_latitude: 22.5839,
         current_longitude: 88.3426,
-        current_speed_kmh: 72.5,
+        current_speed_kmh: 0,
       } as any,
       consist: {
         train_number: '12842',
         name: 'Coromandel Express',
         region: 'EAST',
-        coaches_count: 22,
-        tanks_count: 44,
-        online_status: true,
+        coaches_count: 6,
+        tanks_count: 12,
+        online_status: false,
         active_alarms_count: 0,
         source_station: 'Howrah Jn',
         destination_station: 'MGR Chennai Central',
@@ -110,11 +126,61 @@ const DEFAULT_INITIAL_STATE: StaticFleetState = {
           {
             coach_number: 'A1',
             device_uid: 'PANORAMA-12842-A1',
-            is_online: true,
+            is_online: false,
             hardware_version: 'Standard WLI Node',
             tanks: [
               { id: 'tank-12842-A1-1', tank_index: 1, name: 'Tank 1 (Left)', capacity_liters: 500, current_level_percent: 78.5, current_volume_liters: 392.5, status: 'NORMAL' },
               { id: 'tank-12842-A1-2', tank_index: 2, name: 'Tank 2 (Right)', capacity_liters: 500, current_level_percent: 74.0, current_volume_liters: 370.0, status: 'NORMAL' },
+            ],
+          },
+          {
+            coach_number: 'A2',
+            device_uid: 'PANORAMA-12842-A2',
+            is_online: false,
+            hardware_version: 'Standard WLI Node',
+            tanks: [
+              { id: 'tank-12842-A2-1', tank_index: 1, name: 'Tank 1 (Left)', capacity_liters: 500, current_level_percent: 65.0, current_volume_liters: 325.0, status: 'NORMAL' },
+              { id: 'tank-12842-A2-2', tank_index: 2, name: 'Tank 2 (Right)', capacity_liters: 500, current_level_percent: 68.0, current_volume_liters: 340.0, status: 'NORMAL' },
+            ],
+          },
+          {
+            coach_number: 'B1',
+            device_uid: 'PANORAMA-12842-B1',
+            is_online: false,
+            hardware_version: 'Standard WLI Node',
+            tanks: [
+              { id: 'tank-12842-B1-1', tank_index: 1, name: 'Tank 1 (Left)', capacity_liters: 500, current_level_percent: 82.0, current_volume_liters: 410.0, status: 'NORMAL' },
+              { id: 'tank-12842-B1-2', tank_index: 2, name: 'Tank 2 (Right)', capacity_liters: 500, current_level_percent: 80.0, current_volume_liters: 400.0, status: 'NORMAL' },
+            ],
+          },
+          {
+            coach_number: 'B2',
+            device_uid: 'PANORAMA-12842-B2',
+            is_online: false,
+            hardware_version: 'Standard WLI Node',
+            tanks: [
+              { id: 'tank-12842-B2-1', tank_index: 1, name: 'Tank 1 (Left)', capacity_liters: 500, current_level_percent: 54.0, current_volume_liters: 270.0, status: 'NORMAL' },
+              { id: 'tank-12842-B2-2', tank_index: 2, name: 'Tank 2 (Right)', capacity_liters: 500, current_level_percent: 51.0, current_volume_liters: 255.0, status: 'NORMAL' },
+            ],
+          },
+          {
+            coach_number: 'S1',
+            device_uid: 'PANORAMA-12842-S1',
+            is_online: false,
+            hardware_version: 'Standard WLI Node',
+            tanks: [
+              { id: 'tank-12842-S1-1', tank_index: 1, name: 'Tank 1 (Left)', capacity_liters: 500, current_level_percent: 42.0, current_volume_liters: 210.0, status: 'NORMAL' },
+              { id: 'tank-12842-S1-2', tank_index: 2, name: 'Tank 2 (Right)', capacity_liters: 500, current_level_percent: 40.0, current_volume_liters: 200.0, status: 'NORMAL' },
+            ],
+          },
+          {
+            coach_number: 'S2',
+            device_uid: 'PANORAMA-12842-S2',
+            is_online: false,
+            hardware_version: 'Standard WLI Node',
+            tanks: [
+              { id: 'tank-12842-S2-1', tank_index: 1, name: 'Tank 1 (Left)', capacity_liters: 500, current_level_percent: 30.0, current_volume_liters: 150.0, status: 'NORMAL' },
+              { id: 'tank-12842-S2-2', tank_index: 2, name: 'Tank 2 (Right)', capacity_liters: 500, current_level_percent: 32.0, current_volume_liters: 160.0, status: 'NORMAL' },
             ],
           },
         ],

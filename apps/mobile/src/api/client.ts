@@ -62,7 +62,7 @@ const DEFAULT_USERS: UserProfile[] = [
     employee_id: 'EMP-002',
     designation: 'WLI Maintenance Engineer',
     department: 'Mechanical (Rolling Stock)',
-    division_region: 'South East',
+    division_region: 'EAST',
     role: 'EMPLOYEE',
     account_status: 'ACTIVE',
     is_active: true,
@@ -139,8 +139,9 @@ export function resolveApiBase(): string {
   }
   if (typeof window !== 'undefined' && window.location) {
     const host = window.location.hostname || '';
-    if (host === 'localhost' || host === '127.0.0.1') {
-      return 'http://127.0.0.1:8000/api/v1';
+    if (host === 'localhost' || host === '127.0.0.1' || host === '10.0.2.2') {
+      const port = window.location.port || '8000';
+      return `http://${host}:${port}/api/v1`;
     }
   }
   if (typeof window !== 'undefined' && (window as any).Capacitor) {
@@ -246,7 +247,7 @@ export class ApiClient {
           employee_id: 'EMP-002',
           designation: 'WLI Maintenance Engineer',
           department: 'Mechanical (Rolling Stock)',
-          division_region: 'South East',
+          division_region: 'EAST',
           role: 'EMPLOYEE',
           account_status: 'ACTIVE',
           is_active: true,

@@ -95,6 +95,9 @@ export interface TrainOverviewItem {
   coaches_count: number;
   tanks_count: number;
   is_online: boolean;
+  connectivity_status?: 'ONLINE' | 'OFFLINE' | 'STANDBY' | 'NEVER_CONNECTED' | string;
+  last_seen_at?: string | null;
+  last_telemetry?: string | null;
   status: string;
   active_alarms: number;
   region?: string;

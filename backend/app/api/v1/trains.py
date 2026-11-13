@@ -48,19 +48,22 @@ TRAIN_METADATA: Dict[str, Dict[str, Any]] = {}
 
 
 def _normalize_region_input(raw_region: str) -> str:
-    """Validate and normalize region/zone label into NORTH, SOUTH, EAST, or WEST."""
+    """Validate and normalize region/zone label into canonical NORTH, SOUTH, EAST, or WEST."""
     cleaned = (raw_region or "").strip().upper()
     if cleaned in REGION_CONFIG:
         return cleaned
     if cleaned in ZONE_TO_REGION:
         return ZONE_TO_REGION[cleaned]
-    for token in ("NORTH", "SOUTH", "EAST", "WEST", "CENTRAL", "MUMBAI", "BENGAL", "ODISHA"):
-        if token in cleaned:
-            return map_zone_to_region(cleaned)
-    raise HTTPException(
-        status_code=400,
-        detail=f"Invalid region '{raw_region}'. Choose from {list(REGION_CONFIG.keys())}",
-    )
+    # Check aliases and combined labels:
+    if "EAST" in cleaned or "ER" in cleaned or "SER" in cleaned or "BENGAL" in cleaned or "ODISHA" in cleaned:
+        return "EAST"
+    if "NORTH" in cleaned or "NR" in cleaned or "DELHI" in cleaned:
+        return "NORTH"
+    if "SOUTH" in cleaned or "SR" in cleaned or "CHENNAI" in cleaned:
+        return "SOUTH"
+    if "WEST" in cleaned or "WR" in cleaned or "CENTRAL" in cleaned or "MUMBAI" in cleaned:
+        return "WEST"
+    return map_zone_to_region(cleaned, fallback="EAST")
 
 
 def _safe_json_loads(raw: Optional[str], default: Any) -> Any:
@@ -292,10 +295,12 @@ async def get_regions_summary(db: AsyncSession = Depends(get_db)):
                 trains_in_region.append({
                     "train_number": train_no,
                     "name": meta["name"],
+                    "region": reg_key,
                     "type": meta.get("type", "Express"),
                     "coaches_count": coaches_count,
                     "tanks_count": tank_count,
                     "is_online": is_online,
+                    "connectivity_status": "ONLINE" if is_online else ("OFFLINE" if devs else "NEVER_CONNECTED"),
                     "status": train_status,
                     "active_alarms": train_alarm_count,
                     "source_station": meta.get("source_station"),
@@ -361,9 +366,23 @@ async def list_trains(
             continue
 
         devs = train_devices.get(train_no, [])
-        is_online = any(d.is_online for d in devs)
-        coaches_count = len(devs)
-        tanks_count = sum(len(d.tanks) for d in devs) if devs else 0
+        is_online = any(d.is_online for d in devs) if devs else False
+
+        coaches_list = meta.get("coach_composition") or []
+        if isinstance(coaches_list, list) and len(coaches_list) > 0:
+            coaches_count = len(coaches_list)
+        else:
+            coaches_count = meta.get("total_coaches") or (len(devs) if devs else 0)
+        device_tank_sum = sum(len(d.tanks) for d in devs) if devs else 0
+        tanks_count = max(coaches_count * 2, device_tank_sum)
+
+        if devs:
+            connectivity_status = "ONLINE" if is_online else "OFFLINE"
+        else:
+            connectivity_status = "NEVER_CONNECTED"
+
+        last_seen_dt = max((d.last_seen_at for d in devs if getattr(d, 'last_seen_at', None)), default=None)
+        last_seen_iso = last_seen_dt.isoformat() if last_seen_dt else None
         alarm_count = sum(1 for d in devs if d.id in device_alarms)
 
         train_item = {
@@ -374,6 +393,8 @@ async def list_trains(
             "coaches_count": coaches_count,
             "tanks_count": tanks_count,
             "is_online": is_online,
+            "connectivity_status": connectivity_status,
+            "last_seen_at": last_seen_iso,
             "active_alarms": alarm_count,
             "status": "All Normal" if alarm_count == 0 else f"{alarm_count} Active Alerts",
             "source_station": meta.get("source_station"),
@@ -382,7 +403,7 @@ async def list_trains(
             "destination_code": meta.get("destination_code"),
             "railway_zone": meta.get("railway_zone"),
             "running_days": meta.get("running_days"),
-            "total_coaches": meta.get("total_coaches"),
+            "total_coaches": meta.get("total_coaches") or coaches_count,
             "has_official_composition": meta.get("has_official_composition", False),
             "api_provider": meta.get("api_provider"),
             "last_verified_at": meta.get("last_verified_at"),
