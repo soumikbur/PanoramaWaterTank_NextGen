@@ -20,6 +20,7 @@ import {
 import { ApiClient } from '../api/client';
 import { wsService } from '../services/websocket';
 import { mqttService } from '../services/mqttService';
+import { syncService, SyncState } from '../services/syncService';
 import { DisplayPreferencesService, ScalePreset } from '../services/displayPreferencesService';
 import { AppRouter } from '../services/router';
 import { deviceRegistry, ManagedDevice } from '../services/deviceRegistry';
@@ -129,6 +130,9 @@ interface AppContextType {
   renameCoach: (trainNumber: string, oldCoachNumber: string, newCoachNumber: string) => Promise<any>;
   deleteCoach: (trainNumber: string, coachNumber: string) => Promise<any>;
   reorderCoaches: (trainNumber: string, coachNumbers: string[]) => Promise<any>;
+  syncState: SyncState;
+  lastSyncTime: Date | null;
+  triggerSync: () => Promise<boolean>;
 }
 
 const defaultStats: AlarmStats = {
@@ -196,6 +200,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [regions, setRegions] = useState<RegionSummary[]>([]);
   const [activeConsist, setActiveConsist] = useState<TrainConsist | null>(null);
   const regionsLoadedRef = useRef<boolean>(false);
+  const [syncState, setSyncState] = useState<SyncState>(() => syncService.getState());
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(() => syncService.getLastSyncTime());
 
   const [telemetryTimeoutSec, setTelemetryTimeoutSec] = useState<number>(() => getTelemetryTimeoutSeconds());
   const [telemetryTick, setTelemetryTick] = useState<number>(0);
@@ -630,6 +636,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setLastValidGps(null);
         setGpsWaypoints([]);
       }
+      syncService.setState('SYNCHRONIZED');
     } catch (e) {
       console.warn('[AppContext] Error fetching regions:', e);
     }
@@ -676,6 +683,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (health?.mqttBroker) {
         setMqttBrokerStatus(health.mqttBroker === 'CONNECTED' ? 'CONNECTED' : 'DISCONNECTED');
       }
+      syncService.setState('SYNCHRONIZED');
     } catch (e) {
       console.warn('[AppContext] Error refreshing data:', e);
     }
@@ -713,6 +721,50 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       centralChannel?.close();
       window.removeEventListener('storage', onStorageSync);
       window.removeEventListener(FLEET_UPDATED_EVENT, onLocalFleetEvent);
+    };
+  }, []);
+
+  // Central authoritative synchronization listener
+  useEffect(() => {
+    const unsubSyncState = syncService.onStateChange((st, time) => {
+      setSyncState(st);
+      setLastSyncTime(time);
+    });
+
+    const unsubSyncEvents = syncService.onSyncEvent((evt) => {
+      const type = evt.event_type;
+      if (
+        type === 'TRAIN_CREATED' ||
+        type === 'TRAIN_UPDATED' ||
+        type === 'TRAIN_DELETED' ||
+        type === 'REGION_UPDATED' ||
+        type === 'COACH_CREATED' ||
+        type === 'COACH_UPDATED' ||
+        type === 'COACH_DELETED' ||
+        type === 'FLEET_SYNC'
+      ) {
+        refreshRegions();
+        refreshData();
+      } else if (
+        type === 'DEVICE_CREATED' ||
+        type === 'DEVICE_UPDATED' ||
+        type === 'DEVICE_DELETED' ||
+        type === 'DEVICE_SYNC'
+      ) {
+        refreshData();
+      }
+    });
+
+    const handleReqSync = () => {
+      refreshRegions();
+      refreshData();
+    };
+    window.addEventListener('panorama:request-authoritative-sync', handleReqSync);
+
+    return () => {
+      unsubSyncState();
+      unsubSyncEvents();
+      window.removeEventListener('panorama:request-authoritative-sync', handleReqSync);
     };
   }, []);
 
@@ -1433,6 +1485,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         renameCoach: handleRenameCoach,
         deleteCoach: handleDeleteCoach,
         reorderCoaches: handleReorderCoaches,
+        syncState,
+        lastSyncTime,
+        triggerSync: () => syncService.reconcileWithServer(),
       }}
     >
       {children}

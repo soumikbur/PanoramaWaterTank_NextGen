@@ -1,3 +1,9 @@
+databases:
+  - name: panorama-postgres
+    plan: free
+    databaseName: panorama
+    user: panorama
+
 services:
   - type: web
     name: panorama-water-tank-backend
@@ -18,7 +24,14 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: DATABASE_URL
-        value: sqlite+aiosqlite:///panorama_dev.db
+        fromDatabase:
+          name: panorama-postgres
+          property: connectionString
       - key: CORS_ORIGINS
         value: '["*"]'
-
+      - key: MQTT_BROKER_HOST
+        value: broker.hivemq.com
+      - key: MQTT_BROKER_PORT
+        value: "1883"
+      - key: MQTT_USE_TLS
+        value: "false"

@@ -72,6 +72,9 @@ export const Header: React.FC = () => {
     alarmStats,
     activeAlarms,
     managedAlerts,
+    syncState,
+    lastSyncTime,
+    triggerSync,
   } = useApp();
 
   const { theme, setTheme, resolvedTheme, isDark } = useDisplayPreferences();
@@ -1122,6 +1125,63 @@ export const Header: React.FC = () => {
                 <Search size={18} />
               </button>
 
+              {/* Mobile Central Sync Indicator */}
+              <div
+                id="mobile-sync-status-pill"
+                onClick={() => triggerSync()}
+                style={{
+                  height: '28px',
+                  padding: '0 6px',
+                  borderRadius: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  backgroundColor:
+                    syncState === 'SYNCHRONIZED'
+                      ? '#E8F8EE'
+                      : syncState === 'SYNCHRONIZING'
+                      ? '#FEF3C7'
+                      : '#FDECEC',
+                  border: `1px solid ${
+                    syncState === 'SYNCHRONIZED'
+                      ? '#BBF7D0'
+                      : syncState === 'SYNCHRONIZING'
+                      ? '#FDE68A'
+                      : '#FECACA'
+                  }`,
+                  cursor: 'pointer',
+                }}
+                title={`Central Sync: ${syncState}\nLast: ${lastSyncTime ? lastSyncTime.toLocaleTimeString() : 'Never'}`}
+              >
+                <div
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor:
+                      syncState === 'SYNCHRONIZED'
+                        ? '#16A34A'
+                        : syncState === 'SYNCHRONIZING'
+                        ? '#D97706'
+                        : '#DC2626',
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    color:
+                      syncState === 'SYNCHRONIZED'
+                        ? '#16A34A'
+                        : syncState === 'SYNCHRONIZING'
+                        ? '#D97706'
+                        : '#DC2626',
+                  }}
+                >
+                  {syncState === 'SYNCHRONIZED' ? 'SYNC' : syncState === 'SYNCHRONIZING' ? '...' : 'OFF'}
+                </span>
+              </div>
+
               {/* Mobile Connection Pill */}
               <div
                 style={{
@@ -1686,6 +1746,83 @@ export const Header: React.FC = () => {
               ? 'STALE DATA'
               : mqttConnectionStatus === 'CONNECTING'
               ? 'CONNECTING'
+              : 'OFFLINE'}
+          </span>
+        </div>
+
+        {/* Central Database & Fleet Synchronization Indicator */}
+        <div
+          id="header-sync-status-indicator"
+          onClick={() => triggerSync()}
+          style={{
+            height: '28px',
+            padding: '0 10px',
+            borderRadius: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            backgroundColor:
+              syncState === 'SYNCHRONIZED'
+                ? '#E8F8EE'
+                : syncState === 'SYNCHRONIZING'
+                ? '#FEF3C7'
+                : '#FDECEC',
+            border: `1px solid ${
+              syncState === 'SYNCHRONIZED'
+                ? '#BBF7D0'
+                : syncState === 'SYNCHRONIZING'
+                ? '#FDE68A'
+                : '#FECACA'
+            }`,
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+          title={`Central Fleet Sync: ${
+            syncState === 'SYNCHRONIZED'
+              ? 'Connected & Synchronized'
+              : syncState === 'SYNCHRONIZING'
+              ? 'Connecting / Synchronizing'
+              : 'Backend Disconnected'
+          }\nLast Successful Sync: ${
+            lastSyncTime
+              ? lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+              : 'Never'
+          }\n(Click to trigger manual reconciliation)`}
+        >
+          <div
+            style={{
+              width: '7px',
+              height: '7px',
+              borderRadius: '50%',
+              backgroundColor:
+                syncState === 'SYNCHRONIZED'
+                  ? '#16A34A'
+                  : syncState === 'SYNCHRONIZING'
+                  ? '#D97706'
+                  : '#DC2626',
+            }}
+          />
+          <span
+            style={{
+              fontSize: '10px',
+              fontWeight: 700,
+              color:
+                syncState === 'SYNCHRONIZED'
+                  ? '#16A34A'
+                  : syncState === 'SYNCHRONIZING'
+                  ? '#D97706'
+                  : '#DC2626',
+              letterSpacing: '0.3px',
+            }}
+          >
+            {syncState === 'SYNCHRONIZED'
+              ? `SYNCED ${
+                  lastSyncTime
+                    ? lastSyncTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                    : ''
+                }`
+              : syncState === 'SYNCHRONIZING'
+              ? 'SYNCING...'
               : 'OFFLINE'}
           </span>
         </div>

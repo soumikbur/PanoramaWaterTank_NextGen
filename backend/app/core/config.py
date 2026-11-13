@@ -25,6 +25,18 @@ else:
     _DEFAULT_DB_PATH = (_BACKEND_DIR / "panorama_dev.db").as_posix()
 
 
+def normalize_database_url(url: str) -> str:
+    """Ensure database URL specifies the correct async driver for SQLAlchemy 2.0."""
+    url = (url or "").strip()
+    if not url:
+        return f"sqlite+aiosqlite:///{_DEFAULT_DB_PATH}"
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url
+
+
 class Settings(BaseSettings):
     # Application Info
     APP_NAME: str = "Panorama Water Tank Monitor"
@@ -86,7 +98,16 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:8081",
         "http://localhost:8000",
-        "https://soumikbur.github.io"
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:8081",
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+        "http://10.0.2.2:8000",
+        "https://localhost",
+        "capacitor://localhost",
+        "https://soumikbur.github.io",
+        "https://panorama-water-tank-next-gen.vercel.app",
     ]
 
     model_config = SettingsConfigDict(
@@ -96,6 +117,7 @@ class Settings(BaseSettings):
     )
 
     def model_post_init(self, __context):
+        self.DATABASE_URL = normalize_database_url(self.DATABASE_URL)
         if self.ENV.lower() == "production":
             self.DEBUG = False
 

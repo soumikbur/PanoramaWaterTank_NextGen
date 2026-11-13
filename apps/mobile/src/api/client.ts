@@ -122,7 +122,9 @@ function writeLocalRegistrations(regs: UserProfile[], skipPublish = false): void
   } catch {}
 }
 
-function resolveApiBase(): string | null {
+export const PRODUCTION_BACKEND_URL = 'https://panorama-water-tank-backend.onrender.com/api/v1';
+
+export function resolveApiBase(): string {
   if (typeof window !== 'undefined' && window.localStorage) {
     const custom = window.localStorage.getItem('panorama_backend_url');
     if (custom && custom.trim()) {
@@ -135,28 +137,28 @@ function resolveApiBase(): string | null {
   if (configured && String(configured).trim()) {
     return String(configured).trim().replace(/\/+$/, '');
   }
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    // GitHub Pages serves only static assets unless backend URL is configured
-    if ((window.location.hostname || '').endsWith('.github.io')) {
-      return null;
+  if (typeof window !== 'undefined' && window.location) {
+    const host = window.location.hostname || '';
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://127.0.0.1:8000/api/v1';
     }
-    return `${window.location.origin}/api/v1`;
   }
-  return 'http://127.0.0.1:8000/api/v1';
+  if (typeof window !== 'undefined' && (window as any).Capacitor) {
+    return PRODUCTION_BACKEND_URL;
+  }
+  return PRODUCTION_BACKEND_URL;
 }
 
-const API_BASE = resolveApiBase();
+export const API_BASE = resolveApiBase();
 
 export class ApiClient {
   static hasBackend(): boolean {
-    return Boolean(API_BASE);
+    return true;
   }
 
   private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    if (!API_BASE) {
-      throw new Error('External FastAPI backend URL is not configured (set VITE_API_URL). GitHub Pages hosts static frontend assets only.');
-    }
-    const url = `${API_BASE}${endpoint}`;
+    const base = resolveApiBase();
+    const url = `${base}${endpoint}`;
     const token = localStorage.getItem('panorama_token');
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -927,12 +929,19 @@ export class ApiClient {
   }
 
   static async createTrain(data: TrainCreatePayload): Promise<any> {
-    const res = !API_BASE
-      ? localFleetStore.createTrain(data)
-      : await this.request('/trains', {
-          method: 'POST',
-          body: JSON.stringify(data),
-        });
+    let res: any;
+    try {
+      res = await this.request('/trains', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      try {
+        localFleetStore.createTrain(data);
+      } catch {}
+    } catch (err: any) {
+      console.warn('[ApiClient] createTrain server error, saving locally:', err);
+      res = localFleetStore.createTrain(data);
+    }
     try {
       mqttService.publish('panorama/fleet/sync', { action: 'create_train', train: data });
     } catch {}
@@ -941,12 +950,19 @@ export class ApiClient {
   }
 
   static async updateTrain(trainNumber: string, data: { name?: string; region?: string; type?: string }): Promise<any> {
-    const res = !API_BASE
-      ? localFleetStore.updateTrain(trainNumber, data)
-      : await this.request(`/trains/${trainNumber}`, {
-          method: 'PUT',
-          body: JSON.stringify(data),
-        });
+    let res: any;
+    try {
+      res = await this.request(`/trains/${trainNumber}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+      try {
+        localFleetStore.updateTrain(trainNumber, data);
+      } catch {}
+    } catch (err: any) {
+      console.warn('[ApiClient] updateTrain server error, saving locally:', err);
+      res = localFleetStore.updateTrain(trainNumber, data);
+    }
     try {
       mqttService.publish('panorama/fleet/sync', { action: 'update_train', train_number: trainNumber, data });
     } catch {}
@@ -959,11 +975,18 @@ export class ApiClient {
     if (!clean) {
       throw new Error('Train number is required for deletion.');
     }
-    const res = !API_BASE
-      ? localFleetStore.deleteTrain(trainNumber)
-      : await this.request<{ success?: boolean; message: string; trainId?: string }>(`/trains/${clean}`, {
-          method: 'DELETE',
-        });
+    let res: any;
+    try {
+      res = await this.request<{ success?: boolean; message: string; trainId?: string }>(`/trains/${clean}`, {
+        method: 'DELETE',
+      });
+      try {
+        localFleetStore.deleteTrain(trainNumber);
+      } catch {}
+    } catch (err: any) {
+      console.warn('[ApiClient] deleteTrain server error, saving locally:', err);
+      res = localFleetStore.deleteTrain(trainNumber);
+    }
     deviceRegistry.detachTrain(trainNumber);
     try {
       mqttService.publish('panorama/fleet/sync', { action: 'delete_train', train_number: trainNumber.trim() });
@@ -976,12 +999,19 @@ export class ApiClient {
   static async addCoach(trainNumber: string, data: CoachFormInput): Promise<any> {
     const cleanTrain = (trainNumber || '').trim();
     if (!cleanTrain) throw new Error('Train number is required.');
-    const res = !API_BASE
-      ? localFleetStore.addCoach(cleanTrain, data)
-      : await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches`, {
-          method: 'POST',
-          body: JSON.stringify(data),
-        });
+    let res: any;
+    try {
+      res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+      try {
+        localFleetStore.addCoach(cleanTrain, data);
+      } catch {}
+    } catch (err: any) {
+      console.warn('[ApiClient] addCoach server error, saving locally:', err);
+      res = localFleetStore.addCoach(cleanTrain, data);
+    }
     try {
       mqttService.publish('panorama/fleet/sync', { action: 'coach_change', train_number: cleanTrain });
     } catch {}
@@ -993,12 +1023,19 @@ export class ApiClient {
     const cleanTrain = (trainNumber || '').trim();
     const cleanCoach = (coachNumber || '').trim();
     if (!cleanTrain || !cleanCoach) throw new Error('Train number and Coach number are required.');
-    const res = !API_BASE
-      ? localFleetStore.updateCoach(cleanTrain, cleanCoach, data)
-      : await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(cleanCoach)}`, {
-          method: 'PUT',
-          body: JSON.stringify(data),
-        });
+    let res: any;
+    try {
+      res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(cleanCoach)}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+      try {
+        localFleetStore.updateCoach(cleanTrain, cleanCoach, data);
+      } catch {}
+    } catch (err: any) {
+      console.warn('[ApiClient] updateCoach server error, saving locally:', err);
+      res = localFleetStore.updateCoach(cleanTrain, cleanCoach, data);
+    }
     try {
       mqttService.publish('panorama/fleet/sync', { action: 'coach_change', train_number: cleanTrain });
     } catch {}
@@ -1011,12 +1048,19 @@ export class ApiClient {
     const oldCoach = (oldCoachNumber || '').trim();
     const newCoach = (newCoachNumber || '').trim().toUpperCase();
     if (!cleanTrain || !oldCoach || !newCoach) throw new Error('Train number, old coach number, and new coach number are required.');
-    const res = !API_BASE
-      ? localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach)
-      : await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(oldCoach)}/rename`, {
-          method: 'PUT',
-          body: JSON.stringify({ new_coach_number: newCoach }),
-        });
+    let res: any;
+    try {
+      res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(oldCoach)}/rename`, {
+        method: 'PUT',
+        body: JSON.stringify({ new_coach_number: newCoach }),
+      });
+      try {
+        localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach);
+      } catch {}
+    } catch (err: any) {
+      console.warn('[ApiClient] renameCoach server error, saving locally:', err);
+      res = localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach);
+    }
     try {
       mqttService.publish('panorama/fleet/sync', { action: 'coach_change', train_number: cleanTrain });
     } catch {}
@@ -1028,11 +1072,19 @@ export class ApiClient {
     const cleanTrain = (trainNumber || '').trim();
     const cleanCoach = (coachNumber || '').trim();
     if (!cleanTrain || !cleanCoach) throw new Error('Train number and coach number are required.');
-    const res = !API_BASE
-      ? localFleetStore.deleteCoach(cleanTrain, cleanCoach)
-      : await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(cleanCoach)}`, {
-          method: 'DELETE',
-        });
+    let res: any;
+    try {
+      res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(cleanCoach)}`, {
+        method: 'DELETE',
+      });
+      try {
+        localFleetStore.deleteCoach(cleanTrain, cleanCoach);
+      } catch {}
+    } catch (err: any) {
+      console.warn('[ApiClient] deleteCoach server error, saving locally:', err);
+      res = localFleetStore.deleteCoach(cleanTrain, cleanCoach);
+    }
+    deviceRegistry.unassignCoachDevice(cleanTrain, cleanCoach);
     try {
       mqttService.publish('panorama/fleet/sync', { action: 'coach_change', train_number: cleanTrain });
     } catch {}
@@ -1043,12 +1095,22 @@ export class ApiClient {
   static async reorderCoaches(trainNumber: string, coachNumbers: string[]): Promise<any> {
     const cleanTrain = (trainNumber || '').trim();
     if (!cleanTrain) throw new Error('Train number is required.');
-    const res = !API_BASE
-      ? localFleetStore.reorderCoaches(cleanTrain, coachNumbers)
-      : await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/reorder`, {
-          method: 'PUT',
-          body: JSON.stringify({ coach_numbers: coachNumbers }),
-        });
+    let res: any;
+    try {
+      res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/reorder`, {
+        method: 'PUT',
+        body: JSON.stringify({ coach_numbers: coachNumbers }),
+      });
+      try {
+        localFleetStore.reorderCoaches(cleanTrain, coachNumbers);
+      } catch {}
+    } catch (err: any) {
+      console.warn('[ApiClient] reorderCoaches server error, saving locally:', err);
+      res = localFleetStore.reorderCoaches(cleanTrain, coachNumbers);
+    }
+    try {
+      mqttService.publish('panorama/fleet/sync', { action: 'coach_change', train_number: cleanTrain });
+    } catch {}
     this.notifyCrossTabFleetSync();
     return res;
   }

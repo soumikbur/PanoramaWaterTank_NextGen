@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
@@ -24,6 +24,7 @@ from app.api.v1.auth import get_current_user, get_current_admin_user
 from app.models.user import User
 from app.websocket.manager import ws_manager
 from app.mqtt.client import mqtt_service
+from app.services.sync_broadcaster import broadcast_sync_event
 from app.services.train_lookup_service import (
     TrainLookupResponse,
     REGION_DEFAULT_ZONE,
@@ -261,9 +262,14 @@ async def get_regions_summary(db: AsyncSession = Depends(get_db)):
             devs = train_devices.get(train_no, [])
             meta = _build_train_meta(train_no, db_trains.get(train_no))
             if meta.get("region", "NORTH") == reg_key:
-                is_online = any(d.is_online for d in devs)
-                tank_count = sum(len(d.tanks) for d in devs) if devs else 0
-                coaches_count = len(devs)
+                is_online = any(d.is_online for d in devs) if devs else False
+                coaches_list = meta.get("coach_composition") or []
+                if isinstance(coaches_list, list) and len(coaches_list) > 0:
+                    coaches_count = len(coaches_list)
+                else:
+                    coaches_count = meta.get("total_coaches") or (len(devs) if devs else 1)
+                device_tank_sum = sum(len(d.tanks) for d in devs) if devs else 0
+                tank_count = max(coaches_count * 2, device_tank_sum)
 
                 train_alarm_count = sum(1 for d in devs if d.id in device_alarms)
                 for d in devs:
@@ -582,9 +588,10 @@ async def create_train(
         "tank_height_cm": tank_h,
         "tank_capacity_liters": tank_c,
         "coaches_count": len(coaches_to_create),
+        "tanks_count": len(coaches_to_create) * 2,
     }
-    await ws_manager.broadcast("FLEET_SYNC", sync_event)
-    mqtt_service.publish("panorama/fleet/sync", sync_event)
+    await broadcast_sync_event("TRAIN_CREATED", sync_event)
+    await broadcast_sync_event("REGION_UPDATED", {"region": reg, "train_number": train_number})
 
     return {
         "message": "Train registered successfully",
@@ -645,8 +652,8 @@ async def update_train(
         "name": data.name.strip() if data.name is not None else (db_train.name if db_train else None),
         "region": db_train.region if db_train else None,
     }
-    await ws_manager.broadcast("FLEET_SYNC", sync_event)
-    mqtt_service.publish("panorama/fleet/sync", sync_event)
+    await broadcast_sync_event("TRAIN_UPDATED", sync_event)
+    await broadcast_sync_event("REGION_UPDATED", {"region": db_train.region if db_train else None, "train_number": train_number})
 
     return {
         "message": "Train updated successfully",
@@ -760,8 +767,8 @@ async def delete_train(
         "action": "delete_train",
         "train_number": cleaned,
     }
-    await ws_manager.broadcast("FLEET_SYNC", sync_event)
-    mqtt_service.publish("panorama/fleet/sync", sync_event)
+    await broadcast_sync_event("TRAIN_DELETED", sync_event)
+    await broadcast_sync_event("REGION_UPDATED", {"train_number": cleaned})
 
     return {
         "success": True,
@@ -796,14 +803,16 @@ class CoachUpdateRequest(BaseModel):
     coach_type: Optional[str] = None
     tank_1_name: Optional[str] = None
     tank_2_name: Optional[str] = None
-    tank_1_capacity: Optional[float] = None
-    tank_2_capacity: Optional[float] = None
-    tank_1_height_cm: Optional[float] = None
-    tank_2_height_cm: Optional[float] = None
+    tank_1_capacity: Optional[float] = Field(None, alias="arrival_tank_capacity_liters")
+    tank_2_capacity: Optional[float] = Field(None, alias="departure_tank_capacity_liters")
+    tank_1_height_cm: Optional[float] = Field(None, alias="arrival_tank_height_cm")
+    tank_2_height_cm: Optional[float] = Field(None, alias="departure_tank_height_cm")
     tank_1_geometry: Optional[str] = None
     tank_2_geometry: Optional[str] = None
     tank_height_cm: Optional[float] = None
     device_uid: Optional[str] = None
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class CoachRenameRequest(BaseModel):
@@ -936,8 +945,8 @@ async def add_coach_to_train(
         "train_number": tr_clean,
         "coach_number": c_clean,
     }
-    await ws_manager.broadcast("FLEET_SYNC", sync_event)
-    mqtt_service.publish("panorama/fleet/sync", sync_event)
+    await broadcast_sync_event("COACH_CREATED", sync_event)
+    await broadcast_sync_event("REGION_UPDATED", {"train_number": tr_clean, "coach_number": c_clean})
 
     return {
         "success": True,
@@ -1025,9 +1034,9 @@ async def update_coach_details(
             select(Device).where(
                 Device.train_number == tr_clean,
                 Device.coach_number == c_clean,
-            )
+            ).order_by(Device.updated_at.desc())
         )
-    ).scalar_one_or_none()
+    ).scalars().first()
 
     if not dev:
         raise HTTPException(
@@ -1094,6 +1103,14 @@ async def update_coach_details(
                     c["coach_type"] = data.coach_type
                 if data.coach_name:
                     c["coach_name"] = data.coach_name
+                if h1 and h1 > 0:
+                    c["arrival_tank_height_cm"] = h1
+                if h2 and h2 > 0:
+                    c["departure_tank_height_cm"] = h2
+                if data.tank_1_capacity and data.tank_1_capacity > 0:
+                    c["arrival_tank_capacity_liters"] = data.tank_1_capacity
+                if data.tank_2_capacity and data.tank_2_capacity > 0:
+                    c["departure_tank_capacity_liters"] = data.tank_2_capacity
         db_train.coach_configuration_json = json.dumps(comp)
 
     # Handle device reassignment if requested
@@ -1129,8 +1146,7 @@ async def update_coach_details(
         "train_number": tr_clean,
         "coach_number": c_clean,
     }
-    await ws_manager.broadcast("FLEET_SYNC", sync_event)
-    mqtt_service.publish("panorama/fleet/sync", sync_event)
+    await broadcast_sync_event("COACH_UPDATED", sync_event)
 
     return {
         "success": True,
@@ -1179,9 +1195,9 @@ async def rename_coach(
             select(Device).where(
                 Device.train_number == tr_clean,
                 Device.coach_number == old_c,
-            )
+            ).order_by(Device.updated_at.desc())
         )
-    ).scalar_one_or_none()
+    ).scalars().first()
     if not dev:
         raise HTTPException(
             status_code=404,
@@ -1221,8 +1237,7 @@ async def rename_coach(
         "old_coach_number": old_c,
         "new_coach_number": new_c,
     }
-    await ws_manager.broadcast("FLEET_SYNC", sync_event)
-    mqtt_service.publish("panorama/fleet/sync", sync_event)
+    await broadcast_sync_event("COACH_UPDATED", sync_event)
 
     return {
         "success": True,
@@ -1249,9 +1264,9 @@ async def delete_coach(
             select(Device).where(
                 Device.train_number == tr_clean,
                 Device.coach_number == c_clean,
-            )
+            ).order_by(Device.updated_at.desc())
         )
-    ).scalar_one_or_none()
+    ).scalars().first()
 
     now = utc_now()
     if dev:
@@ -1315,8 +1330,8 @@ async def delete_coach(
         "train_number": tr_clean,
         "deleted_coach_number": c_clean,
     }
-    await ws_manager.broadcast("FLEET_SYNC", sync_event)
-    mqtt_service.publish("panorama/fleet/sync", sync_event)
+    await broadcast_sync_event("COACH_DELETED", sync_event)
+    await broadcast_sync_event("REGION_UPDATED", {"train_number": tr_clean, "deleted_coach_number": c_clean})
 
     return {
         "success": True,

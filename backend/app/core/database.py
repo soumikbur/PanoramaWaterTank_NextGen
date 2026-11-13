@@ -9,18 +9,23 @@ from app.core.config import settings
 
 logger = logging.getLogger("panorama.database")
 
-# SQLite concurrency & compatibility settings
+# SQLite concurrency & compatibility settings vs PostgreSQL connection pool
 is_sqlite = settings.DATABASE_URL.startswith("sqlite")
-connect_args = {"check_same_thread": False, "timeout": 30.0} if is_sqlite else {}
+engine_kwargs = {
+    "echo": False,
+    "future": True,
+}
+if is_sqlite:
+    engine_kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30.0}
+    engine_kwargs["poolclass"] = NullPool
+else:
+    engine_kwargs["pool_size"] = 10
+    engine_kwargs["max_overflow"] = 20
+    engine_kwargs["pool_pre_ping"] = True
+    engine_kwargs["pool_recycle"] = 3600
 
 # Create async engine with pool configuration
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=False,
-    future=True,
-    connect_args=connect_args,
-    poolclass=NullPool if is_sqlite else None
-)
+engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
 
 if is_sqlite:
     @event.listens_for(engine.sync_engine, "connect")

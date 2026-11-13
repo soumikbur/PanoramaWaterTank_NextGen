@@ -11,6 +11,7 @@ from app.api.v1.auth import get_current_admin_user, get_current_user
 from app.models.user import User
 from app.websocket.manager import ws_manager
 from app.mqtt.client import mqtt_service
+from app.services.sync_broadcaster import broadcast_sync_event
 
 router = APIRouter(prefix="/devices", tags=["Devices"])
 
@@ -146,8 +147,7 @@ async def create_device(
         "action": "create_device",
         "device": out.model_dump(by_alias=True)
     }
-    await ws_manager.broadcast("DEVICE_SYNC", sync_payload)
-    mqtt_service.publish("panorama/devices/sync", sync_payload)
+    await broadcast_sync_event("DEVICE_CREATED", sync_payload)
 
     return out
 
@@ -224,8 +224,7 @@ async def update_device(
         "action": "update_device",
         "device": out.model_dump(by_alias=True)
     }
-    await ws_manager.broadcast("DEVICE_SYNC", sync_payload)
-    mqtt_service.publish("panorama/devices/sync", sync_payload)
+    await broadcast_sync_event("DEVICE_UPDATED", sync_payload)
 
     return out
 
@@ -252,8 +251,7 @@ async def delete_device(
         "id": device_id,
         "uid": uid
     }
-    await ws_manager.broadcast("DEVICE_SYNC", sync_payload)
-    mqtt_service.publish("panorama/devices/sync", sync_payload)
+    await broadcast_sync_event("DEVICE_DELETED", sync_payload)
 
     return {"message": "Device deleted successfully", "id": target.id, "uid": uid}
 

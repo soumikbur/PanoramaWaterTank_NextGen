@@ -70,7 +70,7 @@ _explicit_origins = [o for o in settings.CORS_ORIGINS if o != "*"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_explicit_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://soumikbur\.github\.io$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://soumikbur\.github\.io$|^https://[a-zA-Z0-9_-]+\.vercel\.app$|^https?://localhost$|^capacitor://localhost$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
