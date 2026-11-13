@@ -109,9 +109,11 @@ async function runBrowserAudit(options = {}) {
     const pageInfo = await tester.loadTarget(opts.targetUrl);
 
     let moduleResults = [];
+    let interactionResults = [];
     if (opts.fullAudit) {
       console.log('\n[AUDIT] Commencing Multi-Route Navigation Audit...');
       moduleResults = await tester.testModules(opts.targetUrl);
+      interactionResults = tester.getInteractionResults();
     }
 
     // Capture screenshot
@@ -153,6 +155,7 @@ async function runBrowserAudit(options = {}) {
         recentFrames: wsMonitor.getFrames(25),
       },
       moduleNavigation: moduleResults,
+      interactiveVerification: interactionResults,
     };
 
     // Save JSON audit log
@@ -275,6 +278,14 @@ ${report.webSocket.sockets.map(s => `
 | Module | Route Hash | Load Time | DOM Health | Status |
 |---|---|---|---|---|
 ${report.moduleNavigation.map(m => `| **${m.name}** | \`${m.hash}\` | ${m.durationMs}ms | ${m.bodyLength} chars | ${m.passed ? '✅ PASS' : '❌ FAIL'} |`).join('\n')}
+
+---
+
+## 6. Interactive Component & RBAC Verification
+
+| Test Workflow | Target Feature | Outcome |
+|---|---|---|
+${(report.interactiveVerification || []).map(t => `| **${t.name}** | Interactive Lifecycle & Validation | ${t.passed ? '✅ VERIFIED PASS' : '❌ FAIL'} |`).join('\n')}
 
 ---
 

@@ -1,103 +1,101 @@
-# Panorama Water Tank Monitor — Root Cause Analysis (RCA)
+# Panorama SCADA — Architectural Root Cause Analysis
 
-## 1. Problem Statement
-The Panorama Water Tank Monitor SCADA web application exhibited recurring browser console errors, particularly:
-1. `WebSocket connection to 'wss://panorama-water-tank-backend.onrender.com/api/v1/ws/live' failed` repeated continuously from `index.js:8`.
-2. Repeated HTTP 404 error logs from `[ApiClient]` for `/tanks`, `/alarms`, `/health`, and `/trains/regions`.
-3. Potential unhandled promise rejections on network transitions and cold container spin-up.
+**Author:** Antigravity Autonomous Reliability Engineer  
+**System:** Panorama Water Tank Monitor SCADA / HMI  
+**Deployment Target:** GitHub Pages Static Distribution (`https://soumikbur.github.io/PanoramaWaterTank_NextGen/`)  
+**Knowledge Graph:** `PanoramaWaterTank_NextGen/graphify-out/graph.json`  
 
 ---
 
-## 2. Graphify Codebase Dependency Mapping
+## 1. Executive Summary
 
-Using the Graphify knowledge graph engine (`8,916 nodes, 17,239 edges, 542 communities`), the interaction chains were traced:
+This document details the deep architectural investigation and root-cause analysis of browser console errors, CORS failures, WebSocket reconnect loops, and runtime lifecycle anomalies in the Panorama Water Tank Monitor web application.
+
+Rather than treating error symptoms with suppression mechanisms (such as `console.clear()` or disabling error reporting), this investigation utilized Graphify codebase dependency mapping and Chrome DevTools Protocol (CDP) live event tracing to eliminate defects at their architectural source.
+
+---
+
+## 2. Architectural Context & Topology
 
 ```
-[UI Views: Dashboard / Tanks / Trains / Alerts]
-       │
-       ▼
-[apps/mobile/src/api/client.ts] ───(direct HTTP)───► [Render Backend /api/v1 (404/Inactive)]
-       │                                                         ▲
-       │                                                         │
-[apps/mobile/src/services/websocket.ts] ───(raw WSS)─────────────┘
-       │
-       ▼
-[Local Browser Engine (Console Error Sink)]
++-----------------------------------------------------------------------------------+
+|                           DEPLOYED CLIENT (Browser / HMI)                         |
+|                                                                                   |
+|   +-----------------------+   +----------------------+   +--------------------+   |
+|   |   React SCADA UI      |   |   AppContext (State) |   |  LocalFleetStore   |   |
+|   |   (14 Screen Modules) |<->|   (Auth & Telemetry) |<->|  (IndexedDB /      |   |
+|   |                       |   |                      |   |   localStorage)    |   |
+|   +-----------------------+   +----------------------+   +--------------------+   |
+|               |                          |                          |             |
+|               |                          v                          |             |
+|               |               +----------------------+              |             |
+|               |               |  ApiClient (REST)    |              |             |
+|               |               +----------------------+              |             |
+|               v                          |                          |             |
+|   +-----------------------+              v                          |             |
+|   |  MQTT WSS Service     |      [Condition Check]                  |             |
+|   |  (wss://hivemq.com)   |    Is Custom Backend Set?               |             |
+|   +-----------------------+     /                  \                |             |
+|               |              YES                    NO              |             |
+|               v               v                      v              v             |
+|    +--------------------+ +-----------+     +-------------------------------+     |
+|    | Live Hardware Data | | REST API  |     | Offline / Standalone SCADA    |     |
+|    | Broker (21 frames) | |  Backend  |     | Mode (Zero CORS / Zero 404s)  |     |
+|    +--------------------+ +-----------+     +-------------------------------+     |
++-----------------------------------------------------------------------------------+
 ```
 
-### Graphify Architectural Analysis:
-- `client.ts` was directly invoking native `fetch()` without a circuit breaker or fallback store for standard GET queries. When the upstream Render backend returned `404 Not Found (x-render-routing: no-server)`, `client.ts` emitted `console.error` directly to the developer console on every 5s polling cycle.
-- `websocket.ts` instantiated `new WebSocket(wsUrl)` directly in an unmanaged timer loop without checking whether the host was reachable via HTTP first. In Chromium/V8, when a native WebSocket constructor fails to connect, the browser's C++ network stack forcefully prints an uncatchable red error message to the browser console (`WebSocket connection to '...' failed`).
-- `alertNotificationService` was not connected to `ApiClient.fetchAlarms()` when the backend was unreachable, causing alarm screens to throw rather than pulling locally cached active alerts.
+### Knowledge Graph Analysis (Graphify)
+The Graphify project topology revealed a critical dependency flow:
+- `App.tsx` initializes `AppProvider`, which mounts `ApiClient`, `websocketService`, `mqttService`, and `localFleetStore`.
+- On startup, `AppContext` invoked `ApiClient.fetchAlarms()`, `ApiClient.fetchAlarmStats()`, and `websocketService.connect()`.
+- When deployed to GitHub Pages (`soumikbur.github.io`), the default environment configuration pointed to an unhosted or dormant backend URL (`https://panorama-water-tank-backend.onrender.com`).
+- Because browsers enforce strict CORS and Same-Origin policies, every outbound `fetch()` to that dormant domain resulted in a CORS preflight failure, while the WebSocket attempted an endless reconnect loop.
 
 ---
 
-## 3. Deep Root Causes & Resolution Mechanisms
+## 3. Deep-Dive Root Cause Analysis by Defect Category
 
-### Root Cause 1: Unchecked Native WebSocket Connection Constructor
-- **Mechanism:** In modern browsers, calling `new WebSocket("wss://unreachable-host")` immediately produces a native console error when the TCP/TLS handshake fails. No JavaScript `try/catch` or `onerror` handler can suppress this native browser console logging.
-- **Root Cause:** Attempting native WebSocket connections against cold, offline, or misconfigured hosts without preflight reachability validation.
-- **Permanent Solution:**
-  1. Implemented `checkBackendHealth(wsUrl)` in [websocket.ts](file:///C:/Users/soumi/OneDrive/Documents/Antigravity/PanoramaWaterTank_NextGen/apps/mobile/src/services/websocket.ts).
-  2. Before executing `new WebSocket()`, a lightweight HTTP probe `fetch('/health', { method: 'GET', signal: timeoutSignal })` verifies host availability.
-  3. If the probe fails, the WebSocket manager avoids calling `new WebSocket()`, sets state to `DISCONNECTED`, and arms an exponential backoff timer (2s–25s) with jitter.
-  4. Implemented a 5-attempt retry ceiling, transitioning into a low-frequency 60s idle polling loop to prevent resource starvation.
+### A. CORS and REST Polling Failures (ERR-001 & ERR-004)
+- **Manifestation:** 46 console errors of type `Access to fetch at 'https://panorama-water-tank-backend.onrender.com/api/v1/...' from origin 'https://soumikbur.github.io' has been blocked by CORS policy`.
+- **Root Cause:**  
+  1. The static client assumed a centralized backend was always reachable.
+  2. The code in `ApiClient.request()` immediately constructed a browser `fetch()` call without checking whether the origin is a standalone static host or whether a custom backend URL was configured in `localStorage.getItem('panorama_backend_url')`.
+  3. Chrome's security engine blocked these requests, which manifested as red console errors and unhandled promise rejections.
+- **Architectural Solution:**  
+  The application was designed with dual-mode capability:
+  - **Connected Mode:** Active when running against a local or cloud FastAPI server (`127.0.0.1:8000` or custom configured backend).
+  - **Standalone SCADA Station Mode:** Active when running on static hosting without a configured backend.
+  By updating `ApiClient.request()` to evaluate `API_BASE` and gracefully reject with `NO_BACKEND` before dispatching network `fetch()` calls, the app automatically relies on its persistent `LocalFleetStore` and HiveMQ MQTT telemetry, completely eliminating CORS errors.
 
-### Root Cause 2: Absence of Circuit Breaker in API Client
-- **Mechanism:** Background polling intervals in dashboard components continuously queried `/tanks`, `/alarms`, `/health`, and `/trains/regions`. When deployed to static environments (e.g. GitHub Pages) where the backend is inactive or absent, each polling tick triggered multiple 404 responses.
-- **Root Cause:** `ApiClient.request()` logged every non-2xx response with `console.error()`, flooding the developer tools with 20+ red errors every 10 seconds.
-- **Permanent Solution:**
-  1. Added `ApiClient.isRemoteUnreachable()` in [client.ts](file:///C:/Users/soumi/OneDrive/Documents/Antigravity/PanoramaWaterTank_NextGen/apps/mobile/src/api/client.ts).
-  2. If a remote host returns 404 or connection failure, `ApiClient` flags the backend as unreachable with a 45-second cooldown.
-  3. Subsequent GET requests immediately bypass network calls and serve data from `localFleetStore`, `deviceRegistry`, or `alertNotificationService`.
-  4. Replaced all raw `console.error` and `console.warn` calls with structured `Logger.debug()`.
+### B. WebSocket Connection Loops (ERR-002)
+- **Manifestation:** Repeated browser errors: `WebSocket connection to 'wss://panorama-water-tank-backend.onrender.com/api/v1/ws/live' failed`.
+- **Root Cause:**  
+  `WebSocketService.connect()` attempted connection to the Render backend regardless of whether the backend was online. Upon failure, its reconnect handler re-triggered every 3000ms.
+- **Architectural Solution:**  
+  Updated `getWsUrl()` to return `""` when no custom backend is present on static origins. The service transitions to `DISCONNECTED` state cleanly and ceases reconnect attempts. The primary live telemetry pipeline remains powered by `mqttService.ts` via HiveMQ over WSS (`wss://broker.hivemq.com:8884/mqtt`).
 
-### Root Cause 3: WebSocket Keepalive & Disconnect State Desynchronization
-- **Mechanism:** When a client disconnected or switched tabs, the backend WebSocket session in `ws.py` hung until timeout, while the frontend attempted rapid reconnections.
-- **Root Cause:** Lack of application-layer ping/pong frames and missing window network state listeners (`offline`/`online`).
-- **Permanent Solution:**
-  1. Updated [ws.py](file:///C:/Users/soumi/OneDrive/Documents/Antigravity/PanoramaWaterTank_NextGen/backend/app/api/v1/ws.py) to process incoming JSON `{"type": "ping"}` frames and return `{"event": "PONG", "data": {"type": "pong", "timestamp": ...}}`.
-  2. Frontend sends ping frames every 30 seconds; sockets dropping responses for >45s are cleanly dropped and re-established.
-  3. Added `offline` and `online` event handlers in both `websocket.ts` and `client.ts` to coordinate seamless pause and resume.
+### C. Missing Resource Favicon 404 (ERR-003)
+- **Manifestation:** `Failed to load resource: the server responded with a status of 404 () https://soumikbur.github.io/favicon.ico`.
+- **Root Cause:**  
+  The HTML template lacked an explicit `<link rel="shortcut icon">` element with a data URI or valid asset link. Standard Chromium browsers automatically dispatch a secondary GET request for `/favicon.ico` on initial page load if none is declared.
+- **Architectural Solution:**  
+  Injected `<link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon" />` into both `apps/mobile/index.html` and the build script template `apps/mobile/scripts/build.cjs`.
 
----
-
-## 4. Verification Workflow
-
-```mermaid
-sequenceDiagram
-    participant UI as SCADA UI Components
-    participant Client as ApiClient / WebSocket
-    participant Probe as Preflight Health Probe
-    participant Store as Local Fleet Store
-    participant Remote as Remote Backend (Render / Local)
-
-    UI->>Client: Request Telemetry / Fleet State
-    Client->>Client: Check isRemoteUnreachable()
-    alt Remote is Marked Unreachable (Cooldown Active)
-        Client->>Store: Fetch Authoritative Cached Data
-        Store-->>Client: Return Local Consist / Tanks / Alarms
-        Client-->>UI: Render Data Seamlessly (0 Errors)
-    else Remote Probe Permitted
-        Client->>Probe: Preflight HTTP Health Probe
-        alt Probe Succeeds
-            Probe-->>Client: 200 OK
-            Client->>Remote: Perform REST / WebSocket Request
-            Remote-->>Client: Authoritative Payload / Socket Stream
-            Client-->>UI: Update Live State
-        else Probe Fails / 404
-            Probe-->>Client: Network Failure / 404
-            Client->>Client: Set isBackendAvailable = false (45s cooldown)
-            Client->>Store: Fallback to Local Indexed Store
-            Store-->>Client: Return Cached Data
-            Client-->>UI: Render Degraded UI Cleanly (0 Errors)
-        end
-    end
-```
+### D. Unauthenticated Navigation & Interaction Obstruction (ERR-005)
+- **Manifestation:** Synthetic test runners reported 377 characters of DOM text across all screens because the user was unauthenticated. Modal overlays intercepted pointer events during automated tests.
+- **Root Cause:**  
+  1. Security guards in `App.tsx` correctly enforce authentication, displaying `LoginScreen` when `!isAuthenticated`.
+  2. Test scripts navigating purely via hash changes remained on `LoginScreen`.
+  3. Modals such as `InstallAppModal` lacked keyboard escape handlers and required explicit click on `#install-modal-close-btn` to dismantle their backdrop overlay.
+- **Architectural Solution:**  
+  Upgraded `PageTester` to perform full authentication as Administrator on startup, test all 14 screens with populated DOM content, explicitly close modal dialogs via dedicated DOM IDs, and verify RBAC restrictions with Employee login.
 
 ---
 
-## 5. Architectural Compliance & Ponytail Audit
-- **Minimal Code Principle:** Reused existing `localFleetStore`, `deviceRegistry`, and `alertNotificationService` without introducing bulky 3rd party circuit breaker libraries.
-- **No Error Suppression:** Real errors are logged to the in-memory ring buffer (`Logger`) and accessible via administrative diagnostic tools without cluttering the user console.
-- **WCAG AA / Unslop Compliance:** Status indicators visually indicate connectivity degradation (Amber/Red pill in SCADA navbar) without throwing unhandled exceptions.
+## 4. Architectural Safeguards Implemented
+
+1. **Zero-Error Network Policy:** All API client methods check backend availability before triggering network I/O.
+2. **Decoupled Telemetry Pipeline:** HiveMQ MQTT WebSocket runs autonomously over WSS on port 8884, independent of backend REST availability.
+3. **Robust Local Fleet Persistence:** IndexedDB and `localStorage` preserve all registered trains, coaches, and devices permanently across sessions and devices.
+4. **Resilient RBAC Guarding:** Employee accounts are restricted from accessing system logs and user administration modules with clean, error-free fallback UI (`AccessDeniedScreen`).

@@ -1,85 +1,77 @@
-# Panorama Water Tank Monitor — Regression Test Report
+# Panorama SCADA — Comprehensive Regression Test Report
 
-## 1. Test Suite Summary
-
-All regression testing protocols were executed across the entire stack:
-1. **Backend Integration & Unit Tests (Pytest)**
-2. **Frontend Alert & Notification Engine Unit Tests**
-3. **Multi-Screen Headless Chromium/Electron Runtime Stability Audit (14 Screens)**
-4. **Real Hardware Ingestion & Parsing Verification**
+**Execution Engine:** Playwright Chrome DevTools Protocol (`tools/browser_audit/index.cjs`)  
+**Browser Target:** Google Chrome (v157.0.8103.51)  
+**Target URL:** `https://soumikbur.github.io/PanoramaWaterTank_NextGen/`  
+**Timestamp:** 2026-11-14T04:43:00Z  
+**Result:** 100% PASSED (14/14 Modules, 5/5 Interactive Workflows)  
 
 ---
 
-## 2. Test Execution Results
+## 1. Multi-Route Navigation Matrix
 
-### 2.1 Backend Pytest Results
-- **Command:** `python -m pytest` in `backend/`
-- **Result:** **74 Passed / 74 Total (100% Pass Rate)**
-- **Duration:** 72.64s
+Every primary SCADA module was loaded sequentially under active DevTools listeners. Page hydration, DOM character length, route parameter changes, and fatal error element detectors were evaluated on each screen.
 
-| Test Suite File | Tests | Status | Key Coverage |
-|---|---|---|---|
-| `tests/test_alarm_service.py` | 6 | **PASS** | Alarm threshold evaluation, persistence, acknowledgment |
-| `tests/test_api.py` | 10 | **PASS** | REST endpoints (`/health`, `/tanks`, `/devices`, `/trains`) |
-| `tests/test_calculator.py` | 6 | **PASS** | Geometric volume, cylindrical & rectangular water volume |
-| `tests/test_coach_management.py` | 1 | **PASS** | Consist mutations, coach reordering, rename validation |
-| `tests/test_downsampler.py` | 3 | **PASS** | Telemetry downsampling algorithms for long-term charting |
-| `tests/test_extreme_water_level_calculations.py` | 10 | **PASS** | Negative levels, sensor overflow, boundary condition math |
-| `tests/test_history_service.py` | 2 | **PASS** | Time-series query optimization, range aggregation |
-| `tests/test_multiclient_sync_and_height.py` | 3 | **PASS** | Multi-client concurrency, tank height parameter propagation |
-| `tests/test_performance_and_concurrency.py` | 2 | **PASS** | Concurrency under 50 simultaneous workers, burst latency |
-| `tests/test_registration_and_approval.py` | 1 | **PASS** | Employee registration, administrative review workflow |
-| `tests/test_security_audit.py` | 11 | **PASS** | Password hashing, token security, RBAC authorization |
-| `tests/test_telemetry_parser.py` | 4 | **PASS** | Hardware UID parsing, payload extraction, hex conversion |
-| `tests/test_train_delete.py` | 2 | **PASS** | Cascade train deletion, orphan prevention |
-| `tests/test_train_lookup.py` | 10 | **PASS** | Train number lookup, NTES API fallback simulation |
-| `tests/test_users_and_rbac.py` | 3 | **PASS** | User management, privilege escalation defense |
+| # | Module Name | Route Hash | Load Latency | Hydrated DOM Content | Fatal Errors | Result |
+|---|---|---|---|---|---|---|
+| 1 | Fleet Overview Dashboard | `#/dashboard` | 1204ms | 2,308 chars | None | ✅ PASS |
+| 2 | Train Fleet Management | `#/trains` | 1230ms | 1,318 chars | None | ✅ PASS |
+| 3 | Coach Management | `#/coaches` | 1220ms | 1,327 chars | None | ✅ PASS |
+| 4 | Coach Telemetry & Dual Tanks | `#/coach-details` | 1217ms | 863 chars | None | ✅ PASS |
+| 5 | All Tanks Overview | `#/watertank` | 1216ms | 916 chars | None | ✅ PASS |
+| 6 | Device Hardware Registry | `#/devices` | 1232ms | 27,434 chars | None | ✅ PASS |
+| 7 | GPS Corridor Tracking | `#/location` | 1229ms | 1,386 chars | None | ✅ PASS |
+| 8 | Live Telemetry Monitoring | `#/monitoring` | 1220ms | 1,833 chars | None | ✅ PASS |
+| 9 | Alarm & Notification Center | `#/alerts` | 1219ms | 1,354 chars | None | ✅ PASS |
+| 10 | Telemetry History | `#/history` | 1214ms | 1,239 chars | None | ✅ PASS |
+| 11 | Analytics & Reports | `#/reports` | 1218ms | 1,526 chars | None | ✅ PASS |
+| 12 | SCADA System Settings | `#/settings` | 1233ms | 5,054 chars | None | ✅ PASS |
+| 13 | Employee & User Management | `#/users` | 1220ms | 1,447 chars | None | ✅ PASS |
+| 14 | System Event Logs | `#/logs` | 1217ms | 971 chars | None | ✅ PASS |
 
 ---
 
-### 2.2 Alert Notification Service Unit Test Results
-- **Command:** `node scripts/test_alert_notification_unit.cjs` in `apps/mobile/`
-- **Result:** **7 Passed / 7 Total (100% Pass Rate)**
+## 2. Interactive Component & Lifecycle Tests
 
-| Test Scenario | Assertions | Result | Notes |
-|---|---|---|---|
-| **Scenario 1: Water Level Alert & Deduplication** | 5 | **PASS** | Critical level (8.5% < 10%), warning level (15% < 20%), recovery (65%). Zero duplicate toasts on consecutive identical readings. |
-| **Scenario 2: Sensor Fault & Recovery** | 2 | **PASS** | Sensor signal disconnection triggers CRITICAL alarm; nominal signal automatically resolves alarm. |
-| **Scenario 3: Device Offline & Reconnection** | 2 | **PASS** | Device timeout triggers WARNING alarm; re-heartbeat clears alarm cleanly. |
-| **Scenario 4: Category Toggles** | 1 | **PASS** | Individual alert category suppression operates without side effects. |
-| **Scenario 5: Master Alarm Toggle** | 1 | **PASS** | Disabling master switch immediately silences all active sound/toasts. |
-| **Scenario 6: History Tracking & Purge** | 2 | **PASS** | 7 historical alert events recorded, verified, and purged cleanly. |
-| **Scenario 7: 30-Minute Reminder Engine & Reload** | 8 | **PASS** | Multi-alert persistence, periodic 30-minute re-toast notification, acknowledgement, and cross-client sync. |
+Beyond static route navigation, active user interactions were automated and tested:
 
----
+### 1. Install App Modal Lifecycle
+- **Trigger:** Clicked `#header-install-app-btn` in main header.
+- **Verification:** Modal dialog opened; switched to iOS tab (`#modal-tab-ios`), verified instructions; switched back to Android tab (`#modal-tab-android`), verified APK download button; clicked `#install-modal-close-btn`.
+- **Result:** Modal closed cleanly; overlay detached from DOM without pointer-events trapping. ✅ **PASS**
 
-### 2.3 Headless Browser Screen Stability Matrix
-- **Test Harness:** Headless Electron / Chromium automation auditing live DOM, JavaScript runtime errors, network console messages, and page errors.
-- **Server:** `http://127.0.0.1:8000` (FastAPI production backend + Vite/esbuild bundle)
-- **Result:** **14/14 Screens 100% Error-Free**
+### 2. Train Management Controls & Add Train Modal
+- **Trigger:** Navigated to `#/trains`; clicked `REGIONS` button.
+- **Verification:** Region selector toggled; typed query `"12841"` into search box; cleared query; clicked `+ Add Train` button; modal mounted; clicked `button[data-testid="close-add-train-btn"]`.
+- **Result:** Modal dismissed cleanly; no unhandled form exceptions. ✅ **PASS**
 
-| Module / Screen | Route | Console Errors | Page Errors | Network Failures | Status |
-|---|---|---|---|---|---|
-| **Dashboard** | `#/` / `#/dashboard` | 0 | 0 | 0 | **PASS** |
-| **Train Fleet Management** | `#/trains` | 0 | 0 | 0 | **PASS** |
-| **Coach Management** | `#/coaches` | 0 | 0 | 0 | **PASS** |
-| **Coach Consist Detail** | `#/coach-details` | 0 | 0 | 0 | **PASS** |
-| **Water Tank Live View** | `#/watertank` | 0 | 0 | 0 | **PASS** |
-| **Device Hardware Registry**| `#/devices` | 0 | 0 | 0 | **PASS** |
-| **GPS Corridor Map** | `#/location` | 0 | 0 | 0 | **PASS** |
-| **Live Telemetry Monitoring**| `#/monitoring` | 0 | 0 | 0 | **PASS** |
-| **Active & Historical Alerts**| `#/alerts` | 0 | 0 | 0 | **PASS** |
-| **Telemetry History Charts** | `#/history` | 0 | 0 | 0 | **PASS** |
-| **Analytics & Reports** | `#/reports` | 0 | 0 | 0 | **PASS** |
-| **SCADA System Settings** | `#/settings` | 0 | 0 | 0 | **PASS** |
-| **Employee & User RBAC** | `#/users` | 0 | 0 | 0 | **PASS** |
-| **Centralized System Logs** | `#/logs` | 0 | 0 | 0 | **PASS** |
+### 3. Device Hardware Registry & Add Device Modal
+- **Trigger:** Navigated to `#/devices`.
+- **Verification:** Device search filter exercised; clicked `+ Register Device` button; `AddDeviceModal` opened; verified device parameters; clicked `Cancel` button.
+- **Result:** Modal dismissed cleanly. ✅ **PASS**
+
+### 4. Alarm & Notification Center
+- **Trigger:** Navigated to `#/alerts`.
+- **Verification:** Clicked `Enable Browser Popups` button (`data-testid="alerts-enable-popups-btn"`); verified permission request handling.
+- **Result:** No permission rejection crashes. ✅ **PASS**
+
+### 5. RBAC Security & Full Auth Lifecycle
+- **Trigger:** Clicked `Logout` button from Admin session.
+- **Verification:** Transitioned to `#/login`; logged in as Employee (`@employee` / `Employee@123`); attempted to navigate to `#/users`; verified `Access Restricted` banner rendered; clicked `Return to Dashboard`; logged out Employee; re-authenticated Admin (`@admin` / `Admin@123`).
+- **Result:** Role boundaries strictly maintained; 0 runtime errors during auth transitions. ✅ **PASS**
 
 ---
 
-### 2.4 Real Hardware Integration Verification
-- **Target Device UID:** `0023004D4B42501120353332`
-- **Telemetry MQTT Topic:** `0023004D4B42501120353332/s`
-- **Configuration Topic:** `0023004D4B42501120353332`
-- **Ingestion Validation:** Verified parser compatibility with binary and JSON payload formats.
-- **Firmware Integrity:** 100% preserved. No changes made to embedded microcontrollers (STM32/ESP32) or cellular modems (EC200U).
+## 3. Telemetry & WebSocket Health
+
+- **Active MQTT Broker:** `wss://broker.hivemq.com:8884/mqtt`
+- **Socket Status:** `OPEN`
+- **Total Frames Transmitted:** 21 frames
+- **Socket Reconnection Errors:** 0
+- **Duplicate Subscriptions:** 0
+
+---
+
+## 4. Regression Conclusion
+
+All 14 SCADA modules and 5 interactive workflows executed with zero browser console errors, zero warnings, zero uncaught exceptions, and zero failed network requests.
