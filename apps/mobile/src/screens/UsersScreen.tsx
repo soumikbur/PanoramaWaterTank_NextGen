@@ -168,10 +168,12 @@ export const UsersScreen: React.FC = () => {
       fetchUsersList();
       fetchRegistrationsList();
     };
-    window.addEventListener('panorama:users-updated', onUsersUpdated);
-    return () => {
-      window.removeEventListener('panorama:users-updated', onUsersUpdated);
-    };
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('panorama:users-updated', onUsersUpdated);
+      return () => {
+        window.removeEventListener('panorama:users-updated', onUsersUpdated);
+      };
+    }
   }, []);
 
   const handleApproveRegistration = async (reg: UserProfile) => {

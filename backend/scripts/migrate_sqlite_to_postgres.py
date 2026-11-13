@@ -186,3 +186,4 @@ if __name__ == "__main__":
     src = sys.argv[1] if len(sys.argv) > 1 else None
     dst = sys.argv[2] if len(sys.argv) > 2 else None
     asyncio.run(migrate(src, dst))
+

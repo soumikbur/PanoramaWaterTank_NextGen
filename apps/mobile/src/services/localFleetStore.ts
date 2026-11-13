@@ -923,9 +923,11 @@ if (typeof window !== 'undefined') {
     localFleetStore.handleCentralSync(data);
   });
 
-  centralChannel?.addEventListener('message', (event) => {
-    if (event.data?.type === 'FLEET_SYNC' && event.data.state) {
-      localFleetStore.handleCentralSync(event.data.state);
-    }
-  });
+  if (centralChannel && typeof centralChannel.addEventListener === 'function') {
+    centralChannel.addEventListener('message', (event) => {
+      if (event.data?.type === 'FLEET_SYNC' && event.data.state) {
+        localFleetStore.handleCentralSync(event.data.state);
+      }
+    });
+  }
 }

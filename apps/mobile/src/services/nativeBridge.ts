@@ -101,7 +101,7 @@ class NativeBridge {
     // 3. Network Monitoring
     try {
       const Network = this.getCapacitorPlugin('Network');
-      if (Network) {
+      if (Network && typeof Network.addListener === 'function') {
         Network.addListener('networkStatusChange', (status: any) => {
           const formatted: NativeNetworkStatus = {
             connected: Boolean(status.connected),
@@ -118,7 +118,7 @@ class NativeBridge {
     // 4. App Lifecycle
     try {
       const App = this.getCapacitorPlugin('App');
-      if (App) {
+      if (App && typeof App.addListener === 'function') {
         App.addListener('appStateChange', ({ isActive }: { isActive: boolean }) => {
           console.log(`[NativeBridge] App state changed: ${isActive ? 'FOREGROUND' : 'BACKGROUND'}`);
           if (isActive) {

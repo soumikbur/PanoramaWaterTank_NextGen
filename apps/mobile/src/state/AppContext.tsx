@@ -543,12 +543,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     };
 
-    window.addEventListener('hashchange', handleUrlChange);
-    window.addEventListener('popstate', handleUrlChange);
-    return () => {
-      window.removeEventListener('hashchange', handleUrlChange);
-      window.removeEventListener('popstate', handleUrlChange);
-    };
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('hashchange', handleUrlChange);
+      window.addEventListener('popstate', handleUrlChange);
+      return () => {
+        window.removeEventListener('hashchange', handleUrlChange);
+        window.removeEventListener('popstate', handleUrlChange);
+      };
+    }
   }, [activeScreen, selectedTrainNumber, selectedCoachNumber]);
 
   // Clock & Date ticker
@@ -704,7 +706,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         refreshData();
       }
     };
-    centralChannel?.addEventListener('message', onChannelMessage);
+    if (centralChannel && typeof centralChannel.addEventListener === 'function') {
+      centralChannel.addEventListener('message', onChannelMessage);
+    }
 
     const onStorageSync = (e: StorageEvent) => {
       if (e.key === FLEET_STORAGE_KEY || e.key === 'panorama_fleet_sync_ts' || e.key === null) {
@@ -714,13 +718,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const onLocalFleetEvent = () => {
       refreshRegions();
     };
-    window.addEventListener('storage', onStorageSync);
-    window.addEventListener(FLEET_UPDATED_EVENT, onLocalFleetEvent);
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('storage', onStorageSync);
+      window.addEventListener(FLEET_UPDATED_EVENT, onLocalFleetEvent);
+    }
     return () => {
-      centralChannel?.removeEventListener('message', onChannelMessage);
-      centralChannel?.close();
-      window.removeEventListener('storage', onStorageSync);
-      window.removeEventListener(FLEET_UPDATED_EVENT, onLocalFleetEvent);
+      if (centralChannel && typeof centralChannel.removeEventListener === 'function') {
+        centralChannel.removeEventListener('message', onChannelMessage);
+      }
+      try {
+        centralChannel?.close();
+      } catch {}
+      if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+        window.removeEventListener('storage', onStorageSync);
+        window.removeEventListener(FLEET_UPDATED_EVENT, onLocalFleetEvent);
+      }
     };
   }, []);
 
@@ -759,12 +771,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       refreshRegions();
       refreshData();
     };
-    window.addEventListener('panorama:request-authoritative-sync', handleReqSync);
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('panorama:request-authoritative-sync', handleReqSync);
+    }
 
     return () => {
       unsubSyncState();
       unsubSyncEvents();
-      window.removeEventListener('panorama:request-authoritative-sync', handleReqSync);
+      if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+        window.removeEventListener('panorama:request-authoritative-sync', handleReqSync);
+      }
     };
   }, []);
 
@@ -790,7 +806,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     });
 
-    const unsubTelemetry = wsService.addEventListener('TELEMETRY_UPDATE', (data: any) => {
+    const unsubTelemetry = wsService.on('TELEMETRY_UPDATE', (data: any) => {
       const evtTrain = String(data.trainNumber || '').trim();
       if (!evtTrain || !configuredTrainSetRef.current.has(evtTrain)) {
         return;
@@ -884,21 +900,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     });
 
-    const unsubAlarmTriggered = wsService.addEventListener('ALARM_TRIGGERED', () => {
+    const unsubAlarmTriggered = wsService.on('ALARM_TRIGGERED', () => {
       refreshData();
     });
 
-    const unsubAlarmResolved = wsService.addEventListener('ALARM_RESOLVED', () => {
+    const unsubAlarmResolved = wsService.on('ALARM_RESOLVED', () => {
       refreshData();
     });
 
-    const unsubFleetSync = wsService.addEventListener('FLEET_SYNC', (data: any) => {
+    const unsubFleetSync = wsService.on('FLEET_SYNC', (data: any) => {
       console.info('[AppContext] Received FLEET_SYNC WebSocket broadcast:', data);
       refreshRegions();
       refreshData();
     });
 
-    const unsubDeviceSync = wsService.addEventListener('DEVICE_SYNC', (data: any) => {
+    const unsubDeviceSync = wsService.on('DEVICE_SYNC', (data: any) => {
       console.info('[AppContext] Received DEVICE_SYNC WebSocket broadcast:', data);
       refreshData();
     });

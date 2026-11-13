@@ -46,7 +46,7 @@ class SyncService {
   }
 
   private initListeners(): void {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
 
     // 1. Listen for browser online/offline events
     window.addEventListener('online', () => {
@@ -218,3 +218,4 @@ class SyncService {
 }
 
 export const syncService = SyncService.getInstance();
+

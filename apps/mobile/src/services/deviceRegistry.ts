@@ -524,9 +524,11 @@ if (typeof window !== 'undefined') {
     deviceRegistry.handleCentralSync(data);
   });
 
-  centralChannel?.addEventListener('message', (event) => {
-    if (event.data?.type === 'DEVICE_SYNC' && event.data.payload) {
-      deviceRegistry.handleCentralSync(event.data.payload);
-    }
-  });
+  if (centralChannel && typeof centralChannel.addEventListener === 'function') {
+    centralChannel.addEventListener('message', (event) => {
+      if (event.data?.type === 'DEVICE_SYNC' && event.data.payload) {
+        deviceRegistry.handleCentralSync(event.data.payload);
+      }
+    });
+  }
 }

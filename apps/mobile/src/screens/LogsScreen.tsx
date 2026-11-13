@@ -57,7 +57,7 @@ export const LogsScreen: React.FC = () => {
 
   // Append live telemetry updates as real logs
   useEffect(() => {
-    const unsubTelemetry = wsService.addEventListener('TELEMETRY_UPDATE', (data: any) => {
+    const unsubTelemetry = wsService.on('TELEMETRY_UPDATE', (data: any) => {
       const now = new Date().toLocaleTimeString();
       const level = data.status === 'CRITICAL' ? 'ERROR' : data.status === 'WARNING' ? 'WARN' : 'INFO';
       const newEntry: LogEntry = {
@@ -69,7 +69,7 @@ export const LogsScreen: React.FC = () => {
       setLogs((prev) => [newEntry, ...prev.slice(0, 99)]);
     });
 
-    const unsubAlarm = wsService.addEventListener('ALARM_TRIGGERED', (data: any) => {
+    const unsubAlarm = wsService.on('ALARM_TRIGGERED', (data: any) => {
       const now = new Date().toLocaleTimeString();
       const newEntry: LogEntry = {
         time: now,

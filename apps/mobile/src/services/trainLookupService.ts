@@ -432,7 +432,9 @@ async function fetchJsonWithTimeoutAndRetry(
     const timeoutController = new AbortController();
     let timedOut = false;
     const onExternalAbort = () => timeoutController.abort();
-    options.externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
+    if (options.externalSignal && typeof options.externalSignal.addEventListener === 'function') {
+      options.externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+    }
 
     const timer = setTimeout(() => {
       timedOut = true;
@@ -967,7 +969,9 @@ class TrainLookupService {
     const controller = new AbortController();
     let timedOut = false;
     const onAbort = () => controller.abort();
-    signal.addEventListener('abort', onAbort, { once: true });
+    if (signal && typeof signal.addEventListener === 'function') {
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
     const timer = setTimeout(() => {
       timedOut = true;
       controller.abort();
@@ -1110,7 +1114,9 @@ class TrainLookupService {
       const timeoutController = new AbortController();
       let timedOut = false;
       const onExternalAbort = () => timeoutController.abort();
-      options.signal.addEventListener('abort', onExternalAbort, { once: true });
+      if (options.signal && typeof options.signal.addEventListener === 'function') {
+        options.signal.addEventListener('abort', onExternalAbort, { once: true });
+      }
 
       const timer = setTimeout(() => {
         timedOut = true;

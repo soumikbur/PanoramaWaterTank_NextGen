@@ -87,7 +87,12 @@ class BrowserNotificationBridge {
   }
 
   public async registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    if (
+      typeof navigator === 'undefined' ||
+      !('serviceWorker' in navigator) ||
+      !navigator.serviceWorker ||
+      typeof navigator.serviceWorker.addEventListener !== 'function'
+    ) {
       return null;
     }
 

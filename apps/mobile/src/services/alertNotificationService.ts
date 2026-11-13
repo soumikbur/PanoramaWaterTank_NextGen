@@ -242,7 +242,7 @@ class AlertNotificationService {
         this.processDueReminders(Date.now());
       }, NOTIFICATION_CONFIG.REMINDER_CHECK_INTERVAL_MS);
     }
-    if (!this.visibilityBound && typeof document !== 'undefined') {
+    if (!this.visibilityBound && typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
       this.visibilityBound = true;
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {

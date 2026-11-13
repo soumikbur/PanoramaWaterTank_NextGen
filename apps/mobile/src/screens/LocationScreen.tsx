@@ -565,11 +565,11 @@ export const LocationScreen: React.FC = () => {
     };
 
     const container = mapContainerRef.current;
-    if (container) {
+    if (container && typeof container.addEventListener === 'function') {
       container.addEventListener('click', handleMapPopupClick);
     }
     return () => {
-      if (container) {
+      if (container && typeof container.removeEventListener === 'function') {
         container.removeEventListener('click', handleMapPopupClick);
       }
     };

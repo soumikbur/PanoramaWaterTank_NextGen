@@ -60,19 +60,29 @@ export const Sidebar: React.FC = () => {
 
   useEffect(() => {
     if (isMobileNavOpen) {
-      document.body.style.overflow = 'hidden';
+      if (typeof document !== 'undefined' && document.body) {
+        document.body.style.overflow = 'hidden';
+      }
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
           setIsMobileNavOpen(false);
         }
       };
-      window.addEventListener('keydown', handleKeyDown);
+      if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+        window.addEventListener('keydown', handleKeyDown);
+      }
       return () => {
-        document.body.style.overflow = '';
-        window.removeEventListener('keydown', handleKeyDown);
+        if (typeof document !== 'undefined' && document.body) {
+          document.body.style.overflow = '';
+        }
+        if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+          window.removeEventListener('keydown', handleKeyDown);
+        }
       };
     } else {
-      document.body.style.overflow = '';
+      if (typeof document !== 'undefined' && document.body) {
+        document.body.style.overflow = '';
+      }
     }
   }, [isMobileNavOpen, setIsMobileNavOpen]);
 

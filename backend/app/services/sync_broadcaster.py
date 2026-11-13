@@ -82,3 +82,4 @@ async def broadcast_sync_event(
 
     logger.info(f"Broadcasted sync event {event_type} [id={event_id[:8]}]")
     return envelope
+

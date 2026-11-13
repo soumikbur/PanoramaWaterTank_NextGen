@@ -129,8 +129,32 @@ export class WebSocketService {
     this.eventListeners.get(event)!.add(callback);
 
     return () => {
-      this.eventListeners.get(event)?.delete(callback);
+      this.off(event, callback);
     };
+  }
+
+  addEventListener(event: string, callback: EventCallback, options?: any): () => void {
+    return this.on(event, callback);
+  }
+
+  removeEventListener(event: string, callback: EventCallback): void {
+    this.off(event, callback);
+  }
+
+  off(event: string, callback: EventCallback): void {
+    this.eventListeners.get(event)?.delete(callback);
+  }
+
+  addListener(event: string, callback: EventCallback): () => void {
+    return this.on(event, callback);
+  }
+
+  removeListener(event: string, callback: EventCallback): void {
+    this.off(event, callback);
+  }
+
+  emit(event: string, data?: any): void {
+    this.dispatchEvent(event, data);
   }
 
   onStatusChange(callback: StatusCallback): () => void {
