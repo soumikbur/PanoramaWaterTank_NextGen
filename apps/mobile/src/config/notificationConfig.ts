@@ -1,30 +1,30 @@
 /**
  * Centralized Browser Notification & Alert Reminder Configuration.
  *
- * Toggle REMINDER_MODE between 'TEST' (30s) and 'PRODUCTION' (3600s / 1 hour)
- * in this single configuration module.
+ * Configurable alert reminder interval: exactly 30 minutes (1800 seconds / 1,800,000 ms).
  */
+
+export const ALERT_REMINDER_INTERVAL_MS = 30 * 60 * 1000;
+export const ALERT_REMINDER_INTERVAL_SECONDS = 30 * 60; // 1800 seconds
 
 export type ReminderMode = 'TEST' | 'PRODUCTION';
 
 export const NOTIFICATION_CONFIG = {
   /** Active mode for automatic unacknowledged alert reminders */
-  REMINDER_MODE: 'TEST' as ReminderMode,
+  REMINDER_MODE: 'PRODUCTION' as ReminderMode,
 
-  /** Initial testing phase reminder interval: 30 seconds */
-  TEST_REMINDER_INTERVAL_SECONDS: 30,
+  /** Standard reminder interval: 30 minutes (1800 seconds) */
+  TEST_REMINDER_INTERVAL_SECONDS: ALERT_REMINDER_INTERVAL_SECONDS,
 
-  /** Production reminder interval: 3600 seconds (1 hour) */
-  PRODUCTION_REMINDER_INTERVAL_SECONDS: 3600,
+  /** Production reminder interval: 30 minutes (1800 seconds) */
+  PRODUCTION_REMINDER_INTERVAL_SECONDS: ALERT_REMINDER_INTERVAL_SECONDS,
 
   get REMINDER_INTERVAL_SECONDS(): number {
-    return this.REMINDER_MODE === 'PRODUCTION'
-      ? this.PRODUCTION_REMINDER_INTERVAL_SECONDS
-      : this.TEST_REMINDER_INTERVAL_SECONDS;
+    return ALERT_REMINDER_INTERVAL_SECONDS;
   },
 
   get REMINDER_INTERVAL_MS(): number {
-    return this.REMINDER_INTERVAL_SECONDS * 1000;
+    return ALERT_REMINDER_INTERVAL_MS;
   },
 
   /** Scheduler tick resolution in milliseconds */

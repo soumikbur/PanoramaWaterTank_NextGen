@@ -227,10 +227,10 @@ async function runUnitTests() {
   assert.strictEqual(clearedHistory.length, 0, 'History should be empty after clearHistory()');
   console.log('  ✓ History cleared successfully');
 
-  // T12: Browser Popup Notifications + 30s Automatic Reminders + Ack + Recovery + Persistence + Multi-Alert
-  console.log('[TEST 7] Testing persistent 30s browser reminder engine...');
+  // T12: Browser Popup Notifications + 30-Minute Automatic Reminders + Ack + Recovery + Persistence + Multi-Alert + Client Sync
+  console.log('[TEST 7] Testing persistent 30-minute browser reminder engine...');
   spawnedNotifications.length = 0;
-  assert.strictEqual(service.getReminderIntervalMs(), 30000, 'Default reminder interval must be 30000ms (30s)');
+  assert.strictEqual(service.getReminderIntervalMs(), 1800000, 'Default reminder interval must be 1800000ms (30 minutes)');
 
   const t0 = Date.now();
   service.evaluateWaterLevel({
@@ -242,7 +242,7 @@ async function runUnitTests() {
     isOnline: true,
   });
 
-  assert.strictEqual(spawnedNotifications.length, 1, 'Initial alert should trigger 1 browser notification');
+  assert.strictEqual(spawnedNotifications.length, 1, 'Initial alert should trigger 1 immediate browser notification');
   const firstNotif = spawnedNotifications[0];
   assert(firstNotif.title.includes('CRITICAL ALERT'), 'Title must include CRITICAL ALERT');
   assert(firstNotif.options.body.includes('12841'), 'Body must include Train ID');
@@ -250,7 +250,7 @@ async function runUnitTests() {
   assert(firstNotif.options.body.includes('Arrival Side (Tank 1)'), 'Body must include Tank name');
   assert(firstNotif.options.body.includes('6.5%'), 'Body must include current water level');
 
-  // Polling same level does not trigger duplicate notification before 30s
+  // Polling same level does not trigger duplicate notification before 30 minutes
   service.evaluateWaterLevel({
     tankId: 't-rem-1',
     tankName: 'Arrival Side (Tank 1)',
@@ -259,15 +259,15 @@ async function runUnitTests() {
     levelPercent: 6.5,
     isOnline: true,
   });
-  service.processDueReminders(t0 + 15000);
-  assert.strictEqual(spawnedNotifications.length, 1, 'No reminder before 30s elapsed');
+  service.processDueReminders(t0 + 15 * 60 * 1000);
+  assert.strictEqual(spawnedNotifications.length, 1, 'No reminder before 30 minutes elapsed (checked at 15m)');
 
-  // 30s mark -> first reminder fires
-  service.processDueReminders(t0 + 30005);
-  assert.strictEqual(spawnedNotifications.length, 2, 'Reminder #1 must fire at 30s');
+  // 30-minute mark -> first reminder fires
+  service.processDueReminders(t0 + 30 * 60 * 1000 + 5);
+  assert.strictEqual(spawnedNotifications.length, 2, 'Reminder #1 must fire at 30 minutes');
   assert(spawnedNotifications[1].options.body.includes('Reminder #1'), 'Body must mark Reminder #1');
 
-  // Simulate browser refresh mid-countdown (at +45s) and verify next reminder fires at +60s, not +75s
+  // Simulate browser refresh mid-countdown (at +45 minutes) and verify next reminder fires at +60m, not +75m
   service.reloadPersistedState();
   service.evaluateWaterLevel({
     tankId: 't-rem-1',
@@ -278,12 +278,12 @@ async function runUnitTests() {
     isOnline: true,
   });
   assert.strictEqual(spawnedNotifications.length, 2, 'Reload + polling must NOT re-trigger duplicate initial popup');
-  service.processDueReminders(t0 + 45000);
-  assert.strictEqual(spawnedNotifications.length, 2, 'No reminder at 45s after reload');
-  service.processDueReminders(t0 + 60010);
-  assert.strictEqual(spawnedNotifications.length, 3, 'Reminder #2 must fire at 60s even after reload');
+  service.processDueReminders(t0 + 45 * 60 * 1000);
+  assert.strictEqual(spawnedNotifications.length, 2, 'No reminder at 45m after reload');
+  service.processDueReminders(t0 + 60 * 60 * 1000 + 10);
+  assert.strictEqual(spawnedNotifications.length, 3, 'Reminder #2 must fire at 60 minutes even after reload');
 
-  // Independent second alert on different coach at +65s
+  // Independent second alert on different coach at +65 minutes
   service.evaluateWaterLevel({
     tankId: 't-rem-2',
     tankName: 'Departure Side (Tank 2)',
@@ -292,7 +292,7 @@ async function runUnitTests() {
     levelPercent: 14.0,
     isOnline: true,
   });
-  assert.strictEqual(spawnedNotifications.length, 4, 'Second coach alert fires independently');
+  assert.strictEqual(spawnedNotifications.length, 4, 'Second coach alert fires immediately without waiting');
 
   // Acknowledge first alert with user '@admin' -> stops A reminders, leaves B active
   const alert1 = service.getActiveUnacknowledgedAlerts().find((a) => a.tankId === 't-rem-1');
@@ -302,12 +302,30 @@ async function runUnitTests() {
   assert.strictEqual(acked.acknowledgedBy, '@admin');
   assert(acked.acknowledgedAt, 'Acknowledged timestamp should be recorded');
 
-  // Advance to +95s: only alert 2 should remind; alert 1 must remain silent
-  service.processDueReminders(t0 + 96000);
+  // Advance to +95 minutes (second alert's 30-min reminder due at +65m + 30m = +95m): only alert 2 should remind; alert 1 must remain silent
+  service.processDueReminders(t0 + 95 * 60 * 1000 + 5);
   assert.strictEqual(spawnedNotifications.length, 5, 'Only unacknowledged Alert 2 should remind');
   assert(spawnedNotifications[4].options.body.includes('C4'), 'Reminder must belong to Coach C4');
 
-  // Recover second alert (>= 20%) -> stops its reminders immediately
+  // Multi-client sync: another user acknowledges Alert 2 on another computer/client
+  const alert2 = service.getActiveUnacknowledgedAlerts().find((a) => a.tankId === 't-rem-2');
+  assert(alert2, 'Alert 2 should still be active before sync');
+  service.syncWithBackendAlarms([
+    {
+      id: alert2.id,
+      status: 'ACKNOWLEDGED',
+      acknowledged_by: 'Operator_Remote_B',
+      acknowledged_at: new Date(t0 + 100 * 60 * 1000).toISOString(),
+    },
+  ]);
+  const remainingAfterSync = service.getActiveUnacknowledgedAlerts();
+  assert.strictEqual(remainingAfterSync.length, 0, 'No active unacknowledged alerts remain after multi-client sync');
+
+  // Advance to +125 minutes: no further reminders for either alert
+  service.processDueReminders(t0 + 125 * 60 * 1000);
+  assert.strictEqual(spawnedNotifications.length, 5, 'No further reminders after acknowledge & multi-client sync');
+
+  // Recovery second alert (>= 20%) -> marks resolved
   service.evaluateWaterLevel({
     tankId: 't-rem-2',
     tankName: 'Departure Side (Tank 2)',
@@ -316,10 +334,8 @@ async function runUnitTests() {
     levelPercent: 45.0,
     isOnline: true,
   });
-  const remainingActive = service.getActiveUnacknowledgedAlerts();
-  assert.strictEqual(remainingActive.length, 0, 'No active unacknowledged alerts should remain');
-  service.processDueReminders(t0 + 130000);
-  assert.strictEqual(spawnedNotifications.length, 5, 'No further reminders after acknowledge & recovery');
+  service.processDueReminders(t0 + 160 * 60 * 1000);
+  assert.strictEqual(spawnedNotifications.length, 5, 'No further reminders after recovery');
 
   // Permission denied fallback: does not throw or spawn Notification, still logs in-app toast & managed alert
   MockNotification.permission = 'denied';
@@ -328,7 +344,7 @@ async function runUnitTests() {
   assert.strictEqual(service.getActiveUnacknowledgedAlerts().length, 1, 'Broker offline alert still tracked in-app');
   service.evaluateBrokerConnectivity({ isConnected: true });
   assert.strictEqual(service.getActiveUnacknowledgedAlerts().length, 0, 'Broker reconnect resolves alert');
-  console.log('  ✓ 30s reminders, multi-alert, reload persistence, ack, recovery & denied fallback verified');
+  console.log('  ✓ 30-minute reminders, multi-alert, reload persistence, ack, recovery & multi-client sync verified');
 
   unsub();
   service.clearHistory();

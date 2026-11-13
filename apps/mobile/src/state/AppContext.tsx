@@ -676,11 +676,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           : filteredTanks[0] ?? null
       );
       setDevices(devList);
-      setActiveAlarms(
-        (Array.isArray(alarms) ? alarms : []).filter(
-          (a) => !a.trainNumber || validTrains.has(a.trainNumber.trim())
-        )
+      const safeAlarms = (Array.isArray(alarms) ? alarms : []).filter(
+        (a) => !a.trainNumber || validTrains.has(a.trainNumber.trim())
       );
+      setActiveAlarms(safeAlarms);
+      alertNotificationService.syncWithBackendAlarms(safeAlarms);
       setAlarmStats(stats);
       if (health?.mqttBroker) {
         setMqttBrokerStatus(health.mqttBroker === 'CONNECTED' ? 'CONNECTED' : 'DISCONNECTED');

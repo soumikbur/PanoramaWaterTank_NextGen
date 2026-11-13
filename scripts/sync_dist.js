@@ -21,6 +21,13 @@ if (fs.existsSync(src)) {
   fs.mkdirSync(capWww, { recursive: true });
   fs.cpSync(src, capWww, { recursive: true, force: true });
   console.log('Successfully synced apps/mobile/dist to PanoramaWaterTank_Capacitor/www');
+
+  const capAndroidAssets = path.resolve(__dirname, '../PanoramaWaterTank_Capacitor/android/app/src/main/assets/public');
+  if (fs.existsSync(path.dirname(capAndroidAssets))) {
+    fs.mkdirSync(capAndroidAssets, { recursive: true });
+    fs.cpSync(src, capAndroidAssets, { recursive: true, force: true });
+    console.log('Successfully synced apps/mobile/dist to PanoramaWaterTank_Capacitor/android/app/src/main/assets/public');
+  }
 } else {
   console.warn('Source dist not found at:', src);
 }

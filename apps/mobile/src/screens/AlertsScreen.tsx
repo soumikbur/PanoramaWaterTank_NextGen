@@ -134,6 +134,15 @@ export const AlertsScreen: React.FC = () => {
         const isAcked = m.status === 'ACKNOWLEDGED';
         const nextSec = !isAcked ? Math.max(0, Math.ceil((m.nextReminderAt - nowMs) / 1000)) : undefined;
         seenIds.add(m.id);
+        const formatInterval = (sec: number) => {
+          if (sec >= 60) {
+            const mins = Math.floor(sec / 60);
+            const s = sec % 60;
+            return s > 0 ? `${mins}m ${s}s` : `${mins}m`;
+          }
+          return `${sec}s`;
+        };
+
         list.push({
           id: m.id,
           alertKey: m.alertKey,
@@ -164,7 +173,7 @@ export const AlertsScreen: React.FC = () => {
           tankName: m.tankName,
           statusText: isAcked
             ? `Acknowledged${m.acknowledgedBy ? ` by ${m.acknowledgedBy}` : ''}`
-            : `Active · Reminder in ${nextSec ?? NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS}s`,
+            : `Active · Reminder in ${formatInterval(nextSec ?? NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS)}`,
           type: m.alertKey.startsWith('level-') ? 'level' : 'sensor',
         });
       });
@@ -351,7 +360,7 @@ export const AlertsScreen: React.FC = () => {
             >
               <Bell size={14} color="#059669" />
               <span style={{ fontSize: '12px', fontWeight: 700, color: '#065F46', fontFamily: typography.fontFamily }}>
-                Browser Popups: ON ({NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS}s)
+                Browser Popups: ON ({NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS >= 60 ? `${Math.round(NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS / 60)}m` : `${NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS}s`})
               </span>
             </div>
           ) : notificationPermission === 'denied' ? (
@@ -696,7 +705,7 @@ export const AlertsScreen: React.FC = () => {
                       {!alert.acknowledged ? (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#B45309', fontWeight: 600 }}>
                           <Clock size={12} />
-                          Auto-reminder every {NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS}s (sent {alert.reminderCount ?? 0}×)
+                          Auto-reminder every {NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS >= 60 ? `${Math.round(NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS / 60)} min` : `${NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS}s`} (sent {alert.reminderCount ?? 0}×)
                         </span>
                       ) : (
                         <span style={{ color: '#3730A3', fontWeight: 600 }}>

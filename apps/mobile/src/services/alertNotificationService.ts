@@ -7,7 +7,13 @@
  * and persistent alert history.
  */
 
-import { NOTIFICATION_CONFIG } from '../config/notificationConfig';
+import {
+  NOTIFICATION_CONFIG,
+  ALERT_REMINDER_INTERVAL_MS,
+  ALERT_REMINDER_INTERVAL_SECONDS,
+} from '../config/notificationConfig';
+
+export { ALERT_REMINDER_INTERVAL_MS, ALERT_REMINDER_INTERVAL_SECONDS };
 import {
   browserNotificationBridge,
   BrowserNotificationPayload,
@@ -413,8 +419,11 @@ class AlertNotificationService {
     const tsDisplay = this.formatNotificationTimestamp(
       isReminder ? new Date().toISOString() : alert.triggeredAt
     );
+    const intervalSec = Math.round(this.getReminderIntervalMs() / 1000);
+    const intervalDesc =
+      intervalSec >= 60 ? `${Math.round(intervalSec / 60)} minutes (${intervalSec}s)` : `${intervalSec}s`;
     const reminderLine = isReminder
-      ? `Reminder #${alert.reminderCount} (unacknowledged — repeats every ${Math.round(this.getReminderIntervalMs() / 1000)}s)`
+      ? `Reminder #${alert.reminderCount} (unacknowledged — repeats every ${intervalDesc})`
       : null;
 
     const lines = [
@@ -712,6 +721,77 @@ class AlertNotificationService {
       }
     }
     if (changed) {
+      this.saveManagedAlerts();
+      this.emitAlertsChange();
+    }
+  }
+
+  /**
+   * Synchronize active, acknowledged, and resolved alert states from backend.
+   * Ensures multi-client state consistency across desktop, mobile, and web clients.
+   */
+  public syncWithBackendAlarms(
+    backendAlarms: Array<{
+      id: string;
+      status: string;
+      acknowledged_by?: string;
+      acknowledgedBy?: string;
+      acknowledged_at?: string;
+      acknowledgedAt?: string;
+    }>
+  ): void {
+    if (!Array.isArray(backendAlarms)) return;
+    let dirty = false;
+    for (const backendAlarm of backendAlarms) {
+      const ackUser = backendAlarm.acknowledgedBy || backendAlarm.acknowledged_by || 'Remote Operator';
+      const ackTime = backendAlarm.acknowledgedAt || backendAlarm.acknowledged_at || new Date().toISOString();
+
+      if (backendAlarm.status === 'ACKNOWLEDGED') {
+        const target = this.managedAlerts.find(
+          (a) =>
+            a.status === 'ACTIVE' &&
+            (a.id === backendAlarm.id ||
+              a.alertKey === backendAlarm.id ||
+              (backendAlarm.id.startsWith('alarm-low-tank2-') &&
+                a.alertKey === `level-${backendAlarm.id.replace('alarm-low-tank2-', '')}-departure`) ||
+              (backendAlarm.id.startsWith('alarm-s1-') &&
+                a.alertKey === `sensor-s1-${backendAlarm.id.replace('alarm-s1-', '')}`) ||
+              (backendAlarm.id.startsWith('alarm-s2-') &&
+                a.alertKey === `sensor-s2-${backendAlarm.id.replace('alarm-s2-', '')}`) ||
+              (backendAlarm.id.startsWith('alarm-conn-') &&
+                a.alertKey === `conn-${backendAlarm.id.replace('alarm-conn-', '')}`))
+        );
+        if (target) {
+          target.status = 'ACKNOWLEDGED';
+          target.acknowledgedAt = ackTime;
+          target.acknowledgedBy = ackUser;
+          dirty = true;
+          this.updateHistoryStatus(
+            (h) => h.id === target.id || (h.alertKey === target.alertKey && h.status === 'Active'),
+            { status: 'Acknowledged', acknowledgedAt: ackTime, acknowledgedBy: ackUser }
+          );
+        }
+      } else if (backendAlarm.status === 'RESOLVED') {
+        const target = this.managedAlerts.find(
+          (a) =>
+            a.status !== 'RESOLVED' &&
+            (a.id === backendAlarm.id ||
+              a.alertKey === backendAlarm.id ||
+              (backendAlarm.id.startsWith('alarm-low-tank2-') &&
+                a.alertKey === `level-${backendAlarm.id.replace('alarm-low-tank2-', '')}-departure`))
+        );
+        if (target) {
+          target.status = 'RESOLVED';
+          target.resolvedAt = new Date().toISOString();
+          dirty = true;
+          this.updateHistoryStatus(
+            (h) => h.id === target.id || (h.alertKey === target.alertKey && h.status === 'Active'),
+            { status: 'Resolved', resolvedAt: target.resolvedAt }
+          );
+        }
+      }
+    }
+    if (dirty) {
       this.saveManagedAlerts();
       this.emitAlertsChange();
     }

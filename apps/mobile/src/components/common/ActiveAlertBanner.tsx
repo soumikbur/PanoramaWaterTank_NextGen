@@ -57,7 +57,7 @@ export const ActiveAlertBanner: React.FC = () => {
               {activeCount} Active Unacknowledged Alert{activeCount > 1 ? 's' : ''}
             </span>
             <span style={{ color: criticalCount > 0 ? '#B91C1C' : '#B45309', fontSize: '11px' }}>
-              (Reminders every {NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS}s until acknowledged or resolved)
+              (Reminders every {NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS >= 60 ? `${Math.round(NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS / 60)} minutes` : `${NOTIFICATION_CONFIG.REMINDER_INTERVAL_SECONDS}s`} until acknowledged or resolved)
             </span>
           </>
         ) : isDenied ? (
