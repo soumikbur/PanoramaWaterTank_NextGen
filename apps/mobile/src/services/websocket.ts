@@ -59,7 +59,7 @@ export function getWsUrl(): string {
 
     // Static hosting providers that don't run a backend server
     if (hostname.endsWith('github.io') || hostname.endsWith('vercel.app') || hostname.endsWith('pages.dev')) {
-      return 'wss://panorama-water-tank-backend.onrender.com/api/v1/ws/live';
+      return '';
     }
 
     // Reverse proxy or same-host deployment
@@ -67,7 +67,7 @@ export function getWsUrl(): string {
   }
 
   // 4. Capacitor native environment or default production fallback
-  return 'wss://panorama-water-tank-backend.onrender.com/api/v1/ws/live';
+  return '';
 }
 
 export function getHttpHealthUrl(wsUrl?: string): string {

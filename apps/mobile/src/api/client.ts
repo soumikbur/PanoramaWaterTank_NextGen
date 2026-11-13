@@ -149,14 +149,15 @@ export function resolveApiBase(): string {
       return `http://${host}:8000/api/v1`;
     }
     if (host.endsWith('github.io') || host.endsWith('vercel.app') || host.endsWith('pages.dev')) {
-      return PRODUCTION_BACKEND_URL;
+      // On static hosting without custom backend, operate in standalone client mode using HiveMQ MQTT sync
+      return '';
     }
     return `${window.location.origin.replace(/\/+$/, '')}/api/v1`;
   }
   if (typeof window !== 'undefined' && (window as any).Capacitor) {
-    return PRODUCTION_BACKEND_URL;
+    return '';
   }
-  return PRODUCTION_BACKEND_URL;
+  return '';
 }
 
 export const API_BASE = resolveApiBase();
