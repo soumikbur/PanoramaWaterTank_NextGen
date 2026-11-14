@@ -10,7 +10,11 @@ class TelemetryReading(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     device_id = Column(String(36), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False, index=True)
+    device_uid = Column(String(64), nullable=True, index=True)
+    train_number = Column(String(32), nullable=True, index=True)
+    coach_number = Column(String(32), nullable=True, index=True)
     tank_id = Column(String(36), ForeignKey("tanks.id", ondelete="SET NULL"), nullable=True, index=True)
+    tank_index = Column(Integer, nullable=True)
     timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
 
     # Fluid Level Metrics

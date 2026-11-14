@@ -1,6 +1,6 @@
 """Device model representing an edge monitoring node on a railway coach."""
-from sqlalchemy import Column, String, Boolean, DateTime
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
+from sqlalchemy.orm import relationship, foreign
 from app.core.database import Base
 from app.models.base import generate_uuid, utc_now
 
@@ -10,6 +10,7 @@ class Device(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     uid = Column(String(64), unique=True, nullable=False, index=True)
+    train_id = Column(String(36), ForeignKey("trains.id", ondelete="SET NULL"), nullable=True, index=True)
     train_number = Column(String(32), nullable=False, default="12002", index=True)
     coach_number = Column(String(32), nullable=False, default="B4", index=True)
     name = Column(String(128), nullable=False, default="Coach Water Monitor")
@@ -24,11 +25,12 @@ class Device(Base):
     status = Column(String(32), default="AVAILABLE")
     is_online = Column(Boolean, nullable=False, default=False, index=True)
     last_seen_at = Column(DateTime(timezone=True), nullable=True)
+    is_deleted = Column(Boolean, default=False, nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
     # Relationships
+    coach = relationship("Coach", primaryjoin="foreign(Device.uid) == Coach.device_uid", uselist=False, lazy="selectin")
     tanks = relationship("Tank", back_populates="device", cascade="all, delete-orphan", lazy="selectin")
     telemetry_readings = relationship("TelemetryReading", back_populates="device", cascade="all, delete-orphan", lazy="selectin")
     alarms = relationship("Alarm", back_populates="device", cascade="all, delete-orphan", lazy="selectin")
-

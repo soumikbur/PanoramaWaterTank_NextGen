@@ -21,6 +21,9 @@ backend/*.db
 *.bak
 *.sqlite
 *.sqlite3
+backend/backups/
+*.db.gz
+*.sql.gz
 
 # C++ Qt build artifacts & binaries
 build/

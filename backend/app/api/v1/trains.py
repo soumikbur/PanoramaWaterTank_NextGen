@@ -13,14 +13,19 @@ from sqlalchemy import select, delete
 from app.core.database import get_db
 from app.models.device import Device
 from app.models.tank import Tank
+from app.models.coach import Coach
 from app.models.alarm import Alarm, AlarmHistory
 from app.models.audit import AuditEvent
+from app.models.deletion_audit import DeletionAuditRecord
 from app.models.base import utc_now
 from app.models.telemetry import TelemetryReading
 from app.models.train import Train
+from app.models.outbox import SyncOutboxEvent
 from app.repositories.device_repo import DeviceRepository
 from app.repositories.tank_repo import TankRepository
 from app.repositories.telemetry_repo import TelemetryRepository
+from app.repositories.coach_repo import CoachRepository
+from app.repositories.outbox_repo import OutboxRepository
 from app.api.v1.auth import get_current_user, get_current_admin_user
 from app.models.user import User
 from app.websocket.manager import ws_manager
@@ -647,6 +652,7 @@ async def create_train(
     tank_c = float(data.tank_capacity) if data.tank_capacity is not None else 20.0
 
     train_row = Train(
+        id=str(uuid.uuid4()),
         train_number=train_number,
         name=data.name.strip(),
         source_station=data.source_station.strip() if data.source_station else None,
@@ -667,6 +673,7 @@ async def create_train(
         tank_capacity_liters=tank_c,
     )
     db.add(train_row)
+    await db.flush()
 
     TRAIN_METADATA[train_number] = {
         "name": data.name.strip(),
@@ -688,8 +695,45 @@ async def create_train(
     elif data.coach_number and data.coach_number.strip():
         coaches_to_create.append(data.coach_number.strip().upper())
 
-    # Train and coach structure registered cleanly without automatically synthesizing fake physical devices.
-    # Genuine physical edge devices are discovered over MQTT or manually registered by an administrator.
+    # Persist relational coach entities
+    coach_repo = CoachRepository(db)
+    for idx, cn in enumerate(coaches_to_create, 1):
+        await coach_repo.create(
+            train_id=train_row.id,
+            train_number=train_number,
+            coach_number=cn,
+            coach_name=f"Coach {cn}",
+            coach_category="PASSENGER",
+            coach_type="AC_CHAIR_CAR",
+            position=idx,
+        )
+
+    # Queue transactional outbox sync event
+    outbox_repo = OutboxRepository(db)
+    sync_event = {
+        "action": "create_train",
+        "train_number": train_number,
+        "name": data.name.strip(),
+        "region": reg,
+        "train_type": (data.train_type or "Express").strip(),
+        "type": (data.train_type or "Express").strip(),
+        "railway_zone": getattr(data, "railway_zone", None),
+        "source_station": getattr(data, "source_station", None),
+        "source_code": getattr(data, "source_code", None),
+        "destination_station": getattr(data, "destination_station", None),
+        "destination_code": getattr(data, "destination_code", None),
+        "tank_height_cm": tank_h,
+        "tank_capacity_liters": tank_c,
+        "coaches_count": len(coaches_to_create),
+        "tanks_count": len(coaches_to_create) * 2,
+    }
+    await outbox_repo.create_event(
+        event_type="TRAIN_CREATED",
+        entity_type="TRAIN",
+        entity_id=train_number,
+        operation="CREATE",
+        payload=sync_event,
+    )
 
     # Record persistent audit event
     db.add(
@@ -711,24 +755,6 @@ async def create_train(
     )
 
     await db.commit()
-
-    sync_event = {
-        "action": "create_train",
-        "train_number": train_number,
-        "name": data.name.strip(),
-        "region": reg,
-        "train_type": (data.train_type or "Express").strip(),
-        "type": (data.train_type or "Express").strip(),
-        "railway_zone": getattr(data, "railway_zone", None),
-        "source_station": getattr(data, "source_station", None),
-        "source_code": getattr(data, "source_code", None),
-        "destination_station": getattr(data, "destination_station", None),
-        "destination_code": getattr(data, "destination_code", None),
-        "tank_height_cm": tank_h,
-        "tank_capacity_liters": tank_c,
-        "coaches_count": len(coaches_to_create),
-        "tanks_count": len(coaches_to_create) * 2,
-    }
     await broadcast_sync_event(
         "TRAIN_CREATED",
         sync_event,
@@ -927,6 +953,7 @@ async def delete_train(
         }
 
         if db_train is not None:
+            await db.execute(delete(Coach).where(Coach.train_number == cleaned))
             await db.execute(delete(Train).where(Train.train_number == cleaned))
 
         client_ip = request.client.host if request.client else "unknown"
@@ -947,6 +974,31 @@ async def delete_train(
                 ip_address=client_ip,
             )
         )
+        db.add(
+            DeletionAuditRecord(
+                admin_username=admin.username,
+                entity_type="TRAIN",
+                entity_identifier=cleaned,
+                entity_id=db_train.id if db_train else None,
+                snapshot_json=json.dumps(train_snapshot),
+                reason=f"Train {cleaned} explicitly deleted by admin {admin.username}",
+                ip_address=client_ip,
+            )
+        )
+
+        sync_event = {
+            "action": "delete_train",
+            "train_number": cleaned,
+        }
+        outbox_repo = OutboxRepository(db)
+        await outbox_repo.create_event(
+            event_type="TRAIN_DELETED",
+            entity_type="TRAIN",
+            entity_id=cleaned,
+            operation="DELETE",
+            payload=sync_event,
+        )
+
         await db.commit()
     except HTTPException:
         await db.rollback()
@@ -1132,6 +1184,7 @@ async def add_coach_to_train(
             t2.tank_type = geom2
 
     # Update Train official composition JSON if present
+    comp_len = 1
     if db_train:
         comp = _safe_json_loads(db_train.coach_configuration_json, [])
         if not any(c.get("coach_number", "").upper() == c_clean for c in comp):
@@ -1143,6 +1196,23 @@ async def add_coach_to_train(
             })
             db_train.coach_configuration_json = json.dumps(comp)
             db_train.total_coaches = len(comp)
+        comp_len = len(comp)
+
+    # Persist relational coach entity
+    if db_train:
+        coach_repo = CoachRepository(db)
+        existing_coach = await coach_repo.get_by_train_and_coach_number(tr_clean, c_clean)
+        if not existing_coach:
+            await coach_repo.create(
+                train_id=db_train.id,
+                train_number=tr_clean,
+                coach_number=c_clean,
+                coach_name=getattr(data, "coach_name", None) or f"Coach {c_clean}",
+                coach_category=data.coach_category or "PASSENGER",
+                coach_type=data.coach_type or "AC_CHAIR_CAR",
+                position=comp_len,
+                device_uid=uid or None,
+            )
 
     client_ip = request.client.host if request.client else "unknown"
     db.add(
@@ -1155,7 +1225,6 @@ async def add_coach_to_train(
             ip_address=client_ip,
         )
     )
-    await db.commit()
 
     sync_event = {
         "action": "coach_change",
@@ -1174,6 +1243,18 @@ async def add_coach_to_train(
         "tank_1_geometry": getattr(data, "tank_1_geometry", None) or "CYLINDRICAL",
         "tank_2_geometry": getattr(data, "tank_2_geometry", None) or "CYLINDRICAL",
     }
+
+    # Queue transactional outbox sync event
+    outbox_repo = OutboxRepository(db)
+    await outbox_repo.create_event(
+        event_type="COACH_CREATED",
+        entity_type="COACH",
+        entity_id=f"{tr_clean}:{c_clean}",
+        operation="CREATE",
+        payload=sync_event,
+    )
+
+    await db.commit()
     await broadcast_sync_event(
         "COACH_CREATED",
         sync_event,
@@ -1230,6 +1311,10 @@ async def reorder_coaches(
             c["position"] = idx
         db_train.coach_configuration_json = json.dumps(reordered)
 
+    # Reorder relational coach entities
+    coach_repo = CoachRepository(db)
+    await coach_repo.reorder_coaches(tr_clean, [num.strip().upper() for num in data.coach_numbers])
+
     client_ip = request.client.host if request.client else "unknown"
     db.add(
         AuditEvent(
@@ -1241,13 +1326,24 @@ async def reorder_coaches(
             ip_address=client_ip,
         )
     )
-    await db.commit()
 
     sync_event = {
         "action": "coach_change",
         "train_number": tr_clean,
         "coach_numbers": data.coach_numbers,
     }
+
+    # Queue transactional outbox sync event
+    outbox_repo = OutboxRepository(db)
+    await outbox_repo.create_event(
+        event_type="COACH_REORDERED",
+        entity_type="COACH",
+        entity_id=tr_clean,
+        operation="REORDER",
+        payload=sync_event,
+    )
+
+    await db.commit()
     await broadcast_sync_event(
         "COACH_REORDERED",
         sync_event,
@@ -1433,6 +1529,20 @@ async def update_coach_details(
                         tank_type=(data.tank_2_geometry or "CYLINDRICAL").upper(),
                     )
 
+    # Update relational coach entity
+    coach_repo = CoachRepository(db)
+    db_coach = await coach_repo.get_by_train_and_coach_number(tr_clean, c_clean)
+    if db_coach:
+        if data.coach_name:
+            db_coach.coach_name = data.coach_name
+        if data.coach_category:
+            db_coach.coach_category = data.coach_category
+        if data.coach_type:
+            db_coach.coach_type = data.coach_type
+        if data.device_uid is not None:
+            db_coach.device_uid = data.device_uid.strip() or None
+        db_coach.updated_at = utc_now()
+
     client_ip = request.client.host if request.client else "unknown"
     db.add(
         AuditEvent(
@@ -1444,7 +1554,6 @@ async def update_coach_details(
             ip_address=client_ip,
         )
     )
-    await db.commit()
 
     sync_event = {
         "action": "coach_change",
@@ -1463,6 +1572,18 @@ async def update_coach_details(
         "tank_1_geometry": data.tank_1_geometry,
         "tank_2_geometry": data.tank_2_geometry,
     }
+
+    # Queue transactional outbox sync event
+    outbox_repo = OutboxRepository(db)
+    await outbox_repo.create_event(
+        event_type="COACH_UPDATED",
+        entity_type="COACH",
+        entity_id=f"{tr_clean}:{c_clean}",
+        operation="UPDATE",
+        payload=sync_event,
+    )
+
+    await db.commit()
     await broadcast_sync_event(
         "COACH_UPDATED",
         sync_event,
@@ -1551,6 +1672,14 @@ async def rename_coach(
                 item["coach_number"] = new_c
         db_train.coach_configuration_json = json.dumps(comp)
 
+    # Update relational coach entity
+    coach_repo = CoachRepository(db)
+    db_coach = await coach_repo.get_by_train_and_coach_number(tr_clean, old_c)
+    if db_coach:
+        db_coach.coach_number = new_c
+        db_coach.coach_name = f"Coach {new_c}"
+        db_coach.updated_at = utc_now()
+
     client_ip = request.client.host if request.client else "unknown"
     db.add(
         AuditEvent(
@@ -1562,7 +1691,6 @@ async def rename_coach(
             ip_address=client_ip,
         )
     )
-    await db.commit()
 
     sync_event = {
         "action": "coach_change",
@@ -1570,6 +1698,18 @@ async def rename_coach(
         "old_coach_number": old_c,
         "new_coach_number": new_c,
     }
+
+    # Queue transactional outbox sync event
+    outbox_repo = OutboxRepository(db)
+    await outbox_repo.create_event(
+        event_type="COACH_RENAMED",
+        entity_type="COACH",
+        entity_id=f"{tr_clean}:{new_c}",
+        operation="UPDATE",
+        payload=sync_event,
+    )
+
+    await db.commit()
     await broadcast_sync_event(
         "COACH_RENAMED",
         sync_event,
@@ -1651,6 +1791,12 @@ async def delete_coach(
         db_train.coach_configuration_json = json.dumps(comp)
         db_train.total_coaches = len(comp)
 
+    # Soft delete relational coach entity
+    coach_repo = CoachRepository(db)
+    db_coach = await coach_repo.get_by_train_and_coach_number(tr_clean, c_clean)
+    if db_coach:
+        await coach_repo.delete_coach(db_coach, hard=False)
+
     client_ip = request.client.host if request.client else "unknown"
     db.add(
         AuditEvent(
@@ -1662,13 +1808,41 @@ async def delete_coach(
             ip_address=client_ip,
         )
     )
-    await db.commit()
+    db.add(
+        DeletionAuditRecord(
+            admin_username=admin.username,
+            entity_type="COACH",
+            entity_identifier=f"{tr_clean}:{c_clean}",
+            entity_id=db_coach.id if db_coach else None,
+            snapshot_json=json.dumps({
+                "train_number": tr_clean,
+                "coach_number": c_clean,
+                "coach_name": db_coach.coach_name if db_coach else None,
+                "coach_category": db_coach.coach_category if db_coach else None,
+                "unassigned_devices": [d.uid for d in devs],
+            }),
+            reason=f"Coach {c_clean} deleted from Train {tr_clean} by admin {admin.username}",
+            ip_address=client_ip,
+        )
+    )
 
     sync_event = {
         "action": "coach_change",
         "train_number": tr_clean,
         "deleted_coach_number": c_clean,
     }
+
+    # Queue transactional outbox sync event
+    outbox_repo = OutboxRepository(db)
+    await outbox_repo.create_event(
+        event_type="COACH_DELETED",
+        entity_type="COACH",
+        entity_id=f"{tr_clean}:{c_clean}",
+        operation="DELETE",
+        payload=sync_event,
+    )
+
+    await db.commit()
     await broadcast_sync_event(
         "COACH_DELETED",
         sync_event,

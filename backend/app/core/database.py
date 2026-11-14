@@ -104,6 +104,9 @@ def _sync_schema_migration(sync_conn) -> None:
             train_columns = [
                 ("tank_height_cm", "REAL DEFAULT 50.0"),
                 ("tank_capacity_liters", "REAL DEFAULT 20.0"),
+                ("region_id", "VARCHAR(36)"),
+                ("zone_id", "VARCHAR(36)"),
+                ("is_deleted", "BOOLEAN DEFAULT 0"),
             ]
             for col_name, col_type in train_columns:
                 if col_name not in train_cols:
@@ -120,10 +123,38 @@ def _sync_schema_migration(sync_conn) -> None:
                 ("tank_assignment", "VARCHAR(32) DEFAULT 'BOTH'"),
                 ("description", "VARCHAR(255)"),
                 ("status", "VARCHAR(32) DEFAULT 'AVAILABLE'"),
+                ("train_id", "VARCHAR(36)"),
+                ("is_deleted", "BOOLEAN DEFAULT 0"),
             ]
             for col_name, col_type in dev_columns:
                 if col_name not in dev_cols:
                     sync_conn.exec_driver_sql(f"ALTER TABLE devices ADD COLUMN {col_name} {col_type}")
+
+            # Tanks table migration
+            res_tanks = sync_conn.exec_driver_sql("PRAGMA table_info(tanks)").fetchall()
+            tank_cols = {row[1] for row in res_tanks}
+            tank_columns = [
+                ("coach_id", "VARCHAR(36)"),
+                ("train_number", "VARCHAR(32)"),
+                ("coach_number", "VARCHAR(32)"),
+                ("is_deleted", "BOOLEAN DEFAULT 0"),
+            ]
+            for col_name, col_type in tank_columns:
+                if col_name not in tank_cols:
+                    sync_conn.exec_driver_sql(f"ALTER TABLE tanks ADD COLUMN {col_name} {col_type}")
+
+            # Telemetry readings table migration
+            res_telemetry = sync_conn.exec_driver_sql("PRAGMA table_info(telemetry_readings)").fetchall()
+            telemetry_cols = {row[1] for row in res_telemetry}
+            telemetry_columns = [
+                ("device_uid", "VARCHAR(64)"),
+                ("train_number", "VARCHAR(32)"),
+                ("coach_number", "VARCHAR(32)"),
+                ("tank_index", "INTEGER"),
+            ]
+            for col_name, col_type in telemetry_columns:
+                if col_name not in telemetry_cols:
+                    sync_conn.exec_driver_sql(f"ALTER TABLE telemetry_readings ADD COLUMN {col_name} {col_type}")
         except Exception as e:
             logger.warning(f"Column check notice: {e}")
 
@@ -228,6 +259,55 @@ async def seed_initial_fleet(session: AsyncSession) -> None:
         await session.commit()
 
 
+async def seed_initial_regions(session: AsyncSession) -> None:
+    """Seed baseline standard Railway Regions and Zones idempotently."""
+    from app.models.railway import RailwayRegion, RailwayZone
+
+    regions_data = [
+        {"code": "NORTH", "name": "Northern Railway", "headquarters": "New Delhi"},
+        {"code": "EAST", "name": "Eastern Railway", "headquarters": "Kolkata"},
+        {"code": "SOUTH", "name": "Southern Railway", "headquarters": "Chennai"},
+        {"code": "WEST", "name": "Western Railway", "headquarters": "Mumbai"},
+        {"code": "CENTRAL", "name": "Central Railway", "headquarters": "Mumbai"},
+    ]
+    region_map = {}
+    for r_data in regions_data:
+        res = await session.execute(select(RailwayRegion).where(RailwayRegion.code == r_data["code"]))
+        reg = res.scalar_one_or_none()
+        if not reg:
+            reg = RailwayRegion(**r_data)
+            session.add(reg)
+            await session.flush()
+        region_map[r_data["code"]] = reg
+
+    zones_data = [
+        {"code": "NR", "name": "Northern Railway Zone", "headquarters": "New Delhi", "region_code": "NORTH"},
+        {"code": "NCR", "name": "North Central Railway", "headquarters": "Prayagraj", "region_code": "NORTH"},
+        {"code": "NER", "name": "North Eastern Railway", "headquarters": "Gorakhpur", "region_code": "NORTH"},
+        {"code": "ER", "name": "Eastern Railway", "headquarters": "Kolkata", "region_code": "EAST"},
+        {"code": "ECR", "name": "East Central Railway", "headquarters": "Hajipur", "region_code": "EAST"},
+        {"code": "SER", "name": "South Eastern Railway", "headquarters": "Kolkata", "region_code": "EAST"},
+        {"code": "SR", "name": "Southern Railway", "headquarters": "Chennai", "region_code": "SOUTH"},
+        {"code": "SCR", "name": "South Central Railway", "headquarters": "Secunderabad", "region_code": "SOUTH"},
+        {"code": "SWR", "name": "South Western Railway", "headquarters": "Hubballi", "region_code": "SOUTH"},
+        {"code": "WR", "name": "Western Railway", "headquarters": "Mumbai", "region_code": "WEST"},
+        {"code": "WCR", "name": "West Central Railway", "headquarters": "Jabalpur", "region_code": "WEST"},
+        {"code": "CR", "name": "Central Railway", "headquarters": "Mumbai", "region_code": "CENTRAL"},
+    ]
+    for z_data in zones_data:
+        res_z = await session.execute(select(RailwayZone).where(RailwayZone.code == z_data["code"]))
+        zn = res_z.scalar_one_or_none()
+        if not zn:
+            zn = RailwayZone(
+                code=z_data["code"],
+                name=z_data["name"],
+                headquarters=z_data["headquarters"],
+                region_code=z_data["region_code"],
+            )
+            session.add(zn)
+    await session.commit()
+
+
 async def init_db() -> None:
     """Initialize database tables and seed baseline credentials and configurations."""
     async with engine.begin() as conn:
@@ -236,6 +316,7 @@ async def init_db() -> None:
     async with AsyncSessionLocal() as session:
         try:
             await seed_initial_accounts(session)
+            await seed_initial_regions(session)
             await seed_initial_settings(session)
             await seed_initial_fleet(session)
         except Exception as e:

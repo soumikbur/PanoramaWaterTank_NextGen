@@ -219,8 +219,8 @@ async def create_device(
         "action": "create_device",
         "device": out.model_dump(by_alias=True),
         "uid": out.uid,
-        "train_number": out.train_number,
-        "coach_number": out.coach_number,
+        "train_number": out.trainNumber,
+        "coach_number": out.coachNumber,
     }
     await broadcast_sync_event(
         "DEVICE_CREATED",
@@ -321,8 +321,8 @@ async def update_device(
         "action": "update_device",
         "device": out.model_dump(by_alias=True),
         "uid": out.uid,
-        "train_number": out.train_number,
-        "coach_number": out.coach_number,
+        "train_number": out.trainNumber,
+        "coach_number": out.coachNumber,
     }
     await broadcast_sync_event(
         "DEVICE_UPDATED",

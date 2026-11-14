@@ -1,5 +1,5 @@
 """Tank model representing physical water reservoir geometry and thresholds."""
-from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 from app.models.base import generate_uuid, utc_now
@@ -10,6 +10,9 @@ class Tank(Base):
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
     device_id = Column(String(36), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False, index=True)
+    coach_id = Column(String(36), ForeignKey("coaches.id", ondelete="CASCADE"), nullable=True, index=True)
+    train_number = Column(String(32), nullable=True, index=True)
+    coach_number = Column(String(32), nullable=True, index=True)
     tank_index = Column(Integer, nullable=False, default=1)  # 1 = Primary, 2 = Secondary
     name = Column(String(64), nullable=False, default="Primary Water Tank")
     tank_type = Column(String(32), nullable=False, default="CYLINDRICAL")  # CYLINDRICAL, RECTANGULAR
@@ -25,6 +28,7 @@ class Tank(Base):
     critical_threshold_percent = Column(Float, nullable=False, default=10.0)
     overflow_threshold_percent = Column(Float, nullable=False, default=100.0)
 
+    is_deleted = Column(Boolean, default=False, nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
@@ -34,6 +38,7 @@ class Tank(Base):
 
     # Relationships
     device = relationship("Device", back_populates="tanks")
+    coach = relationship("Coach", back_populates="tanks")
     telemetry_readings = relationship("TelemetryReading", back_populates="tank")
     alarms = relationship("Alarm", back_populates="tank")
 
