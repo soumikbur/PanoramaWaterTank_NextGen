@@ -193,10 +193,41 @@ export class ApiClient {
       ApiClient.isBackendAvailable = null;
       ApiClient.lastHealthCheckTime = 0;
     });
+    if (window.location && (window.location.hostname.endsWith('github.io') || window.location.hostname.endsWith('pages.dev'))) {
+      try {
+        fetch('./backend-status.json', { cache: 'no-store' })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (data && data.available === true) {
+              ApiClient.isBackendAvailable = true;
+              if (window.localStorage) {
+                window.localStorage.setItem('panorama_backend_verified', 'true');
+              }
+            }
+          })
+          .catch(() => {});
+      } catch {}
+    }
   }
 
   static isRemoteUnreachable(): boolean {
     this.ensureListeners();
+    const base = resolveApiBase();
+    const isLocal = base.includes('127.0.0.1') || base.includes('localhost');
+    if (isLocal) {
+      return this.isBackendAvailable === false && (Date.now() - this.lastHealthCheckTime < 10000);
+    }
+
+    if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+      const host = window.location.hostname;
+      if (host.endsWith('github.io') || host.endsWith('pages.dev')) {
+        const verified = window.localStorage ? window.localStorage.getItem('panorama_backend_verified') : null;
+        if (verified !== 'true' && this.isBackendAvailable !== true) {
+          return true;
+        }
+      }
+    }
+
     if (this.isBackendAvailable === false) {
       if (Date.now() - this.lastHealthCheckTime < 45000) {
         return true;

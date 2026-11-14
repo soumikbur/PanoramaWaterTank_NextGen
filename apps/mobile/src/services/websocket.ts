@@ -221,6 +221,14 @@ export class WebSocketService {
     // Pre-flight health probe if prior attempts failed or host is remote
     const isLocal = wsUrl.includes('127.0.0.1') || wsUrl.includes('localhost');
     if (!isLocal || this.reconnectAttempts > 1) {
+      if (typeof window !== 'undefined' && window.location && window.location.hostname && (window.location.hostname.endsWith('github.io') || window.location.hostname.endsWith('pages.dev'))) {
+        const verified = window.localStorage ? window.localStorage.getItem('panorama_backend_verified') : null;
+        if (verified !== 'true') {
+          this.isConnecting = false;
+          this.setStatus('DISCONNECTED');
+          return;
+        }
+      }
       const isHealthy = await this.checkBackendHealth(wsUrl);
       if (!isHealthy) {
         this.isConnecting = false;

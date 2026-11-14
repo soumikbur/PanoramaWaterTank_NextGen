@@ -8,15 +8,18 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from typing import Optional
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.database import init_db
+from app.core.database import init_db, get_db
 from app.mqtt.client import mqtt_service
 from app.api.v1 import api_router, trains as trains_v1
+from app.api.v1.health import health_check
+from app.api.v1.ws import websocket_live_stream
 
 # Configure logging
 logging.basicConfig(
@@ -67,6 +70,16 @@ app = FastAPI(
 
 # CORS Configuration (Restricted strictly to local loopback and verified production domains)
 _explicit_origins = [o for o in settings.CORS_ORIGINS if o != "*"]
+_explicit_origins.extend([
+    "https://soumikbur.github.io",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:8000",
+])
+_explicit_origins = list(dict.fromkeys(_explicit_origins))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_explicit_origins,
@@ -74,7 +87,22 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    max_age=86400,
 )
+
+
+@app.get("/health", tags=["Health"])
+@app.get("/api/health", tags=["Health"])
+async def root_health_alias(db: AsyncSession = Depends(get_db)):
+    """Root and /api/health aliases for health check probes."""
+    return await health_check(db)
+
+
+@app.websocket("/ws/live")
+@app.websocket("/api/ws/live")
+async def root_ws_alias(websocket: WebSocket):
+    """Root and /api/ws/live aliases for WebSocket live telemetry."""
+    await websocket_live_stream(websocket)
 
 
 @app.middleware("http")

@@ -14,6 +14,15 @@ async def websocket_live_stream(websocket: WebSocket):
     """Real-time live WebSocket endpoint broadcasting telemetry and alarm events."""
     await ws_manager.connect(websocket)
     try:
+        # Send immediate connection acknowledgment JSON frame
+        await websocket.send_text(json.dumps({
+            "event": "CONNECTED",
+            "data": {
+                "status": "CONNECTED",
+                "timestamp": time.time(),
+                "clientCount": ws_manager.client_count
+            }
+        }))
         while True:
             # Keep connection open and receive optional client messages/subscriptions
             data = await websocket.receive_text()

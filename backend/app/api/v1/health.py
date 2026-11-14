@@ -1,6 +1,7 @@
 """Health and Diagnostics Router."""
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
@@ -22,7 +23,7 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     except Exception:
         db_ok = False
 
-    return {
+    content = {
         "status": "HEALTHY" if db_ok else "DEGRADED",
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
@@ -31,4 +32,9 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         "mqttBroker": "CONNECTED" if mqtt_service.is_connected else "DISCONNECTED",
         "activeWebSockets": ws_manager.client_count
     }
+
+    if not db_ok:
+        return JSONResponse(status_code=503, content=content)
+
+    return content
 
