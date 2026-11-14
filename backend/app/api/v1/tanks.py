@@ -19,6 +19,7 @@ from app.services.alarm_service import AlarmService
 from app.api.v1.auth import get_current_admin_user
 from app.models.user import User
 from app.models.train import Train
+from app.services.sync_broadcaster import broadcast_sync_event
 
 router = APIRouter(prefix="/tanks", tags=["Tanks"])
 
@@ -248,6 +249,24 @@ async def update_tank_geometry(
                     if update_data.name: c["tank_2_name"] = update_data.name
         db_train.coach_configuration_json = json.dumps(comp)
         await db.commit()
+
+        await broadcast_sync_event(
+            event_type="TANK_UPDATED",
+            payload={
+                "tank_id": tank_id,
+                "train_number": tr_no,
+                "coach_number": c_no,
+                "tank_index": t_idx,
+                "name": update_data.name,
+                "capacity_liters": update_data.capacityLiters,
+                "height_cm": update_data.heightCm,
+                "area_m2": update_data.areaM2,
+            },
+            entity_type="TANK",
+            entity_id=tank_id,
+            operation="UPDATE",
+        )
+
         return TankOut(
             id=tank_id,
             device_id="UNASSIGNED",
@@ -295,5 +314,22 @@ async def update_tank_geometry(
 
     await db.commit()
     await db.refresh(tank)
+
+    await broadcast_sync_event(
+        event_type="TANK_UPDATED",
+        payload={
+            "tank_id": tank.id,
+            "device_id": tank.device_id,
+            "tank_index": tank.tank_index,
+            "name": tank.name,
+            "capacity_liters": tank.capacity_liters,
+            "height_cm": tank.height_cm,
+            "area_m2": tank.area_m2,
+        },
+        entity_type="TANK",
+        entity_id=tank.id,
+        operation="UPDATE",
+    )
+
     return TankOut.model_validate(tank)
 

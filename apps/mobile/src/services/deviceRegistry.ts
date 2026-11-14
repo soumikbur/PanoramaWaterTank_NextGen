@@ -258,6 +258,66 @@ class DeviceRegistryService {
     return true;
   }
 
+  public handleDeviceEvent(event: any): boolean {
+    if (!event || typeof event !== 'object') return false;
+    const op = event.operation;
+    const payload = event.payload || event.data || {};
+    const uid = (event.entity_id || payload.uid || payload.id || '').trim();
+    if (!uid) return false;
+
+    if (op === 'DELETE' || event.event_type === 'DEVICE_DELETED') {
+      this.deletedUids.add(uid);
+      this.devices.delete(uid);
+      this.saveToStorage({ skipPublish: true });
+      this.notify();
+      return true;
+    }
+
+    const trno = payload.train_number !== undefined ? payload.train_number : (payload.trainNumber !== undefined ? payload.trainNumber : 'UNASSIGNED');
+    const chno = payload.coach_number !== undefined ? payload.coach_number : (payload.coachNumber !== undefined ? payload.coachNumber : 'UNASSIGNED');
+    const isAssigned = trno && trno !== 'UNASSIGNED' && chno && chno !== 'UNASSIGNED';
+
+    const existing = this.devices.get(uid);
+    if (existing) {
+      this.devices.set(uid, {
+        ...existing,
+        name: payload.name || existing.name,
+        trainNumber: trno,
+        coachNumber: chno,
+        assignmentStatus: isAssigned ? 'ENGAGED' : 'AVAILABLE',
+        registrationStatus: 'REGISTERED',
+      });
+    } else {
+      this.devices.set(uid, {
+        uid,
+        name: payload.name || `Device ${uid.slice(-6)}`,
+        trainNumber: trno,
+        coachNumber: chno,
+        registrationStatus: 'REGISTERED',
+        assignmentStatus: isAssigned ? 'ENGAGED' : 'AVAILABLE',
+        hardwareModel: payload.hardware_version || 'ESP32-S3',
+        firmwareVersion: payload.firmware_version || 'v2.1.0',
+        protocol: payload.protocol || 'MQTT',
+        isOnline: false,
+        batteryPercent: 100,
+        batteryVoltage: 3.7,
+        tank1Level: 0,
+        tank1HeightCm: 50,
+        tank2Level: 0,
+        tank2HeightCm: 50,
+        latitude: null,
+        longitude: null,
+        speedKmh: 0,
+        lastSeen: new Date().toISOString(),
+        lastSeenTimestamp: Date.now(),
+        registeredAt: new Date().toISOString(),
+      });
+    }
+    this.saveToStorage({ skipPublish: true });
+    this.notify();
+    return true;
+  }
+
   private notify(): void {
     const list = this.getDevices();
     this.listeners.forEach((listener) => {

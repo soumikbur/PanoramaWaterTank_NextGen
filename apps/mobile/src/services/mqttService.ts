@@ -56,6 +56,8 @@ export const CENTRAL_DEVICES_TOPIC = 'panorama/central/devices/v2';
 export const CENTRAL_SETTINGS_TOPIC = 'panorama/central/settings/v2';
 export const CENTRAL_USERS_TOPIC = 'panorama/central/users/v2';
 export const CENTRAL_DELTA_SYNC_TOPIC = 'panorama/central/sync/v2';
+export const SYNC_EVENTS_TOPIC = 'panorama/sync/events';
+export const SYNC_WILDCARD_TOPIC = 'panorama/sync/#';
 
 export type TelemetryCallback = (payload: LiveTelemetryPayload) => void;
 export type MqttStatusCallback = (status: MqttConnectionStatus) => void;
@@ -74,6 +76,8 @@ export class MqttService {
   private centralSettingsListeners: Set<(event: any) => void> = new Set();
   private centralUsersListeners: Set<(event: any) => void> = new Set();
   private centralDeltaListeners: Set<(event: any) => void> = new Set();
+  private syncEventListeners: Set<(event: any) => void> = new Set();
+  private seenSyncEventIds: Map<string, number> = new Map();
   private reconnectTimer: any = null;
   private staleTimer: any = null;
   private reconnectAttempts = 0;
@@ -158,6 +162,10 @@ export class MqttService {
         try {
           const destination = message.destinationName || message.topic || '';
           const payloadStr = message.payloadString;
+          if (destination === SYNC_EVENTS_TOPIC || destination.startsWith('panorama/sync/')) {
+            this.handleSyncEvent(payloadStr);
+            return;
+          }
           if (destination === CENTRAL_FLEET_TOPIC) {
             this.handleCentralFleetSync(payloadStr);
             return;
@@ -202,6 +210,10 @@ export class MqttService {
           this.setStatus('CONNECTED');
           console.info(`[MQTT] Connected to ${this.brokerHost}:${this.brokerPort}. Subscribing to topics...`);
           try {
+            // Subscribe to primary synchronization bus (events and wildcard)
+            this.client.subscribe(SYNC_EVENTS_TOPIC, { qos: 1 });
+            this.client.subscribe(SYNC_WILDCARD_TOPIC, { qos: 1 });
+
             // Subscribe to primary configuration topic and telemetry stream (/s)
             this.client.subscribe(this.topic, { qos: 1 });
             this.client.subscribe(`${this.topic}/s`, { qos: 1 });
@@ -529,6 +541,50 @@ export class MqttService {
     };
   }
 
+  private isDuplicateSyncEvent(eventId?: string, mutationId?: string): boolean {
+    const now = Date.now();
+    if (this.seenSyncEventIds.size > 500) {
+      for (const [id, ts] of this.seenSyncEventIds.entries()) {
+        if (now - ts > 60000) {
+          this.seenSyncEventIds.delete(id);
+        }
+      }
+    }
+    const checkId = eventId || mutationId;
+    if (!checkId) return false;
+    if (this.seenSyncEventIds.has(checkId)) {
+      return true;
+    }
+    this.seenSyncEventIds.set(checkId, now);
+    if (eventId && mutationId) {
+      this.seenSyncEventIds.set(mutationId, now);
+    }
+    return false;
+  }
+
+  private handleSyncEvent(rawString: string): void {
+    try {
+      const event = JSON.parse(rawString);
+      if (!event || typeof event !== 'object') return;
+      if (this.isDuplicateSyncEvent(event.event_id, event.mutation_id)) {
+        return;
+      }
+      console.info(`[MQTT] Sync event received [${event.event_type || 'UNKNOWN'}] [${event.entity_type}:${event.entity_id}:${event.operation}]:`, event);
+      for (const cb of this.syncEventListeners) {
+        try {
+          cb(event);
+        } catch (e) {
+          console.error('[MQTT] Error in sync event listener:', e);
+        }
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('panorama:sync-event', { detail: event }));
+      }
+    } catch (e) {
+      console.warn('[MQTT] Invalid sync event JSON payload:', e);
+    }
+  }
+
   private handleCentralFleetSync(rawString: string): void {
     try {
       const data = JSON.parse(rawString);
@@ -654,6 +710,13 @@ export class MqttService {
     this.centralDeltaListeners.add(cb);
     return () => {
       this.centralDeltaListeners.delete(cb);
+    };
+  }
+
+  onSyncEvent(cb: (event: any) => void): () => void {
+    this.syncEventListeners.add(cb);
+    return () => {
+      this.syncEventListeners.delete(cb);
     };
   }
 

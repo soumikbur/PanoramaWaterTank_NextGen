@@ -22,6 +22,29 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 
+async def get_current_user_optional(
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db)
+) -> Optional[User]:
+    """Optionally validate JWT token if provided; returns None if unauthenticated."""
+    if not token:
+        return None
+    try:
+        payload = decode_access_token(token)
+        if not payload:
+            return None
+        username = payload.get("sub")
+        if not username:
+            return None
+        result = await db.execute(select(User).where((User.username == username) | (User.id == payload.get("id"))))
+        user = result.scalar_one_or_none()
+        if not user or not user.is_active or user.account_status != "ACTIVE":
+            return None
+        return user
+    except Exception:
+        return None
+
+
 async def get_current_user(
     token: Optional[str] = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db)

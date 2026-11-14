@@ -149,6 +149,10 @@ class SyncService {
       }
     }
 
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('panorama:sync-event', { detail: rawEnvelope }));
+    }
+
     // Automatically trigger state reconciliation if this is a mutation
     this.scheduleReconciliation(200);
   }

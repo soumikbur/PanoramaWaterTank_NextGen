@@ -13,6 +13,7 @@ from app.models.alarm import Alarm, AlarmHistory
 from app.models.train import Train
 from app.models.user import User
 from app.models.audit import AuditEvent
+from app.services.sync_broadcaster import broadcast_sync_event
 from app.api.v1.auth import get_current_user
 
 router = APIRouter(prefix="/alarms", tags=["Alarms"])
@@ -113,6 +114,21 @@ async def acknowledge_alarm(
         details=f"Acknowledged by {current_user.username}: {ack_data.comment or 'No comment'}"
     ))
     await db.commit()
+
+    await broadcast_sync_event(
+        event_type="ALARM_ACKNOWLEDGED",
+        payload={
+            "alarm_id": alarm_id,
+            "status": alarm.status,
+            "acknowledged_by": current_user.username,
+            "acknowledged_at": alarm.acknowledged_at.isoformat() if alarm.acknowledged_at else None,
+            "comment": ack_data.comment,
+        },
+        entity_type="ALARM",
+        entity_id=alarm_id,
+        operation="ACKNOWLEDGE",
+    )
+
     return AlarmOut.model_validate(alarm)
 
 

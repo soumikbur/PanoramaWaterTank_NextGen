@@ -19,6 +19,7 @@ from app.schemas.auth import (
     UpdateStatusRequest,
     RegistrationActionRequest
 )
+from app.services.sync_broadcaster import broadcast_sync_event
 from app.api.v1.auth import get_current_admin_user
 
 router = APIRouter(prefix="/users", tags=["Users & Employee Management"])
@@ -120,6 +121,14 @@ async def create_user(
     await db.commit()
     await db.refresh(new_user)
 
+    await broadcast_sync_event(
+        event_type="USER_CREATED",
+        payload={"id": new_user.id, "username": new_user.username, "employee_id": new_user.employee_id, "role": new_user.role},
+        entity_type="USER",
+        entity_id=new_user.id,
+        operation="CREATE",
+    )
+
     return new_user
 
 
@@ -211,6 +220,14 @@ async def approve_registration(
     ))
     await db.commit()
     await db.refresh(user)
+
+    await broadcast_sync_event(
+        event_type="USER_UPDATED",
+        payload={"id": user.id, "username": user.username, "account_status": user.account_status, "role": user.role},
+        entity_type="USER",
+        entity_id=user.id,
+        operation="UPDATE",
+    )
     return user
 
 
@@ -261,6 +278,14 @@ async def reject_registration(
     ))
     await db.commit()
     await db.refresh(user)
+
+    await broadcast_sync_event(
+        event_type="USER_UPDATED",
+        payload={"id": user.id, "username": user.username, "account_status": user.account_status, "role": user.role},
+        entity_type="USER",
+        entity_id=user.id,
+        operation="UPDATE",
+    )
     return user
 
 
@@ -334,6 +359,14 @@ async def update_user(
         ip_address=client_ip
     ))
     await db.commit()
+
+    await broadcast_sync_event(
+        event_type="USER_UPDATED",
+        payload={"id": user.id, "username": user.username, "account_status": user.account_status, "role": user.role},
+        entity_type="USER",
+        entity_id=user.id,
+        operation="UPDATE",
+    )
 
     return user
 
@@ -429,6 +462,14 @@ async def update_account_status(
     ))
     await db.commit()
 
+    await broadcast_sync_event(
+        event_type="USER_UPDATED",
+        payload={"id": user.id, "username": user.username, "account_status": user.account_status, "role": user.role},
+        entity_type="USER",
+        entity_id=user.id,
+        operation="UPDATE",
+    )
+
     return user
 
 
@@ -460,6 +501,14 @@ async def delete_user(
     ))
     await db.delete(user)
     await db.commit()
+
+    await broadcast_sync_event(
+        event_type="USER_DELETED",
+        payload={"id": user_id, "username": username},
+        entity_type="USER",
+        entity_id=user_id,
+        operation="DELETE",
+    )
 
     return {"status": "SUCCESS", "message": f"User '{username}' deleted successfully."}
 

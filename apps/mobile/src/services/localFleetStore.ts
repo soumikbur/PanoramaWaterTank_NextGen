@@ -455,6 +455,15 @@ export const localFleetStore = {
     return state.trains[clean]?.consist ?? null;
   },
 
+  invalidateConsist(trainNumber: string): void {
+    const clean = (trainNumber || '').trim();
+    const state = readState();
+    if (state.trains[clean] && state.trains[clean].consist) {
+      delete state.trains[clean].consist;
+      writeState(state, { skipPublish: true });
+    }
+  },
+
   syncFromAuthoritativeRegions(regions: RegionSummary[]): void {
     if (!Array.isArray(regions)) return;
     const state = readState();

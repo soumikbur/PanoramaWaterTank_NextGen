@@ -129,6 +129,23 @@ class ApplicationLogger {
         }
       }
 
+      // Gracefully handle expected offline fallback and superseded promises without noisy red console errors
+      const isExpectedOffline =
+        reason?.code === 'BACKEND_OFFLINE' ||
+        reason?.status === 503 ||
+        String(msg).includes('using cached local store') ||
+        String(msg).includes('Remote backend unreachable') ||
+        reason?.name === 'AbortError' ||
+        String(msg).includes('Lookup superseded');
+
+      if (isExpectedOffline) {
+        if (typeof event.preventDefault === 'function') {
+          event.preventDefault();
+        }
+        this.debug('RUNTIME', 'Promise', msg, 'unhandledRejection', { stack });
+        return;
+      }
+
       this.error('RUNTIME', 'Promise', msg, 'unhandledRejection', { stack });
     });
   }

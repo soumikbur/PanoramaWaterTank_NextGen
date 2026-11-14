@@ -324,6 +324,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     activeConsistRef.current = activeConsist;
   }, [activeConsist]);
 
+  const selectedTrainNumberRef = useRef<string>(selectedTrainNumber);
+  useEffect(() => {
+    selectedTrainNumberRef.current = selectedTrainNumber;
+  }, [selectedTrainNumber]);
+
   // Keep selected train/coach, active consist, URL params, and local caches strictly synced with configuredTrains
   useEffect(() => {
     // Authoritative fleet validator registration
@@ -1057,16 +1062,89 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
 
     // Real-time multi-client synchronization over MQTT broadcast topics
+    const unsubMqttSyncEvent = mqttService.onSyncEvent(async (event) => {
+      console.info('[AppContext] Received real-time sync event:', event);
+      if (!event || typeof event !== 'object') return;
+      const entityType = event.entity_type;
+      const op = event.operation;
+      const payload = event.payload || event.data || {};
+      const trainNum = (payload.train_number || (entityType === 'TRAIN' ? event.entity_id : '') || '').trim();
+
+      if (entityType === 'TRAIN') {
+        await refreshRegions();
+        await refreshData();
+        const activeTr = (selectedTrainNumberRef.current || '').trim();
+        if (op === 'DELETE' && activeTr === event.entity_id) {
+          const next = configuredTrainsRef.current.find((t) => t.train_number !== event.entity_id);
+          setSelectedTrainNumber(next?.train_number || '');
+          setActiveConsist(null);
+        } else if (activeTr && activeTr === event.entity_id) {
+          ApiClient.fetchTrainConsist(event.entity_id).then((c) => {
+            if (c) setActiveConsist(c);
+          }).catch(() => {});
+        }
+      } else if (entityType === 'COACH' || entityType === 'TANK') {
+        if (trainNum) {
+          localFleetStore.invalidateConsist(trainNum);
+        }
+        await refreshRegions();
+        const activeTr = (selectedTrainNumberRef.current || activeConsistRef.current?.train_number || '').trim();
+        if (trainNum && activeTr === trainNum) {
+          ApiClient.fetchTrainConsist(trainNum).then((c) => {
+            if (c) setActiveConsist(c);
+          }).catch(() => {});
+        }
+        debouncedRefresh(true);
+      } else if (entityType === 'DEVICE') {
+        deviceRegistry.handleDeviceEvent(event);
+        debouncedRefresh(false);
+        const activeTr = (selectedTrainNumberRef.current || activeConsistRef.current?.train_number || '').trim();
+        if (activeTr) {
+          ApiClient.fetchTrainConsist(activeTr).then((c) => {
+            if (c) setActiveConsist(c);
+          }).catch(() => {});
+        }
+      } else if (entityType === 'ALARM') {
+        ApiClient.fetchAlarms('ACTIVE').then((alarms) => {
+          if (Array.isArray(alarms)) {
+            setActiveAlarms(alarms);
+            alertNotificationService.syncWithBackendAlarms(alarms);
+          }
+        }).catch(() => {});
+        ApiClient.fetchAlarmStats().then((stats) => {
+          if (stats) setAlarmStats(stats);
+        }).catch(() => {});
+      } else if (entityType === 'SETTING') {
+        debouncedRefresh(false);
+      } else if (entityType === 'USER') {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('panorama:users-updated'));
+        }
+      }
+    });
+
     const unsubMqttFleetSync = mqttService.onFleetSync((event) => {
       console.info('[AppContext] Received MQTT fleet sync broadcast:', event);
       refreshRegions();
       refreshData();
+      const activeTr = (selectedTrainNumberRef.current || activeConsistRef.current?.train_number || '').trim();
+      if (activeTr) {
+        ApiClient.fetchTrainConsist(activeTr).then((c) => {
+          if (c) setActiveConsist(c);
+        }).catch(() => {});
+      }
     });
 
     const unsubMqttCentralFleet = mqttService.onCentralFleetSync((event) => {
       console.info('[AppContext] Received MQTT central fleet sync broadcast:', event);
       refreshRegions();
       refreshData();
+      const activeTr = (selectedTrainNumberRef.current || activeConsistRef.current?.train_number || '').trim();
+      if (activeTr) {
+        ApiClient.fetchTrainConsist(activeTr).then((c) => {
+          if (c) setActiveConsist(c);
+        }).catch(() => {});
+      }
     });
 
     let deltaDebounceTimer: any = null;
@@ -1367,6 +1445,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     return () => {
       unsubMqttStatus();
+      unsubMqttSyncEvent();
       unsubMqttFleetSync();
       unsubMqttCentralFleet();
       unsubMqttDeviceSync();

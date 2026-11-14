@@ -13,6 +13,7 @@ from app.repositories.tank_repo import TankRepository
 from app.repositories.device_repo import DeviceRepository
 from app.schemas.settings import SettingItem, SettingUpdate
 from app.mqtt.client import mqtt_service
+from app.services.sync_broadcaster import broadcast_sync_event
 from app.api.v1.auth import get_current_admin_user, get_current_user
 from app.models.user import User
 
@@ -274,6 +275,20 @@ async def apply_unified_config(
         }
     }
     mqtt_service.publish("wli/config/global/update", config_broadcast, qos=1, retain=True)
+
+    await broadcast_sync_event(
+        event_type="SETTING_UPDATED",
+        payload={
+            "version": cfg_version,
+            "parameters": config_broadcast["parameters"],
+            "updated_by": admin.username,
+        },
+        entity_type="SETTING",
+        entity_id="system_config",
+        operation="UPDATE",
+        version=cfg_version,
+        retain_mqtt=True,
+    )
 
     return {
         "status": "SUCCESS",

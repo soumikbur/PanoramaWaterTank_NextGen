@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { colors, typography, metrics } from '../theme';
 import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
 import { RegionSummary, TrainOverviewItem, TrainConsist } from '../types';
+import { localFleetStore } from '../services/localFleetStore';
 import { Train, Plus, Trash2, X, ChevronRight, MapPin, ArrowLeft, ArrowRight, CheckCircle2, Edit3, SlidersHorizontal } from 'lucide-react';
 import { AddTrainModal } from '../components/train/AddTrainModal';
 import { ManageCoachModal } from '../components/coach/ManageCoachModal';
@@ -65,6 +66,10 @@ export const TrainManagementScreen: React.FC = () => {
 
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   const [selectedTrain, setSelectedTrain] = useState<TrainConsist | null>(null);
+  const selectedTrainRef = useRef<TrainConsist | null>(selectedTrain);
+  useEffect(() => {
+    selectedTrainRef.current = selectedTrain;
+  }, [selectedTrain]);
   const [loading, setLoading] = useState<boolean>(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
@@ -92,6 +97,38 @@ export const TrainManagementScreen: React.FC = () => {
   useEffect(() => {
     refreshRegions();
 
+    const handleSync = async (e: any) => {
+      const event = e?.detail;
+      if (!event) return;
+      const entityType = event.entity_type || '';
+      const payload = event.payload || event.data || {};
+      const trainNum = (
+        payload.train_number ||
+        (entityType === 'TRAIN' ? event.entity_id : '') ||
+        String(event.entity_id || '').split(':')[0] ||
+        ''
+      ).trim();
+
+      if (selectedTrainRef.current) {
+        const currentTr = selectedTrainRef.current.train_number.trim();
+        if (event.event_type === 'TRAIN_DELETED' && (String(event.entity_id || payload.train_number).trim() === currentTr)) {
+          setSelectedTrain(null);
+        } else if (!trainNum || trainNum === currentTr || entityType === 'COACH') {
+          try {
+            localFleetStore.invalidateConsist(currentTr);
+            const refreshed = await ApiClient.fetchTrainConsist(currentTr);
+            if (refreshed) setSelectedTrain(refreshed);
+          } catch (err) {
+            console.warn('[TrainManagementScreen] Failed to refresh consist on sync event:', err);
+          }
+        }
+      }
+
+      if (entityType === 'TRAIN' || entityType === 'COACH') {
+        refreshRegions();
+      }
+    };
+
     const handleRootNav = (e: any) => {
       if (e?.detail?.screen === 'trains') {
         setSelectedRegion(null);
@@ -105,10 +142,12 @@ export const TrainManagementScreen: React.FC = () => {
 
     if (typeof window !== 'undefined') {
       window.addEventListener('panorama:section-root', handleRootNav);
+      window.addEventListener('panorama:sync-event', handleSync);
     }
     return () => {
       if (typeof window !== 'undefined') {
         window.removeEventListener('panorama:section-root', handleRootNav);
+        window.removeEventListener('panorama:sync-event', handleSync);
       }
     };
   }, []);
@@ -478,6 +517,8 @@ export const TrainManagementScreen: React.FC = () => {
                 <div
                   key={r.region}
                   data-region={r.region}
+                  data-region-code={r.code}
+                  data-region-name={r.name}
                   data-testid={`region-card-${r.region}`}
                   style={{
                     backgroundColor: '#FFFFFF',
@@ -728,6 +769,8 @@ export const TrainManagementScreen: React.FC = () => {
               return (
                 <div
                   key={train.train_number}
+                  data-testid={`train-row-${train.train_number}`}
+                  data-train-number={train.train_number}
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '120px 2fr 100px 100px 120px 140px',

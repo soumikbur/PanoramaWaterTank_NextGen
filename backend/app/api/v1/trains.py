@@ -1115,8 +1115,15 @@ async def add_coach_to_train(
         "action": "coach_change",
         "train_number": tr_clean,
         "coach_number": c_clean,
+        "device_uid": uid,
     }
-    await broadcast_sync_event("COACH_CREATED", sync_event)
+    await broadcast_sync_event(
+        "COACH_CREATED",
+        sync_event,
+        entity_type="COACH",
+        entity_id=f"{tr_clean}:{c_clean}",
+        operation="CREATE",
+    )
     await broadcast_sync_event("REGION_UPDATED", {"train_number": tr_clean, "coach_number": c_clean})
 
     return {
@@ -1176,8 +1183,15 @@ async def reorder_coaches(
     sync_event = {
         "action": "coach_change",
         "train_number": tr_clean,
+        "coach_numbers": data.coach_numbers,
     }
-    await broadcast_sync_event("COACH_REORDERED", sync_event)
+    await broadcast_sync_event(
+        "COACH_REORDERED",
+        sync_event,
+        entity_type="COACH",
+        entity_id=tr_clean,
+        operation="REORDER",
+    )
 
     return {
         "success": True,
@@ -1338,8 +1352,15 @@ async def update_coach_details(
         "action": "coach_change",
         "train_number": tr_clean,
         "coach_number": c_clean,
+        "device_uid": (getattr(data, "device_uid", None) or getattr(data, "deviceUid", None) or "").strip(),
     }
-    await broadcast_sync_event("COACH_UPDATED", sync_event)
+    await broadcast_sync_event(
+        "COACH_UPDATED",
+        sync_event,
+        entity_type="COACH",
+        entity_id=f"{tr_clean}:{c_clean}",
+        operation="UPDATE",
+    )
 
     return {
         "success": True,
@@ -1440,7 +1461,13 @@ async def rename_coach(
         "old_coach_number": old_c,
         "new_coach_number": new_c,
     }
-    await broadcast_sync_event("COACH_UPDATED", sync_event)
+    await broadcast_sync_event(
+        "COACH_RENAMED",
+        sync_event,
+        entity_type="COACH",
+        entity_id=f"{tr_clean}:{new_c}",
+        operation="UPDATE",
+    )
 
     return {
         "success": True,
@@ -1533,7 +1560,13 @@ async def delete_coach(
         "train_number": tr_clean,
         "deleted_coach_number": c_clean,
     }
-    await broadcast_sync_event("COACH_DELETED", sync_event)
+    await broadcast_sync_event(
+        "COACH_DELETED",
+        sync_event,
+        entity_type="COACH",
+        entity_id=f"{tr_clean}:{c_clean}",
+        operation="DELETE",
+    )
     await broadcast_sync_event("REGION_UPDATED", {"train_number": tr_clean, "deleted_coach_number": c_clean})
 
     return {

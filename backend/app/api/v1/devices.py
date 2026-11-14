@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.repositories.device_repo import DeviceRepository
 from app.repositories.telemetry_repo import TelemetryRepository
 from app.schemas.device import DeviceOut, DeviceDiagnostics, DeviceCreate, DeviceUpdate
-from app.api.v1.auth import get_current_admin_user, get_current_user
+from app.api.v1.auth import get_current_admin_user, get_current_user, get_current_user_optional
 from app.models.train import Train
 from app.services.train_lookup_service import TRAIN_NUMBER_RE
 from app.models.user import User
@@ -94,17 +94,16 @@ async def get_device_diagnostics(
 @router.post("", response_model=DeviceOut, status_code=201)
 async def create_device(
     payload: DeviceCreate,
+    upsert: bool = False,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Register a new edge monitoring device and auto-provision associated tanks (Admin & Employee)."""
     repo = DeviceRepository(db)
     existing = await repo.get_by_uid(payload.uid)
-    if existing:
-        raise HTTPException(status_code=400, detail=f"Device with UID '{payload.uid}' already exists")
-
     train_no = (payload.trainNumber or "").strip()
     coach_no = (payload.coachNumber or "").strip()
+
     if train_no and train_no.upper() != "UNASSIGNED":
         train_exists = (
             await db.execute(select(Train).where(Train.train_number == train_no))
@@ -114,6 +113,64 @@ async def create_device(
                 status_code=400,
                 detail=f"Cannot assign device: Train '{train_no}' is not registered. Devices can only be assigned to registered trains."
             )
+
+    if existing and not upsert:
+        raise HTTPException(status_code=400, detail=f"Device with UID '{payload.uid}' already exists")
+
+    if existing:
+        # Idempotent update for existing device entity
+        if payload.name:
+            existing.name = payload.name.strip()
+        if payload.trainNumber is not None:
+            existing.train_number = train_no or "UNASSIGNED"
+        if payload.coachNumber is not None:
+            existing.coach_number = coach_no or "UNASSIGNED"
+        if payload.hardwareVersion:
+            existing.hardware_version = payload.hardwareVersion
+        if payload.firmwareVersion:
+            existing.firmware_version = payload.firmwareVersion
+        if payload.deviceType:
+            existing.device_type = payload.deviceType
+        if payload.protocol:
+            existing.protocol = payload.protocol
+        if payload.tankAssignment:
+            existing.tank_assignment = payload.tankAssignment
+        if payload.description is not None:
+            existing.description = payload.description
+        existing.status = payload.status or ("ENGAGED" if (existing.train_number != "UNASSIGNED" and existing.coach_number != "UNASSIGNED") else "AVAILABLE")
+        existing.updated_at = utc_now()
+        await db.commit()
+        await db.refresh(existing)
+
+        out = DeviceOut(
+            id=existing.id,
+            uid=existing.uid,
+            train_number=existing.train_number,
+            coach_number=existing.coach_number,
+            name=existing.name,
+            hardware_version=existing.hardware_version,
+            firmware_version=existing.firmware_version,
+            device_type=existing.device_type,
+            protocol=existing.protocol,
+            mqtt_client_id=existing.mqtt_client_id,
+            mqtt_topic=existing.mqtt_topic,
+            tank_assignment=existing.tank_assignment,
+            description=existing.description,
+            status=existing.status,
+            is_online=existing.is_online,
+            last_seen_at=existing.last_seen_at,
+            created_at=existing.created_at,
+            updated_at=existing.updated_at,
+            primary_level=None,
+            secondary_level=None,
+            has_active_alarm=False
+        )
+        sync_payload = {
+            "action": "update_device",
+            "device": out.model_dump(by_alias=True)
+        }
+        await broadcast_sync_event("DEVICE_UPDATED", sync_payload)
+        return out
 
     device = await repo.create_or_update(
         uid=payload.uid.strip(),
