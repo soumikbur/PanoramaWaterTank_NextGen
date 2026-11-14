@@ -21,6 +21,7 @@ import {
   Eye,
   Lock,
   ArrowRight,
+  ArrowLeft,
   RefreshCw,
   Sliders,
   GripVertical,
@@ -172,13 +173,74 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
     return list;
   }, [rawCoaches, searchQuery, categoryFilter, sortBy]);
 
+  // Deduplicated registered devices across managedDevices and devices
+  const allKnownDevices = useMemo(() => {
+    const map = new Map<string, {
+      uid: string;
+      isOnline: boolean;
+      trainNumber: string | null;
+      coachNumber: string | null;
+      hardwareModel: string;
+      name: string;
+    }>();
+
+    for (const d of managedDevices) {
+      if (d.uid) {
+        map.set(d.uid.toUpperCase(), {
+          uid: d.uid.toUpperCase(),
+          isOnline: !!d.isOnline,
+          trainNumber: d.trainNumber || null,
+          coachNumber: d.coachNumber || null,
+          hardwareModel: d.hardwareModel || 'WLI Node',
+          name: d.name || `Node ${d.uid.slice(-6)}`,
+        });
+      }
+    }
+
+    for (const d of devices) {
+      const u = (d.uid || '').toUpperCase();
+      if (u && !map.has(u)) {
+        map.set(u, {
+          uid: u,
+          isOnline: !!(d.isOnline ?? (d as any).is_online),
+          trainNumber: d.trainNumber || (d as any).train_number || null,
+          coachNumber: d.coachNumber || (d as any).coach_number || null,
+          hardwareModel: d.hardwareVersion || (d as any).hardware_version || 'WLI Node',
+          name: d.name || `Node ${u.slice(-6)}`,
+        });
+      }
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.uid.localeCompare(b.uid));
+  }, [managedDevices, devices]);
+
+  const selectedDeviceObj = useMemo(() => {
+    const curUid = formData.deviceUid.trim().toUpperCase();
+    if (!curUid) return null;
+    return allKnownDevices.find((d) => d.uid === curUid) || null;
+  }, [allKnownDevices, formData.deviceUid]);
+
+  const isAssignedToOtherCoach = useMemo(() => {
+    if (!selectedDeviceObj) return false;
+    const devTrain = (selectedDeviceObj.trainNumber || '').trim();
+    const devCoach = (selectedDeviceObj.coachNumber || '').trim().toUpperCase();
+    if (!devTrain || !devCoach || devTrain === 'UNASSIGNED' || devCoach === 'UNASSIGNED') {
+      return false;
+    }
+    if (activeSubModal === 'EDIT' && targetCoach) {
+      if (devTrain === effectiveTrainNumber && devCoach === targetCoach.coach_number.toUpperCase()) {
+        return false;
+      }
+    }
+    return true;
+  }, [selectedDeviceObj, activeSubModal, targetCoach, effectiveTrainNumber]);
+
   // List of available unassigned devices from managedDevices
   const availableDevices = useMemo(() => {
-    const list = managedDevices.filter(
-      (d) => d.assignmentStatus === 'AVAILABLE' || !d.trainNumber || d.trainNumber === 'UNASSIGNED'
+    return allKnownDevices.filter(
+      (d) => !d.trainNumber || d.trainNumber === 'UNASSIGNED' || !d.coachNumber || d.coachNumber === 'UNASSIGNED'
     );
-    return list;
-  }, [managedDevices]);
+  }, [allKnownDevices]);
 
   if (!isOpen) return null;
 
@@ -325,10 +387,11 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
         tank_2_height_cm: Number(formData.tank2HeightCm) || 50,
         tank_1_geometry: formData.tank1Geometry,
         tank_2_geometry: formData.tank2Geometry,
-        device_uid: targetCoach.device_uid || '', // Preserve existing hardware device UID untouched
+        device_uid: formData.deviceUid.trim(),
       };
 
       await updateCoach(effectiveTrainNumber, targetCoach.coach_number, payload);
+      await refreshData();
       setStatusFeedback({ type: 'success', message: `Coach ${targetCoach.coach_number} updated successfully.` });
       setActiveSubModal('NONE');
     } catch (err: any) {
@@ -649,27 +712,52 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            title="Close Coach Editing Panel"
-            style={{
-              width: '34px',
-              height: '34px',
-              borderRadius: '6px',
-              backgroundColor: '#F8FAFC',
-              color: '#64748B',
-              border: '1px solid #E2E8F0',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              transition: 'background-color 0.15s ease, color 0.15s ease',
-            }}
-          >
-            <X size={18} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={onClose}
+              aria-label="Back to Train Details"
+              title="Back to Train Details"
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                backgroundColor: '#F8FAFC',
+                color: '#475569',
+                border: '1px solid #CBD5E1',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '12px',
+                fontWeight: 600,
+                transition: 'background-color 0.15s ease',
+              }}
+            >
+              <ArrowLeft size={14} />
+              <span>Back</span>
+            </button>
+
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              title="Close Coach Editing Panel"
+              style={{
+                width: '34px',
+                height: '34px',
+                borderRadius: '6px',
+                backgroundColor: '#F8FAFC',
+                color: '#64748B',
+                border: '1px solid #E2E8F0',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                transition: 'background-color 0.15s ease, color 0.15s ease',
+              }}
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Status Feedback Toast/Banner */}
@@ -1376,23 +1464,49 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                   {activeSubModal === 'ADD' ? 'Add New Coach to Consist' : `Edit Coach ${targetCoach?.coach_number}`}
                 </h3>
               </div>
-              <button
-                onClick={() => setActiveSubModal('NONE')}
-                style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '5px',
-                  backgroundColor: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
-                  color: '#64748B',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <X size={16} />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setActiveSubModal('NONE')}
+                  aria-label="Back to Coaches"
+                  title="Back to Coach Fleet & Consist"
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '5px',
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #CBD5E1',
+                    color: '#475569',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <ArrowLeft size={13} />
+                  <span>Back</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSubModal('NONE')}
+                  aria-label="Close"
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '5px',
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    color: '#64748B',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             <form onSubmit={activeSubModal === 'ADD' ? handleAddSubmit : handleEditSubmit} style={{ padding: '16px' }}>
@@ -1603,49 +1717,171 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                 </div>
               </div>
 
-              {/* Device Assignment - Displayed ONLY during Add Coach, completely absent in Edit Coach */}
-              {activeSubModal === 'ADD' && (
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
-                    Assigned Hardware Device UID
-                  </label>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <input
-                      type="text"
-                      placeholder="e.g. 0026004D4B42501120353332 (or leave blank)"
+              {/* HARDWARE DEVICE MANAGEMENT — Rendered for both ADD and EDIT */}
+              {(activeSubModal === 'ADD' || activeSubModal === 'EDIT') && (
+                <div
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '6px',
+                    padding: '12px',
+                    marginBottom: '14px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Cpu size={14} color="#2563EB" />
+                      <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#1E293B', letterSpacing: '0.3px', textTransform: 'uppercase' }}>
+                        Hardware Device Management
+                      </span>
+                    </div>
+
+                    {/* Status Pill for Selected Device */}
+                    {formData.deviceUid.trim() ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span
+                          style={{
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            padding: '1px 6px',
+                            borderRadius: '10px',
+                            backgroundColor: selectedDeviceObj?.isOnline ? '#DCFCE7' : '#F1F5F9',
+                            color: selectedDeviceObj?.isOnline ? '#16A34A' : '#64748B',
+                            border: `1px solid ${selectedDeviceObj?.isOnline ? '#86EFAC' : '#CBD5E1'}`,
+                          }}
+                        >
+                          {selectedDeviceObj?.isOnline ? 'ONLINE' : 'OFFLINE'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, deviceUid: '' })}
+                          title="Unassign this device"
+                          style={{
+                            fontSize: '10px',
+                            fontWeight: 600,
+                            color: '#DC2626',
+                            backgroundColor: '#FEF2F2',
+                            border: '1px solid #FECACA',
+                            borderRadius: '4px',
+                            padding: '2px 6px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Unassign
+                        </button>
+                      </div>
+                    ) : (
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          padding: '1px 6px',
+                          borderRadius: '10px',
+                          backgroundColor: '#F1F5F9',
+                          color: '#64748B',
+                          border: '1px solid #E2E8F0',
+                        }}
+                      >
+                        NO DEVICE ASSIGNED
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Dropdown Selector */}
+                  <div style={{ marginBottom: '8px' }}>
+                    <label style={{ display: 'block', fontSize: '10.5px', fontWeight: 600, color: '#475569', marginBottom: '3px' }}>
+                      Select Registered Hardware Node
+                    </label>
+                    <select
                       value={formData.deviceUid}
-                      onChange={(e) => setFormData({ ...formData, deviceUid: e.target.value.toUpperCase() })}
+                      onChange={(e) => setFormData({ ...formData, deviceUid: e.target.value })}
                       style={{
-                        flex: 1,
+                        width: '100%',
                         padding: '6px 8px',
                         borderRadius: '5px',
                         border: '1px solid #CBD5E1',
                         fontSize: '11.5px',
                         fontFamily: 'monospace',
+                        color: '#1E293B',
+                        backgroundColor: '#FFFFFF',
                       }}
-                    />
-                    {availableDevices.length > 0 && (
-                      <select
-                        onChange={(e) => e.target.value && setFormData({ ...formData, deviceUid: e.target.value })}
+                    >
+                      <option value="">[ No Device Assigned / Unassigned ]</option>
+                      {allKnownDevices.map((d) => {
+                        const isThisCoach =
+                          activeSubModal === 'EDIT' &&
+                          targetCoach &&
+                          d.trainNumber === effectiveTrainNumber &&
+                          d.coachNumber === targetCoach.coach_number.toUpperCase();
+                        const isOtherCoach =
+                          d.trainNumber &&
+                          d.coachNumber &&
+                          !isThisCoach &&
+                          d.trainNumber !== 'UNASSIGNED';
+                        const statusTag = d.isOnline ? 'ONLINE' : 'OFFLINE';
+                        const assignTag = isThisCoach
+                          ? 'Assigned to THIS coach'
+                          : isOtherCoach
+                          ? `Assigned: Train ${d.trainNumber} / Coach ${d.coachNumber}`
+                          : 'AVAILABLE';
+                        return (
+                          <option key={d.uid} value={d.uid}>
+                            {d.uid} — [{statusTag}] — {assignTag}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  {/* Manual UID Entry & Topic Info */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '6px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
+                        Device Hardware UID (Hexadecimal)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 0026004D4B42501120353332 (or blank to unassign)"
+                        value={formData.deviceUid}
+                        onChange={(e) => setFormData({ ...formData, deviceUid: e.target.value.toUpperCase() })}
                         style={{
-                          padding: '6px 8px',
-                          borderRadius: '5px',
+                          width: '100%',
+                          padding: '5px 8px',
+                          borderRadius: '4px',
                           border: '1px solid #CBD5E1',
                           fontSize: '11px',
-                          color: '#334155',
+                          fontFamily: 'monospace',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+
+                    {/* Duplicate Assignment Warning / Status Notice */}
+                    {isAssignedToOtherCoach && selectedDeviceObj && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontSize: '10.5px',
+                          color: '#B45309',
+                          backgroundColor: '#FFFBEB',
+                          border: '1px solid #FCD34D',
+                          borderRadius: '4px',
+                          padding: '4px 8px',
+                          marginTop: '2px',
                         }}
                       >
-                        <option value="">Choose Unassigned Node</option>
-                        {availableDevices.map((d) => (
-                          <option key={d.uid} value={d.uid}>
-                            {d.uid} ({d.hardwareModel})
-                          </option>
-                        ))}
-                      </select>
+                        <AlertTriangle size={13} color="#D97706" style={{ flexShrink: 0 }} />
+                        <span>
+                          Notice: Device is currently mapped to Train {selectedDeviceObj.trainNumber} / Coach {selectedDeviceObj.coachNumber}. Saving will reassign it to this coach.
+                        </span>
+                      </div>
                     )}
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#64748B', marginTop: '3px' }}>
-                    MQTT Telemetry Topic: <code>0023004D4B42501120353332</code> (UID matching device header)
+
+                    <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>
+                      MQTT Telemetry Topic: <code>{formData.deviceUid ? formData.deviceUid : '0023004D4B42501120353332'}</code>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1746,23 +1982,49 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                   Rename Coach {targetCoach.coach_number}
                 </h3>
               </div>
-              <button
-                onClick={() => setActiveSubModal('NONE')}
-                style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '5px',
-                  backgroundColor: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
-                  color: '#64748B',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <X size={16} />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setActiveSubModal('NONE')}
+                  aria-label="Back to Coaches"
+                  title="Back to Coach Fleet & Consist"
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '5px',
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #CBD5E1',
+                    color: '#475569',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <ArrowLeft size={13} />
+                  <span>Back</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSubModal('NONE')}
+                  aria-label="Close"
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '5px',
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    color: '#64748B',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             <form onSubmit={handleRenameSubmit} style={{ padding: '16px' }}>
@@ -1888,23 +2150,47 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                   Confirm Coach Deletion
                 </h3>
               </div>
-              <button
-                onClick={() => setActiveSubModal('NONE')}
-                style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '5px',
-                  backgroundColor: '#FEF2F2',
-                  border: '1px solid #FECACA',
-                  color: '#DC2626',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <X size={16} />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setActiveSubModal('NONE')}
+                  aria-label="Back to Coaches"
+                  title="Back to Coach Fleet & Consist"
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '5px',
+                    backgroundColor: '#FEF2F2',
+                    border: '1px solid #FECACA',
+                    color: '#991B1B',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <ArrowLeft size={13} />
+                  <span>Back</span>
+                </button>
+                <button
+                  onClick={() => setActiveSubModal('NONE')}
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '5px',
+                    backgroundColor: '#FEF2F2',
+                    border: '1px solid #FECACA',
+                    color: '#DC2626',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             <div style={{ padding: '16px' }}>

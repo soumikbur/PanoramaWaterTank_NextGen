@@ -394,9 +394,11 @@ export class ApiClient {
     const execPromise = this.executeNetworkRequest<T>(url, base, endpoint, options, 1);
     if (method === 'GET') {
       this.pendingGetRequests.set(url, execPromise);
-      execPromise.finally(() => {
-        this.pendingGetRequests.delete(url);
-      });
+      execPromise
+        .catch(() => {})
+        .finally(() => {
+          this.pendingGetRequests.delete(url);
+        });
     }
 
     return execPromise;

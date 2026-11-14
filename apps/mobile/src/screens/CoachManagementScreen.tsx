@@ -348,7 +348,7 @@ export const CoachManagementScreen: React.FC = () => {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
           <button
-            onClick={() => setActiveScreen('dashboard')}
+            onClick={() => setActiveScreen('trains')}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -364,7 +364,7 @@ export const CoachManagementScreen: React.FC = () => {
             }}
           >
             <ChevronLeft size={14} />
-            <span>Dashboard</span>
+            <span>Train Management</span>
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

@@ -799,7 +799,10 @@ export const Sidebar: React.FC = () => {
                 NAVIGATION
               </div>
               {primaryNavItems.map((item) => {
-                const isActive = activeScreen === item.id;
+                const isActive =
+                  item.id === 'trains'
+                    ? activeScreen === 'trains' || activeScreen === 'coaches' || activeScreen === 'coach-details'
+                    : activeScreen === item.id;
                 const IconComp = item.icon;
                 return (
                   <button

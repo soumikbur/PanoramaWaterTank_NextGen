@@ -1421,7 +1421,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return;
     }
     setActiveScreen(screen);
-    AppRouter.navigate(screen, selectedTrainNumber, selectedCoachNumber);
+    // Root section navigation from sidebar or header always navigates to clean section path (#/screen)
+    AppRouter.navigate(screen);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('panorama:section-root', { detail: { screen } }));
+    }
   };
 
   const handleSetSelectedTrainNumber = (trainNum: string) => {

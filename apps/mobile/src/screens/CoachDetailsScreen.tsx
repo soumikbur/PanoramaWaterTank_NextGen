@@ -270,7 +270,7 @@ export const CoachDetailsScreen: React.FC = () => {
         {/* Navigation & Title Group */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <button
-            onClick={() => setActiveScreen('dashboard')}
+            onClick={() => setActiveScreen('trains')}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -287,7 +287,7 @@ export const CoachDetailsScreen: React.FC = () => {
             }}
           >
             <ArrowLeft size={13} />
-            <span>Dashboard</span>
+            <span>Train Management</span>
           </button>
 
           <button

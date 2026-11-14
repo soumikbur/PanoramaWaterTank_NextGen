@@ -1295,26 +1295,31 @@ async def update_coach_details(
                     c["arrival_tank_capacity_liters"] = data.tank_1_capacity
                 if data.tank_2_capacity and data.tank_2_capacity > 0:
                     c["departure_tank_capacity_liters"] = data.tank_2_capacity
+                if data.device_uid is not None:
+                    c["device_uid"] = data.device_uid.strip()
         db_train.coach_configuration_json = json.dumps(comp)
 
     # Handle device reassignment if requested
-    if data.device_uid and data.device_uid.strip() and data.device_uid.strip() != (dev.uid if dev else None):
+    if data.device_uid is not None:
         new_uid = data.device_uid.strip()
-        new_dev = (
-            await db.execute(select(Device).where(Device.uid == new_uid))
-        ).scalar_one_or_none()
-        if new_dev:
+        current_uid = dev.uid if dev else ""
+        if new_uid != current_uid:
             # Unassign old device
             if dev:
                 dev.train_number = "UNASSIGNED"
                 dev.coach_number = "UNASSIGNED"
                 dev.status = "AVAILABLE"
+                dev.updated_at = utc_now()
             # Assign new device
-            new_dev.train_number = tr_clean
-            new_dev.coach_number = c_clean
-            new_dev.status = "ENGAGED"
-            new_dev.coach_number = c_clean
-            new_dev.updated_at = utc_now()
+            if new_uid:
+                new_dev = (
+                    await db.execute(select(Device).where(Device.uid == new_uid))
+                ).scalar_one_or_none()
+                if new_dev:
+                    new_dev.train_number = tr_clean
+                    new_dev.coach_number = c_clean
+                    new_dev.status = "ENGAGED"
+                    new_dev.updated_at = utc_now()
 
     client_ip = request.client.host if request.client else "unknown"
     db.add(

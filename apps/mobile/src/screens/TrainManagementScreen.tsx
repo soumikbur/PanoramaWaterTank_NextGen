@@ -91,6 +91,26 @@ export const TrainManagementScreen: React.FC = () => {
 
   useEffect(() => {
     refreshRegions();
+
+    const handleRootNav = (e: any) => {
+      if (e?.detail?.screen === 'trains') {
+        setSelectedRegion(null);
+        setSelectedTrain(null);
+        setIsEditCoachOpen(false);
+        setIsAddModalOpen(false);
+        setIsEditModalOpen(false);
+        setDeleteTargetTrain(null);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('panorama:section-root', handleRootNav);
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('panorama:section-root', handleRootNav);
+      }
+    };
   }, []);
 
   const handleSelectRegion = (regionKey: string) => {
@@ -457,6 +477,8 @@ export const TrainManagementScreen: React.FC = () => {
               return (
                 <div
                   key={r.region}
+                  data-region={r.region}
+                  data-testid={`region-card-${r.region}`}
                   style={{
                     backgroundColor: '#FFFFFF',
                     border: '1px solid #E2E8F0',
@@ -742,6 +764,7 @@ export const TrainManagementScreen: React.FC = () => {
                   <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                     <button
                       onClick={() => handleInspectTrain(train.train_number)}
+                      title="Manage Coach Fleet & Consist"
                       style={{
                         backgroundColor: '#EFF6FF',
                         border: '1px solid #BFDBFE',
@@ -756,7 +779,7 @@ export const TrainManagementScreen: React.FC = () => {
                         gap: '4px',
                       }}
                     >
-                      <span>Consist</span>
+                      <span>Manage</span>
                       <ChevronRight size={12} />
                     </button>
                     {currentUser?.role === 'ADMIN' && (
