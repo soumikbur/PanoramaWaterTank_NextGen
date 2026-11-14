@@ -217,9 +217,18 @@ async def create_device(
 
     sync_payload = {
         "action": "create_device",
-        "device": out.model_dump(by_alias=True)
+        "device": out.model_dump(by_alias=True),
+        "uid": out.uid,
+        "train_number": out.trainNumber,
+        "coach_number": out.coachNumber,
     }
-    await broadcast_sync_event("DEVICE_CREATED", sync_payload)
+    await broadcast_sync_event(
+        "DEVICE_CREATED",
+        sync_payload,
+        entity_type="DEVICE",
+        entity_id=out.uid,
+        operation="CREATE",
+    )
 
     return out
 
@@ -310,9 +319,18 @@ async def update_device(
 
     sync_payload = {
         "action": "update_device",
-        "device": out.model_dump(by_alias=True)
+        "device": out.model_dump(by_alias=True),
+        "uid": out.uid,
+        "train_number": out.trainNumber,
+        "coach_number": out.coachNumber,
     }
-    await broadcast_sync_event("DEVICE_UPDATED", sync_payload)
+    await broadcast_sync_event(
+        "DEVICE_UPDATED",
+        sync_payload,
+        entity_type="DEVICE",
+        entity_id=out.uid,
+        operation="UPDATE",
+    )
 
     return out
 
@@ -339,7 +357,13 @@ async def delete_device(
         "id": device_id,
         "uid": uid
     }
-    await broadcast_sync_event("DEVICE_DELETED", sync_payload)
+    await broadcast_sync_event(
+        "DEVICE_DELETED",
+        sync_payload,
+        entity_type="DEVICE",
+        entity_id=uid,
+        operation="DELETE",
+    )
 
     return {"message": "Device deleted successfully", "id": target.id, "uid": uid}
 

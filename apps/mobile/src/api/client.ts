@@ -1290,7 +1290,7 @@ export class ApiClient {
           body: JSON.stringify(data),
         });
         try {
-          localFleetStore.createTrain(data);
+          localFleetStore.createTrain(data, { skipPublish: true });
         } catch {}
       } catch (err) {
         res = localFleetStore.createTrain(data);
@@ -1299,7 +1299,13 @@ export class ApiClient {
       res = localFleetStore.createTrain(data);
     }
     try {
-      mqttService.publish('panorama/fleet/sync', { action: 'create_train', train: data });
+      mqttService.publishSyncEvent({
+        event_type: 'TRAIN_CREATED',
+        entity_type: 'TRAIN',
+        entity_id: data.train_number,
+        operation: 'CREATE',
+        payload: data,
+      });
     } catch {}
     this.notifyCrossTabFleetSync();
     return res;
@@ -1314,7 +1320,7 @@ export class ApiClient {
           body: JSON.stringify(data),
         });
         try {
-          localFleetStore.updateTrain(trainNumber, data);
+          localFleetStore.updateTrain(trainNumber, data, { skipPublish: true });
         } catch {}
       } catch (err) {
         res = localFleetStore.updateTrain(trainNumber, data);
@@ -1323,7 +1329,13 @@ export class ApiClient {
       res = localFleetStore.updateTrain(trainNumber, data);
     }
     try {
-      mqttService.publish('panorama/fleet/sync', { action: 'update_train', train_number: trainNumber, data });
+      mqttService.publishSyncEvent({
+        event_type: 'TRAIN_UPDATED',
+        entity_type: 'TRAIN',
+        entity_id: trainNumber,
+        operation: 'UPDATE',
+        payload: { train_number: trainNumber, ...data },
+      });
     } catch {}
     this.notifyCrossTabFleetSync();
     return res;
@@ -1341,7 +1353,7 @@ export class ApiClient {
           method: 'DELETE',
         });
         try {
-          localFleetStore.deleteTrain(trainNumber);
+          localFleetStore.deleteTrain(trainNumber, { skipPublish: true });
         } catch {}
       } catch (err) {
         res = localFleetStore.deleteTrain(trainNumber);
@@ -1354,7 +1366,13 @@ export class ApiClient {
       alertNotificationService.resolveAlertsForTrain(trainNumber);
     } catch {}
     try {
-      mqttService.publish('panorama/fleet/sync', { action: 'delete_train', train_number: trainNumber.trim() });
+      mqttService.publishSyncEvent({
+        event_type: 'TRAIN_DELETED',
+        entity_type: 'TRAIN',
+        entity_id: trainNumber,
+        operation: 'DELETE',
+        payload: { train_number: trainNumber },
+      });
     } catch {}
     this.notifyCrossTabFleetSync();
     return res;
@@ -1372,7 +1390,7 @@ export class ApiClient {
           body: JSON.stringify(data),
         });
         try {
-          localFleetStore.addCoach(cleanTrain, data);
+          localFleetStore.addCoach(cleanTrain, data, { skipPublish: true });
         } catch {}
       } catch (err) {
         res = localFleetStore.addCoach(cleanTrain, data);
@@ -1381,7 +1399,13 @@ export class ApiClient {
       res = localFleetStore.addCoach(cleanTrain, data);
     }
     try {
-      mqttService.publish('panorama/fleet/sync', { action: 'coach_change', train_number: cleanTrain });
+      mqttService.publishSyncEvent({
+        event_type: 'COACH_CREATED',
+        entity_type: 'COACH',
+        entity_id: `${cleanTrain}:${data.coach_number}`,
+        operation: 'CREATE',
+        payload: { train_number: cleanTrain, ...data },
+      });
     } catch {}
     this.notifyCrossTabFleetSync();
     return res;
@@ -1399,7 +1423,7 @@ export class ApiClient {
           body: JSON.stringify(data),
         });
         try {
-          localFleetStore.updateCoach(cleanTrain, cleanCoach, data);
+          localFleetStore.updateCoach(cleanTrain, cleanCoach, data, { skipPublish: true });
         } catch {}
       } catch (err) {
         res = localFleetStore.updateCoach(cleanTrain, cleanCoach, data);
@@ -1408,7 +1432,13 @@ export class ApiClient {
       res = localFleetStore.updateCoach(cleanTrain, cleanCoach, data);
     }
     try {
-      mqttService.publish('panorama/fleet/sync', { action: 'coach_change', train_number: cleanTrain });
+      mqttService.publishSyncEvent({
+        event_type: 'COACH_UPDATED',
+        entity_type: 'COACH',
+        entity_id: `${cleanTrain}:${cleanCoach}`,
+        operation: 'UPDATE',
+        payload: { train_number: cleanTrain, coach_number: cleanCoach, ...data },
+      });
     } catch {}
     this.notifyCrossTabFleetSync();
     return res;
@@ -1427,7 +1457,7 @@ export class ApiClient {
           body: JSON.stringify({ new_coach_number: newCoach }),
         });
         try {
-          localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach);
+          localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach, { skipPublish: true });
         } catch {}
       } catch (err) {
         res = localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach);
@@ -1436,7 +1466,13 @@ export class ApiClient {
       res = localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach);
     }
     try {
-      mqttService.publish('panorama/fleet/sync', { action: 'coach_change', train_number: cleanTrain });
+      mqttService.publishSyncEvent({
+        event_type: 'COACH_RENAMED',
+        entity_type: 'COACH',
+        entity_id: `${cleanTrain}:${newCoach}`,
+        operation: 'UPDATE',
+        payload: { train_number: cleanTrain, old_coach_number: oldCoach, new_coach_number: newCoach },
+      });
     } catch {}
     this.notifyCrossTabFleetSync();
     return res;
@@ -1453,7 +1489,7 @@ export class ApiClient {
           method: 'DELETE',
         });
         try {
-          localFleetStore.deleteCoach(cleanTrain, cleanCoach);
+          localFleetStore.deleteCoach(cleanTrain, cleanCoach, { skipPublish: true });
         } catch {}
       } catch (err) {
         res = localFleetStore.deleteCoach(cleanTrain, cleanCoach);
@@ -1466,7 +1502,13 @@ export class ApiClient {
       alertNotificationService.resolveAlertsForCoach(cleanTrain, cleanCoach);
     } catch {}
     try {
-      mqttService.publish('panorama/fleet/sync', { action: 'coach_change', train_number: cleanTrain });
+      mqttService.publishSyncEvent({
+        event_type: 'COACH_DELETED',
+        entity_type: 'COACH',
+        entity_id: `${cleanTrain}:${cleanCoach}`,
+        operation: 'DELETE',
+        payload: { train_number: cleanTrain, deleted_coach_number: cleanCoach, coach_number: cleanCoach },
+      });
     } catch {}
     this.notifyCrossTabFleetSync();
     return res;
@@ -1483,7 +1525,7 @@ export class ApiClient {
           body: JSON.stringify({ coach_numbers: coachNumbers }),
         });
         try {
-          localFleetStore.reorderCoaches(cleanTrain, coachNumbers);
+          localFleetStore.reorderCoaches(cleanTrain, coachNumbers, { skipPublish: true });
         } catch {}
       } catch (err) {
         res = localFleetStore.reorderCoaches(cleanTrain, coachNumbers);
@@ -1492,7 +1534,13 @@ export class ApiClient {
       res = localFleetStore.reorderCoaches(cleanTrain, coachNumbers);
     }
     try {
-      mqttService.publish('panorama/fleet/sync', { action: 'coach_change', train_number: cleanTrain });
+      mqttService.publishSyncEvent({
+        event_type: 'COACHES_REORDERED',
+        entity_type: 'COACH',
+        entity_id: cleanTrain,
+        operation: 'REORDER',
+        payload: { train_number: cleanTrain, coach_numbers: coachNumbers },
+      });
     } catch {}
     this.notifyCrossTabFleetSync();
     return res;
@@ -1554,6 +1602,31 @@ export class ApiClient {
       method: 'PUT',
       body: JSON.stringify(geometry),
     });
+  }
+
+  static async updateTank(tankId: string, data: { name?: string; capacityLiters?: number; heightCm?: number; areaM2?: number; geometry?: string }): Promise<any> {
+    let res: any;
+    if (API_BASE && !this.isRemoteUnreachable()) {
+      try {
+        res = await this.request(`/tanks/${encodeURIComponent(tankId)}`, {
+          method: 'PUT',
+          body: JSON.stringify(data),
+        });
+      } catch {}
+    }
+    try {
+      localFleetStore.updateTank({ tank_id: tankId, ...data }, { skipPublish: true });
+    } catch {}
+    try {
+      mqttService.publishSyncEvent({
+        event_type: 'TANK_UPDATED',
+        entity_type: 'TANK',
+        entity_id: tankId,
+        operation: 'UPDATE',
+        payload: { tank_id: tankId, ...data },
+      });
+    } catch {}
+    return res || { success: true, tankId, ...data };
   }
 
   // Devices
@@ -1647,7 +1720,13 @@ export class ApiClient {
     };
 
     try {
-      mqttService.publish('panorama/devices/sync', { action: 'create_device', device: payload });
+      mqttService.publishSyncEvent({
+        event_type: 'DEVICE_CREATED',
+        entity_type: 'DEVICE',
+        entity_id: uid,
+        operation: 'CREATE',
+        payload: { ...payload, uid, id: uid },
+      });
     } catch {}
 
     if (API_BASE && !this.isRemoteUnreachable()) {
@@ -1692,7 +1771,13 @@ export class ApiClient {
       deviceRegistry.assignDevice(deviceId, tr || '', ch || '');
     }
     try {
-      mqttService.publish('panorama/devices/sync', { action: 'update_device', deviceId, data });
+      mqttService.publishSyncEvent({
+        event_type: 'DEVICE_UPDATED',
+        entity_type: 'DEVICE',
+        entity_id: deviceId,
+        operation: 'UPDATE',
+        payload: { deviceId, uid: deviceId, trainNumber: tr, coachNumber: ch, ...data },
+      });
     } catch {}
     try {
       return await this.request<Device>(`/devices/${deviceId}`, {
@@ -1722,7 +1807,13 @@ export class ApiClient {
   static async deleteDevice(deviceId: string): Promise<any> {
     deviceRegistry.deleteDevice(deviceId);
     try {
-      mqttService.publish('panorama/devices/sync', { action: 'delete_device', id: deviceId });
+      mqttService.publishSyncEvent({
+        event_type: 'DEVICE_DELETED',
+        entity_type: 'DEVICE',
+        entity_id: deviceId,
+        operation: 'DELETE',
+        payload: { id: deviceId, uid: deviceId },
+      });
     } catch {}
     if (API_BASE) {
       try {

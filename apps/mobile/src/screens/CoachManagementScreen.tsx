@@ -60,6 +60,10 @@ export const CoachManagementScreen: React.FC = () => {
     liveTelemetry,
     connectionStatus,
     refreshData,
+    addCoach,
+    updateCoach,
+    deleteCoach,
+    refreshRegions,
   } = useApp();
 
   const [activeTrain, setActiveTrain] = useState<string>(selectedTrainNumber || '');
@@ -193,30 +197,25 @@ export const CoachManagementScreen: React.FC = () => {
     setIsAddCoachOpen(true);
   };
 
-  const handleCreateCoach = (e: React.FormEvent) => {
+  const handleCreateCoach = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCoachNum.trim()) return;
+    if (!newCoachNum.trim() || !activeTrain) return;
 
-    const newCoach: CoachRecord = {
-      id: `custom-${Date.now()}`,
-      coachNumber: newCoachNum.trim(),
-      coachType: newCoachType,
-      trainNumber: activeTrain,
-      deviceId: newCoachDev.trim() || 'Not Mapped',
-      isOnline: false,
-      batteryPercent: null,
-      arrivalLevel: null,
-      arrivalHeightCm: null,
-      departureLevel: null,
-      departureHeightCm: null,
-      arrivalAlarmStatus: 'NORMAL',
-      departureAlarmStatus: 'NORMAL',
-    };
-
-    setCustomCoaches((prev) => [...prev, newCoach]);
-    setIsAddCoachOpen(false);
-    setActionFeedback(`Coach ${newCoach.coachNumber} added to Train ${activeTrain}.`);
-    setTimeout(() => setActionFeedback(null), 3500);
+    try {
+      const devUid = newCoachDev.trim() === 'Auto-Assigned' || newCoachDev.trim() === 'Not Mapped' ? '' : newCoachDev.trim();
+      await addCoach(activeTrain, {
+        coach_number: newCoachNum.trim().toUpperCase(),
+        coach_type: newCoachType,
+        coach_category: newCoachType,
+        device_uid: devUid,
+      });
+      setIsAddCoachOpen(false);
+      setActionFeedback(`Coach ${newCoachNum.trim().toUpperCase()} added to Train ${activeTrain}.`);
+      setTimeout(() => setActionFeedback(null), 3500);
+    } catch (err: any) {
+      setActionFeedback(err?.message || 'Failed to add coach');
+      setTimeout(() => setActionFeedback(null), 3500);
+    }
   };
 
   const handleOpenEditCoach = (coach: CoachRecord) => {
@@ -227,30 +226,25 @@ export const CoachManagementScreen: React.FC = () => {
     setIsEditCoachOpen(true);
   };
 
-  const handleSaveEditCoach = (e: React.FormEvent) => {
+  const handleSaveEditCoach = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!coachToEdit) return;
+    if (!coachToEdit || !activeTrain) return;
 
-    const patch: Partial<CoachRecord> = {
-      coachNumber: editCoachNum.trim() || coachToEdit.coachNumber,
-      coachType: editCoachType,
-      deviceId: coachToEdit.deviceId || 'Not Mapped',
-    };
-
-    setCoachOverrides((prev) => ({
-      ...prev,
-      [coachToEdit.id]: { ...prev[coachToEdit.id], ...patch },
-    }));
-    setCustomCoaches((prev) =>
-      prev.map((c) => (c.id === coachToEdit.id ? { ...c, ...patch } : c))
-    );
-    if (selectedCoach?.id === coachToEdit.id) {
-      setSelectedCoach((prev) => (prev ? { ...prev, ...patch } : null));
-      if (patch.coachNumber) setSelectedCoachNumber(patch.coachNumber);
+    try {
+      const devUid = editCoachDev.trim() === 'Auto-Assigned' || editCoachDev.trim() === 'Not Mapped' ? '' : editCoachDev.trim();
+      await updateCoach(activeTrain, coachToEdit.coachNumber, {
+        coach_number: editCoachNum.trim().toUpperCase() || coachToEdit.coachNumber,
+        coach_type: editCoachType,
+        coach_category: editCoachType,
+        device_uid: devUid,
+      });
+      setIsEditCoachOpen(false);
+      setActionFeedback(`Coach ${editCoachNum.trim().toUpperCase()} updated successfully.`);
+      setTimeout(() => setActionFeedback(null), 3500);
+    } catch (err: any) {
+      setActionFeedback(err?.message || 'Failed to update coach');
+      setTimeout(() => setActionFeedback(null), 3500);
     }
-    setIsEditCoachOpen(false);
-    setActionFeedback(`Coach ${patch.coachNumber} updated successfully.`);
-    setTimeout(() => setActionFeedback(null), 3500);
   };
 
   // Step through coaches in detailed view

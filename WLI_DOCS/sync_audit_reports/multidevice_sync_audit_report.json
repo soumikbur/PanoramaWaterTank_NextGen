@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-11-14T20:16:41.112Z",
+  "durationSeconds": 239.09,
+  "targetUrl": "http://127.0.0.1:8000",
+  "results": [
+    {
+      "test": "TEST 1: Train Addition Real-Time Sync",
+      "status": "PASSED"
+    },
+    {
+      "test": "TEST 2: Coach Addition Real-Time Sync",
+      "status": "PASSED"
+    },
+    {
+      "test": "TEST 3: Device UID Assignment Real-Time Sync",
+      "status": "PASSED"
+    },
+    {
+      "test": "TEST 4: Tank Capacity Modification Real-Time Sync",
+      "status": "PASSED"
+    },
+    {
+      "test": "TEST 5: Coach Deletion Real-Time Sync",
+      "status": "PASSED"
+    },
+    {
+      "test": "TEST 6: Offline Resilience & Reconnection Recovery",
+      "status": "PASSED"
+    },
+    {
+      "test": "TEST 7: Concurrent Mutations Convergence",
+      "status": "PASSED"
+    }
+  ],
+  "capturedErrors": [],
+  "allPassed": true
+}

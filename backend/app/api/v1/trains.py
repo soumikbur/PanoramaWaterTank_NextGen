@@ -1,6 +1,7 @@
 """Trains and Fleet Management API Router."""
 import json
 import re
+import uuid
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -528,7 +529,7 @@ async def get_train_consist(train_number: str, db: AsyncSession = Depends(get_db
                 ]
                 coaches_list.append(CoachConsistItem(
                     coach_number=cn,
-                    device_uid=None,
+                    device_uid=c.get("device_uid") or None,
                     is_online=False,
                     hardware_version=None,
                     tanks=slot_tanks
@@ -716,13 +717,32 @@ async def create_train(
         "train_number": train_number,
         "name": data.name.strip(),
         "region": reg,
+        "train_type": (data.train_type or "Express").strip(),
+        "type": (data.train_type or "Express").strip(),
+        "railway_zone": getattr(data, "railway_zone", None),
+        "source_station": getattr(data, "source_station", None),
+        "source_code": getattr(data, "source_code", None),
+        "destination_station": getattr(data, "destination_station", None),
+        "destination_code": getattr(data, "destination_code", None),
         "tank_height_cm": tank_h,
         "tank_capacity_liters": tank_c,
         "coaches_count": len(coaches_to_create),
         "tanks_count": len(coaches_to_create) * 2,
     }
-    await broadcast_sync_event("TRAIN_CREATED", sync_event)
-    await broadcast_sync_event("REGION_UPDATED", {"region": reg, "train_number": train_number})
+    await broadcast_sync_event(
+        "TRAIN_CREATED",
+        sync_event,
+        entity_type="TRAIN",
+        entity_id=train_number,
+        operation="CREATE",
+    )
+    await broadcast_sync_event(
+        "REGION_UPDATED",
+        {"region": reg, "train_number": train_number},
+        entity_type="TRAIN",
+        entity_id=train_number,
+        operation="UPDATE",
+    )
 
     return {
         "message": "Train registered successfully",
@@ -797,9 +817,23 @@ async def update_train(
         "train_number": train_number,
         "name": data.name.strip() if data.name is not None else (db_train.name if db_train else None),
         "region": db_train.region if db_train else None,
+        "train_type": (data.type or (db_train.train_type if db_train else None) or "Express").strip(),
+        "type": (data.type or (db_train.train_type if db_train else None) or "Express").strip(),
     }
-    await broadcast_sync_event("TRAIN_UPDATED", sync_event)
-    await broadcast_sync_event("REGION_UPDATED", {"region": db_train.region if db_train else None, "train_number": train_number})
+    await broadcast_sync_event(
+        "TRAIN_UPDATED",
+        sync_event,
+        entity_type="TRAIN",
+        entity_id=train_number,
+        operation="UPDATE",
+    )
+    await broadcast_sync_event(
+        "REGION_UPDATED",
+        {"region": db_train.region if db_train else None, "train_number": train_number},
+        entity_type="TRAIN",
+        entity_id=train_number,
+        operation="UPDATE",
+    )
 
     return {
         "message": "Train updated successfully",
@@ -930,8 +964,20 @@ async def delete_train(
         "action": "delete_train",
         "train_number": cleaned,
     }
-    await broadcast_sync_event("TRAIN_DELETED", sync_event)
-    await broadcast_sync_event("REGION_UPDATED", {"train_number": cleaned})
+    await broadcast_sync_event(
+        "TRAIN_DELETED",
+        sync_event,
+        entity_type="TRAIN",
+        entity_id=cleaned,
+        operation="DELETE",
+    )
+    await broadcast_sync_event(
+        "REGION_UPDATED",
+        {"train_number": cleaned},
+        entity_type="TRAIN",
+        entity_id=cleaned,
+        operation="DELETE",
+    )
 
     return {
         "success": True,
@@ -1115,7 +1161,18 @@ async def add_coach_to_train(
         "action": "coach_change",
         "train_number": tr_clean,
         "coach_number": c_clean,
+        "coach_name": getattr(data, "coach_name", None) or f"Coach {c_clean}",
+        "coach_category": getattr(data, "coach_category", None) or getattr(data, "coach_type", None) or "Standard Coach",
+        "coach_type": getattr(data, "coach_type", None) or getattr(data, "coach_category", None) or "Standard Coach",
         "device_uid": uid,
+        "tank_1_name": getattr(data, "tank_1_name", None) or "Arrival Side (Tank 1)",
+        "tank_2_name": getattr(data, "tank_2_name", None) or "Departure Side (Tank 2)",
+        "tank_1_capacity": float(getattr(data, "tank_1_capacity", None) or 500.0),
+        "tank_2_capacity": float(getattr(data, "tank_2_capacity", None) or 500.0),
+        "tank_1_height_cm": float(getattr(data, "tank_1_height_cm", None) or 50.0),
+        "tank_2_height_cm": float(getattr(data, "tank_2_height_cm", None) or 50.0),
+        "tank_1_geometry": getattr(data, "tank_1_geometry", None) or "CYLINDRICAL",
+        "tank_2_geometry": getattr(data, "tank_2_geometry", None) or "CYLINDRICAL",
     }
     await broadcast_sync_event(
         "COACH_CREATED",
@@ -1124,7 +1181,13 @@ async def add_coach_to_train(
         entity_id=f"{tr_clean}:{c_clean}",
         operation="CREATE",
     )
-    await broadcast_sync_event("REGION_UPDATED", {"train_number": tr_clean, "coach_number": c_clean})
+    await broadcast_sync_event(
+        "REGION_UPDATED",
+        {"train_number": tr_clean, "coach_number": c_clean},
+        entity_type="COACH",
+        entity_id=f"{tr_clean}:{c_clean}",
+        operation="CREATE",
+    )
 
     return {
         "success": True,
@@ -1334,6 +1397,41 @@ async def update_coach_details(
                     new_dev.coach_number = c_clean
                     new_dev.status = "ENGAGED"
                     new_dev.updated_at = utc_now()
+                else:
+                    new_dev = Device(
+                        id=f"dev-{uuid.uuid4().hex[:8]}",
+                        uid=new_uid,
+                        train_number=tr_clean,
+                        coach_number=c_clean,
+                        name=f"Node {new_uid[-6:]}",
+                        hardware_version="Standard WLI Node",
+                        status="ENGAGED",
+                        is_online=False,
+                    )
+                    db.add(new_dev)
+                    await db.flush()
+                # Ensure dual tanks for newly assigned device
+                tank_repo = TankRepository(db)
+                t1 = await tank_repo.get_by_device_and_index(new_dev.id, 1)
+                if not t1:
+                    await tank_repo.create(
+                        device_id=new_dev.id,
+                        tank_index=1,
+                        name=data.tank_1_name or "Arrival Side (Tank 1)",
+                        capacity_liters=data.tank_1_capacity or 500.0,
+                        height_cm=h1,
+                        tank_type=(data.tank_1_geometry or "CYLINDRICAL").upper(),
+                    )
+                t2 = await tank_repo.get_by_device_and_index(new_dev.id, 2)
+                if not t2:
+                    await tank_repo.create(
+                        device_id=new_dev.id,
+                        tank_index=2,
+                        name=data.tank_2_name or "Departure Side (Tank 2)",
+                        capacity_liters=data.tank_2_capacity or 500.0,
+                        height_cm=h2,
+                        tank_type=(data.tank_2_geometry or "CYLINDRICAL").upper(),
+                    )
 
     client_ip = request.client.host if request.client else "unknown"
     db.add(
@@ -1353,6 +1451,17 @@ async def update_coach_details(
         "train_number": tr_clean,
         "coach_number": c_clean,
         "device_uid": (getattr(data, "device_uid", None) or getattr(data, "deviceUid", None) or "").strip(),
+        "coach_name": data.coach_name,
+        "coach_category": data.coach_category,
+        "coach_type": data.coach_type,
+        "tank_1_name": data.tank_1_name,
+        "tank_2_name": data.tank_2_name,
+        "tank_1_capacity": float(data.tank_1_capacity) if data.tank_1_capacity else 500.0,
+        "tank_2_capacity": float(data.tank_2_capacity) if data.tank_2_capacity else 500.0,
+        "tank_1_height_cm": float(h1) if h1 else 50.0,
+        "tank_2_height_cm": float(h2) if h2 else 50.0,
+        "tank_1_geometry": data.tank_1_geometry,
+        "tank_2_geometry": data.tank_2_geometry,
     }
     await broadcast_sync_event(
         "COACH_UPDATED",

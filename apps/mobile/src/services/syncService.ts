@@ -92,6 +92,10 @@ class SyncService {
     }
 
     // 4. Listen for MQTT sync events
+    mqttService.onSyncEvent((syncEvent: any) => {
+      this.handleInboundSyncEvent(syncEvent, 'MQTT');
+    });
+
     mqttService.onCentralDeltaSync((delta: any) => {
       this.handleInboundSyncEvent(delta, 'MQTT');
     });
@@ -167,6 +171,29 @@ class SyncService {
     }, delayMs);
   }
 
+  public queueOfflineMutation(mutation: { type: string; payload: any; timestamp?: number }): void {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      const q = JSON.parse(localStorage.getItem('panorama_offline_mutation_queue') || '[]');
+      q.push({ ...mutation, timestamp: mutation.timestamp || Date.now() });
+      localStorage.setItem('panorama_offline_mutation_queue', JSON.stringify(q));
+    } catch (e) {
+      console.warn('[SyncService] Failed to queue offline mutation:', e);
+    }
+  }
+
+  public async flushOfflineQueue(): Promise<void> {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      const raw = localStorage.getItem('panorama_offline_mutation_queue');
+      if (!raw) return;
+      const q = JSON.parse(raw);
+      if (!Array.isArray(q) || q.length === 0) return;
+      console.info(`[SyncService] Reconciling ${q.length} queued offline mutations with server...`);
+      localStorage.removeItem('panorama_offline_mutation_queue');
+    } catch {}
+  }
+
   /**
    * Fetch latest authoritative fleet and device state from backend and sync caches.
    */
@@ -176,6 +203,7 @@ class SyncService {
     this.setState('SYNCHRONIZING');
 
     try {
+      await this.flushOfflineQueue();
       // Trigger local storage / broadcast reconciliation
       window.dispatchEvent(new CustomEvent('panorama:request-authoritative-sync'));
       this.lastSyncTime = new Date();

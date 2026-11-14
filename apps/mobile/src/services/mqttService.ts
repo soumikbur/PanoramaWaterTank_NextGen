@@ -184,14 +184,17 @@ export class MqttService {
           }
           if (destination === CENTRAL_DELTA_SYNC_TOPIC) {
             this.handleCentralDeltaSync(payloadStr);
+            this.handleSyncEvent(payloadStr);
             return;
           }
           if (destination === 'panorama/fleet/sync') {
             this.handleFleetSync(payloadStr);
+            this.handleSyncEvent(payloadStr);
             return;
           }
           if (destination === 'panorama/devices/sync') {
             this.handleDeviceSync(payloadStr);
+            this.handleSyncEvent(payloadStr);
             return;
           }
           this.handleIncomingPayload(payloadStr, destination);
@@ -566,6 +569,78 @@ export class MqttService {
     try {
       const event = JSON.parse(rawString);
       if (!event || typeof event !== 'object') return;
+
+      // Normalize ad-hoc frames to standard AuthoritativeSyncEvent envelope
+      if (!event.entity_type || !event.event_type) {
+        if (event.action === 'create_train') {
+          event.event_type = 'TRAIN_CREATED';
+          event.entity_type = 'TRAIN';
+          event.operation = 'CREATE';
+          event.entity_id = event.train?.train_number || event.train_number || '';
+          event.payload = event.train || event;
+        } else if (event.action === 'update_train') {
+          event.event_type = 'TRAIN_UPDATED';
+          event.entity_type = 'TRAIN';
+          event.operation = 'UPDATE';
+          event.entity_id = event.train_number || '';
+          event.payload = event.data || event;
+        } else if (event.action === 'delete_train') {
+          event.event_type = 'TRAIN_DELETED';
+          event.entity_type = 'TRAIN';
+          event.operation = 'DELETE';
+          event.entity_id = event.train_number || '';
+          event.payload = event;
+        } else if (event.action === 'coach_change') {
+          event.entity_type = 'COACH';
+          event.entity_id = event.train_number || '';
+          event.payload = event;
+          if (event.deleted_coach_number) {
+            event.event_type = 'COACH_DELETED';
+            event.operation = 'DELETE';
+          } else if (event.old_coach_number && event.new_coach_number) {
+            event.event_type = 'COACH_RENAMED';
+            event.operation = 'UPDATE';
+          } else if (event.coach_numbers) {
+            event.event_type = 'COACHES_REORDERED';
+            event.operation = 'REORDER';
+          } else if (event.coach_number && (event.coach_category || event.tank_1_name || event.device_uid !== undefined)) {
+            event.event_type = 'COACH_CREATED';
+            event.operation = 'CREATE';
+          } else {
+            event.event_type = 'COACH_UPDATED';
+            event.operation = 'UPDATE';
+          }
+        } else if (event.action === 'create_device') {
+          event.event_type = 'DEVICE_CREATED';
+          event.entity_type = 'DEVICE';
+          event.operation = 'CREATE';
+          event.entity_id = event.device?.uid || event.uid || '';
+          event.payload = event.device || event;
+        } else if (event.action === 'update_device') {
+          event.event_type = 'DEVICE_UPDATED';
+          event.entity_type = 'DEVICE';
+          event.operation = 'UPDATE';
+          event.entity_id = event.deviceId || event.device?.uid || event.uid || '';
+          event.payload = event.data || event.device || event;
+        } else if (event.action === 'delete_device') {
+          event.event_type = 'DEVICE_DELETED';
+          event.entity_type = 'DEVICE';
+          event.operation = 'DELETE';
+          event.entity_id = event.id || event.uid || '';
+          event.payload = event;
+        } else if (event.type === 'FLEET_UPDATE') {
+          event.event_type = 'FLEET_SYNC';
+          event.entity_type = 'TRAIN';
+          event.operation = 'UPDATE';
+          event.payload = event;
+        } else if (event.type === 'DEVICE_UPDATE') {
+          event.event_type = 'DEVICE_SYNC';
+          event.entity_type = 'DEVICE';
+          event.operation = 'UPDATE';
+          event.payload = event;
+        }
+      }
+
       if (this.isDuplicateSyncEvent(event.event_id, event.mutation_id)) {
         return;
       }
@@ -720,7 +795,7 @@ export class MqttService {
     };
   }
 
-  publish(topic: string, payload: any, retained: boolean = false): boolean {
+  publish(topic: string, payload: any, retained: boolean = false, qos: number = 1): boolean {
     if (!this.client || !this.client.isConnected || !this.client.isConnected()) {
       return false;
     }
@@ -732,7 +807,7 @@ export class MqttService {
       const str = typeof payload === 'string' ? payload : JSON.stringify(payload);
       const msg = new MessageConstructor(str);
       msg.destinationName = topic;
-      msg.qos = 0;
+      msg.qos = qos;
       if (retained) {
         msg.retained = true;
       }
@@ -742,6 +817,51 @@ export class MqttService {
       console.warn('[MQTT] Failed to publish message:', err);
       return false;
     }
+  }
+
+  /**
+   * Broadcast an authoritative synchronization event envelope over MQTT bus (QoS 1).
+   */
+  publishSyncEvent(event: {
+    event_id?: string;
+    event_type: string;
+    entity_type: string;
+    entity_id: string;
+    operation: string;
+    payload: any;
+    version?: number;
+    timestamp?: string;
+    mutation_id?: string;
+  }): boolean {
+    const fullEvent = {
+      event_id: event.event_id || `evt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      event_type: event.event_type,
+      entity_type: event.entity_type,
+      entity_id: String(event.entity_id || ''),
+      operation: event.operation,
+      payload: event.payload || {},
+      data: event.payload || {},
+      version: event.version || Date.now(),
+      timestamp: event.timestamp || new Date().toISOString(),
+      mutation_id: event.mutation_id || `mut_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    };
+
+    // Mark as locally seen to prevent self-echo loop
+    this.seenSyncEventIds.set(fullEvent.event_id, Date.now());
+    this.seenSyncEventIds.set(fullEvent.mutation_id, Date.now());
+
+    // Broadcast across primary sync topics with QoS 1 guarantee
+    const p1 = this.publish(SYNC_EVENTS_TOPIC, fullEvent, false, 1);
+    this.publish(`panorama/sync/${fullEvent.entity_type.toLowerCase()}`, fullEvent, false, 1);
+    this.publish(`panorama/sync/${fullEvent.event_type.toLowerCase()}`, fullEvent, false, 1);
+    if (fullEvent.entity_type === 'TRAIN' || fullEvent.entity_type === 'COACH') {
+      this.publish('panorama/fleet/sync', fullEvent, false, 1);
+      this.publish(CENTRAL_DELTA_SYNC_TOPIC, fullEvent, false, 1);
+    } else if (fullEvent.entity_type === 'DEVICE') {
+      this.publish('panorama/devices/sync', fullEvent, false, 1);
+      this.publish(CENTRAL_DELTA_SYNC_TOPIC, fullEvent, false, 1);
+    }
+    return p1;
   }
 
   disconnect(): void {

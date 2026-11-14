@@ -1067,27 +1067,324 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!event || typeof event !== 'object') return;
       const entityType = event.entity_type;
       const op = event.operation;
+      const eventType = event.event_type;
       const payload = event.payload || event.data || {};
-      const trainNum = (payload.train_number || (entityType === 'TRAIN' ? event.entity_id : '') || '').trim();
+      const trainNum = (
+        payload.train_number ||
+        payload.trainNumber ||
+        (entityType === 'TRAIN' ? event.entity_id : '') ||
+        String(event.entity_id || '').split(':')[0] ||
+        ''
+      ).trim();
 
       if (entityType === 'TRAIN') {
-        await refreshRegions();
-        await refreshData();
-        const activeTr = (selectedTrainNumberRef.current || '').trim();
-        if (op === 'DELETE' && activeTr === event.entity_id) {
-          const next = configuredTrainsRef.current.find((t) => t.train_number !== event.entity_id);
-          setSelectedTrainNumber(next?.train_number || '');
-          setActiveConsist(null);
-        } else if (activeTr && activeTr === event.entity_id) {
-          ApiClient.fetchTrainConsist(event.entity_id).then((c) => {
-            if (c) setActiveConsist(c);
-          }).catch(() => {});
+        const regCode = (payload.region || 'NORTH').trim().toUpperCase();
+        if (op === 'CREATE' || eventType === 'TRAIN_CREATED') {
+          try {
+            localFleetStore.createTrain({
+              train_number: trainNum,
+              name: payload.name || `Train ${trainNum}`,
+              region: regCode,
+              train_type: payload.train_type || payload.type || 'Express',
+              coach_number: payload.coach_number || 'C1',
+              tank_capacity: payload.tank_capacity_liters || payload.tank_capacity || 20.0,
+              tank_height: payload.tank_height_cm || payload.tank_height || 50.0,
+              coaches: payload.coaches,
+            }, { skipPublish: true });
+          } catch {}
+
+          setRegions((prevRegions) => {
+            const newTrainItem: TrainOverviewItem = {
+              train_number: trainNum,
+              name: payload.name || `Train ${trainNum}`,
+              region: regCode,
+              train_type: payload.train_type || payload.type || 'Express',
+              type: payload.train_type || payload.type || 'Express',
+              source_station: payload.source_station || 'Source',
+              destination_station: payload.destination_station || 'Destination',
+              tank_height_cm: payload.tank_height_cm || 50.0,
+              tank_capacity_liters: payload.tank_capacity_liters || 20.0,
+              coaches_count: payload.coaches_count || 1,
+              tanks_count: payload.tanks_count || 2,
+              is_online: false,
+              active_alarms: 0,
+            };
+            const existingReg = prevRegions.find((r) => r.region.toUpperCase() === regCode);
+            if (!existingReg) {
+              return [
+                ...prevRegions,
+                {
+                  region: regCode,
+                  name: `${regCode} Region`,
+                  code: regCode,
+                  configuredTrains: 1,
+                  coaches: newTrainItem.coaches_count || 1,
+                  tanks: newTrainItem.tanks_count || 2,
+                  onlineTrains: 0,
+                  status: 'All Normal',
+                  trains: [newTrainItem],
+                },
+              ];
+            }
+            return prevRegions.map((r) => {
+              if (r.region.toUpperCase() !== regCode) return r;
+              if (r.trains.some((t) => t.train_number.trim() === trainNum)) return r;
+              const updatedTrains = [...r.trains, newTrainItem].sort((a, b) => a.train_number.localeCompare(b.train_number));
+              return {
+                ...r,
+                configuredTrains: updatedTrains.length,
+                coaches: updatedTrains.reduce((sum, t) => sum + (t.coaches_count || 0), 0),
+                tanks: updatedTrains.reduce((sum, t) => sum + (t.tanks_count || 0), 0),
+                trains: updatedTrains,
+              };
+            });
+          });
+          if (!selectedTrainNumberRef.current) {
+            setSelectedTrainNumber(trainNum);
+          }
+        } else if (op === 'DELETE' || eventType === 'TRAIN_DELETED') {
+          try {
+            localFleetStore.deleteTrain(trainNum, { skipPublish: true });
+          } catch {}
+          setRegions((prevRegions) => {
+            return prevRegions.map((r) => {
+              const remaining = r.trains.filter((t) => t.train_number.trim() !== trainNum);
+              return {
+                ...r,
+                configuredTrains: remaining.length,
+                coaches: remaining.reduce((sum, t) => sum + (t.coaches_count || 0), 0),
+                tanks: remaining.reduce((sum, t) => sum + (t.tanks_count || 0), 0),
+                trains: remaining,
+              };
+            });
+          });
+          const activeTr = (selectedTrainNumberRef.current || '').trim();
+          if (activeTr === trainNum) {
+            const next = configuredTrainsRef.current.find((t) => t.train_number !== trainNum);
+            setSelectedTrainNumber(next?.train_number || '');
+            setActiveConsist(null);
+          }
+        } else if (op === 'UPDATE' || eventType === 'TRAIN_UPDATED') {
+          try {
+            localFleetStore.updateTrain(trainNum, payload, { skipPublish: true });
+          } catch {}
+          setRegions((prevRegions) => {
+            return prevRegions.map((r) => {
+              const updated = r.trains.map((t) => {
+                if (t.train_number.trim() !== trainNum) return t;
+                return {
+                  ...t,
+                  name: payload.name || t.name,
+                  region: payload.region ? payload.region.toUpperCase() : t.region,
+                  train_type: payload.train_type || payload.type || t.train_type,
+                  type: payload.train_type || payload.type || t.type,
+                };
+              });
+              return { ...r, trains: updated };
+            });
+          });
+          const activeTr = (selectedTrainNumberRef.current || '').trim();
+          if (activeTr === trainNum) {
+            ApiClient.fetchTrainConsist(trainNum).then((c) => {
+              if (c) setActiveConsist(c);
+            }).catch(() => {});
+          }
         }
-      } else if (entityType === 'COACH' || entityType === 'TANK') {
+        await refreshRegions();
+      } else if (entityType === 'COACH') {
+        const coachNum = (
+          payload.coach_number ||
+          payload.coachNumber ||
+          payload.deleted_coach_number ||
+          payload.new_coach_number ||
+          String(event.entity_id || '').split(':')[1] ||
+          ''
+        ).trim().toUpperCase();
+
         if (trainNum) {
           localFleetStore.invalidateConsist(trainNum);
         }
-        await refreshRegions();
+
+        if (op === 'CREATE' || eventType === 'COACH_CREATED') {
+          try {
+            localFleetStore.addCoach(trainNum, {
+              coach_number: coachNum,
+              coach_name: payload.coach_name || `Coach ${coachNum}`,
+              coach_category: payload.coach_category || 'General',
+              coach_type: payload.coach_type || payload.coach_category || 'General',
+              device_uid: payload.device_uid || '',
+              tank_1_name: payload.tank_1_name || 'Arrival Side (Tank 1)',
+              tank_2_name: payload.tank_2_name || 'Departure Side (Tank 2)',
+              tank_1_capacity: payload.tank_1_capacity || 500,
+              tank_2_capacity: payload.tank_2_capacity || 500,
+              tank_1_height_cm: payload.tank_1_height_cm || 50,
+              tank_2_height_cm: payload.tank_2_height_cm || 50,
+              tank_1_geometry: payload.tank_1_geometry || 'CYLINDRICAL',
+              tank_2_geometry: payload.tank_2_geometry || 'CYLINDRICAL',
+            }, { skipPublish: true });
+          } catch {}
+          if (payload.device_uid) {
+            deviceRegistry.assignDevice(payload.device_uid, trainNum, coachNum, { skipPublish: true });
+          }
+          setActiveConsist((prevConsist) => {
+            if (!prevConsist || prevConsist.train_number.trim() !== trainNum) return prevConsist;
+            if (prevConsist.coaches.some((c) => c.coach_number.trim().toUpperCase() === coachNum)) return prevConsist;
+            const newCoach = {
+              id: `coach-${trainNum}-${coachNum}`,
+              train_number: trainNum,
+              coach_number: coachNum,
+              coach_name: payload.coach_name || `Coach ${coachNum}`,
+              coach_category: payload.coach_category || 'General',
+              coach_type: payload.coach_type || payload.coach_category || 'General',
+              device_uid: payload.device_uid || '',
+              position: prevConsist.coaches.length + 1,
+              is_online: false,
+              tanks: [
+                {
+                  id: `tank-${trainNum}-${coachNum}-1`,
+                  tank_index: 1,
+                  name: payload.tank_1_name || 'Arrival Side (Tank 1)',
+                  capacity_liters: Number(payload.tank_1_capacity) || 500,
+                  height_cm: Number(payload.tank_1_height_cm) || 50,
+                  geometry: payload.tank_1_geometry || 'CYLINDRICAL',
+                  tank_type: payload.tank_1_geometry || 'CYLINDRICAL',
+                },
+                {
+                  id: `tank-${trainNum}-${coachNum}-2`,
+                  tank_index: 2,
+                  name: payload.tank_2_name || 'Departure Side (Tank 2)',
+                  capacity_liters: Number(payload.tank_2_capacity) || 500,
+                  height_cm: Number(payload.tank_2_height_cm) || 50,
+                  geometry: payload.tank_2_geometry || 'CYLINDRICAL',
+                  tank_type: payload.tank_2_geometry || 'CYLINDRICAL',
+                },
+              ],
+            };
+            return {
+              ...prevConsist,
+              coaches: [...prevConsist.coaches, newCoach as any],
+            };
+          });
+          // Increment coaches count in regions
+          setRegions((prevRegions) =>
+            prevRegions.map((r) => ({
+              ...r,
+              trains: r.trains.map((t) =>
+                t.train_number.trim() === trainNum
+                  ? { ...t, coaches_count: (t.coaches_count || 0) + 1, tanks_count: (t.tanks_count || 0) + 2 }
+                  : t
+              ),
+              coaches: r.trains.reduce((sum, t) => sum + (t.train_number.trim() === trainNum ? (t.coaches_count || 0) + 1 : (t.coaches_count || 0)), 0),
+              tanks: r.trains.reduce((sum, t) => sum + (t.train_number.trim() === trainNum ? (t.tanks_count || 0) + 2 : (t.tanks_count || 0)), 0),
+            }))
+          );
+        } else if (op === 'DELETE' || eventType === 'COACH_DELETED') {
+          const delNum = (payload.deleted_coach_number || coachNum).toUpperCase();
+          try {
+            localFleetStore.deleteCoach(trainNum, delNum, { skipPublish: true });
+          } catch {}
+          deviceRegistry.unassignCoachDevice(trainNum, delNum, { skipPublish: true });
+          setActiveConsist((prevConsist) => {
+            if (!prevConsist || prevConsist.train_number.trim() !== trainNum) return prevConsist;
+            return {
+              ...prevConsist,
+              coaches: prevConsist.coaches.filter((c) => c.coach_number.trim().toUpperCase() !== delNum),
+            };
+          });
+          setRegions((prevRegions) =>
+            prevRegions.map((r) => ({
+              ...r,
+              trains: r.trains.map((t) =>
+                t.train_number.trim() === trainNum
+                  ? { ...t, coaches_count: Math.max(0, (t.coaches_count || 1) - 1), tanks_count: Math.max(0, (t.tanks_count || 2) - 2) }
+                  : t
+              ),
+              coaches: r.trains.reduce((sum, t) => sum + (t.train_number.trim() === trainNum ? Math.max(0, (t.coaches_count || 1) - 1) : (t.coaches_count || 0)), 0),
+              tanks: r.trains.reduce((sum, t) => sum + (t.train_number.trim() === trainNum ? Math.max(0, (t.tanks_count || 2) - 2) : (t.tanks_count || 0)), 0),
+            }))
+          );
+        } else if (eventType === 'COACH_RENAMED') {
+          const oldNum = (payload.old_coach_number || '').toUpperCase();
+          const newNum = (payload.new_coach_number || coachNum).toUpperCase();
+          try {
+            localFleetStore.renameCoach(trainNum, oldNum, newNum, { skipPublish: true });
+          } catch {}
+          setActiveConsist((prevConsist) => {
+            if (!prevConsist || prevConsist.train_number.trim() !== trainNum) return prevConsist;
+            return {
+              ...prevConsist,
+              coaches: prevConsist.coaches.map((c) =>
+                c.coach_number.trim().toUpperCase() === oldNum
+                  ? { ...c, coach_number: newNum, coach_name: `Coach ${newNum}` }
+                  : c
+              ),
+            };
+          });
+          if (selectedCoachNumber.toUpperCase() === oldNum) {
+            setSelectedCoachNumber(newNum);
+          }
+        } else if (eventType === 'COACHES_REORDERED' && Array.isArray(payload.coach_numbers)) {
+          try {
+            localFleetStore.reorderCoaches(trainNum, payload.coach_numbers, { skipPublish: true });
+          } catch {}
+          setActiveConsist((prevConsist) => {
+            if (!prevConsist || prevConsist.train_number.trim() !== trainNum) return prevConsist;
+            const orderMap = new Map((payload.coach_numbers as string[]).map((num, idx) => [num.toUpperCase(), idx]));
+            const reordered = [...prevConsist.coaches].sort((a, b) => {
+              const idxA = orderMap.has(a.coach_number.toUpperCase()) ? orderMap.get(a.coach_number.toUpperCase())! : 999;
+              const idxB = orderMap.has(b.coach_number.toUpperCase()) ? orderMap.get(b.coach_number.toUpperCase())! : 999;
+              return idxA - idxB;
+            });
+            return { ...prevConsist, coaches: reordered };
+          });
+        } else if (op === 'UPDATE' || eventType === 'COACH_UPDATED') {
+          try {
+            localFleetStore.updateCoach(trainNum, coachNum, payload, { skipPublish: true });
+          } catch {}
+          if (payload.device_uid) {
+            deviceRegistry.assignDevice(payload.device_uid, trainNum, coachNum, { skipPublish: true });
+          }
+          setActiveConsist((prevConsist) => {
+            if (!prevConsist || prevConsist.train_number.trim() !== trainNum) return prevConsist;
+            return {
+              ...prevConsist,
+              coaches: prevConsist.coaches.map((c) => {
+                if (c.coach_number.trim().toUpperCase() !== coachNum) return c;
+                const updatedTanks = c.tanks.map((t) => {
+                  if (t.tank_index === 1) {
+                    return {
+                      ...t,
+                      capacity_liters: payload.tank_1_capacity ? Number(payload.tank_1_capacity) : t.capacity_liters,
+                      height_cm: payload.tank_1_height_cm ? Number(payload.tank_1_height_cm) : t.height_cm,
+                      name: payload.tank_1_name || t.name,
+                      geometry: payload.tank_1_geometry || t.geometry,
+                      tank_type: payload.tank_1_geometry || t.tank_type,
+                    };
+                  } else if (t.tank_index === 2) {
+                    return {
+                      ...t,
+                      capacity_liters: payload.tank_2_capacity ? Number(payload.tank_2_capacity) : t.capacity_liters,
+                      height_cm: payload.tank_2_height_cm ? Number(payload.tank_2_height_cm) : t.height_cm,
+                      name: payload.tank_2_name || t.name,
+                      geometry: payload.tank_2_geometry || t.geometry,
+                      tank_type: payload.tank_2_geometry || t.tank_type,
+                    };
+                  }
+                  return t;
+                });
+                return {
+                  ...c,
+                  coach_name: payload.coach_name || c.coach_name,
+                  coach_category: payload.coach_category || c.coach_category,
+                  coach_type: payload.coach_type || c.coach_type,
+                  device_uid: payload.device_uid !== undefined ? payload.device_uid : c.device_uid,
+                  tanks: updatedTanks,
+                };
+              }),
+            };
+          });
+        }
+
         const activeTr = (selectedTrainNumberRef.current || activeConsistRef.current?.train_number || '').trim();
         if (trainNum && activeTr === trainNum) {
           ApiClient.fetchTrainConsist(trainNum).then((c) => {
@@ -1104,16 +1401,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if (c) setActiveConsist(c);
           }).catch(() => {});
         }
-      } else if (entityType === 'ALARM') {
-        ApiClient.fetchAlarms('ACTIVE').then((alarms) => {
-          if (Array.isArray(alarms)) {
-            setActiveAlarms(alarms);
-            alertNotificationService.syncWithBackendAlarms(alarms);
+      } else if (entityType === 'TANK') {
+        try {
+          localFleetStore.updateTank(payload, { skipPublish: true });
+        } catch {}
+        if (payload.capacity_liters != null || payload.height_cm != null) {
+          const activeTr = (selectedTrainNumberRef.current || activeConsistRef.current?.train_number || '').trim();
+          if (trainNum && activeTr === trainNum) {
+            ApiClient.fetchTrainConsist(trainNum).then((c) => {
+              if (c) setActiveConsist(c);
+            }).catch(() => {});
           }
-        }).catch(() => {});
-        ApiClient.fetchAlarmStats().then((stats) => {
-          if (stats) setAlarmStats(stats);
-        }).catch(() => {});
+        }
+        debouncedRefresh(false);
+      } else if (entityType === 'ALARM') {
+        if (eventType === 'ALARM_ACKNOWLEDGED' && payload.alarm_id) {
+          setActiveAlarms((prev) =>
+            prev.map((a) => (a.id === payload.alarm_id ? { ...a, status: 'ACKNOWLEDGED' } : a))
+          );
+        } else {
+          ApiClient.fetchAlarms('ACTIVE').then((alarms) => {
+            if (Array.isArray(alarms)) {
+              setActiveAlarms(alarms);
+              alertNotificationService.syncWithBackendAlarms(alarms);
+            }
+          }).catch(() => {});
+          ApiClient.fetchAlarmStats().then((stats) => {
+            if (stats) setAlarmStats(stats);
+          }).catch(() => {});
+        }
       } else if (entityType === 'SETTING') {
         debouncedRefresh(false);
       } else if (entityType === 'USER') {

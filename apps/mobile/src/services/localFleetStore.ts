@@ -236,7 +236,7 @@ export const localFleetStore = {
     });
   },
 
-  createTrain(payload: TrainCreatePayload): { success: boolean; train_number: string; coaches_created: number } {
+  createTrain(payload: TrainCreatePayload, options?: { skipPublish?: boolean }): { success: boolean; train_number: string; coaches_created: number } {
     const num = (payload.train_number || '').trim();
     if (!num) {
       throw new Error('Train number is required.');
@@ -344,12 +344,12 @@ export const localFleetStore = {
     };
 
     state.trains[num] = { train: trainItem, consist };
-    writeState(state);
+    writeState(state, options);
 
     return { success: true, train_number: num, coaches_created: coaches.length };
   },
 
-  updateTrain(trainNumber: string, data: { name?: string; region?: string; type?: string }): { success: boolean } {
+  updateTrain(trainNumber: string, data: { name?: string; region?: string; type?: string }, options?: { skipPublish?: boolean }): { success: boolean } {
     const clean = (trainNumber || '').trim();
     const state = readState();
     const rec = state.trains[clean];
@@ -370,11 +370,11 @@ export const localFleetStore = {
       rec.train.type = data.type;
       rec.consist.train_type = data.type;
     }
-    writeState(state);
+    writeState(state, options);
     return { success: true };
   },
 
-  deleteTrain(trainNumber: string): { success: boolean; message: string; trainId: string } {
+  deleteTrain(trainNumber: string, options?: { skipPublish?: boolean }): { success: boolean; message: string; trainId: string } {
     const clean = (trainNumber || '').trim();
     const state = readState();
     if (!state.trains[clean]) {
@@ -383,7 +383,7 @@ export const localFleetStore = {
     state.deletedTrainNumbers = state.deletedTrainNumbers || {};
     state.deletedTrainNumbers[clean] = Date.now();
     delete state.trains[clean];
-    writeState(state);
+    writeState(state, options);
     try {
       deviceRegistry.detachTrain(clean);
       alertNotificationService.resolveAlertsForTrain(clean);
@@ -560,7 +560,7 @@ export const localFleetStore = {
     }
   },
 
-  addCoach(trainNumber: string, input: CoachFormInput): { success: boolean; coach: CoachConsist } {
+  addCoach(trainNumber: string, input: CoachFormInput, options?: { skipPublish?: boolean }): { success: boolean; coach: CoachConsist } {
     const num = (trainNumber || '').trim();
     const state = readState();
     const record = state.trains[num];
@@ -639,11 +639,11 @@ export const localFleetStore = {
       deviceRegistry.assignDevice(devUid, num, cNum);
     }
 
-    writeState(state);
+    writeState(state, options);
     return { success: true, coach: newCoach };
   },
 
-  updateCoach(trainNumber: string, coachNumber: string, input: CoachFormInput): { success: boolean; coach: CoachConsist } {
+  updateCoach(trainNumber: string, coachNumber: string, input: CoachFormInput, options?: { skipPublish?: boolean }): { success: boolean; coach: CoachConsist } {
     const num = (trainNumber || '').trim();
     const cNum = (coachNumber || '').trim().toUpperCase();
     const state = readState();
@@ -707,11 +707,11 @@ export const localFleetStore = {
       }
     }
 
-    writeState(state);
+    writeState(state, options);
     return { success: true, coach };
   },
 
-  renameCoach(trainNumber: string, oldCoachNumber: string, newCoachNumber: string): { success: boolean; oldCoachNumber: string; newCoachNumber: string } {
+  renameCoach(trainNumber: string, oldCoachNumber: string, newCoachNumber: string, options?: { skipPublish?: boolean }): { success: boolean; oldCoachNumber: string; newCoachNumber: string } {
     const num = (trainNumber || '').trim();
     const oldC = (oldCoachNumber || '').trim().toUpperCase();
     const newC = (newCoachNumber || '').trim().toUpperCase();
@@ -754,11 +754,11 @@ export const localFleetStore = {
       }
     }
 
-    writeState(state);
+    writeState(state, options);
     return { success: true, oldCoachNumber: oldC, newCoachNumber: newC };
   },
 
-  deleteCoach(trainNumber: string, coachNumber: string): { success: boolean; message: string; coachNumber: string } {
+  deleteCoach(trainNumber: string, coachNumber: string, options?: { skipPublish?: boolean }): { success: boolean; message: string; coachNumber: string } {
     const num = (trainNumber || '').trim();
     const cNum = (coachNumber || '').trim().toUpperCase();
     const state = readState();
@@ -786,11 +786,11 @@ export const localFleetStore = {
       alertNotificationService.resolveAlertsForCoach(num, cNum);
     } catch {}
 
-    writeState(state);
+    writeState(state, options);
     return { success: true, message: `Coach ${cNum} deleted successfully from Train ${num}.`, coachNumber: cNum };
   },
 
-  reorderCoaches(trainNumber: string, coachNumbers: string[]): { success: boolean; coaches: CoachConsist[] } {
+  reorderCoaches(trainNumber: string, coachNumbers: string[], options?: { skipPublish?: boolean }): { success: boolean; coaches: CoachConsist[] } {
     const num = (trainNumber || '').trim();
     const state = readState();
     const record = state.trains[num];
@@ -823,8 +823,41 @@ export const localFleetStore = {
     });
 
     record.consist.coaches = reordered;
-    writeState(state);
+    writeState(state, options);
     return { success: true, coaches: reordered };
+  },
+
+  updateTank(payload: any, options?: { skipPublish?: boolean }): boolean {
+    const tankId = String(payload.tank_id || payload.id || '');
+    const trainNum = String(payload.train_number || '').trim();
+    const coachNum = String(payload.coach_number || '').trim().toUpperCase();
+    const tankIndex = Number(payload.tank_index) || 1;
+    const state = readState();
+
+    let matched = false;
+    for (const rec of Object.values(state.trains)) {
+      if (trainNum && rec.train.train_number.trim() !== trainNum) continue;
+      for (const c of rec.consist.coaches || []) {
+        if (coachNum && c.coach_number.trim().toUpperCase() !== coachNum) continue;
+        for (const t of c.tanks || []) {
+          if (t.id === tankId || (!tankId && t.tank_index === tankIndex)) {
+            if (payload.name) t.name = payload.name;
+            if (payload.capacity_liters != null) t.capacity_liters = Number(payload.capacity_liters);
+            if (payload.height_cm != null) t.height_cm = Number(payload.height_cm);
+            if (payload.area_m2 != null) t.cross_sectional_area_m2 = Number(payload.area_m2);
+            if (payload.geometry) {
+              t.geometry = payload.geometry;
+              t.tank_type = payload.geometry;
+            }
+            matched = true;
+          }
+        }
+      }
+    }
+    if (matched) {
+      writeState(state, options);
+    }
+    return matched;
   },
 
   listAllTanks(): TankLiveStatus[] {

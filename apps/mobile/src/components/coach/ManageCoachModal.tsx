@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp } from '../../state/AppContext';
-import { CoachConsist, CoachFormInput } from '../../types';
+import { CoachConsist, CoachFormInput, TrainConsist } from '../../types';
+import { ApiClient } from '../../api/client';
+import { localFleetStore, FLEET_UPDATED_EVENT } from '../../services/localFleetStore';
 import {
   X,
   Plus,
@@ -172,12 +174,54 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
     }
   }, [statusFeedback]);
 
-  // Coaches list from active consist
+  // Consist fetched directly for this modal if activeConsist does not match
+  const [modalConsist, setModalConsist] = useState<TrainConsist | null>(null);
+
+  useEffect(() => {
+    if (!effectiveTrainNumber) return;
+    const local = localFleetStore.getTrainConsist(effectiveTrainNumber);
+    if (local) setModalConsist(local);
+    ApiClient.fetchTrainConsist(effectiveTrainNumber)
+      .then((c) => {
+        if (c) setModalConsist(c);
+      })
+      .catch(() => {});
+  }, [isOpen, effectiveTrainNumber]);
+
+  useEffect(() => {
+    const handleSync = () => {
+      if (effectiveTrainNumber) {
+        const local = localFleetStore.getTrainConsist(effectiveTrainNumber);
+        if (local) setModalConsist(local);
+        ApiClient.fetchTrainConsist(effectiveTrainNumber)
+          .then((c) => {
+            if (c) setModalConsist(c);
+          })
+          .catch(() => {});
+      }
+    };
+    window.addEventListener('panorama:sync-event', handleSync);
+    window.addEventListener(FLEET_UPDATED_EVENT, handleSync);
+    return () => {
+      window.removeEventListener('panorama:sync-event', handleSync);
+      window.removeEventListener(FLEET_UPDATED_EVENT, handleSync);
+    };
+  }, [effectiveTrainNumber]);
+
+  // Coaches list from active consist, modal consist, or local store
   const rawCoaches: CoachConsist[] = useMemo(() => {
-    return activeConsist?.train_number === effectiveTrainNumber && activeConsist.coaches
-      ? activeConsist.coaches
-      : [];
-  }, [activeConsist, effectiveTrainNumber]);
+    if (activeConsist?.train_number === effectiveTrainNumber && activeConsist.coaches && activeConsist.coaches.length > 0) {
+      return activeConsist.coaches;
+    }
+    if (modalConsist?.train_number === effectiveTrainNumber && modalConsist.coaches && modalConsist.coaches.length > 0) {
+      return modalConsist.coaches;
+    }
+    const local = localFleetStore.getTrainConsist(effectiveTrainNumber);
+    if (local?.coaches && local.coaches.length > 0) {
+      return local.coaches;
+    }
+    return activeConsist?.coaches || [];
+  }, [activeConsist, modalConsist, effectiveTrainNumber]);
 
   // Filtered & Sorted Coaches
   const displayCoaches = useMemo(() => {

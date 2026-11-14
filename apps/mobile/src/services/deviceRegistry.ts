@@ -686,6 +686,36 @@ class DeviceRegistryService {
   }
 
   /**
+   * Unassign hardware devices bound to a specific coach.
+   */
+  public unassignCoachDevice(trainNumber: string, coachNumber: string, _options?: { skipPublish?: boolean }): number {
+    const cleanTrain = (trainNumber || '').trim().toLowerCase();
+    const cleanCoach = (coachNumber || '').trim().toLowerCase();
+    if (!cleanTrain || !cleanCoach) return 0;
+    let count = 0;
+    this.devices.forEach((dev, uid) => {
+      if (
+        (dev.trainNumber || '').trim().toLowerCase() === cleanTrain &&
+        (dev.coachNumber || '').trim().toLowerCase() === cleanCoach
+      ) {
+        this.devices.set(uid, {
+          ...dev,
+          trainNumber: null,
+          coachNumber: null,
+          assignmentStatus: 'AVAILABLE',
+          isOnline: false,
+        });
+        count += 1;
+      }
+    });
+    if (count > 0) {
+      this.saveToStorage();
+      this.notify();
+    }
+    return count;
+  }
+
+  /**
    * Delete device from registry.
    */
   public deleteDevice(uid: string): boolean {
