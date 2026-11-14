@@ -32,6 +32,13 @@ import {
 } from 'lucide-react';
 
 import { DisplaySettingsPanel } from '../components/settings/DisplaySettingsPanel';
+import {
+  resolveApiBaseUrl,
+  resolveHealthUrl,
+  setCustomApiUrl,
+  DEFAULT_PRODUCTION_API_URL,
+  DEFAULT_LOCAL_API_URL,
+} from '../config/apiConfig';
 
 export const SettingsScreen: React.FC = () => {
   const { currentUser } = useApp();
@@ -166,6 +173,9 @@ const AdminSystemSettings: React.FC = () => {
   const [ubidotsLabel, setUbidotsLabel] = useState('wli');
   const [ubidotsToken, setUbidotsToken] = useState('BBUS-sample-token-live-telemetry');
   const [showToken, setShowToken] = useState(false);
+  const [backendUrl, setBackendUrl] = useState<string>(() => resolveApiBaseUrl());
+  const [backendTestStatus, setBackendTestStatus] = useState<string | null>(null);
+  const [testingBackend, setTestingBackend] = useState<boolean>(false);
 
   // Section 5: Map & Location Settings
   const [defaultCorridor, setDefaultCorridor] = useState('ACTIVE_TRAIN_GPS');
@@ -342,6 +352,27 @@ const AdminSystemSettings: React.FC = () => {
     }
   };
 
+  const handleTestBackend = async () => {
+    setTestingBackend(true);
+    setBackendTestStatus('Connecting to backend health probe...');
+    try {
+      const res = await fetch(resolveHealthUrl(backendUrl), {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      if (res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setBackendTestStatus(`✓ Connected: HTTP 200 OK — ${json.app || 'Panorama Backend'} (${json.version || 'v2'})`);
+      } else {
+        setBackendTestStatus(`✗ Server responded with HTTP ${res.status}: ${res.statusText}`);
+      }
+    } catch (err: any) {
+      setBackendTestStatus(`✗ Unreachable: ${err?.message || 'Connection refused / CORS blocked'}`);
+    } finally {
+      setTestingBackend(false);
+    }
+  };
+
   const handleApply = async () => {
     if (!isThresholdOrderingValid) {
       setActionMessage({
@@ -387,6 +418,7 @@ const AdminSystemSettings: React.FC = () => {
       };
 
       await ApiClient.applyUnifiedConfig(payload);
+      setCustomApiUrl(backendUrl);
       updateAlertConfig({
         masterEnabled: alarmMasterEnabled,
         criticalThreshold: Number(alarmCritical),
@@ -1444,6 +1476,70 @@ const AdminSystemSettings: React.FC = () => {
               {mqttTestResult}
             </div>
           )}
+
+          {/* Central REST API Backend Gateway */}
+          <div style={{ backgroundColor: colors.surfaceAlt, padding: '14px', borderRadius: '8px', border: `1px solid ${colors.border}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+              <div>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: colors.textPrimary }}>
+                  Central SCADA REST API Gateway
+                </span>
+                <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: colors.textMuted }}>
+                  Authoritative endpoint for trains, coach consists, physical tank parameters, and SCADA alarms.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => { setBackendUrl(DEFAULT_LOCAL_API_URL); setHasUnsavedChanges(true); }}
+                  style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '4px', border: `1px solid ${colors.border}`, backgroundColor: colors.surface, cursor: 'pointer', color: colors.textPrimary }}
+                >
+                  Local (8000)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setBackendUrl(DEFAULT_PRODUCTION_API_URL); setHasUnsavedChanges(true); }}
+                  style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '4px', border: `1px solid ${colors.border}`, backgroundColor: colors.surface, cursor: 'pointer', color: colors.textPrimary }}
+                >
+                  Render Cloud
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTestBackend}
+                  disabled={testingBackend}
+                  style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '4px', border: 'none', backgroundColor: '#2563EB', color: '#fff', cursor: 'pointer', fontWeight: 600 }}
+                >
+                  {testingBackend ? 'Probing...' : 'Test API'}
+                </button>
+              </div>
+            </div>
+            <input
+              type="text"
+              disabled={!isAdmin}
+              value={backendUrl}
+              onChange={(e) => {
+                setBackendUrl(e.target.value);
+                setHasUnsavedChanges(true);
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                borderRadius: '6px',
+                border: `1px solid ${colors.borderStrong}`,
+                backgroundColor: colors.surface,
+                color: colors.textPrimary,
+                fontSize: '12px',
+                fontFamily: 'monospace',
+                boxSizing: 'border-box',
+              }}
+              placeholder="e.g. http://127.0.0.1:8000/api/v1"
+            />
+            {backendTestStatus && (
+              <div style={{ marginTop: '8px', fontSize: '11px', color: backendTestStatus.startsWith('✓') ? '#16A34A' : '#DC2626', fontWeight: 600 }}>
+                {backendTestStatus}
+              </div>
+            )}
+          </div>
 
           {/* MQTT Settings */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '14px' }}>

@@ -31,6 +31,23 @@ import {
   CENTRAL_DELTA_SYNC_TOPIC,
 } from '../services/mqttService';
 import { Logger } from '../services/logger';
+import {
+  resolveApiBaseUrl,
+  DEFAULT_PRODUCTION_API_URL,
+  resolveHealthUrl,
+  BACKEND_URL_CHANGED_EVENT,
+} from '../config/apiConfig';
+
+export type BackendConnectivityStatus = 'ONLINE' | 'OFFLINE' | 'DEGRADED' | 'CHECKING';
+
+export interface ClassifiedApiError {
+  type: 'NETWORK_OFFLINE' | 'TIMEOUT' | 'CONNECTION_REFUSED' | 'SERVER_ERROR' | 'CLIENT_ERROR' | 'UNKNOWN';
+  message: string;
+  status?: number;
+  code?: string;
+  retryable: boolean;
+  originalError?: any;
+}
 
 const USERS_STORAGE_KEY = 'panorama_users_store';
 const REGISTRATIONS_STORAGE_KEY = 'panorama_registrations_store';
@@ -124,58 +141,43 @@ function writeLocalRegistrations(regs: UserProfile[], skipPublish = false): void
   } catch {}
 }
 
-export const PRODUCTION_BACKEND_URL = 'https://panorama-water-tank-backend.onrender.com/api/v1';
+export const PRODUCTION_BACKEND_URL = DEFAULT_PRODUCTION_API_URL;
 
 export function resolveApiBase(): string {
-  // 1. User manual override stored in localStorage
-  if (typeof window !== 'undefined' && window.localStorage) {
-    const custom = window.localStorage.getItem('panorama_backend_url');
-    if (custom && custom.trim()) {
-      return custom.trim().replace(/\/+$/, '');
-    }
-  }
-
-  // 2. Check local loopback FIRST so local development and testing on 127.0.0.1/localhost connect to local backend
-  if (typeof window !== 'undefined' && window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
-    const host = window.location.hostname || '127.0.0.1';
-    const port = window.location.port || '';
-    if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0') {
-      if (port === '8000') {
-        return `http://${host}:${port}/api/v1`;
-      }
-      return `http://${host}:8000/api/v1`;
-    }
-  }
-
-  // 3. Build-time environment variable injection
-  const configured =
-    (typeof process !== 'undefined' && (
-      process.env?.VITE_API_BASE_URL ||
-      process.env?.VITE_BACKEND_URL ||
-      process.env?.VITE_API_URL ||
-      process.env?.API_BASE_URL ||
-      process.env?.API_URL ||
-      process.env?.REACT_APP_API_URL
-    )) ||
-    (typeof import.meta !== 'undefined' && (
-      (import.meta as any).env?.VITE_API_BASE_URL ||
-      (import.meta as any).env?.VITE_BACKEND_URL ||
-      (import.meta as any).env?.VITE_API_URL
-    ));
-  if (configured && String(configured).trim()) {
-    return String(configured).trim().replace(/\/+$/, '');
-  }
-
-  // 4. Default production backend URL
-  return PRODUCTION_BACKEND_URL;
+  return resolveApiBaseUrl();
 }
 
 export const API_BASE = resolveApiBase();
 
 export class ApiClient {
-  private static isBackendAvailable: boolean | null = null;
+  private static backendStatus: BackendConnectivityStatus = 'CHECKING';
   private static lastHealthCheckTime = 0;
   private static listenersBound = false;
+  private static backoffDelayMs = 2000;
+  private static readonly maxBackoffMs = 60000;
+  private static healthCheckTimer: any = null;
+  private static statusListeners: Set<(status: BackendConnectivityStatus) => void> = new Set();
+  private static pendingGetRequests: Map<string, Promise<any>> = new Map();
+
+  static getBackendStatus(): BackendConnectivityStatus {
+    return this.backendStatus;
+  }
+
+  static onStatusChange(callback: (status: BackendConnectivityStatus) => void): () => void {
+    this.statusListeners.add(callback);
+    callback(this.backendStatus);
+    return () => this.statusListeners.delete(callback);
+  }
+
+  private static setBackendStatus(next: BackendConnectivityStatus): void {
+    if (this.backendStatus === next) return;
+    this.backendStatus = next;
+    for (const listener of this.statusListeners) {
+      try {
+        listener(next);
+      } catch {}
+    }
+  }
 
   static hasBackend(): boolean {
     const base = resolveApiBase();
@@ -185,58 +187,155 @@ export class ApiClient {
   private static ensureListeners(): void {
     if (this.listenersBound || typeof window === 'undefined') return;
     this.listenersBound = true;
+
     window.addEventListener('online', () => {
-      ApiClient.isBackendAvailable = null;
-      ApiClient.lastHealthCheckTime = 0;
+      this.backoffDelayMs = 2000;
+      this.probeHealth(true);
     });
-    window.addEventListener('panorama:backend-url-changed', () => {
-      ApiClient.isBackendAvailable = null;
-      ApiClient.lastHealthCheckTime = 0;
+
+    window.addEventListener('offline', () => {
+      this.setBackendStatus('OFFLINE');
     });
-    if (window.location && (window.location.hostname.endsWith('github.io') || window.location.hostname.endsWith('pages.dev'))) {
-      try {
-        fetch('./backend-status.json', { cache: 'no-store' })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((data) => {
-            if (data && data.available === true) {
-              ApiClient.isBackendAvailable = true;
-              if (window.localStorage) {
-                window.localStorage.setItem('panorama_backend_verified', 'true');
-              }
-            }
-          })
-          .catch(() => {});
-      } catch {}
+
+    window.addEventListener(BACKEND_URL_CHANGED_EVENT, () => {
+      this.backoffDelayMs = 2000;
+      this.lastHealthCheckTime = 0;
+      this.probeHealth(true);
+    });
+
+    // Proactive initial health probe
+    this.probeHealth();
+  }
+
+  /**
+   * Proactively checks backend health with exponential backoff on failure.
+   */
+  static async probeHealth(immediate = false): Promise<boolean> {
+    if (typeof window === 'undefined' || typeof fetch === 'undefined') return true;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      this.setBackendStatus('OFFLINE');
+      return false;
     }
+
+    const base = resolveApiBase();
+    if (!base) {
+      this.setBackendStatus('OFFLINE');
+      return false;
+    }
+
+    const healthUrl = resolveHealthUrl(base);
+    try {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutId = controller ? setTimeout(() => controller.abort(), 4000) : null;
+
+      const response = await fetch(healthUrl, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller?.signal,
+        cache: 'no-store',
+      });
+
+      if (timeoutId) clearTimeout(timeoutId);
+
+      if (response.ok || response.status === 200) {
+        this.lastHealthCheckTime = Date.now();
+        this.backoffDelayMs = 2000;
+        this.setBackendStatus('ONLINE');
+        if (this.healthCheckTimer) {
+          clearTimeout(this.healthCheckTimer);
+          this.healthCheckTimer = null;
+        }
+        return true;
+      }
+
+      this.setBackendStatus('DEGRADED');
+      this.scheduleHealthProbe();
+      return false;
+    } catch {
+      this.setBackendStatus('OFFLINE');
+      this.scheduleHealthProbe();
+      return false;
+    }
+  }
+
+  private static scheduleHealthProbe(): void {
+    if (this.healthCheckTimer) clearTimeout(this.healthCheckTimer);
+    this.healthCheckTimer = setTimeout(() => {
+      this.probeHealth();
+    }, this.backoffDelayMs);
+    this.backoffDelayMs = Math.min(this.backoffDelayMs * 2, this.maxBackoffMs);
   }
 
   static isRemoteUnreachable(): boolean {
     this.ensureListeners();
-    const base = resolveApiBase();
-    const isLocal = base.includes('127.0.0.1') || base.includes('localhost');
-    if (isLocal) {
-      return this.isBackendAvailable === false && (Date.now() - this.lastHealthCheckTime < 10000);
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return true;
     }
-
-    if (typeof window !== 'undefined' && window.location && window.location.hostname) {
-      const host = window.location.hostname;
-      if (host.endsWith('github.io') || host.endsWith('pages.dev')) {
-        const verified = window.localStorage ? window.localStorage.getItem('panorama_backend_verified') : null;
-        if (verified !== 'true' && this.isBackendAvailable !== true) {
-          return true;
-        }
-      }
-    }
-
-    if (this.isBackendAvailable === false) {
-      if (Date.now() - this.lastHealthCheckTime < 45000) {
-        return true;
-      }
-    }
-    return false;
+    return this.backendStatus === 'OFFLINE' && (Date.now() - this.lastHealthCheckTime > 5000);
   }
 
-  private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  /**
+   * Categorizes errors into structured taxonomy.
+   */
+  private static classifyError(err: any, url: string): ClassifiedApiError {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return {
+        type: 'NETWORK_OFFLINE',
+        message: 'Device has no active internet connection',
+        retryable: true,
+        originalError: err,
+      };
+    }
+    if (err?.name === 'AbortError' || err?.status === 408 || err?.code === 'ETIMEDOUT') {
+      return {
+        type: 'TIMEOUT',
+        message: `Request timed out (10s) while connecting to ${url}`,
+        status: 408,
+        code: 'ETIMEDOUT',
+        retryable: true,
+        originalError: err,
+      };
+    }
+    if (err?.status >= 500) {
+      return {
+        type: 'SERVER_ERROR',
+        message: err.message || `Server error (${err.status})`,
+        status: err.status,
+        code: err.code || `HTTP_${err.status}`,
+        retryable: true,
+        originalError: err,
+      };
+    }
+    if (err?.status >= 400) {
+      return {
+        type: 'CLIENT_ERROR',
+        message: err.message || `Client error (${err.status})`,
+        status: err.status,
+        code: err.code || `HTTP_${err.status}`,
+        retryable: false,
+        originalError: err,
+      };
+    }
+    const errMsg = String(err?.message || err || '');
+    if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('connection refused')) {
+      return {
+        type: 'CONNECTION_REFUSED',
+        message: `Backend service is unreachable at ${url}`,
+        code: 'ECONNREFUSED',
+        retryable: true,
+        originalError: err,
+      };
+    }
+    return {
+      type: 'UNKNOWN',
+      message: errMsg || 'Unknown communication error',
+      retryable: false,
+      originalError: err,
+    };
+  }
+
+  private static async request<T>(endpoint: string, options: RequestInit = {}, retries = 1): Promise<T> {
+    this.ensureListeners();
     const base = resolveApiBase();
     if (!base) {
       const noBaseErr: any = new Error(`No backend configured; bypassing network call for ${endpoint}`);
@@ -245,99 +344,127 @@ export class ApiClient {
       throw noBaseErr;
     }
     const url = `${base}${endpoint}`;
+    const method = (options.method || 'GET').toUpperCase();
 
-    if (this.isRemoteUnreachable()) {
-      const cachedErr: any = new Error(`Remote backend unreachable at ${base}; using cached local store`);
-      cachedErr.status = 503;
-      cachedErr.code = 'ENOTFOUND';
-      throw cachedErr;
-    }
-
-    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('panorama_token') : null;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      ...(options.headers as Record<string, string> || {}),
-    };
-
-    // Implement AbortController with 10s request timeout
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    let timeoutId: any = null;
-    if (controller) {
-      timeoutId = setTimeout(() => {
-        controller.abort();
-      }, 10000);
-      if (options.signal) {
-        options.signal.addEventListener('abort', () => controller.abort());
+    // Prevent duplicate simultaneous GET requests to the same endpoint
+    if (method === 'GET') {
+      const existing = this.pendingGetRequests.get(url);
+      if (existing) {
+        return existing;
       }
     }
 
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers,
-        signal: controller ? controller.signal : options.signal,
-      });
+    const execPromise = (async () => {
+      // If we are completely offline at the network level, fail fast
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        const offErr: any = new Error('Client is offline');
+        offErr.status = 0;
+        offErr.code = 'OFFLINE';
+        throw offErr;
+      }
 
-      if (timeoutId) clearTimeout(timeoutId);
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('panorama_token') : null;
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        ...(options.headers as Record<string, string> || {}),
+      };
 
-      const rawText = await response.text();
-      let parsedJson: any = null;
-      if (rawText) {
-        try {
-          parsedJson = JSON.parse(rawText);
-        } catch {
-          parsedJson = null;
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      let timeoutId: any = null;
+      if (controller) {
+        timeoutId = setTimeout(() => {
+          controller.abort();
+        }, 10000);
+        if (options.signal) {
+          options.signal.addEventListener('abort', () => controller.abort());
         }
       }
 
-      if (!response.ok) {
-        if (!url.includes('127.0.0.1') && !url.includes('localhost')) {
-          ApiClient.isBackendAvailable = false;
-          ApiClient.lastHealthCheckTime = Date.now();
-        }
-
-        let errorMsg = `API error ${response.status}${response.statusText ? `: ${response.statusText}` : ''}`;
-        if (parsedJson && (parsedJson.message || parsedJson.detail)) {
-          errorMsg = String(parsedJson.detail || parsedJson.message);
-        } else if (response.status === 405) {
-          errorMsg = 'HTTP 405 Method Not Allowed: API endpoint does not accept this request or is routed to static hosting.';
-        }
-        Logger.debug('API', 'ApiClient', `${options.method || 'GET'} ${url} returned ${response.status}: ${errorMsg}`, 'request', {
-          status: response.status,
-          detail: parsedJson || rawText.slice(0, 150),
+      try {
+        const response = await fetch(url, {
+          ...options,
+          headers,
+          signal: controller ? controller.signal : options.signal,
         });
-        const err: any = new Error(errorMsg);
-        err.status = response.status;
-        if (parsedJson?.code) err.code = parsedJson.code;
-        throw err;
-      }
 
-      ApiClient.isBackendAvailable = true;
+        if (timeoutId) clearTimeout(timeoutId);
 
-      if (parsedJson !== null) {
-        return parsedJson as T;
+        const rawText = await response.text();
+        let parsedJson: any = null;
+        if (rawText) {
+          try {
+            parsedJson = JSON.parse(rawText);
+          } catch {
+            parsedJson = null;
+          }
+        }
+
+        if (!response.ok) {
+          // If server returned 502/503/504 and we have retries remaining, retry once after backoff
+          if ((response.status === 502 || response.status === 503 || response.status === 504) && retries > 0 && method === 'GET') {
+            await new Promise((r) => setTimeout(r, 600));
+            return this.request<T>(endpoint, options, retries - 1);
+          }
+
+          let errorMsg = `API error ${response.status}${response.statusText ? `: ${response.statusText}` : ''}`;
+          if (parsedJson && (parsedJson.message || parsedJson.detail)) {
+            errorMsg = String(parsedJson.detail || parsedJson.message);
+          } else if (response.status === 405) {
+            errorMsg = 'HTTP 405 Method Not Allowed: API endpoint does not accept this request.';
+          }
+
+          Logger.debug('API', 'ApiClient', `${method} ${url} returned ${response.status}: ${errorMsg}`, 'request', {
+            status: response.status,
+            detail: parsedJson || rawText.slice(0, 150),
+          });
+
+          this.setBackendStatus('DEGRADED');
+          const err: any = new Error(errorMsg);
+          err.status = response.status;
+          if (parsedJson?.code) err.code = parsedJson.code;
+          throw err;
+        }
+
+        this.setBackendStatus('ONLINE');
+        this.lastHealthCheckTime = Date.now();
+        this.backoffDelayMs = 2000;
+
+        if (parsedJson !== null) {
+          return parsedJson as T;
+        }
+        if (response.status === 204 || !rawText.trim()) {
+          return {} as T;
+        }
+        throw new Error(`Invalid non-JSON response from ${url}`);
+      } catch (fetchErr: any) {
+        if (timeoutId) clearTimeout(timeoutId);
+
+        // Check if retryable for transient network dropouts on GET
+        if (retries > 0 && method === 'GET' && fetchErr.name !== 'AbortError') {
+          await new Promise((r) => setTimeout(r, 600));
+          return this.request<T>(endpoint, options, retries - 1);
+        }
+
+        const classified = this.classifyError(fetchErr, url);
+        if (classified.type === 'CONNECTION_REFUSED' || classified.type === 'TIMEOUT') {
+          this.setBackendStatus('OFFLINE');
+          this.scheduleHealthProbe();
+        }
+
+        Logger.debug('API', 'ApiClient', `Request to ${url} failed: ${classified.message}`, 'networkFail');
+        throw fetchErr;
       }
-      if (response.status === 204 || !rawText.trim()) {
-        return {} as T;
-      }
-      throw new Error(`Invalid non-JSON response from ${url}`);
-    } catch (fetchErr: any) {
-      if (timeoutId) clearTimeout(timeoutId);
-      if (!url.includes('127.0.0.1') && !url.includes('localhost')) {
-        ApiClient.isBackendAvailable = false;
-        ApiClient.lastHealthCheckTime = Date.now();
-      }
-      if (fetchErr.name === 'AbortError') {
-        const timeoutErr: any = new Error(`Request timeout (10s) exceeded while requesting ${url}`);
-        timeoutErr.status = 408;
-        timeoutErr.code = 'ETIMEDOUT';
-        Logger.debug('API', 'ApiClient', `Request timed out for ${url}`, 'timeout');
-        throw timeoutErr;
-      }
-      Logger.debug('API', 'ApiClient', `Network request to ${url} failed: ${fetchErr?.message || fetchErr}`, 'networkFail');
-      throw fetchErr;
+    })();
+
+    if (method === 'GET') {
+      this.pendingGetRequests.set(url, execPromise);
+      execPromise.finally(() => {
+        this.pendingGetRequests.delete(url);
+      });
     }
+
+    return execPromise;
   }
 
   // Auth

@@ -17,7 +17,7 @@ import {
   TrainConsist,
   CoachFormInput
 } from '../types';
-import { ApiClient } from '../api/client';
+import { ApiClient, BackendConnectivityStatus } from '../api/client';
 import { wsService, WebSocketStatus } from '../services/websocket';
 import { mqttService } from '../services/mqttService';
 import { syncService, SyncState } from '../services/syncService';
@@ -74,6 +74,7 @@ interface AppContextType {
   activeAlarms: AlarmItem[];
   alarmStats: AlarmStats;
   connectionStatus: WebSocketStatus;
+  backendApiStatus: BackendConnectivityStatus;
   mqttBrokerStatus: 'CONNECTED' | 'DISCONNECTED' | 'UNKNOWN';
   mqttConnectionStatus: MqttConnectionStatus;
   liveTelemetry: LiveTelemetryPayload | null;
@@ -181,6 +182,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [activeAlarms, setActiveAlarms] = useState<AlarmItem[]>([]);
   const [alarmStats, setAlarmStats] = useState<AlarmStats>(defaultStats);
   const [connectionStatus, setConnectionStatus] = useState<WebSocketStatus>('DISCONNECTED');
+  const [backendApiStatus, setBackendApiStatus] = useState<BackendConnectivityStatus>(() => ApiClient.getBackendStatus());
   const [mqttBrokerStatus, setMqttBrokerStatus] = useState<'CONNECTED' | 'DISCONNECTED' | 'UNKNOWN'>('UNKNOWN');
   const [mqttConnectionStatus, setMqttConnectionStatus] = useState<MqttConnectionStatus>('DISCONNECTED');
   const [liveTelemetry, setLiveTelemetry] = useState<LiveTelemetryPayload | null>(null);
@@ -831,6 +833,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         window.removeEventListener('panorama:request-authoritative-sync', handleReqSync);
       }
     };
+  }, []);
+
+  // Subscribe to backend API connectivity status
+  useEffect(() => {
+    return ApiClient.onStatusChange((status) => {
+      setBackendApiStatus(status);
+    });
   }, []);
 
   // Setup WebSocket stream
@@ -1521,6 +1530,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         activeAlarms,
         alarmStats,
         connectionStatus,
+        backendApiStatus,
         mqttBrokerStatus,
         mqttConnectionStatus,
         liveTelemetry,

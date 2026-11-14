@@ -12,6 +12,11 @@
  */
 
 import { Logger } from './logger';
+import {
+  resolveWsUrl,
+  resolveHealthUrl,
+  DEFAULT_PRODUCTION_WS_URL,
+} from '../config/apiConfig';
 
 export type WebSocketStatus = 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING' | 'ERROR';
 export type EventCallback = (data: any) => void;
@@ -22,59 +27,14 @@ const STALE_TIMEOUT_MS = 45000;
 const MAX_CONSECUTIVE_FAILURES = 5;
 const IDLE_POLL_INTERVAL_MS = 60000;
 
-export const PRODUCTION_WS_URL = 'wss://panorama-water-tank-backend.onrender.com/api/v1/ws/live';
+export const PRODUCTION_WS_URL = DEFAULT_PRODUCTION_WS_URL;
 
 export function getWsUrl(): string {
-  // 1. Check custom user backend setting
-  if (typeof window !== 'undefined' && window.localStorage) {
-    const custom = window.localStorage.getItem('panorama_backend_url');
-    if (custom && custom.trim()) {
-      const clean = custom.trim().replace(/\/+$/, '');
-      const wsProto = clean.startsWith('https://') ? 'wss://' : 'ws://';
-      const hostPath = clean.replace(/^https?:\/\//, '');
-      const pathSuffix = hostPath.endsWith('/api/v1') ? '/ws/live' : (hostPath.includes('/api/v1') ? '/ws/live' : '/api/v1/ws/live');
-      return `${wsProto}${hostPath.replace(/\/api\/v1$/, '')}${pathSuffix}`;
-    }
-  }
-
-  // 2. Local development loopback (prioritized over baked-in production env vars for local testing)
-  if (typeof window !== 'undefined' && window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
-    const hostname = window.location.hostname || '127.0.0.1';
-    const port = window.location.port || '';
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') {
-      if (port === '8000') {
-        return `ws://${hostname}:${port}/api/v1/ws/live`;
-      }
-      return `ws://${hostname}:8000/api/v1/ws/live`;
-    }
-  }
-
-  // 3. Check environment variables
-  const configured =
-    (typeof process !== 'undefined' && (
-      process.env?.VITE_WS_URL ||
-      process.env?.VITE_BACKEND_WS_URL ||
-      process.env?.WS_URL ||
-      process.env?.REACT_APP_WS_URL
-    )) ||
-    (typeof import.meta !== 'undefined' && (
-      (import.meta as any).env?.VITE_WS_URL ||
-      (import.meta as any).env?.VITE_BACKEND_WS_URL
-    ));
-  if (configured && String(configured).trim()) {
-    return String(configured).trim();
-  }
-
-  // 4. Default production WebSocket URL
-  return PRODUCTION_WS_URL;
+  return resolveWsUrl();
 }
 
 export function getHttpHealthUrl(wsUrl?: string): string {
-  const target = wsUrl || getWsUrl();
-  const httpProto = target.startsWith('wss://') ? 'https://' : 'http://';
-  const clean = target.replace(/^wss?:\/\//, '');
-  const baseUrl = clean.split('/ws/live')[0];
-  return `${httpProto}${baseUrl}/health`;
+  return resolveHealthUrl(wsUrl);
 }
 
 export class WebSocketService {
@@ -221,24 +181,16 @@ export class WebSocketService {
     // Pre-flight health probe if prior attempts failed or host is remote
     const isLocal = wsUrl.includes('127.0.0.1') || wsUrl.includes('localhost');
     if (!isLocal || this.reconnectAttempts > 1) {
-      if (typeof window !== 'undefined' && window.location && window.location.hostname && (window.location.hostname.endsWith('github.io') || window.location.hostname.endsWith('pages.dev'))) {
-        const verified = window.localStorage ? window.localStorage.getItem('panorama_backend_verified') : null;
-        if (verified !== 'true') {
-          this.isConnecting = false;
-          this.setStatus('DISCONNECTED');
-          return;
-        }
-      }
       const isHealthy = await this.checkBackendHealth(wsUrl);
       if (!isHealthy) {
         this.isConnecting = false;
-        Logger.warn(
+        Logger.debug(
           'WEBSOCKET',
           'WebSocketService',
           `Backend health probe failed at ${getHttpHealthUrl(wsUrl)}. Postponing WebSocket handshake.`,
           'healthProbe'
         );
-        this.setStatus('ERROR');
+        this.setStatus('DISCONNECTED');
         this.scheduleReconnect();
         return;
       }
