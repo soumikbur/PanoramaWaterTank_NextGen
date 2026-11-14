@@ -8,10 +8,13 @@ from app.repositories.device_repo import DeviceRepository
 from app.repositories.telemetry_repo import TelemetryRepository
 from app.schemas.device import DeviceOut, DeviceDiagnostics, DeviceCreate, DeviceUpdate
 from app.api.v1.auth import get_current_admin_user, get_current_user
+from app.models.train import Train
+from app.services.train_lookup_service import TRAIN_NUMBER_RE
 from app.models.user import User
 from app.websocket.manager import ws_manager
 from app.mqtt.client import mqtt_service
 from app.services.sync_broadcaster import broadcast_sync_event
+from sqlalchemy import select
 
 router = APIRouter(prefix="/devices", tags=["Devices"])
 
@@ -100,10 +103,22 @@ async def create_device(
     if existing:
         raise HTTPException(status_code=400, detail=f"Device with UID '{payload.uid}' already exists")
 
+    train_no = (payload.trainNumber or "").strip()
+    coach_no = (payload.coachNumber or "").strip()
+    if train_no and train_no.upper() != "UNASSIGNED":
+        train_exists = (
+            await db.execute(select(Train).where(Train.train_number == train_no))
+        ).scalar_one_or_none()
+        if not train_exists and not TRAIN_NUMBER_RE.match(train_no):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot assign device: Train '{train_no}' is not registered. Devices can only be assigned to registered trains."
+            )
+
     device = await repo.create_or_update(
         uid=payload.uid.strip(),
-        train_number=payload.trainNumber.strip(),
-        coach_number=payload.coachNumber.strip(),
+        train_number=train_no or "UNASSIGNED",
+        coach_number=coach_no or "UNASSIGNED",
         name=payload.name.strip(),
         hardware_version=payload.hardwareVersion or "Standard WLI Node",
         firmware_version=payload.firmwareVersion or "2.0.0",
@@ -113,7 +128,7 @@ async def create_device(
         mqtt_topic=payload.mqttTopic or f"panorama/telemetry/{payload.uid.strip()}",
         tank_assignment=payload.tankAssignment or "BOTH",
         description=payload.description,
-        status=payload.status or "AVAILABLE",
+        status=payload.status or ("ENGAGED" if (train_no and train_no.upper() != "UNASSIGNED" and coach_no and coach_no.upper() != "UNASSIGNED") else "AVAILABLE"),
     )
 
     await db.commit()
@@ -168,9 +183,25 @@ async def update_device(
     if payload.name is not None:
         device.name = payload.name.strip()
     if payload.trainNumber is not None:
-        device.train_number = payload.trainNumber.strip()
+        tr_val = payload.trainNumber.strip()
+        if tr_val and tr_val.upper() != "UNASSIGNED":
+            train_exists = (
+                await db.execute(select(Train).where(Train.train_number == tr_val))
+            ).scalar_one_or_none()
+            if not train_exists and not TRAIN_NUMBER_RE.match(tr_val):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cannot assign device: Train '{tr_val}' is not registered. Devices can only be assigned to registered trains."
+                )
+        device.train_number = tr_val or "UNASSIGNED"
     if payload.coachNumber is not None:
-        device.coach_number = payload.coachNumber.strip()
+        device.coach_number = payload.coachNumber.strip() or "UNASSIGNED"
+
+    # Update assignment status automatically
+    if device.train_number != "UNASSIGNED" and device.coach_number != "UNASSIGNED":
+        device.status = "ENGAGED"
+    elif device.status == "ENGAGED":
+        device.status = "AVAILABLE"
     if payload.firmwareVersion is not None:
         device.firmware_version = payload.firmwareVersion.strip()
     if payload.hardwareVersion is not None:

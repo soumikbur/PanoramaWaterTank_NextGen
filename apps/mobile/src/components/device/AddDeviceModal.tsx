@@ -42,7 +42,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
     if (isOpen) {
       const randomHex = Math.random().toString(16).substring(2, 8).toUpperCase();
       const generatedUid = `DEV-WLI-${randomHex}`;
-      const tr = (presetTrainNumber || selectedTrainNumber || configuredTrains[0]?.train_number || '12002').trim();
+      const tr = (presetTrainNumber || selectedTrainNumber || configuredTrains[0]?.train_number || '').trim();
       const ch = (presetCoachNumber || selectedCoachNumber || 'C1').trim().toUpperCase();
 
       setUid(generatedUid);

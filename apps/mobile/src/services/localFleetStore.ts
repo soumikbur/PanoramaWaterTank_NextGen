@@ -88,198 +88,7 @@ const DEFAULT_INITIAL_STATE: StaticFleetState = {
   updatedAt: 1700000000000,
   mutationId: 'initial-baseline',
   deletedTrainNumbers: {},
-  trains: {
-    '12842': {
-      train: {
-        train_number: '12842',
-        name: 'Coromandel Express',
-        region: 'EAST',
-        type: 'Superfast Express',
-        coaches_count: 6,
-        tanks_count: 12,
-        is_online: false,
-        active_alarms: 0,
-        status: 'All Normal',
-        source_station: 'Howrah Jn',
-        source_code: 'HWH',
-        destination_station: 'MGR Chennai Central',
-        destination_code: 'MAS',
-        railway_zone: 'SER',
-        total_coaches: 6,
-        has_official_composition: true,
-        api_provider: 'Standard Fleet Registry',
-        last_verified_at: new Date().toISOString(),
-        current_latitude: 22.5839,
-        current_longitude: 88.3426,
-        current_speed_kmh: 0,
-      } as any,
-      consist: {
-        train_number: '12842',
-        name: 'Coromandel Express',
-        region: 'EAST',
-        coaches_count: 6,
-        tanks_count: 12,
-        online_status: false,
-        active_alarms_count: 0,
-        source_station: 'Howrah Jn',
-        destination_station: 'MGR Chennai Central',
-        coaches: [
-          {
-            coach_number: 'A1',
-            device_uid: 'PANORAMA-12842-A1',
-            is_online: false,
-            hardware_version: 'Standard WLI Node',
-            tanks: [
-              { id: 'tank-12842-A1-1', tank_index: 1, name: 'Tank 1 (Left)', capacity_liters: 500, current_level_percent: 78.5, current_volume_liters: 392.5, status: 'NORMAL' },
-              { id: 'tank-12842-A1-2', tank_index: 2, name: 'Tank 2 (Right)', capacity_liters: 500, current_level_percent: 74.0, current_volume_liters: 370.0, status: 'NORMAL' },
-            ],
-          },
-          {
-            coach_number: 'A2',
-            device_uid: 'PANORAMA-12842-A2',
-            is_online: false,
-            hardware_version: 'Standard WLI Node',
-            tanks: [
-              { id: 'tank-12842-A2-1', tank_index: 1, name: 'Tank 1 (Left)', capacity_liters: 500, current_level_percent: 65.0, current_volume_liters: 325.0, status: 'NORMAL' },
-              { id: 'tank-12842-A2-2', tank_index: 2, name: 'Tank 2 (Right)', capacity_liters: 500, current_level_percent: 68.0, current_volume_liters: 340.0, status: 'NORMAL' },
-            ],
-          },
-          {
-            coach_number: 'B1',
-            device_uid: 'PANORAMA-12842-B1',
-            is_online: false,
-            hardware_version: 'Standard WLI Node',
-            tanks: [
-              { id: 'tank-12842-B1-1', tank_index: 1, name: 'Tank 1 (Left)', capacity_liters: 500, current_level_percent: 82.0, current_volume_liters: 410.0, status: 'NORMAL' },
-              { id: 'tank-12842-B1-2', tank_index: 2, name: 'Tank 2 (Right)', capacity_liters: 500, current_level_percent: 80.0, current_volume_liters: 400.0, status: 'NORMAL' },
-            ],
-          },
-          {
-            coach_number: 'B2',
-            device_uid: 'PANORAMA-12842-B2',
-            is_online: false,
-            hardware_version: 'Standard WLI Node',
-            tanks: [
-              { id: 'tank-12842-B2-1', tank_index: 1, name: 'Tank 1 (Left)', capacity_liters: 500, current_level_percent: 54.0, current_volume_liters: 270.0, status: 'NORMAL' },
-              { id: 'tank-12842-B2-2', tank_index: 2, name: 'Tank 2 (Right)', capacity_liters: 500, current_level_percent: 51.0, current_volume_liters: 255.0, status: 'NORMAL' },
-            ],
-          },
-          {
-            coach_number: 'S1',
-            device_uid: 'PANORAMA-12842-S1',
-            is_online: false,
-            hardware_version: 'Standard WLI Node',
-            tanks: [
-              { id: 'tank-12842-S1-1', tank_index: 1, name: 'Tank 1 (Left)', capacity_liters: 500, current_level_percent: 42.0, current_volume_liters: 210.0, status: 'NORMAL' },
-              { id: 'tank-12842-S1-2', tank_index: 2, name: 'Tank 2 (Right)', capacity_liters: 500, current_level_percent: 40.0, current_volume_liters: 200.0, status: 'NORMAL' },
-            ],
-          },
-          {
-            coach_number: 'S2',
-            device_uid: 'PANORAMA-12842-S2',
-            is_online: false,
-            hardware_version: 'Standard WLI Node',
-            tanks: [
-              { id: 'tank-12842-S2-1', tank_index: 1, name: 'Tank 1 (Left)', capacity_liters: 500, current_level_percent: 30.0, current_volume_liters: 150.0, status: 'NORMAL' },
-              { id: 'tank-12842-S2-2', tank_index: 2, name: 'Tank 2 (Right)', capacity_liters: 500, current_level_percent: 32.0, current_volume_liters: 160.0, status: 'NORMAL' },
-            ],
-          },
-        ],
-      },
-    },
-    '12841': {
-      train: {
-        train_number: '12841',
-        name: 'Howrah Mail',
-        region: 'SOUTH',
-        type: 'Superfast Mail',
-        coaches_count: 20,
-        tanks_count: 40,
-        is_online: false,
-        active_alarms: 0,
-        status: 'All Normal',
-        source_station: 'MGR Chennai Central',
-        source_code: 'MAS',
-        destination_station: 'Howrah Jn',
-        destination_code: 'HWH',
-        railway_zone: 'SR',
-        total_coaches: 20,
-        has_official_composition: true,
-        api_provider: 'Standard Fleet Registry',
-        last_verified_at: new Date(Date.now() - 3600000).toISOString(),
-        current_latitude: 17.6868,
-        current_longitude: 83.2185,
-        current_speed_kmh: 0,
-      } as any,
-      consist: {
-        train_number: '12841',
-        name: 'Howrah Mail',
-        region: 'SOUTH',
-        coaches_count: 20,
-        tanks_count: 40,
-        online_status: false,
-        active_alarms_count: 0,
-        source_station: 'MGR Chennai Central',
-        destination_station: 'Howrah Jn',
-        coaches: [
-          {
-            coach_number: 'B1',
-            device_uid: 'PANORAMA-12841-B1',
-            is_online: false,
-            hardware_version: 'Standard WLI Node',
-            tanks: [
-              { id: 'tank-12841-B1-1', tank_index: 1, name: 'Tank 1 (Left)', capacity_liters: 500, current_level_percent: 60.0, current_volume_liters: 300.0, status: 'NORMAL' },
-            ],
-          },
-        ],
-      },
-    },
-    '12860': {
-      train: {
-        train_number: '12860',
-        name: 'Gitanjali Express',
-        region: 'WEST',
-        type: 'Superfast Express',
-        coaches_count: 24,
-        tanks_count: 48,
-        is_online: false,
-        active_alarms: 0,
-        status: 'All Normal',
-        source_station: 'Howrah Jn',
-        source_code: 'HWH',
-        destination_station: 'CSMT Mumbai',
-        destination_code: 'CSMT',
-        railway_zone: 'CR',
-        total_coaches: 24,
-        has_official_composition: true,
-        api_provider: 'Standard Fleet Registry',
-        last_verified_at: new Date(Date.now() - 7200000).toISOString(),
-        current_latitude: null,
-        current_longitude: null,
-        current_speed_kmh: null,
-      } as any,
-      consist: {
-        train_number: '12860',
-        name: 'Gitanjali Express',
-        region: 'WEST',
-        coaches_count: 24,
-        tanks_count: 48,
-        online_status: false,
-        active_alarms_count: 0,
-        source_station: 'Howrah Jn',
-        destination_station: 'CSMT Mumbai',
-        coaches: [
-          {
-            coach_number: 'C1',
-            device_uid: 'PANORAMA-12860-C1',
-            is_online: false,
-            hardware_version: 'Standard WLI Node',
-            tanks: [],
-          },
-        ],
-      },
-    },
-  },
+  trains: {},
 };
 
 function readState(): StaticFleetState {
@@ -305,6 +114,24 @@ function readState(): StaticFleetState {
       parsed?.deletedTrainNumbers && typeof parsed.deletedTrainNumbers === 'object'
         ? parsed.deletedTrainNumbers
         : {};
+
+    // Purge legacy demo trains if present from older baseline
+    if (parsed?.mutationId === 'initial-baseline' && (trains['12842'] || trains['12841'] || trains['12860'])) {
+      delete trains['12842'];
+      delete trains['12841'];
+      delete trains['12860'];
+    }
+
+    // Sanitize any coach device_uids that were auto-synthesized demo strings
+    for (const tr of Object.values(trains as Record<string, StoredTrainRecord>)) {
+      if (tr?.consist?.coaches) {
+        for (const coach of tr.consist.coaches) {
+          if (coach.device_uid && coach.device_uid.startsWith('PANORAMA-')) {
+            coach.device_uid = '';
+          }
+        }
+      }
+    }
 
     for (const num of Object.keys(deletedTrainNumbers)) {
       delete trains[num];
@@ -446,7 +273,7 @@ export const localFleetStore = {
       return {
         coach_number: cNum,
         coach_category: spec.coach_category || 'Coach',
-        device_uid: `PANORAMA-${num}-${cNum}`,
+        device_uid: (spec as any).device_uid || '',
         is_online: false,
         hardware_version: 'Standard WLI Node',
         tanks: [
@@ -743,7 +570,7 @@ export const localFleetStore = {
       throw err;
     }
 
-    const devUid = (input.device_uid || '').trim() || `PANORAMA-${num}-${cNum}`;
+    const devUid = (input.device_uid || '').trim();
     const t1Cap = Number(input.tank_1_capacity) > 0 ? Number(input.tank_1_capacity) : 500;
     const t2Cap = Number(input.tank_2_capacity) > 0 ? Number(input.tank_2_capacity) : 500;
     const t1Name = (input.tank_1_name || '').trim() || 'Arrival Side (Tank 1)';
@@ -867,7 +694,7 @@ export const localFleetStore = {
         coach.device_uid = newDev;
       } else if (!newDev && oldDev) {
         deviceRegistry.unassignDevice(oldDev);
-        coach.device_uid = `PANORAMA-${num}-${cNum}`;
+        coach.device_uid = '';
       }
     }
 

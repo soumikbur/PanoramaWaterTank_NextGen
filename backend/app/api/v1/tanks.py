@@ -1,4 +1,5 @@
 """Tanks API Router."""
+import json
 from typing import List, Optional
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,6 +8,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.models.base import utc_now
 from app.repositories.tank_repo import TankRepository
 from app.repositories.device_repo import DeviceRepository
 from app.repositories.telemetry_repo import TelemetryRepository
@@ -89,17 +91,13 @@ async def list_all_tanks(db: AsyncSession = Depends(get_db)):
     telemetry_repo = TelemetryRepository(db)
     alarm_repo = AlarmRepository(db)
 
-    tanks = await tank_repo.list_all()
-    if not tanks:
-        return []
-
-    configured_trains = set(
-        (await db.execute(select(Train.train_number))).scalars().all()
-    )
+    trains = (await db.execute(select(Train))).scalars().all()
+    configured_trains = {t.train_number for t in trains}
     if not configured_trains:
         return []
 
     results = []
+    tanks = await tank_repo.list_all()
     for tank in tanks:
         device = await device_repo.get_by_id(tank.device_id)
         if (
@@ -112,6 +110,67 @@ async def list_all_tanks(db: AsyncSession = Depends(get_db)):
         latest = await telemetry_repo.get_latest_for_tank(tank.id)
         active_alarms = await alarm_repo.list_alarms(status="ACTIVE", device_id=tank.device_id) if device else []
         results.append(_calculate_tank_status(tank, device, latest, active_alarms))
+
+    # Also include configured coach tank slots for configured trains without assigned devices
+    for tr in trains:
+        raw_comp = getattr(tr, "coach_configuration_json", None)
+        try:
+            comp = json.loads(raw_comp) if raw_comp else []
+        except Exception:
+            comp = []
+        for c in comp:
+            cn = (c.get("coach_number") or "").strip().upper()
+            if not cn:
+                continue
+            if not any(r.trainNumber == tr.train_number and r.coachNumber == cn for r in results):
+                h1 = float(c.get("arrival_tank_height_cm") or tr.tank_height_cm or 50.0)
+                h2 = float(c.get("departure_tank_height_cm") or tr.tank_height_cm or 50.0)
+                c1 = float(c.get("arrival_tank_capacity_liters") or tr.tank_capacity_liters or 20.0)
+                c2 = float(c.get("departure_tank_capacity_liters") or tr.tank_capacity_liters or 20.0)
+                results.append(TankLiveStatus(
+                    tankId=f"slot-{tr.train_number}-{cn}-1",
+                    deviceId="UNASSIGNED",
+                    deviceUid="UNASSIGNED",
+                    trainNumber=tr.train_number,
+                    coachNumber=cn,
+                    tankName=c.get("tank_1_name") or "Arrival Side (Tank 1)",
+                    levelPercent=0.0,
+                    rawLevelPercent=0.0,
+                    volumeLiters=0.0,
+                    heightCm=0.0,
+                    capacityLiters=c1,
+                    maxHeightCm=h1,
+                    crossSectionalAreaM2=0.04,
+                    rank="N/A",
+                    alarmStatus="AWAITING_TELEMETRY",
+                    batteryVoltage=None,
+                    isOnline=False,
+                    hasTelemetry=False,
+                    isStale=False,
+                    lastUpdate=None,
+                ))
+                results.append(TankLiveStatus(
+                    tankId=f"slot-{tr.train_number}-{cn}-2",
+                    deviceId="UNASSIGNED",
+                    deviceUid="UNASSIGNED",
+                    trainNumber=tr.train_number,
+                    coachNumber=cn,
+                    tankName=c.get("tank_2_name") or "Departure Side (Tank 2)",
+                    levelPercent=0.0,
+                    rawLevelPercent=0.0,
+                    volumeLiters=0.0,
+                    heightCm=0.0,
+                    capacityLiters=c2,
+                    maxHeightCm=h2,
+                    crossSectionalAreaM2=0.04,
+                    rank="N/A",
+                    alarmStatus="AWAITING_TELEMETRY",
+                    batteryVoltage=None,
+                    isOnline=False,
+                    hasTelemetry=False,
+                    isStale=False,
+                    lastUpdate=None,
+                ))
 
     return results
 
@@ -141,7 +200,8 @@ async def get_live_tank_status(db: AsyncSession = Depends(get_db)):
             break
 
     if not tank or not device:
-        return None
+        all_tanks = await list_all_tanks(db)
+        return all_tanks[0] if all_tanks else None
 
     latest = await telemetry_repo.get_latest_for_tank(tank.id)
     active_alarms = await alarm_repo.list_alarms(status="ACTIVE", device_id=device.id)
@@ -163,6 +223,46 @@ async def update_tank_geometry(
         raise HTTPException(status_code=400, detail="Tank height must be a positive number.")
     if update_data.areaM2 is not None and update_data.areaM2 <= 0:
         raise HTTPException(status_code=400, detail="Tank area must be a positive number.")
+
+    if tank_id.startswith("slot-"):
+        parts = tank_id.split("-")
+        tr_no = parts[1]
+        c_no = parts[2]
+        t_idx = int(parts[3])
+        db_train = (await db.execute(select(Train).where(Train.train_number == tr_no))).scalar_one_or_none()
+        if not db_train:
+            raise HTTPException(status_code=404, detail="Tank not found")
+        try:
+            comp = json.loads(db_train.coach_configuration_json) if db_train.coach_configuration_json else []
+        except Exception:
+            comp = []
+        for c in comp:
+            if c.get("coach_number", "").upper() == c_no.upper():
+                if t_idx == 1:
+                    if update_data.capacityLiters: c["arrival_tank_capacity_liters"] = update_data.capacityLiters
+                    if update_data.heightCm: c["arrival_tank_height_cm"] = update_data.heightCm
+                    if update_data.name: c["tank_1_name"] = update_data.name
+                else:
+                    if update_data.capacityLiters: c["departure_tank_capacity_liters"] = update_data.capacityLiters
+                    if update_data.heightCm: c["departure_tank_height_cm"] = update_data.heightCm
+                    if update_data.name: c["tank_2_name"] = update_data.name
+        db_train.coach_configuration_json = json.dumps(comp)
+        await db.commit()
+        return TankOut(
+            id=tank_id,
+            device_id="UNASSIGNED",
+            tank_index=t_idx,
+            name=update_data.name or f"Tank {t_idx}",
+            tank_type="CYLINDRICAL",
+            capacity_liters=update_data.capacityLiters or 20.0,
+            height_cm=update_data.heightCm or 50.0,
+            area_m2=update_data.areaM2 or 0.04,
+            warning_threshold_percent=20.0,
+            critical_threshold_percent=10.0,
+            overflow_threshold_percent=100.0,
+            created_at=utc_now(),
+            updated_at=utc_now(),
+        )
 
     tank_repo = TankRepository(db)
     tank = await tank_repo.get_by_id(tank_id)

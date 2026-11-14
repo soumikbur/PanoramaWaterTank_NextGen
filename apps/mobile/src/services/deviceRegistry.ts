@@ -112,6 +112,7 @@ class DeviceRegistryService {
           this.devices.clear();
           const now = Date.now();
           parsed.forEach((d) => {
+            if (!d || !d.uid || d.uid.startsWith('PANORAMA-')) return;
             // Recalculate isOnline based on elapsed time
             const isOnline = d.lastSeenTimestamp ? (now - d.lastSeenTimestamp) < STALE_TIMEOUT_MS : false;
             this.devices.set(d.uid, {
@@ -119,6 +120,10 @@ class DeviceRegistryService {
               isOnline: d.isOnline && isOnline,
             });
           });
+          // Persist cleaned list if synthetic devices were stripped
+          if (parsed.some((d) => d?.uid && d.uid.startsWith('PANORAMA-'))) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(this.devices.values())));
+          }
         }
       }
     } catch (e) {
@@ -196,7 +201,7 @@ class DeviceRegistryService {
 
     const now = Date.now();
     rawDevices.forEach((remoteDev) => {
-      if (!remoteDev || !remoteDev.uid || this.deletedUids.has(remoteDev.uid)) return;
+      if (!remoteDev || !remoteDev.uid || this.deletedUids.has(remoteDev.uid) || remoteDev.uid.startsWith('PANORAMA-')) return;
       const existing = this.devices.get(remoteDev.uid);
       if (existing) {
         // Keep active local telemetry if local timestamp is newer, but adopt remote administrative mapping
@@ -369,11 +374,16 @@ class DeviceRegistryService {
     if (!Array.isArray(devices) || devices.length === 0) return;
     const now = Date.now();
     devices.forEach((d) => {
-      if (!d || !d.uid) return;
+      if (!d || !d.uid || d.uid.startsWith('PANORAMA-')) return;
       const existing = this.devices.get(d.uid);
       const train = (d.trainNumber || d.train_number || '').trim() || null;
       const coach = (d.coachNumber || d.coach_number || '').trim() || null;
-      const isEngaged = Boolean(train && coach);
+      const isEngaged = Boolean(
+        train &&
+        coach &&
+        train.toUpperCase() !== 'UNASSIGNED' &&
+        coach.toUpperCase() !== 'UNASSIGNED'
+      );
       const base: ManagedDevice = existing || {
         uid: d.uid,
         name: d.name || `Node (${d.uid.slice(-6)})`,
@@ -428,7 +438,12 @@ class DeviceRegistryService {
     const now = Date.now();
     const train = options?.trainNumber?.trim() || null;
     const coach = options?.coachNumber?.trim() || null;
-    const isEngaged = Boolean(train && coach);
+    const isEngaged = Boolean(
+      train &&
+      coach &&
+      train.toUpperCase() !== 'UNASSIGNED' &&
+      coach.toUpperCase() !== 'UNASSIGNED'
+    );
 
     const base: ManagedDevice = existing || {
       uid,

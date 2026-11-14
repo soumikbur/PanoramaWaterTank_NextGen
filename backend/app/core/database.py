@@ -213,18 +213,17 @@ async def seed_initial_settings(session: AsyncSession) -> None:
 
 
 async def seed_initial_fleet(session: AsyncSession) -> None:
-    """Seed baseline default device and tanks idempotently if none exist."""
-    from app.repositories.tank_repo import TankRepository
+    """Seed baseline genuine hardware device idempotently in unassigned state without mock trains."""
     from app.repositories.device_repo import DeviceRepository
-    tank_repo = TankRepository(session)
-    primary = await tank_repo.get_first_primary()
-    if not primary:
-        device_repo = DeviceRepository(session)
+    device_repo = DeviceRepository(session)
+    existing = await device_repo.get_by_uid(settings.DEFAULT_DEVICE_UID)
+    if not existing:
         await device_repo.create_or_update(
             uid=settings.DEFAULT_DEVICE_UID,
-            train_number=settings.DEFAULT_TRAIN_NUMBER,
-            coach_number=settings.DEFAULT_COACH_NUMBER,
-            name="Shatabdi Coach B4 Water System"
+            train_number="UNASSIGNED",
+            coach_number="UNASSIGNED",
+            name="Shatabdi Coach B4 Water System",
+            status="AVAILABLE",
         )
         await session.commit()
 

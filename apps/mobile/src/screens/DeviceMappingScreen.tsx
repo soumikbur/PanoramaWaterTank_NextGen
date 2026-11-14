@@ -38,6 +38,7 @@ export const DeviceMappingScreen: React.FC = () => {
     telemetryTimeoutSeconds,
     setTelemetryTimeoutSeconds,
     consistMetrics,
+    configuredTrains,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
@@ -107,10 +108,20 @@ export const DeviceMappingScreen: React.FC = () => {
   };
 
   const handleOpenMapModal = (dev: ManagedDevice) => {
+    if (!configuredTrains || configuredTrains.length === 0) {
+      alert('Cannot assign device: No trains are registered in the system. Please register a train and coach first in Fleet Management.');
+      return;
+    }
     setTargetDevice(dev);
-    setTrainNumberInput(dev.trainNumber || dev.payloadTrno || '225256');
-    setCoachNumberInput(dev.coachNumber || dev.payloadChno || 'CR123456');
-    setDeviceNameInput(dev.name || `Coach ${dev.payloadChno || 'CR123456'} Sensor`);
+    const initialTrain = (dev.trainNumber && configuredTrains.some((t) => t.train_number === dev.trainNumber))
+      ? dev.trainNumber
+      : (dev.payloadTrno && configuredTrains.some((t) => t.train_number === dev.payloadTrno))
+      ? dev.payloadTrno
+      : configuredTrains[0].train_number;
+    const initialCoach = dev.coachNumber || dev.payloadChno || 'C1';
+    setTrainNumberInput(initialTrain);
+    setCoachNumberInput(initialCoach);
+    setDeviceNameInput(dev.name || `Coach ${initialCoach} Sensor`);
     setHardwareModelInput(dev.hardwareModel || 'WLI EC200U-CN');
     setIsMapModalOpen(true);
   };
@@ -125,10 +136,15 @@ export const DeviceMappingScreen: React.FC = () => {
     if (!targetDevice) return;
 
     const tr = trainNumberInput.trim();
-    const ch = coachNumberInput.trim();
+    const ch = coachNumberInput.trim().toUpperCase();
 
     if (!tr || !ch) {
       alert('Please specify both Train Number and Coach Number to complete consist mapping.');
+      return;
+    }
+
+    if (configuredTrains.length > 0 && !configuredTrains.some((t) => t.train_number === tr)) {
+      alert(`Train "${tr}" is not registered in the fleet. Please select a valid registered train.`);
       return;
     }
 
@@ -690,7 +706,9 @@ export const DeviceMappingScreen: React.FC = () => {
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                       <Radio size={28} color="#94A3B8" />
                       <div style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>
-                        No devices found matching filter "{activeTab}"
+                        {managedDevices.length === 0
+                          ? 'No devices registered yet. Devices will appear here after discovery or manual registration.'
+                          : `No devices found matching filter "${activeTab}"`}
                       </div>
                       <div style={{ fontSize: '12px', color: '#94A3B8', maxWidth: '400px' }}>
                         Devices broadcasting on MQTT topic <code>0023004D4B42501120353332</code> will appear automatically under Discovered.
@@ -1099,22 +1117,45 @@ export const DeviceMappingScreen: React.FC = () => {
                   <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#475569', textTransform: 'uppercase', marginBottom: '4px' }}>
                     Train Number *
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={trainNumberInput}
-                    onChange={(e) => setTrainNumberInput(e.target.value)}
-                    placeholder="e.g. 225256"
-                    style={{
-                      width: '100%',
-                      padding: '8px 10px',
-                      borderRadius: '6px',
-                      border: '1px solid #CBD5E1',
-                      fontSize: '12px',
-                      color: '#0F172A',
-                      boxSizing: 'border-box',
-                    }}
-                  />
+                  {configuredTrains && configuredTrains.length > 0 ? (
+                    <select
+                      value={trainNumberInput}
+                      onChange={(e) => setTrainNumberInput(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid #CBD5E1',
+                        fontSize: '12px',
+                        color: '#0F172A',
+                        backgroundColor: '#FFFFFF',
+                        boxSizing: 'border-box',
+                      }}
+                    >
+                      {configuredTrains.map((t) => (
+                        <option key={t.train_number} value={t.train_number}>
+                          {t.train_number} — {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      required
+                      value={trainNumberInput}
+                      onChange={(e) => setTrainNumberInput(e.target.value)}
+                      placeholder="e.g. 12842"
+                      style={{
+                        width: '100%',
+                        padding: '8px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid #CBD5E1',
+                        fontSize: '12px',
+                        color: '#0F172A',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  )}
                 </div>
 
                 <div>
@@ -1125,8 +1166,8 @@ export const DeviceMappingScreen: React.FC = () => {
                     type="text"
                     required
                     value={coachNumberInput}
-                    onChange={(e) => setCoachNumberInput(e.target.value)}
-                    placeholder="e.g. CR123456"
+                    onChange={(e) => setCoachNumberInput(e.target.value.toUpperCase())}
+                    placeholder="e.g. B1, A1, S1"
                     style={{
                       width: '100%',
                       padding: '8px 10px',

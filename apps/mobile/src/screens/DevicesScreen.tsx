@@ -62,8 +62,8 @@ export const DevicesScreen: React.FC = () => {
   const [addProtocol, setAddProtocol] = useState('MQTT over TLS/WSS (Port 8884)');
   const [addMqttClientId, setAddMqttClientId] = useState('');
   const [addMqttTopic, setAddMqttTopic] = useState('');
-  const [addTrainNumber, setAddTrainNumber] = useState('12002');
-  const [addCoachNumber, setAddCoachNumber] = useState('B1');
+  const [addTrainNumber, setAddTrainNumber] = useState('');
+  const [addCoachNumber, setAddCoachNumber] = useState('');
   const [addTankAssignment, setAddTankAssignment] = useState<'BOTH' | 'Tank 1' | 'Tank 2'>('BOTH');
   const [addDescription, setAddDescription] = useState('');
   const [addStatus, setAddStatus] = useState('AVAILABLE');
@@ -100,8 +100,8 @@ export const DevicesScreen: React.FC = () => {
         dbId: d.id,
         name: d.name || `Water Monitor (${d.trainNumber}/${d.coachNumber})`,
         id: d.uid,
-        trainNumber: d.trainNumber || '12002',
-        coachNumber: d.coachNumber || 'B4',
+        trainNumber: d.trainNumber || 'UNASSIGNED',
+        coachNumber: d.coachNumber || 'UNASSIGNED',
         serialNumber: d.uid,
         location: `Coach ${d.coachNumber} (Train ${d.trainNumber})`,
         status,
@@ -145,8 +145,8 @@ export const DevicesScreen: React.FC = () => {
   const handleOpenAddModal = (presetTrain?: string, presetCoach?: string) => {
     const randomHex = Math.random().toString(16).substring(2, 8).toUpperCase();
     const newUid = `DEV-WLI-${randomHex}`;
-    const tr = presetTrain || selectedTrainNumber || '12002';
-    const ch = presetCoach || selectedCoachNumber || 'B1';
+    const tr = presetTrain || selectedTrainNumber || '';
+    const ch = presetCoach || selectedCoachNumber || '';
     setAddUid(newUid);
     setAddName(`Coach ${ch} Water Monitor`);
     setAddDeviceType('Quectel EC200U 4G LTE');

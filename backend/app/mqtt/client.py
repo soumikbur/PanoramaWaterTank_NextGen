@@ -107,6 +107,9 @@ class MqttService:
             client.subscribe(settings.MQTT_TELEMETRY_TOPIC, qos=1)
             client.subscribe(settings.MQTT_STATUS_TOPIC, qos=1)
             client.subscribe("0023004D4B42501120353332", qos=1)
+            client.subscribe("0023004D4B42501120353332/s", qos=1)
+            client.subscribe("0026004D4B42501120353332", qos=1)
+            client.subscribe("0026004D4B42501120353332/s", qos=1)
         else:
             logger.error(f"MQTT Connection failed with return code {rc_code}")
 
@@ -147,9 +150,10 @@ class MqttService:
                         await session.execute(select(Train).where(Train.train_number == clean_trno))
                     ).scalar_one_or_none()
 
-                if train_row is None:
+                if clean_trno and clean_trno.upper() != "UNASSIGNED" and train_row is None:
+                    # Telemetry claims unconfigured or deleted train: reject train assignment and do not mark online
                     existing_dev = await device_repo.get_by_uid(payload.uid)
-                    if existing_dev and existing_dev.train_number != "UNASSIGNED":
+                    if existing_dev:
                         existing_dev.train_number = "UNASSIGNED"
                         existing_dev.coach_number = "UNASSIGNED"
                         existing_dev.is_online = False
@@ -161,12 +165,29 @@ class MqttService:
                     )
                     return
 
-                # 1. Update/Create Device attached to verified configured train
-                device = await device_repo.create_or_update(
-                    uid=payload.uid,
-                    train_number=clean_trno,
-                    coach_number=payload.chno
-                )
+                if train_row is None:
+                    # Unassigned device reporting telemetry without train claim
+                    device = await device_repo.get_by_uid(payload.uid)
+                    if not device:
+                        device = await device_repo.create_or_update(
+                            uid=payload.uid,
+                            train_number="UNASSIGNED",
+                            coach_number="UNASSIGNED",
+                            name=f"WLI Node ({payload.uid[-6:]})",
+                            status="AVAILABLE"
+                        )
+                    else:
+                        device.train_number = "UNASSIGNED"
+                        device.coach_number = "UNASSIGNED"
+                        device.is_online = True
+                        device.last_seen_at = datetime.now(timezone.utc)
+                else:
+                    # 1. Update/Create Device attached to verified configured train
+                    device = await device_repo.create_or_update(
+                        uid=payload.uid,
+                        train_number=clean_trno,
+                        coach_number=payload.chno
+                    )
 
                 # 2. Fetch Primary Tank
                 primary_tank = await tank_repo.get_by_device_and_index(device.id, 1)

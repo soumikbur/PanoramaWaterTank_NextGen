@@ -202,7 +202,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
       tank2HeightCm: 50,
       tank1Geometry: 'CYLINDRICAL',
       tank2Geometry: 'CYLINDRICAL',
-      deviceUid: `PANORAMA-${effectiveTrainNumber}-${nextNum}`,
+      deviceUid: '',
     });
     setActiveSubModal('ADD');
   };
@@ -292,7 +292,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
         tank_2_height_cm: Number(formData.tank2HeightCm) || 50,
         tank_1_geometry: formData.tank1Geometry,
         tank_2_geometry: formData.tank2Geometry,
-        device_uid: formData.deviceUid.trim() || `PANORAMA-${effectiveTrainNumber}-${cNum}`,
+        device_uid: formData.deviceUid.trim(),
       };
 
       await addCoach(effectiveTrainNumber, payload);
@@ -1106,14 +1106,14 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <Cpu size={14} color="#64748B" style={{ flexShrink: 0 }} />
                           <span
-                            title={coach.device_uid || 'PANORAMA-AUTO'}
+                            title={coach.device_uid || 'Unassigned'}
                             style={{
                               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
                               fontSize: '11px',
                               backgroundColor: '#F1F5F9',
                               padding: '2px 6px',
                               borderRadius: '4px',
-                              color: '#1E293B',
+                              color: coach.device_uid ? '#1E293B' : '#94A3B8',
                               border: '1px solid #E2E8F0',
                               maxWidth: '140px',
                               overflow: 'hidden',
@@ -1122,7 +1122,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                               display: 'inline-block',
                             }}
                           >
-                            {coach.device_uid || 'PANORAMA-AUTO'}
+                            {coach.device_uid || 'Unassigned'}
                           </span>
                         </div>
                       </td>
@@ -1612,7 +1612,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <input
                       type="text"
-                      placeholder={`PANORAMA-${effectiveTrainNumber}-${formData.coachNumber || 'C1'}`}
+                      placeholder="e.g. 0026004D4B42501120353332 (or leave blank)"
                       value={formData.deviceUid}
                       onChange={(e) => setFormData({ ...formData, deviceUid: e.target.value.toUpperCase() })}
                       style={{

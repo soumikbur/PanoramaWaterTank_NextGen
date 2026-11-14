@@ -6,8 +6,8 @@ from pydantic import BaseModel, Field, ConfigDict
 
 class DeviceBase(BaseModel):
     uid: str
-    trainNumber: str = Field("12002", alias="train_number")
-    coachNumber: str = Field("B4", alias="coach_number")
+    trainNumber: str = Field("UNASSIGNED", alias="train_number")
+    coachNumber: str = Field("UNASSIGNED", alias="coach_number")
     name: str = "Coach Water Monitor"
     hardwareVersion: Optional[str] = Field("Standard WLI Node", alias="hardware_version")
     firmwareVersion: Optional[str] = Field("2.0.0", alias="firmware_version")

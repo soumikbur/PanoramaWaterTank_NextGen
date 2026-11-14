@@ -18,6 +18,7 @@ backend/*.db
 *.db
 *.db-shm
 *.db-wal
+*.bak
 *.sqlite
 *.sqlite3
 
