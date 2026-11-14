@@ -204,6 +204,11 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
       });
       if (stale) return;
       applyLookupData(result);
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || err?.message?.includes('aborted') || err?.message?.includes('superseded')) {
+        return;
+      }
+      setSubmitError(err?.message || 'Verification could not be completed.');
     } finally {
       setLookupLoading(false);
     }

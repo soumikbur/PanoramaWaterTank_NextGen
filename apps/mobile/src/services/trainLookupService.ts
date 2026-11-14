@@ -1107,10 +1107,16 @@ class TrainLookupService {
     trainNumber: string,
     options: { refresh?: boolean; signal: AbortSignal }
   ): Promise<TrainLookupResult> {
+    if (ApiClient.isRemoteUnreachable()) {
+      return buildEmptyErrorResult(trainNumber, 'UNAVAILABLE', 'SERVER_UNAVAILABLE', 'Backend offline');
+    }
     let attempt = 0;
     const maxRetries = 1;
 
     while (attempt <= maxRetries) {
+      if (ApiClient.isRemoteUnreachable()) {
+        return buildEmptyErrorResult(trainNumber, 'UNAVAILABLE', 'SERVER_UNAVAILABLE', 'Backend offline');
+      }
       const timeoutController = new AbortController();
       let timedOut = false;
       const onExternalAbort = () => timeoutController.abort();
@@ -1134,8 +1140,8 @@ class TrainLookupService {
         }
         return result;
       } catch (err: any) {
-        if (options.signal.aborted && !timedOut) {
-          throw err;
+        if (options.signal?.aborted && !timedOut) {
+          return buildEmptyErrorResult(trainNumber, 'UNAVAILABLE', 'SERVER_UNAVAILABLE', 'Lookup superseded.');
         }
         const classified = timedOut
           ? new ClassifiedLookupError('TIMEOUT', messageForErrorCode('TIMEOUT'), { retryable: true })
@@ -1196,7 +1202,7 @@ class TrainLookupService {
     const promise = (async (): Promise<{ result: TrainLookupResult; stale: boolean }> => {
       try {
         let result: TrainLookupResult;
-        if (ApiClient.hasBackend()) {
+        if (ApiClient.hasBackend() && !ApiClient.isRemoteUnreachable()) {
           options?.onProgress?.('Querying Backend Multi-Provider API...');
           result = await this.lookupViaBackend(trainNumber, { refresh: options?.refresh, signal: controller.signal });
           if (result.status === 'UNAVAILABLE' || (result as any).error_code === 'AUTH_ERROR') {

@@ -180,9 +180,15 @@ export class ApiClient {
     }
   }
 
-  static hasBackend(): boolean {
+  static isBackendConfigured(): boolean {
     const base = resolveApiBase();
     return Boolean(base && base.trim().length > 0);
+  }
+
+  static hasBackend(): boolean {
+    const base = resolveApiBase();
+    if (!base || !base.trim()) return false;
+    return !this.isRemoteUnreachable();
   }
 
   private static ensureListeners(): void {
@@ -1641,15 +1647,18 @@ export class ApiClient {
       mqttService.publish('panorama/devices/sync', { action: 'create_device', device: payload });
     } catch {}
 
-    try {
-      return await this.request<Device>('/devices', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-    } catch (err) {
-      if (API_BASE) throw err;
-      return {
-        id: registered.uid,
+    if (API_BASE && !this.isRemoteUnreachable()) {
+      try {
+        return await this.request<Device>('/devices', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+      } catch (err) {
+        // Fall back to locally registered device if remote fails
+      }
+    }
+    return {
+      id: registered.uid,
         uid: registered.uid,
         name: registered.name,
         trainNumber: registered.trainNumber || '',
@@ -1670,8 +1679,7 @@ export class ApiClient {
         lastSeenAt: registered.lastSeen,
         batteryPercent: registered.batteryPercent,
         hasActiveAlarm: false,
-      };
-    }
+    };
   }
 
   static async updateDevice(deviceId: string, data: Partial<DeviceCreatePayload>): Promise<Device> {

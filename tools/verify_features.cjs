@@ -29,10 +29,15 @@ async function run() {
     // Auto login if on login screen
     if (page.url().includes('login') || (await page.$('input[type="password"]'))) {
       console.log('Logging in as admin...');
-      await page.fill('input[type="text"], input[name="username"]', 'admin');
-      await page.fill('input[type="password"]', 'Admin@123');
-      await page.click('button[type="submit"]');
-      await page.waitForTimeout(1500);
+      const devAdminBtn = page.locator('button:has-text("Login as Admin")');
+      if (await devAdminBtn.isVisible()) {
+        await devAdminBtn.click();
+      } else {
+        await page.fill('input[type="text"], input[name="username"]', 'admin');
+        await page.fill('input[type="password"]', 'Admin@123');
+        await page.click('button[type="submit"]');
+      }
+      await page.waitForTimeout(2000);
     }
 
     // 2. Test Sidebar Navigation to Train Management

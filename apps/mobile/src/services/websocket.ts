@@ -53,6 +53,7 @@ export class WebSocketService {
   private isOffline = false;
   private lastMessageReceivedTime = 0;
   private networkListenersBound = false;
+  private standbyLogged = false;
 
   private constructor() {
     this.bindNetworkListeners();
@@ -133,13 +134,23 @@ export class WebSocketService {
     if (typeof window === 'undefined' || typeof fetch === 'undefined') return true;
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
 
-    // Static hosting guard: if on github.io or pages.dev without custom backend, skip futile preflight
+    // Static hosting guard: if on github.io or pages.dev without custom backend override
     if (typeof window !== 'undefined' && window.location && window.location.hostname) {
       const host = window.location.hostname;
       if (host.endsWith('github.io') || host.endsWith('pages.dev')) {
         const hasCustom = typeof window.localStorage !== 'undefined' && Boolean(window.localStorage.getItem('panorama_backend_url'));
         if (!hasCustom) {
-          return false;
+          try {
+            const statusRes = await fetch('./backend-status.json', { cache: 'no-store' });
+            if (statusRes.ok) {
+              const statusData = await statusRes.json();
+              if (statusData && statusData.available === false) {
+                return false;
+              }
+            }
+          } catch {
+            return false;
+          }
         }
       }
     }
@@ -164,11 +175,43 @@ export class WebSocketService {
     }
   }
 
+  private startIdlePoll(wsUrl?: string): void {
+    if (this.isDestroyed) return;
+    this.setStatus('DISCONNECTED');
+    if (!this.standbyLogged) {
+      this.standbyLogged = true;
+      const target = wsUrl ? getHttpHealthUrl(wsUrl) : 'remote endpoint';
+      Logger.info(
+        'WEBSOCKET',
+        'WebSocketService',
+        `Remote backend currently offline or unmapped at ${target}. Standby mode active (polling every 60s). Real-time telemetry is running via HiveMQ MQTT.`
+      );
+    }
+    if (!this.idlePollTimer) {
+      this.idlePollTimer = setInterval(async () => {
+        if (this.status !== 'CONNECTED' && !this.isDestroyed) {
+          const currentWs = getWsUrl();
+          if (currentWs) {
+            const healthy = await this.checkBackendHealth(currentWs);
+            if (healthy) {
+              this.standbyLogged = false;
+              if (this.idlePollTimer) {
+                clearInterval(this.idlePollTimer);
+                this.idlePollTimer = null;
+              }
+              this.reconnectAttempts = 0;
+              this.connect();
+            }
+          }
+        }
+      }, IDLE_POLL_INTERVAL_MS);
+    }
+  }
+
   async connect(): Promise<void> {
     if (this.isDestroyed) return;
 
     if (this.isOffline || (typeof navigator !== 'undefined' && navigator.onLine === false)) {
-      Logger.warn('WEBSOCKET', 'WebSocketService', 'Cannot connect while browser is offline.');
       this.setStatus('DISCONNECTED');
       return;
     }
@@ -195,14 +238,7 @@ export class WebSocketService {
       const isHealthy = await this.checkBackendHealth(wsUrl);
       if (!isHealthy) {
         this.isConnecting = false;
-        Logger.debug(
-          'WEBSOCKET',
-          'WebSocketService',
-          `Backend health probe failed at ${getHttpHealthUrl(wsUrl)}. Postponing WebSocket handshake.`,
-          'healthProbe'
-        );
-        this.setStatus('DISCONNECTED');
-        this.scheduleReconnect();
+        this.startIdlePoll(wsUrl);
         return;
       }
     }
@@ -213,6 +249,11 @@ export class WebSocketService {
       this.ws.onopen = () => {
         this.isConnecting = false;
         this.reconnectAttempts = 0;
+        this.standbyLogged = false;
+        if (this.idlePollTimer) {
+          clearInterval(this.idlePollTimer);
+          this.idlePollTimer = null;
+        }
         this.lastMessageReceivedTime = Date.now();
         this.setStatus('CONNECTED');
         Logger.info('WEBSOCKET', 'WebSocketService', `WebSocket connected successfully to ${wsUrl}`);
@@ -243,7 +284,7 @@ export class WebSocketService {
           this.setStatus('DISCONNECTED');
           return;
         }
-        this.setStatus(this.reconnectAttempts >= MAX_CONSECUTIVE_FAILURES ? 'ERROR' : 'DISCONNECTED');
+        this.setStatus('DISCONNECTED');
         Logger.info(
           'WEBSOCKET',
           'WebSocketService',
@@ -261,13 +302,7 @@ export class WebSocketService {
       };
     } catch (err: any) {
       this.isConnecting = false;
-      this.setStatus('ERROR');
-      Logger.warn(
-        'WEBSOCKET',
-        'WebSocketService',
-        `Exception instantiating WebSocket connection: ${err?.message || err}`,
-        'instantiation'
-      );
+      this.setStatus('DISCONNECTED');
       this.scheduleReconnect();
     }
   }
@@ -322,23 +357,10 @@ export class WebSocketService {
       this.reconnectAttempts++;
     }
 
-    // If max retry ceiling reached, pause rapid retries and switch to slow idle polling
-    if (this.reconnectAttempts > MAX_CONSECUTIVE_FAILURES) {
-      this.setStatus('ERROR');
-      Logger.warn(
-        'WEBSOCKET',
-        'WebSocketService',
-        `Maximum reconnection attempts (${MAX_CONSECUTIVE_FAILURES}) reached. Switching to periodic idle probe every 60s.`
-      );
-
-      if (!this.idlePollTimer) {
-        this.idlePollTimer = setInterval(() => {
-          if (this.status !== 'CONNECTED' && !this.isDestroyed) {
-            this.reconnectAttempts = 0;
-            this.connect();
-          }
-        }, IDLE_POLL_INTERVAL_MS);
-      }
+    // If retry ceiling reached, pause retries and switch to quiet idle polling
+    if (this.reconnectAttempts > 3) {
+      this.setStatus('DISCONNECTED');
+      this.startIdlePoll();
       return;
     }
 
@@ -432,6 +454,7 @@ export class WebSocketService {
   }
 
   reconnect(): void {
+    this.standbyLogged = false;
     this.disconnect();
     this.isDestroyed = false;
     this.reconnectAttempts = 0;

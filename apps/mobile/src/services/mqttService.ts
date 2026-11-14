@@ -6,6 +6,7 @@
 
 // @ts-ignore
 import Paho from 'paho-mqtt';
+import { Logger } from './logger';
 import { LiveTelemetryPayload, MqttConnectionStatus, MqttGpsFix } from '../types';
 
 export interface ParsedMqttGps {
@@ -375,7 +376,7 @@ export class MqttService {
     this.clearStaleTimer();
     this.staleTimer = setTimeout(() => {
       if (this.status === 'CONNECTED') {
-        console.warn(`[MQTT] No telemetry received for ${STALE_TIMEOUT_MS / 1000}s. Transitioning to STALE.`);
+        Logger.info('MQTT', 'Watchdog', `No telemetry received for ${STALE_TIMEOUT_MS / 1000}s. Transitioning to STALE standby.`);
         this.setStatus('STALE');
         if (this.lastTelemetry) {
           this.lastTelemetry = { ...this.lastTelemetry, isStale: true };
