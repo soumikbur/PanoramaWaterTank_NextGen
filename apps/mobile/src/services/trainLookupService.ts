@@ -1147,7 +1147,7 @@ class TrainLookupService {
           ? new ClassifiedLookupError('TIMEOUT', messageForErrorCode('TIMEOUT'), { retryable: true })
           : classifyCaughtError(err);
 
-        if (!classified.retryable || attempt >= maxRetries) {
+        if (!classified.retryable || attempt >= maxRetries || err?.code === 'BACKEND_OFFLINE' || ApiClient.isRemoteUnreachable()) {
           return buildEmptyErrorResult(
             trainNumber,
             'UNAVAILABLE',
@@ -1157,7 +1157,7 @@ class TrainLookupService {
         }
       } finally {
         clearTimeout(timer);
-        options.signal.removeEventListener('abort', onExternalAbort);
+        options.signal?.removeEventListener?.('abort', onExternalAbort);
       }
 
       attempt++;

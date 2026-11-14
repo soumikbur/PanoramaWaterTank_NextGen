@@ -89,7 +89,23 @@ async function run() {
 
       // Click Manage to inspect train
       await manageBtn.click();
+      await page.waitForTimeout(1000);
       console.log('Clicked Manage button. Waiting for Level 3...');
+
+      // Verify Coach Consist button is completely removed
+      const coachConsistBtn = page.locator('button:has-text("Coach Consist")');
+      const coachConsistBtnCount = await coachConsistBtn.count();
+      console.log('Coach Consist buttons in Train Details header (expected 0):', coachConsistBtnCount);
+      if (coachConsistBtnCount !== 0) {
+        throw new Error(`Expected Coach Consist button to be removed, but found ${coachConsistBtnCount}`);
+      }
+
+      // Verify other buttons remain intact
+      const inspectBtn = page.locator('button:has-text("Inspect in Water Tank Monitor")');
+      console.log('Inspect in Water Tank Monitor button visible:', await inspectBtn.isVisible());
+      const backToTrainsInHeader = page.locator('button:has-text("Back to Trains")');
+      console.log('Back to Trains button visible:', await backToTrainsInHeader.isVisible());
+
       const editCoachesBtn = page.locator('button:has-text("Edit Coaches")').first();
       await editCoachesBtn.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
       if (await editCoachesBtn.isVisible()) {
@@ -153,7 +169,7 @@ async function run() {
       }
 
       // 9. Test Sidebar Reset: drill into region again, then click Train Management in sidebar
-      await eastRegionCard.click();
+      await page.locator('div[data-region="EAST"] button:has-text("View Trains in Region")').click();
       await page.waitForTimeout(500);
       console.log('Drilled into region. Now clicking Train Management in sidebar...');
       await trainNavButton.click();

@@ -3,7 +3,7 @@ import { colors, typography, metrics } from '../theme';
 import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
 import { RegionSummary, TrainOverviewItem, TrainConsist } from '../types';
-import { Train, Plus, Trash2, X, ChevronRight, MapPin, ArrowLeft, ArrowRight, CheckCircle2, Edit3, Layers, SlidersHorizontal } from 'lucide-react';
+import { Train, Plus, Trash2, X, ChevronRight, MapPin, ArrowLeft, ArrowRight, CheckCircle2, Edit3, SlidersHorizontal } from 'lucide-react';
 import { AddTrainModal } from '../components/train/AddTrainModal';
 import { ManageCoachModal } from '../components/coach/ManageCoachModal';
 
@@ -881,29 +881,6 @@ export const TrainManagementScreen: React.FC = () => {
               >
                 <SlidersHorizontal size={13} />
                 <span>Edit Coaches</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setSelectedTrainNumber(selectedTrain.train_number);
-                  setActiveScreen('coaches');
-                }}
-                style={{
-                  backgroundColor: '#EFF6FF',
-                  border: '1px solid #BFDBFE',
-                  color: '#2563EB',
-                  borderRadius: '6px',
-                  padding: '8px 14px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                }}
-              >
-                <span>Coach Consist</span>
-                <Layers size={13} />
               </button>
 
               <button

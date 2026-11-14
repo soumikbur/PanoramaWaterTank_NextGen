@@ -477,7 +477,7 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
               <button
                 type="button"
                 data-testid="verify-train-btn"
-                onClick={() => void handleVerifyClick()}
+                onClick={() => { handleVerifyClick().catch(() => {}); }}
                 disabled={lookupLoading || !cleanInputNum}
                 title="Verify train number via Railway API"
                 style={{
@@ -601,7 +601,7 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
                 <button
                   type="button"
                   data-testid="retry-verify-btn"
-                  onClick={() => void handleVerifyClick()}
+                  onClick={() => { handleVerifyClick().catch(() => {}); }}
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
