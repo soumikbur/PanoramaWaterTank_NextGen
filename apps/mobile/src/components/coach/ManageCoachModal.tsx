@@ -1189,30 +1189,44 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                         </div>
                       </td>
 
-                      {/* ASSIGNED DEVICE (Monospace with Ellipsis and full tooltip) */}
+                      {/* ASSIGNED DEVICE (Interactive Chip with Monospace & Tooltip) */}
                       <td style={{ padding: '10px 10px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <Cpu size={14} color="#64748B" style={{ flexShrink: 0 }} />
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(coach)}
+                          title={coach.device_uid ? `Assigned UID: ${coach.device_uid} (Click to manage/reassign)` : 'Click to assign hardware MCU UID'}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            background: 'transparent',
+                            border: 'none',
+                            padding: 0,
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <Cpu size={14} color={coach.device_uid ? '#2563EB' : '#64748B'} style={{ flexShrink: 0 }} />
                           <span
-                            title={coach.device_uid || 'Unassigned'}
                             style={{
                               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
                               fontSize: '11px',
-                              backgroundColor: '#F1F5F9',
+                              backgroundColor: coach.device_uid ? '#EFF6FF' : '#F1F5F9',
                               padding: '2px 6px',
                               borderRadius: '4px',
-                              color: coach.device_uid ? '#1E293B' : '#94A3B8',
-                              border: '1px solid #E2E8F0',
+                              color: coach.device_uid ? '#1D4ED8' : '#64748B',
+                              border: `1px solid ${coach.device_uid ? '#BFDBFE' : '#E2E8F0'}`,
                               maxWidth: '140px',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
                               display: 'inline-block',
+                              fontWeight: coach.device_uid ? 600 : 400,
                             }}
                           >
                             {coach.device_uid || 'Unassigned'}
                           </span>
-                        </div>
+                        </button>
                       </td>
 
                       {/* STATUS */}

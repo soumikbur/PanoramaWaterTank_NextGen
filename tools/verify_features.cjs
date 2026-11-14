@@ -58,10 +58,28 @@ async function run() {
     console.log('Navigated into EAST region train list.');
 
     // 4. Verify Manage button (Task 4)
-    const manageBtn = page.locator('button[title="Manage Coach Fleet & Consist"]').first();
+    let manageBtn = page.locator('button[title="Manage Coach Fleet & Consist"]').first();
+    let hasManageBtn = await manageBtn.count();
+
+    if (hasManageBtn === 0) {
+      console.log('No train in region; registering test train 12842...');
+      const addTrainBtn = page.locator('button:has-text("Add Train")').first();
+      await addTrainBtn.click();
+      await page.waitForTimeout(500);
+      const trainInput = page.locator('[data-testid="train-number-input"]').first();
+      await trainInput.fill('12842');
+      const verifyBtn = page.locator('[data-testid="verify-train-btn"]').first();
+      await verifyBtn.click();
+      await page.waitForTimeout(2000);
+      const confirmBtn = page.locator('[data-testid="confirm-add-train-btn"]').first();
+      await confirmBtn.click();
+      await page.waitForTimeout(2000);
+      manageBtn = page.locator('button[title="Manage Coach Fleet & Consist"]').first();
+      hasManageBtn = await manageBtn.count();
+    }
+
     const consistBtn = page.locator('button:has-text("Consist"):not(:has-text("Manage"))');
     const hasConsistBtn = await consistBtn.count();
-    const hasManageBtn = await manageBtn.count();
 
     console.log('Manage buttons found:', hasManageBtn);
     console.log('Old Consist buttons found:', hasConsistBtn);

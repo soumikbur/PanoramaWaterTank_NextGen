@@ -80,17 +80,22 @@ async function build() {
     target: ['es2020'],
   });
 
+  const buildVersion = Date.now();
+
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <meta name="theme-color" content="#1976D2" />
     <meta name="description" content="Panorama Water Tank Monitor — NextGen Railway Coach SCADA & HMI System" />
     <title>Panorama Water Tank Monitor — Railway SCADA/HMI</title>
     <link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231976D2'><path d='M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2c0-3.32-2.67-7.25-8-11.8z'/></svg>" />
-    <link rel="stylesheet" href="./assets/index.css" />
+    <link rel="stylesheet" href="./assets/index.css?v=${buildVersion}" />
     <script>
       (function() {
         try {
@@ -137,7 +142,7 @@ async function build() {
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-    <script type="module" src="./assets/index.js"></script>
+    <script type="module" src="./assets/index.js?v=${buildVersion}"></script>
   </body>
 </html>`;
 

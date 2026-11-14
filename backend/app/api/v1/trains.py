@@ -473,7 +473,7 @@ async def get_train_consist(train_number: str, db: AsyncSession = Depends(get_db
                         geometry=geom,
                         current_level_percent=round(level, 1),
                         current_volume_liters=round(vol, 1),
-                        current_height_cm=round(latest.water_height_cm, 1) if (latest and latest.water_height_cm is not None) else round((level / 100.0) * (getattr(t, "height_cm", 50.0) or 50.0), 1),
+                        current_height_cm=round(getattr(latest, "height_cm", getattr(latest, "water_height_cm", None)), 1) if (latest and getattr(latest, "height_cm", getattr(latest, "water_height_cm", None)) is not None) else round((level / 100.0) * (getattr(t, "height_cm", 50.0) or 50.0), 1),
                         status=status
                     ))
 
@@ -560,7 +560,7 @@ async def get_train_consist(train_number: str, db: AsyncSession = Depends(get_db
                     geometry=geom,
                     current_level_percent=round(level, 1),
                     current_volume_liters=round(vol, 1),
-                    current_height_cm=round(latest.water_height_cm, 1) if (latest and latest.water_height_cm is not None) else round((level / 100.0) * (getattr(t, "height_cm", 50.0) or 50.0), 1),
+                    current_height_cm=round(getattr(latest, "height_cm", getattr(latest, "water_height_cm", None)), 1) if (latest and getattr(latest, "height_cm", getattr(latest, "water_height_cm", None)) is not None) else round((level / 100.0) * (getattr(t, "height_cm", 50.0) or 50.0), 1),
                     status=status
                 ))
 

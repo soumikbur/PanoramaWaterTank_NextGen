@@ -19,6 +19,20 @@ const centralChannel: BroadcastChannel | null =
     : null;
 
 function resolveRegistryApiBase(): string | null {
+  if (typeof window !== 'undefined' && window.location?.hostname) {
+    const host = window.location.hostname;
+    if (host.endsWith('github.io') || host.endsWith('pages.dev')) {
+      const custom = window.localStorage ? (window.localStorage.getItem('panorama_api_url') || window.localStorage.getItem('panorama_backend_url')) : null;
+      if (custom && custom.trim()) {
+        return custom.trim().replace(/\/+$/, '');
+      }
+      return null;
+    }
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return `${window.location.origin}/api/v1`;
+    }
+  }
+
   const configured =
     (typeof process !== 'undefined' && (process.env?.API_URL || process.env?.REACT_APP_API_URL || process.env?.VITE_API_URL)) ||
     (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL);
@@ -26,7 +40,6 @@ function resolveRegistryApiBase(): string | null {
     return String(configured).trim().replace(/\/+$/, '');
   }
   if (typeof window !== 'undefined' && window.location?.origin) {
-    if ((window.location.hostname || '').endsWith('.github.io')) return null;
     return `${window.location.origin}/api/v1`;
   }
   return 'http://127.0.0.1:8000/api/v1';
@@ -479,29 +492,56 @@ class DeviceRegistryService {
       hardwareModel: options?.hardwareModel || base.hardwareModel,
     };
 
+    const isKnown = this.devices.has(uid);
     this.devices.set(uid, registered);
     this.saveToStorage();
     this.notify();
 
-    // Async REST sync attempt when a backend origin is configured
-    if (API_BASE) {
+    // Async REST sync attempt when a backend origin is configured and active
+    const isUnreachable = typeof window !== 'undefined' && (
+      (window as any).__PANORAMA_IS_REMOTE_UNREACHABLE__
+        ? (window as any).__PANORAMA_IS_REMOTE_UNREACHABLE__()
+        : false
+    );
+    if (API_BASE && !isUnreachable) {
       const token = typeof window !== 'undefined' ? localStorage.getItem('panorama_token') : null;
-      fetch(`${API_BASE}/devices`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          uid: registered.uid,
-          name: registered.name,
-          train_number: registered.trainNumber || '',
-          coach_number: registered.coachNumber || '',
-          hardware_version: registered.hardwareModel,
-        }),
-      }).catch((err) => {
-        console.info('[DeviceRegistry] Backend sync skipped:', err?.message || err);
-      });
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+      const syncBody = {
+        name: registered.name,
+        train_number: registered.trainNumber || '',
+        coach_number: registered.coachNumber || '',
+        hardware_version: registered.hardwareModel,
+      };
+
+      if (isKnown) {
+        fetch(`${API_BASE}/devices/${encodeURIComponent(registered.uid)}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify(syncBody),
+        }).catch(() => {});
+      } else {
+        fetch(`${API_BASE}/devices`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            uid: registered.uid,
+            ...syncBody,
+          }),
+        })
+          .then((res) => {
+            if (res.status === 400 || res.status === 409) {
+              return fetch(`${API_BASE}/devices/${encodeURIComponent(registered.uid)}`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(syncBody),
+              });
+            }
+          })
+          .catch(() => {});
+      }
     }
 
     return registered;
@@ -538,7 +578,7 @@ class DeviceRegistryService {
       alertNotificationService.resolveAlertsForDevice(uid, 'Device unassigned');
     } catch {}
 
-    if (API_BASE) {
+    if (API_BASE && !isUnreachable) {
       const token = typeof window !== 'undefined' ? localStorage.getItem('panorama_token') : null;
       fetch(`${API_BASE}/devices/${uid}`, {
         method: 'PUT',

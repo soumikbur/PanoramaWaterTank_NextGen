@@ -192,6 +192,9 @@ export class ApiClient {
   }
 
   private static ensureListeners(): void {
+    if (typeof window !== 'undefined') {
+      (window as any).__PANORAMA_IS_REMOTE_UNREACHABLE__ = () => ApiClient.isRemoteUnreachable();
+    }
     if (this.listenersBound || typeof window === 'undefined') return;
     this.listenersBound = true;
 
