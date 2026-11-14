@@ -246,7 +246,7 @@ export class ApiClient {
     }
     const url = `${base}${endpoint}`;
 
-    if (this.isRemoteUnreachable() && (options.method === 'GET' || !options.method)) {
+    if (this.isRemoteUnreachable()) {
       const cachedErr: any = new Error(`Remote backend unreachable at ${base}; using cached local store`);
       cachedErr.status = 503;
       cachedErr.code = 'ENOTFOUND';
@@ -475,7 +475,7 @@ export class ApiClient {
 
   static logout(): void {
     const token = localStorage.getItem('panorama_token');
-    if (token && API_BASE) {
+    if (token && API_BASE && !this.isRemoteUnreachable()) {
       try {
         fetch(`${API_BASE}/auth/logout`, {
           method: 'POST',
