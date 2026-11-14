@@ -1199,6 +1199,17 @@ class TrainLookupService {
         if (ApiClient.hasBackend()) {
           options?.onProgress?.('Querying Backend Multi-Provider API...');
           result = await this.lookupViaBackend(trainNumber, { refresh: options?.refresh, signal: controller.signal });
+          if (result.status === 'UNAVAILABLE' || (result as any).error_code === 'AUTH_ERROR') {
+            options?.onProgress?.('Backend uncontacted. Cascading to Public Railway APIs...');
+            const fallback = await this.lookupViaPublicProviders(trainNumber, {
+              refresh: options?.refresh,
+              signal: controller.signal,
+              onProgress: options?.onProgress,
+            });
+            if (fallback.status === 'VERIFIED' || fallback.status === 'UNSUPPORTED_TYPE') {
+              result = fallback;
+            }
+          }
         } else {
           result = await this.lookupViaPublicProviders(trainNumber, {
             refresh: options?.refresh,

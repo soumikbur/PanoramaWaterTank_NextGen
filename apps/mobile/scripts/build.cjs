@@ -25,9 +25,19 @@ async function build() {
   const enableTestLogin = process.env.VITE_ENABLE_TEST_LOGIN !== undefined
     ? process.env.VITE_ENABLE_TEST_LOGIN.trim().toLowerCase() === 'true'
     : true;
-  const apiUrl = (process.env.VITE_API_URL || '').trim();
-  const wsUrl = (process.env.VITE_WS_URL || '').trim();
-  console.log(`[BUILD] Bundling application with esbuild (test shortcuts: ${enableTestLogin})...`);
+  const apiUrl = (
+    process.env.VITE_API_BASE_URL ||
+    process.env.VITE_BACKEND_URL ||
+    process.env.VITE_API_URL ||
+    process.env.API_BASE_URL ||
+    'https://panorama-water-tank-backend.onrender.com/api/v1'
+  ).trim();
+  const wsUrl = (
+    process.env.VITE_WS_URL ||
+    process.env.VITE_BACKEND_WS_URL ||
+    'wss://panorama-water-tank-backend.onrender.com/api/v1/ws/live'
+  ).trim();
+  console.log(`[BUILD] Bundling application with esbuild (test shortcuts: ${enableTestLogin}, api: ${apiUrl})...`);
   const start = Date.now();
 
   await esbuild.build({
@@ -46,6 +56,11 @@ async function build() {
       'import.meta.env.VITE_ENABLE_TEST_LOGIN': enableTestLogin ? '"true"' : '"false"',
       'process.env.VITE_API_URL': JSON.stringify(apiUrl),
       'import.meta.env.VITE_API_URL': JSON.stringify(apiUrl),
+      'process.env.VITE_API_BASE_URL': JSON.stringify(apiUrl),
+      'import.meta.env.VITE_API_BASE_URL': JSON.stringify(apiUrl),
+      'process.env.VITE_BACKEND_URL': JSON.stringify(apiUrl),
+      'import.meta.env.VITE_BACKEND_URL': JSON.stringify(apiUrl),
+      'process.env.API_BASE_URL': JSON.stringify(apiUrl),
       'process.env.VITE_WS_URL': JSON.stringify(wsUrl),
       'import.meta.env.VITE_WS_URL': JSON.stringify(wsUrl),
     },

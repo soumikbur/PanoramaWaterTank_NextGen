@@ -36,6 +36,10 @@ jobs:
 
       - name: Build Frontend Application
         run: npm run build
+        env:
+          VITE_API_BASE_URL: https://panorama-water-tank-backend.onrender.com/api/v1
+          VITE_BACKEND_URL: https://panorama-water-tank-backend.onrender.com/api/v1
+          VITE_WS_URL: wss://panorama-water-tank-backend.onrender.com/api/v1/ws/live
 
       - name: Verify Static Build Artifacts
         run: |

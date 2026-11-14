@@ -127,18 +127,15 @@ function writeLocalRegistrations(regs: UserProfile[], skipPublish = false): void
 export const PRODUCTION_BACKEND_URL = 'https://panorama-water-tank-backend.onrender.com/api/v1';
 
 export function resolveApiBase(): string {
+  // 1. User manual override stored in localStorage
   if (typeof window !== 'undefined' && window.localStorage) {
     const custom = window.localStorage.getItem('panorama_backend_url');
     if (custom && custom.trim()) {
       return custom.trim().replace(/\/+$/, '');
     }
   }
-  const configured =
-    (typeof process !== 'undefined' && (process.env?.API_URL || process.env?.REACT_APP_API_URL || process.env?.VITE_API_URL)) ||
-    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL);
-  if (configured && String(configured).trim()) {
-    return String(configured).trim().replace(/\/+$/, '');
-  }
+
+  // 2. Check local loopback FIRST so local development and testing on 127.0.0.1/localhost connect to local backend
   if (typeof window !== 'undefined' && window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
     const host = window.location.hostname || '127.0.0.1';
     const port = window.location.port || '';
@@ -148,16 +145,29 @@ export function resolveApiBase(): string {
       }
       return `http://${host}:8000/api/v1`;
     }
-    if (host.endsWith('github.io') || host.endsWith('vercel.app') || host.endsWith('pages.dev')) {
-      // On static hosting without custom backend, operate in standalone client mode using HiveMQ MQTT sync
-      return '';
-    }
-    return `${window.location.origin.replace(/\/+$/, '')}/api/v1`;
   }
-  if (typeof window !== 'undefined' && (window as any).Capacitor) {
-    return '';
+
+  // 3. Build-time environment variable injection
+  const configured =
+    (typeof process !== 'undefined' && (
+      process.env?.VITE_API_BASE_URL ||
+      process.env?.VITE_BACKEND_URL ||
+      process.env?.VITE_API_URL ||
+      process.env?.API_BASE_URL ||
+      process.env?.API_URL ||
+      process.env?.REACT_APP_API_URL
+    )) ||
+    (typeof import.meta !== 'undefined' && (
+      (import.meta as any).env?.VITE_API_BASE_URL ||
+      (import.meta as any).env?.VITE_BACKEND_URL ||
+      (import.meta as any).env?.VITE_API_URL
+    ));
+  if (configured && String(configured).trim()) {
+    return String(configured).trim().replace(/\/+$/, '');
   }
-  return '';
+
+  // 4. Default production backend URL
+  return PRODUCTION_BACKEND_URL;
 }
 
 export const API_BASE = resolveApiBase();
@@ -168,7 +178,8 @@ export class ApiClient {
   private static listenersBound = false;
 
   static hasBackend(): boolean {
-    return true;
+    const base = resolveApiBase();
+    return Boolean(base && base.trim().length > 0);
   }
 
   private static ensureListeners(): void {

@@ -22,6 +22,8 @@ const STALE_TIMEOUT_MS = 45000;
 const MAX_CONSECUTIVE_FAILURES = 5;
 const IDLE_POLL_INTERVAL_MS = 60000;
 
+export const PRODUCTION_WS_URL = 'wss://panorama-water-tank-backend.onrender.com/api/v1/ws/live';
+
 export function getWsUrl(): string {
   // 1. Check custom user backend setting
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -35,39 +37,36 @@ export function getWsUrl(): string {
     }
   }
 
-  // 2. Check environment variables
-  const configured =
-    (typeof process !== 'undefined' && (process.env?.WS_URL || process.env?.REACT_APP_WS_URL || process.env?.VITE_WS_URL)) ||
-    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_WS_URL);
-  if (configured && String(configured).trim()) {
-    return String(configured).trim();
-  }
-
-  // 3. Browser web session
+  // 2. Local development loopback (prioritized over baked-in production env vars for local testing)
   if (typeof window !== 'undefined' && window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
     const hostname = window.location.hostname || '127.0.0.1';
     const port = window.location.port || '';
-    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-
-    // Local development loopback
     if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') {
       if (port === '8000') {
         return `ws://${hostname}:${port}/api/v1/ws/live`;
       }
       return `ws://${hostname}:8000/api/v1/ws/live`;
     }
-
-    // Static hosting providers that don't run a backend server
-    if (hostname.endsWith('github.io') || hostname.endsWith('vercel.app') || hostname.endsWith('pages.dev')) {
-      return '';
-    }
-
-    // Reverse proxy or same-host deployment
-    return `${wsProto}//${window.location.host}/api/v1/ws/live`;
   }
 
-  // 4. Capacitor native environment or default production fallback
-  return '';
+  // 3. Check environment variables
+  const configured =
+    (typeof process !== 'undefined' && (
+      process.env?.VITE_WS_URL ||
+      process.env?.VITE_BACKEND_WS_URL ||
+      process.env?.WS_URL ||
+      process.env?.REACT_APP_WS_URL
+    )) ||
+    (typeof import.meta !== 'undefined' && (
+      (import.meta as any).env?.VITE_WS_URL ||
+      (import.meta as any).env?.VITE_BACKEND_WS_URL
+    ));
+  if (configured && String(configured).trim()) {
+    return String(configured).trim();
+  }
+
+  // 4. Default production WebSocket URL
+  return PRODUCTION_WS_URL;
 }
 
 export function getHttpHealthUrl(wsUrl?: string): string {
