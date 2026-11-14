@@ -48,6 +48,50 @@ const COACH_CATEGORIES = [
   'Generator Car (EOG)',
 ];
 
+export function matchCoachCategoryOption(raw?: string | null): string {
+  if (!raw) return 'AC 3-Tier (3A)';
+  const s = raw.trim();
+  if (COACH_CATEGORIES.includes(s)) return s;
+  const upper = s.toUpperCase();
+  if (upper.includes('EOG') || upper.includes('POWER') || upper.includes('GENERATOR') || upper.includes('LPR') || upper.includes('LWLRRM')) {
+    return 'Generator Car (EOG)';
+  }
+  if (upper.includes('1A') || upper.includes('FIRST AC') || upper.includes('1ST CLASS') || /^H\d*$/.test(upper)) {
+    return 'AC 1st Class (1A)';
+  }
+  if (upper.includes('2A') || upper.includes('2-TIER') || upper.includes('2 TIER') || /^A\d*$/.test(upper)) {
+    return 'AC 2-Tier (2A)';
+  }
+  if (upper.includes('3E') || upper.includes('ECONOMY') || /^M\d*$/.test(upper)) {
+    return 'AC 3-Tier Economy (3E)';
+  }
+  if (upper.includes('3A') || upper.includes('3-TIER') || upper.includes('3 TIER') || /^B\d*$/.test(upper)) {
+    return 'AC 3-Tier (3A)';
+  }
+  if (upper.includes('GENERAL') || upper.includes('UNRESERVED') || /\bGS\b/.test(upper) || /\bGEN\b/.test(upper)) {
+    return 'General / Unreserved (GS)';
+  }
+  if (upper.includes('SECOND SITTING') || /\b2S\b/.test(upper) || /^D\d*$/.test(upper)) {
+    return 'Second Sitting (2S)';
+  }
+  if (upper.includes('EXECUTIVE') || /\bEC\b/.test(upper) || /\bEA\b/.test(upper)) {
+    return 'Executive Chair Car (EC)';
+  }
+  if (upper.includes('CHAIR') || /\bCC\b/.test(upper) || /^C\d*$/.test(upper) || /^J\d*$/.test(upper)) {
+    return 'AC Chair Car (CC)';
+  }
+  if (upper.includes('SLR') || upper.includes('GUARD') || upper.includes('BRAKE') || upper.includes('LUGGAGE')) {
+    return 'Luggage / Brake Van (SLR)';
+  }
+  if (upper.includes('SLEEPER') || /\bSL\b/.test(upper) || /^S\d*$/.test(upper)) {
+    return 'Sleeper Class (SL)';
+  }
+  if (upper.includes('PANTRY') || /\bPC\b/.test(upper)) {
+    return 'Pantry Car (PC)';
+  }
+  return s;
+}
+
 export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onClose, trainNumber }) => {
   const {
     currentUser,
@@ -288,7 +332,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
     setFormData({
       coachNumber: coach.coach_number,
       coachName: coach.coach_name || `Coach ${coach.coach_number}`,
-      coachCategory: coach.coach_category || 'AC 3-Tier (3A)',
+      coachCategory: matchCoachCategoryOption(coach.coach_category || coach.coach_type),
       tank1Name: t1?.name || 'Arrival Side (Tank 1)',
       tank2Name: t2?.name || 'Departure Side (Tank 2)',
       tank1Capacity: cap1,
@@ -1555,7 +1599,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                     Coach Category / Type *
                   </label>
                   <select
-                    value={formData.coachCategory}
+                    value={matchCoachCategoryOption(formData.coachCategory)}
                     onChange={(e) => setFormData({ ...formData, coachCategory: e.target.value })}
                     style={{
                       width: '100%',
@@ -1566,6 +1610,9 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                       backgroundColor: '#FFFFFF',
                     }}
                   >
+                    {!COACH_CATEGORIES.includes(matchCoachCategoryOption(formData.coachCategory)) && (
+                      <option value={formData.coachCategory}>{formData.coachCategory}</option>
+                    )}
                     {COACH_CATEGORIES.map((cat) => (
                       <option key={cat} value={cat}>
                         {cat}

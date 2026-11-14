@@ -40,11 +40,24 @@ async function testDeployedSite() {
   await page.waitForTimeout(1000);
 
   // Wait for regions to be visible
-  const northCardBtn = page.locator('div[data-region="NORTH"] button:has-text("View Trains in Region")');
-  await northCardBtn.waitFor({ state: 'visible', timeout: 10000 });
-  console.log('Drilling into Northern Railway (NORTH)...');
-  await northCardBtn.click();
-  await page.waitForTimeout(1500);
+  await page.waitForSelector('div[data-region]', { timeout: 10000 });
+  const regionsSummary = await page.$$eval('div[data-region]', els => els.map(e => ({
+    region: e.getAttribute('data-region'),
+    text: e.innerText.replace(/\n+/g, ' ')
+  })));
+  console.log('Regions summary on deployed site:', JSON.stringify(regionsSummary, null, 2));
+
+  const screenshotPath = path.resolve(__dirname, '../tools/deployed_train_details_verified.png');
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  console.log('Saved screenshot of initial trains screen to:', screenshotPath);
+
+  // Drill into Western Railway if regions view is active
+  const westCardBtn = page.locator('div[data-region="WEST"] button:has-text("View Trains in Region")');
+  if (await westCardBtn.isVisible().catch(() => false)) {
+    console.log('Drilling into Western Railway (WEST)...');
+    await westCardBtn.click();
+    await page.waitForTimeout(1500);
+  }
 
   // Check the table row button text: should be "Manage", NOT "Consist"
   const manageButtons = page.locator('button[title="Manage Coach Fleet & Consist"]');
@@ -73,9 +86,9 @@ async function testDeployedSite() {
   console.log('Back to Trains button visible:', await backBtn.isVisible());
 
   // Capture screenshot of Train Details page
-  const screenshotPath = path.resolve(__dirname, '../tools/deployed_train_details_verified.png');
-  await page.screenshot({ path: screenshotPath, fullPage: true });
-  console.log('Saved screenshot to:', screenshotPath);
+  const detailsScreenshotPath = path.resolve(__dirname, '../tools/deployed_train_details_verified.png');
+  await page.screenshot({ path: detailsScreenshotPath, fullPage: true });
+  console.log('Saved screenshot to:', detailsScreenshotPath);
 
   await browser.close();
   console.log('--- DEPLOYMENT VERIFICATION COMPLETE ---');
