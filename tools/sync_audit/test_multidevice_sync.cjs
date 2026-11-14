@@ -142,7 +142,7 @@ async function runMultiDeviceSyncAudit() {
     await pageA.click(`div[data-region="${targetRegion}"] button:has-text("View Trains in Region")`);
     await pageA.waitForTimeout(1000);
 
-    const existingRow = await pageA.$(`div:has-text("${targetTrainNumber}")`);
+    const existingRow = await pageA.$(`div[data-testid="train-row-${targetTrainNumber}"]`);
     if (existingRow) {
       console.log(`Train ${targetTrainNumber} already exists in fleet.`);
     } else {
@@ -208,8 +208,24 @@ async function runMultiDeviceSyncAudit() {
     // -------------------------------------------------------------------------
     console.log('\n--- [TEST 2] Coach Addition Real-Time Sync ---');
     const testCoachNumber = 'C9';
+
+    // Pre-cleanup of any lingering test coaches from previous runs
+    const testCoachesToClean = ['C9', 'C8', 'M1', 'M2'];
+    for (const coachId of testCoachesToClean) {
+      const existingRow = pageA.locator(`tr:has(span:text-is("${coachId}"))`).first();
+      if (await existingRow.isVisible().catch(() => false)) {
+        console.log(`Pre-cleanup: Removing lingering test coach ${coachId}...`);
+        await existingRow.locator('button[title*="Delete"]').click();
+        await pageA.waitForTimeout(500);
+        await pageA.click('div[style*="100000"] button:has-text("Delete Coach")');
+        await pageA.waitForSelector('div[style*="100000"]', { state: 'detached', timeout: 15000 }).catch(() => {});
+        await pageA.waitForSelector(`tr:has(span:text-is("${coachId}"))`, { state: 'detached', timeout: 10000 }).catch(() => {});
+        await pageA.waitForTimeout(1000);
+      }
+    }
+
     console.log(`Device A: Adding Coach ${testCoachNumber}...`);
-    await pageA.click('button:has-text("Add Coach")');
+    await pageA.click('button[title="Add New Coach to Consist"]');
     await pageA.waitForTimeout(500);
 
     // Fill Coach Number and Category
@@ -221,7 +237,8 @@ async function runMultiDeviceSyncAudit() {
     const addCoachSubmitBtn = pageA.locator('button[type="submit"]:has-text("Add Coach")');
     await addCoachSubmitBtn.click();
     console.log(`Device A: Coach ${testCoachNumber} submitted.`);
-    await pageA.waitForTimeout(2000);
+    await pageA.waitForSelector('div[style*="100000"]', { state: 'detached', timeout: 15000 });
+    await pageA.waitForTimeout(500);
 
     // Verify Device B automatically shows Coach C9 in table without reload
     console.log(`Checking Device B for Coach ${testCoachNumber} in consist table (NO RELOAD)...`);
@@ -249,7 +266,8 @@ async function runMultiDeviceSyncAudit() {
     // Save Changes on Device A
     await pageA.click('button:has-text("Save Changes")');
     console.log('Device A: Saved device UID assignment.');
-    await pageA.waitForTimeout(2000);
+    await pageA.waitForSelector('div[style*="100000"]', { state: 'detached', timeout: 15000 });
+    await pageA.waitForTimeout(500);
 
     // Verify Device B automatically shows assigned UID on Coach C9
     console.log(`Checking Device B for assigned UID ${assignedUid} on Coach ${testCoachNumber} (NO RELOAD)...`);
@@ -276,7 +294,8 @@ async function runMultiDeviceSyncAudit() {
     // Save on Device B
     await pageB.click('button:has-text("Save Changes")');
     console.log('Device B: Saved tank capacity changes.');
-    await pageB.waitForTimeout(2000);
+    await pageB.waitForSelector('div[style*="100000"]', { state: 'detached', timeout: 15000 });
+    await pageB.waitForTimeout(500);
 
     // Verify Device A automatically shows 750 L for Coach C9
     console.log('Checking Device A for updated tank configuration (NO RELOAD)...');
@@ -294,9 +313,10 @@ async function runMultiDeviceSyncAudit() {
     await c9RowA.locator('button[title*="Delete"]').click();
     await pageA.waitForTimeout(500);
     // Confirm delete
-    await pageA.click('button:has-text("Delete Coach")');
+    await pageA.click('div[style*="100000"] button:has-text("Delete Coach")');
     console.log(`Device A: Confirmed deletion of Coach ${testCoachNumber}.`);
-    await pageA.waitForTimeout(2000);
+    await pageA.waitForSelector('div[style*="100000"]', { state: 'detached', timeout: 15000 });
+    await pageA.waitForTimeout(500);
 
     // Verify Device B automatically removes Coach C9 from consist table
     console.log(`Checking Device B: Coach ${testCoachNumber} should be removed from view (NO RELOAD)...`);
@@ -312,32 +332,34 @@ async function runMultiDeviceSyncAudit() {
     await contextB.setOffline(true);
     await pageB.waitForTimeout(1000);
 
-    const offlineCoachNum = 'S1';
+    const offlineCoachNum = 'C8';
     console.log(`Device A: Adding Coach ${offlineCoachNum} while Device B is offline...`);
-    await pageA.click('button:has-text("Add Coach")');
+    await pageA.click('button[title="Add New Coach to Consist"]');
     await pageA.waitForTimeout(500);
     const offlineCoachInput = pageA.locator('input[placeholder*="C1, B1, S4"]').first();
     await offlineCoachInput.fill(offlineCoachNum);
     await pageA.click('button[type="submit"]:has-text("Add Coach")');
-    await pageA.waitForTimeout(2000);
+    await pageA.waitForSelector('div[style*="100000"]', { state: 'detached', timeout: 15000 });
+    await pageA.waitForTimeout(500);
     console.log(`Device A: Coach ${offlineCoachNum} added while Device B was offline.`);
 
     console.log('Device B: Restoring network connectivity (online mode)...');
     await contextB.setOffline(false);
     await pageB.waitForTimeout(3000);
 
-    // Device B catches up and displays Coach S1
+    // Device B catches up and displays Coach C8
     console.log(`Checking Device B: Awaiting catch-up synchronization for Coach ${offlineCoachNum}...`);
     await pageB.waitForSelector(`tr:has(span:text-is("${offlineCoachNum}"))`, { timeout: 15000 });
     console.log('SUCCESS: Device B reconnected and synchronized state without manual refresh!');
     testResults.push({ test: 'TEST 6: Offline Resilience & Reconnection Recovery', status: 'PASSED' });
 
-    // Clean up Coach S1 on Device A
-    const s1RowA = pageA.locator(`tr:has(span:text-is("${offlineCoachNum}"))`).first();
-    await s1RowA.locator('button[title*="Delete"]').click();
+    // Clean up Coach C8 on Device A
+    const c8RowA = pageA.locator(`tr:has(span:text-is("${offlineCoachNum}"))`).first();
+    await c8RowA.locator('button[title*="Delete"]').click();
     await pageA.waitForTimeout(500);
-    await pageA.click('button:has-text("Delete Coach")');
-    await pageA.waitForTimeout(2000);
+    await pageA.click('div[style*="100000"] button:has-text("Delete Coach")');
+    await pageA.waitForSelector('div[style*="100000"]', { state: 'detached', timeout: 15000 });
+    await pageA.waitForTimeout(1000);
 
     // -------------------------------------------------------------------------
     // TEST 7: Concurrent Simultaneous Mutations from Multiple Devices
@@ -345,15 +367,29 @@ async function runMultiDeviceSyncAudit() {
     console.log('\n--- [TEST 7] Concurrent Simultaneous Mutations ---');
     const coachM1 = 'M1';
     const coachM2 = 'M2';
+
+    // Pre-cleanup M1 and M2 if present
+    for (const mCoach of [coachM1, coachM2]) {
+      const existingM = pageA.locator(`tr:has(span:text-is("${mCoach}"))`).first();
+      if (await existingM.isVisible().catch(() => false)) {
+        await existingM.locator('button[title*="Delete"]').click();
+        await pageA.waitForTimeout(500);
+        await pageA.click('div[style*="100000"] button:has-text("Delete Coach")');
+        await pageA.waitForSelector('div[style*="100000"]', { state: 'detached', timeout: 15000 }).catch(() => {});
+        await pageA.waitForSelector(`tr:has(span:text-is("${mCoach}"))`, { state: 'detached', timeout: 10000 }).catch(() => {});
+        await pageA.waitForTimeout(1000);
+      }
+    }
+
     console.log(`Simultaneously adding Coach ${coachM1} on Device A and Coach ${coachM2} on Device B...`);
 
     // Prepare Device A
-    await pageA.click('button:has-text("Add Coach")');
+    await pageA.click('button[title="Add New Coach to Consist"]');
     await pageA.waitForTimeout(500);
     await pageA.locator('input[placeholder*="C1, B1, S4"]').first().fill(coachM1);
 
     // Prepare Device B
-    await pageB.click('button:has-text("Add Coach")');
+    await pageB.click('button[title="Add New Coach to Consist"]');
     await pageB.waitForTimeout(500);
     await pageB.locator('input[placeholder*="C1, B1, S4"]').first().fill(coachM2);
 
@@ -364,9 +400,10 @@ async function runMultiDeviceSyncAudit() {
     ]);
     console.log('Simultaneous mutations dispatched from Device A and Device B.');
     await Promise.all([
-      pageA.waitForTimeout(3000),
-      pageB.waitForTimeout(3000),
+      pageA.waitForSelector('div[style*="100000"]', { state: 'detached', timeout: 15000 }).catch(() => {}),
+      pageB.waitForSelector('div[style*="100000"]', { state: 'detached', timeout: 15000 }).catch(() => {}),
     ]);
+    await pageA.waitForTimeout(1000);
 
     // Verify both Coach M1 and Coach M2 appear on Device C!
     console.log('Checking Device C (independent observer) for both Coach M1 and Coach M2...');
@@ -386,15 +423,17 @@ async function runMultiDeviceSyncAudit() {
     if (await m1RowA.isVisible().catch(() => false)) {
       await m1RowA.locator('button[title*="Delete"]').click();
       await pageA.waitForTimeout(500);
-      await pageA.click('button:has-text("Delete Coach")');
-      await pageA.waitForTimeout(2000);
+      await pageA.click('div[style*="100000"] button:has-text("Delete Coach")');
+      await pageA.waitForSelector('div[style*="100000"]', { state: 'detached', timeout: 15000 }).catch(() => {});
+      await pageA.waitForTimeout(1000);
     }
     const m2RowA = pageA.locator(`tr:has(span:text-is("${coachM2}"))`).first();
     if (await m2RowA.isVisible().catch(() => false)) {
       await m2RowA.locator('button[title*="Delete"]').click();
       await pageA.waitForTimeout(500);
-      await pageA.click('button:has-text("Delete Coach")');
-      await pageA.waitForTimeout(2000);
+      await pageA.click('div[style*="100000"] button:has-text("Delete Coach")');
+      await pageA.waitForSelector('div[style*="100000"]', { state: 'detached', timeout: 15000 }).catch(() => {});
+      await pageA.waitForTimeout(1000);
     }
 
     // Capture screenshot of final synchronized state

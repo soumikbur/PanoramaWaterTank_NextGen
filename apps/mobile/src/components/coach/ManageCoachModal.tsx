@@ -479,9 +479,9 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
       };
 
       await updateCoach(effectiveTrainNumber, targetCoach.coach_number, payload);
-      await refreshData();
       setStatusFeedback({ type: 'success', message: `Coach ${targetCoach.coach_number} updated successfully.` });
       setActiveSubModal('NONE');
+      refreshData().catch(() => {});
     } catch (err: any) {
       setStatusFeedback({ type: 'error', message: err?.message || 'Failed to update coach.' });
     } finally {
