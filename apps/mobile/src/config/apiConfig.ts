@@ -115,13 +115,19 @@ export function resolveWsUrl(): string {
 
 /**
  * Derives HTTP health probe endpoint for a given API base or WS URL.
+ * Safely strips WebSocket schemes (ws://, wss://) and suffixes (/ws/live) to ensure
+ * standard HTTP/HTTPS endpoints are queried by fetch().
  */
-export function resolveHealthUrl(apiBase?: string): string {
-  const base = (apiBase || resolveApiBaseUrl()).replace(/\/+$/, '');
-  if (base.endsWith('/api/v1')) {
-    return `${base}/health`;
+export function resolveHealthUrl(candidateUrl?: string): string {
+  const target = (candidateUrl || resolveApiBaseUrl()).trim().replace(/\/+$/, '');
+  const isHttps = target.startsWith('wss://') || target.startsWith('https://');
+  const httpProto = isHttps ? 'https://' : 'http://';
+  const clean = target.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '');
+  const withoutWs = clean.split('/ws/live')[0].replace(/\/+$/, '');
+  if (withoutWs.endsWith('/api/v1')) {
+    return `${httpProto}${withoutWs}/health`;
   }
-  return `${base}/api/v1/health`;
+  return `${httpProto}${withoutWs}/api/v1/health`;
 }
 
 /**

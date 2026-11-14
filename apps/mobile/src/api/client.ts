@@ -36,6 +36,7 @@ import {
   DEFAULT_PRODUCTION_API_URL,
   resolveHealthUrl,
   BACKEND_URL_CHANGED_EVENT,
+  STORAGE_KEY_API_URL,
 } from '../config/apiConfig';
 
 export type BackendConnectivityStatus = 'ONLINE' | 'OFFLINE' | 'DEGRADED' | 'CHECKING';
@@ -223,6 +224,29 @@ export class ApiClient {
       return false;
     }
 
+    // Static hosting check: on github.io or pages.dev without user custom URL override
+    if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+      const host = window.location.hostname;
+      if (host.endsWith('github.io') || host.endsWith('pages.dev')) {
+        const hasCustom = typeof window.localStorage !== 'undefined' && Boolean(window.localStorage.getItem(STORAGE_KEY_API_URL));
+        if (!hasCustom && !immediate) {
+          try {
+            const statusRes = await fetch('./backend-status.json', { cache: 'no-store' });
+            if (statusRes.ok) {
+              const statusData = await statusRes.json();
+              if (statusData && statusData.available === false) {
+                this.setBackendStatus('OFFLINE');
+                return false;
+              }
+            }
+          } catch {
+            this.setBackendStatus('OFFLINE');
+            return false;
+          }
+        }
+      }
+    }
+
     const healthUrl = resolveHealthUrl(base);
     try {
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -271,7 +295,20 @@ export class ApiClient {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       return true;
     }
-    return this.backendStatus === 'OFFLINE' && (Date.now() - this.lastHealthCheckTime > 5000);
+    const base = resolveApiBase();
+    if (!base) return true;
+
+    if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+      const host = window.location.hostname;
+      if (host.endsWith('github.io') || host.endsWith('pages.dev')) {
+        const hasCustom = typeof window.localStorage !== 'undefined' && Boolean(window.localStorage.getItem(STORAGE_KEY_API_URL));
+        if (!hasCustom && this.backendStatus !== 'ONLINE') {
+          return true;
+        }
+      }
+    }
+
+    return this.backendStatus === 'OFFLINE';
   }
 
   /**
@@ -360,6 +397,14 @@ export class ApiClient {
         const offErr: any = new Error('Client is offline');
         offErr.status = 0;
         offErr.code = 'OFFLINE';
+        throw offErr;
+      }
+
+      // Circuit breaker: if backend is known to be unreachable and this is not an explicit probe, fail fast
+      if (this.isRemoteUnreachable() && (options.headers as any)?.['X-Force-Probe'] !== 'true') {
+        const offErr: any = new Error(`Remote backend unreachable at ${base}; using cached local store`);
+        offErr.status = 503;
+        offErr.code = 'BACKEND_OFFLINE';
         throw offErr;
       }
 
@@ -625,7 +670,7 @@ export class ApiClient {
     account_status?: string;
     role?: string;
   }): Promise<UserProfile[]> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       let list = readLocalUsers();
       if (params?.search) {
         const q = params.search.toLowerCase();
@@ -694,7 +739,7 @@ export class ApiClient {
     account_status?: string;
     must_change_password?: boolean;
   }): Promise<UserProfile> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       const users = readLocalUsers();
       const newUser: UserProfile = {
         id: `user-${Date.now().toString(36)}`,
@@ -766,7 +811,7 @@ export class ApiClient {
       is_active?: boolean;
     }
   ): Promise<UserProfile> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       const users = readLocalUsers();
       const idx = users.findIndex((u) => u.id === userId || u.username === userId);
       if (idx !== -1) {
@@ -819,7 +864,7 @@ export class ApiClient {
     newPassword?: string,
     forceChangeNextLogin: boolean = true
   ): Promise<{ status: string; message: string; temporary_password: string; must_change_password: boolean }> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       return {
         status: 'success',
         message: 'Password reset successfully',
@@ -843,7 +888,7 @@ export class ApiClient {
     userId: string,
     accountStatus: 'ACTIVE' | 'INACTIVE' | 'LOCKED'
   ): Promise<UserProfile> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       const users = readLocalUsers();
       const idx = users.findIndex((u) => u.id === userId || u.username === userId);
       if (idx !== -1) {
@@ -869,7 +914,7 @@ export class ApiClient {
   }
 
   static async deleteUser(userId: string): Promise<void> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       const users = readLocalUsers().filter((u) => u.id !== userId && u.username !== userId);
       writeLocalUsers(users);
       return;
@@ -888,7 +933,7 @@ export class ApiClient {
     username: string;
     status: string;
   }> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       const regs = readLocalRegistrations();
       const regId = `reg-${Date.now().toString(36)}`;
       const newReg: UserProfile = {
@@ -953,7 +998,7 @@ export class ApiClient {
     status?: string;
     search?: string;
   }): Promise<UserProfile[]> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       let list = readLocalRegistrations();
       if (params?.status) {
         list = list.filter((r) => r.account_status === params.status);
@@ -1007,7 +1052,7 @@ export class ApiClient {
   }
 
   static async getRegistrationDetail(regId: string): Promise<UserProfile> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       const regs = readLocalRegistrations();
       const r = regs.find((item) => item.id === regId);
       if (r) return r;
@@ -1047,7 +1092,7 @@ export class ApiClient {
   }
 
   static async approveRegistration(regId: string): Promise<UserProfile> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       const regs = readLocalRegistrations();
       const idx = regs.findIndex((r) => r.id === regId);
       if (idx !== -1) {
@@ -1092,7 +1137,7 @@ export class ApiClient {
   }
 
   static async rejectRegistration(regId: string, rejectionReason: string): Promise<UserProfile> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       const regs = readLocalRegistrations();
       const idx = regs.findIndex((r) => r.id === regId);
       if (idx !== -1) {
@@ -1129,7 +1174,7 @@ export class ApiClient {
 
   // Trains and Fleet Management
   static async fetchRegionsSummary(): Promise<RegionSummary[]> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       return localFleetStore.getRegionsSummary();
     }
     try {
@@ -1146,7 +1191,7 @@ export class ApiClient {
   }
 
   static async fetchTrains(region?: string, search?: string): Promise<TrainOverviewItem[]> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       return localFleetStore.listTrains(region, search);
     }
     const params = new URLSearchParams();
@@ -1165,7 +1210,7 @@ export class ApiClient {
     if (!clean) {
       throw new Error('Train number is required.');
     }
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       const localConsist = localFleetStore.getTrainConsist(clean);
       if (localConsist) return localConsist;
       throw new Error(`Train ${clean} not found.`);
@@ -1209,14 +1254,18 @@ export class ApiClient {
 
   static async createTrain(data: TrainCreatePayload): Promise<any> {
     let res: any;
-    if (API_BASE) {
-      res = await this.request('/trains', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+    if (API_BASE && !this.isRemoteUnreachable()) {
       try {
-        localFleetStore.createTrain(data);
-      } catch {}
+        res = await this.request('/trains', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        });
+        try {
+          localFleetStore.createTrain(data);
+        } catch {}
+      } catch (err) {
+        res = localFleetStore.createTrain(data);
+      }
     } else {
       res = localFleetStore.createTrain(data);
     }
@@ -1229,14 +1278,18 @@ export class ApiClient {
 
   static async updateTrain(trainNumber: string, data: { name?: string; region?: string; type?: string }): Promise<any> {
     let res: any;
-    if (API_BASE) {
-      res = await this.request(`/trains/${encodeURIComponent(trainNumber)}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-      });
+    if (API_BASE && !this.isRemoteUnreachable()) {
       try {
-        localFleetStore.updateTrain(trainNumber, data);
-      } catch {}
+        res = await this.request(`/trains/${encodeURIComponent(trainNumber)}`, {
+          method: 'PUT',
+          body: JSON.stringify(data),
+        });
+        try {
+          localFleetStore.updateTrain(trainNumber, data);
+        } catch {}
+      } catch (err) {
+        res = localFleetStore.updateTrain(trainNumber, data);
+      }
     } else {
       res = localFleetStore.updateTrain(trainNumber, data);
     }
@@ -1253,13 +1306,17 @@ export class ApiClient {
       throw new Error('Train number is required for deletion.');
     }
     let res: any;
-    if (API_BASE) {
-      res = await this.request<{ success?: boolean; message: string; trainId?: string }>(`/trains/${clean}`, {
-        method: 'DELETE',
-      });
+    if (API_BASE && !this.isRemoteUnreachable()) {
       try {
-        localFleetStore.deleteTrain(trainNumber);
-      } catch {}
+        res = await this.request<{ success?: boolean; message: string; trainId?: string }>(`/trains/${clean}`, {
+          method: 'DELETE',
+        });
+        try {
+          localFleetStore.deleteTrain(trainNumber);
+        } catch {}
+      } catch (err) {
+        res = localFleetStore.deleteTrain(trainNumber);
+      }
     } else {
       res = localFleetStore.deleteTrain(trainNumber);
     }
@@ -1279,14 +1336,18 @@ export class ApiClient {
     const cleanTrain = (trainNumber || '').trim();
     if (!cleanTrain) throw new Error('Train number is required.');
     let res: any;
-    if (API_BASE) {
-      res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      });
+    if (API_BASE && !this.isRemoteUnreachable()) {
       try {
-        localFleetStore.addCoach(cleanTrain, data);
-      } catch {}
+        res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches`, {
+          method: 'POST',
+          body: JSON.stringify(data),
+        });
+        try {
+          localFleetStore.addCoach(cleanTrain, data);
+        } catch {}
+      } catch (err) {
+        res = localFleetStore.addCoach(cleanTrain, data);
+      }
     } else {
       res = localFleetStore.addCoach(cleanTrain, data);
     }
@@ -1302,14 +1363,18 @@ export class ApiClient {
     const cleanCoach = (coachNumber || '').trim();
     if (!cleanTrain || !cleanCoach) throw new Error('Train number and Coach number are required.');
     let res: any;
-    if (API_BASE) {
-      res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(cleanCoach)}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-      });
+    if (API_BASE && !this.isRemoteUnreachable()) {
       try {
-        localFleetStore.updateCoach(cleanTrain, cleanCoach, data);
-      } catch {}
+        res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(cleanCoach)}`, {
+          method: 'PUT',
+          body: JSON.stringify(data),
+        });
+        try {
+          localFleetStore.updateCoach(cleanTrain, cleanCoach, data);
+        } catch {}
+      } catch (err) {
+        res = localFleetStore.updateCoach(cleanTrain, cleanCoach, data);
+      }
     } else {
       res = localFleetStore.updateCoach(cleanTrain, cleanCoach, data);
     }
@@ -1326,14 +1391,18 @@ export class ApiClient {
     const newCoach = (newCoachNumber || '').trim().toUpperCase();
     if (!cleanTrain || !oldCoach || !newCoach) throw new Error('Train number, old coach number, and new coach number are required.');
     let res: any;
-    if (API_BASE) {
-      res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(oldCoach)}/rename`, {
-        method: 'PUT',
-        body: JSON.stringify({ new_coach_number: newCoach }),
-      });
+    if (API_BASE && !this.isRemoteUnreachable()) {
       try {
-        localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach);
-      } catch {}
+        res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(oldCoach)}/rename`, {
+          method: 'PUT',
+          body: JSON.stringify({ new_coach_number: newCoach }),
+        });
+        try {
+          localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach);
+        } catch {}
+      } catch (err) {
+        res = localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach);
+      }
     } else {
       res = localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach);
     }
@@ -1349,13 +1418,17 @@ export class ApiClient {
     const cleanCoach = (coachNumber || '').trim();
     if (!cleanTrain || !cleanCoach) throw new Error('Train number and coach number are required.');
     let res: any;
-    if (API_BASE) {
-      res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(cleanCoach)}`, {
-        method: 'DELETE',
-      });
+    if (API_BASE && !this.isRemoteUnreachable()) {
       try {
-        localFleetStore.deleteCoach(cleanTrain, cleanCoach);
-      } catch {}
+        res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(cleanCoach)}`, {
+          method: 'DELETE',
+        });
+        try {
+          localFleetStore.deleteCoach(cleanTrain, cleanCoach);
+        } catch {}
+      } catch (err) {
+        res = localFleetStore.deleteCoach(cleanTrain, cleanCoach);
+      }
     } else {
       res = localFleetStore.deleteCoach(cleanTrain, cleanCoach);
     }
@@ -1374,14 +1447,18 @@ export class ApiClient {
     const cleanTrain = (trainNumber || '').trim();
     if (!cleanTrain) throw new Error('Train number is required.');
     let res: any;
-    if (API_BASE) {
-      res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/reorder`, {
-        method: 'PUT',
-        body: JSON.stringify({ coach_numbers: coachNumbers }),
-      });
+    if (API_BASE && !this.isRemoteUnreachable()) {
       try {
-        localFleetStore.reorderCoaches(cleanTrain, coachNumbers);
-      } catch {}
+        res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/reorder`, {
+          method: 'PUT',
+          body: JSON.stringify({ coach_numbers: coachNumbers }),
+        });
+        try {
+          localFleetStore.reorderCoaches(cleanTrain, coachNumbers);
+        } catch {}
+      } catch (err) {
+        res = localFleetStore.reorderCoaches(cleanTrain, coachNumbers);
+      }
     } else {
       res = localFleetStore.reorderCoaches(cleanTrain, coachNumbers);
     }
@@ -1394,7 +1471,7 @@ export class ApiClient {
 
   // Location and GPS Tracking
   static async fetchLocations(trainNumber?: string): Promise<TrainLocation[]> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       const locs = localFleetStore.getTrainLocations();
       return trainNumber ? locs.filter((l) => l.train_number === trainNumber.trim()) : locs;
     }
@@ -1408,39 +1485,36 @@ export class ApiClient {
   }
 
   static async fetchCorridorStations(trainNumber?: string): Promise<import('../types').CorridorStation[]> {
-    if (!API_BASE) return [];
+    if (!API_BASE || this.isRemoteUnreachable()) return [];
     const query = trainNumber ? `?train_number=${encodeURIComponent(trainNumber)}` : '';
     try {
       return await this.request<import('../types').CorridorStation[]>(`/location/corridor${query}`);
-    } catch (err) {
-      Logger.debug('API', 'ApiClient', 'fetchCorridorStations failed, returning empty list', 'fetchCorridorStations', err);
+    } catch {
       return [];
     }
   }
 
   // Tanks
   static async fetchTanks(): Promise<TankLiveStatus[]> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       return localFleetStore.listAllTanks();
     }
     try {
       const res = await this.request<TankLiveStatus[]>('/tanks');
       return Array.isArray(res) ? res : [];
-    } catch (err) {
-      Logger.debug('API', 'ApiClient', 'fetchTanks failed, falling back to local fleet tanks', 'fetchTanks', err);
+    } catch {
       return localFleetStore.listAllTanks();
     }
   }
 
   static async fetchLiveTank(): Promise<TankLiveStatus | null> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       const list = localFleetStore.listAllTanks();
       return list[0] ?? null;
     }
     try {
       return await this.request<TankLiveStatus>('/tanks/live');
-    } catch (err) {
-      Logger.debug('API', 'ApiClient', 'fetchLiveTank failed, falling back to local tank', 'fetchLiveTank', err);
+    } catch {
       const list = localFleetStore.listAllTanks();
       return list[0] ?? null;
     }
@@ -1455,7 +1529,7 @@ export class ApiClient {
 
   // Devices
   static async fetchDevices(search?: string, isOnline?: boolean): Promise<Device[]> {
-    if (API_BASE) {
+    if (API_BASE && !this.isRemoteUnreachable()) {
       try {
         const params = new URLSearchParams();
         if (search) params.append('search', search);
@@ -1659,7 +1733,7 @@ export class ApiClient {
 
   // Alarms
   static async fetchAlarms(status?: string): Promise<AlarmItem[]> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       const alerts = alertNotificationService.getActiveAlerts();
       return alerts.map((a: any) => ({
         id: a.id,
@@ -1679,8 +1753,7 @@ export class ApiClient {
     const query = status ? `?status=${status}` : '';
     try {
       return await this.request<AlarmItem[]>(`/alarms${query}`);
-    } catch (err) {
-      Logger.debug('API', 'ApiClient', 'fetchAlarms failed, falling back to alertNotificationService', 'fetchAlarms', err);
+    } catch {
       const alerts = alertNotificationService.getActiveAlerts();
       return alerts.map((a: any) => ({
         id: a.id,
@@ -1700,7 +1773,7 @@ export class ApiClient {
   }
 
   static async fetchAlarmStats(): Promise<AlarmStats> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       const alerts = alertNotificationService.getActiveAlerts();
       const critical = alerts.filter(a => a.severity === 'CRITICAL' || a.severity === 'critical').length;
       const warning = alerts.filter(a => a.severity === 'WARNING' || a.severity === 'warning').length;
@@ -1714,8 +1787,7 @@ export class ApiClient {
     }
     try {
       return await this.request<AlarmStats>('/alarms/stats');
-    } catch (err) {
-      Logger.debug('API', 'ApiClient', 'fetchAlarmStats failed, falling back to local alert stats', 'fetchAlarmStats', err);
+    } catch {
       const alerts = alertNotificationService.getActiveAlerts();
       const critical = alerts.filter(a => a.severity === 'CRITICAL' || a.severity === 'critical').length;
       const warning = alerts.filter(a => a.severity === 'WARNING' || a.severity === 'warning').length;
@@ -1751,7 +1823,7 @@ export class ApiClient {
     mqttBroker: string;
     activeWebSockets: number;
   }> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       return {
         status: 'nominal',
         app: 'Panorama Water Tank Monitor',
@@ -1763,8 +1835,7 @@ export class ApiClient {
     }
     try {
       return await this.request('/health');
-    } catch (err) {
-      Logger.debug('API', 'ApiClient', 'fetchHealth failed, falling back to local status', 'fetchHealth', err);
+    } catch {
       return {
         status: 'degraded',
         app: 'Panorama Water Tank Monitor',
@@ -1778,16 +1849,18 @@ export class ApiClient {
 
   // Settings
   static async fetchSettings(): Promise<SettingItem[]> {
+    if (!API_BASE || this.isRemoteUnreachable()) {
+      return [];
+    }
     try {
       return await this.request<SettingItem[]>('/settings');
-    } catch (err) {
-      Logger.debug('API', 'ApiClient', 'fetchSettings failed, returning local default settings', 'fetchSettings', err);
+    } catch {
       return [];
     }
   }
 
   static async fetchUnifiedConfig(): Promise<any> {
-    if (!API_BASE) {
+    if (!API_BASE || this.isRemoteUnreachable()) {
       if (typeof window !== 'undefined' && window.localStorage) {
         const saved = window.localStorage.getItem('panorama_system_config');
         if (saved) {

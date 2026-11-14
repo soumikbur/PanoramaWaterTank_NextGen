@@ -133,6 +133,17 @@ export class WebSocketService {
     if (typeof window === 'undefined' || typeof fetch === 'undefined') return true;
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
 
+    // Static hosting guard: if on github.io or pages.dev without custom backend, skip futile preflight
+    if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+      const host = window.location.hostname;
+      if (host.endsWith('github.io') || host.endsWith('pages.dev')) {
+        const hasCustom = typeof window.localStorage !== 'undefined' && Boolean(window.localStorage.getItem('panorama_backend_url'));
+        if (!hasCustom) {
+          return false;
+        }
+      }
+    }
+
     const healthUrl = getHttpHealthUrl(wsUrl);
     try {
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
