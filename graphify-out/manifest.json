@@ -5573,6 +5573,18 @@
     "ast_hash": "40b0d73a0fe1a07798e93d8758012421",
     "semantic_hash": ""
   },
+  "WLI_DOCS/browser_debug_logs/BROWSER_DEBUG_REPORT_2026-11-14T04-07-39-846Z.md": {
+    "mtime": 1794629300.8159142,
+    "seen": 1794629327.2689376,
+    "ast_hash": "9f3babbccec965d38327376115146aaf",
+    "semantic_hash": ""
+  },
+  "WLI_DOCS/browser_debug_logs/screenshot_2026-11-14T04-07-39-846Z.png": {
+    "mtime": 1794629300.8034604,
+    "seen": 1794629327.3379316,
+    "ast_hash": "1c8f36dd0d25a147a0d51ea1f706afb8",
+    "semantic_hash": ""
+  },
   "PanoramaWaterTank_Capacitor/package-lock.json": {
     "mtime": 1794515092.0,
     "seen": 1794597776.1783333,
