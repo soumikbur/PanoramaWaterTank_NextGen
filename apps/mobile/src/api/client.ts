@@ -371,7 +371,7 @@ export class ApiClient {
     };
   }
 
-  private static async request<T>(endpoint: string, options: RequestInit = {}, retries = 1): Promise<T> {
+  private static async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     this.ensureListeners();
     const base = resolveApiBase();
     if (!base) {
@@ -391,117 +391,7 @@ export class ApiClient {
       }
     }
 
-    const execPromise = (async () => {
-      // If we are completely offline at the network level, fail fast
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-        const offErr: any = new Error('Client is offline');
-        offErr.status = 0;
-        offErr.code = 'OFFLINE';
-        throw offErr;
-      }
-
-      // Circuit breaker: if backend is known to be unreachable and this is not an explicit probe, fail fast
-      if (this.isRemoteUnreachable() && (options.headers as any)?.['X-Force-Probe'] !== 'true') {
-        const offErr: any = new Error(`Remote backend unreachable at ${base}; using cached local store`);
-        offErr.status = 503;
-        offErr.code = 'BACKEND_OFFLINE';
-        throw offErr;
-      }
-
-      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('panorama_token') : null;
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        ...(options.headers as Record<string, string> || {}),
-      };
-
-      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      let timeoutId: any = null;
-      if (controller) {
-        timeoutId = setTimeout(() => {
-          controller.abort();
-        }, 10000);
-        if (options.signal) {
-          options.signal.addEventListener('abort', () => controller.abort());
-        }
-      }
-
-      try {
-        const response = await fetch(url, {
-          ...options,
-          headers,
-          signal: controller ? controller.signal : options.signal,
-        });
-
-        if (timeoutId) clearTimeout(timeoutId);
-
-        const rawText = await response.text();
-        let parsedJson: any = null;
-        if (rawText) {
-          try {
-            parsedJson = JSON.parse(rawText);
-          } catch {
-            parsedJson = null;
-          }
-        }
-
-        if (!response.ok) {
-          // If server returned 502/503/504 and we have retries remaining, retry once after backoff
-          if ((response.status === 502 || response.status === 503 || response.status === 504) && retries > 0 && method === 'GET') {
-            await new Promise((r) => setTimeout(r, 600));
-            return this.request<T>(endpoint, options, retries - 1);
-          }
-
-          let errorMsg = `API error ${response.status}${response.statusText ? `: ${response.statusText}` : ''}`;
-          if (parsedJson && (parsedJson.message || parsedJson.detail)) {
-            errorMsg = String(parsedJson.detail || parsedJson.message);
-          } else if (response.status === 405) {
-            errorMsg = 'HTTP 405 Method Not Allowed: API endpoint does not accept this request.';
-          }
-
-          Logger.debug('API', 'ApiClient', `${method} ${url} returned ${response.status}: ${errorMsg}`, 'request', {
-            status: response.status,
-            detail: parsedJson || rawText.slice(0, 150),
-          });
-
-          this.setBackendStatus('DEGRADED');
-          const err: any = new Error(errorMsg);
-          err.status = response.status;
-          if (parsedJson?.code) err.code = parsedJson.code;
-          throw err;
-        }
-
-        this.setBackendStatus('ONLINE');
-        this.lastHealthCheckTime = Date.now();
-        this.backoffDelayMs = 2000;
-
-        if (parsedJson !== null) {
-          return parsedJson as T;
-        }
-        if (response.status === 204 || !rawText.trim()) {
-          return {} as T;
-        }
-        throw new Error(`Invalid non-JSON response from ${url}`);
-      } catch (fetchErr: any) {
-        if (timeoutId) clearTimeout(timeoutId);
-
-        // Check if retryable for transient network dropouts on GET
-        if (retries > 0 && method === 'GET' && fetchErr.name !== 'AbortError') {
-          await new Promise((r) => setTimeout(r, 600));
-          return this.request<T>(endpoint, options, retries - 1);
-        }
-
-        const classified = this.classifyError(fetchErr, url);
-        if (classified.type === 'CONNECTION_REFUSED' || classified.type === 'TIMEOUT') {
-          this.setBackendStatus('OFFLINE');
-          this.scheduleHealthProbe();
-        }
-
-        Logger.debug('API', 'ApiClient', `Request to ${url} failed: ${classified.message}`, 'networkFail');
-        throw fetchErr;
-      }
-    })();
-
+    const execPromise = this.executeNetworkRequest<T>(url, base, endpoint, options, 1);
     if (method === 'GET') {
       this.pendingGetRequests.set(url, execPromise);
       execPromise.finally(() => {
@@ -510,6 +400,127 @@ export class ApiClient {
     }
 
     return execPromise;
+  }
+
+  private static async executeNetworkRequest<T>(
+    url: string,
+    base: string,
+    endpoint: string,
+    options: RequestInit,
+    retries: number
+  ): Promise<T> {
+    const method = (options.method || 'GET').toUpperCase();
+
+    // If we are completely offline at the network level, fail fast
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      const offErr: any = new Error('Client is offline');
+      offErr.status = 0;
+      offErr.code = 'OFFLINE';
+      throw offErr;
+    }
+
+    // Circuit breaker: if backend is known to be unreachable and this is not an explicit probe, fail fast
+    if (this.isRemoteUnreachable() && (options.headers as any)?.['X-Force-Probe'] !== 'true') {
+      const offErr: any = new Error(`Remote backend unreachable at ${base}; using cached local store`);
+      offErr.status = 503;
+      offErr.code = 'BACKEND_OFFLINE';
+      throw offErr;
+    }
+
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('panorama_token') : null;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(options.headers as Record<string, string> || {}),
+    };
+
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    let timeoutId: any = null;
+    if (controller) {
+      timeoutId = setTimeout(() => {
+        controller.abort();
+      }, 10000);
+      if (options.signal) {
+        options.signal.addEventListener('abort', () => controller.abort());
+      }
+    }
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller ? controller.signal : options.signal,
+      });
+
+      if (timeoutId) clearTimeout(timeoutId);
+
+      const rawText = await response.text();
+      let parsedJson: any = null;
+      let hasJson = false;
+      if (rawText) {
+        try {
+          parsedJson = JSON.parse(rawText);
+          hasJson = true;
+        } catch {
+          hasJson = false;
+        }
+      }
+
+      if (!response.ok) {
+        // If server returned 502/503/504 and we have retries remaining, retry once after backoff
+        if ((response.status === 502 || response.status === 503 || response.status === 504) && retries > 0 && method === 'GET') {
+          await new Promise((r) => setTimeout(r, 600));
+          return this.executeNetworkRequest<T>(url, base, endpoint, options, retries - 1);
+        }
+
+        let errorMsg = `API error ${response.status}${response.statusText ? `: ${response.statusText}` : ''}`;
+        if (parsedJson && (parsedJson.message || parsedJson.detail)) {
+          errorMsg = String(parsedJson.detail || parsedJson.message);
+        } else if (response.status === 405) {
+          errorMsg = 'HTTP 405 Method Not Allowed: API endpoint does not accept this request.';
+        }
+
+        Logger.debug('API', 'ApiClient', `${method} ${url} returned ${response.status}: ${errorMsg}`, 'request', {
+          status: response.status,
+          detail: parsedJson || rawText.slice(0, 150),
+        });
+
+        this.setBackendStatus('DEGRADED');
+        const err: any = new Error(errorMsg);
+        err.status = response.status;
+        if (parsedJson?.code) err.code = parsedJson.code;
+        throw err;
+      }
+
+      this.setBackendStatus('ONLINE');
+      this.lastHealthCheckTime = Date.now();
+      this.backoffDelayMs = 2000;
+
+      if (hasJson) {
+        return parsedJson as T;
+      }
+      if (response.status === 204 || !rawText.trim() || rawText.trim() === 'null') {
+        return (null as unknown) as T;
+      }
+      throw new Error(`Invalid non-JSON response from ${url}`);
+    } catch (fetchErr: any) {
+      if (timeoutId) clearTimeout(timeoutId);
+
+      // Check if retryable for transient network dropouts on GET
+      if (retries > 0 && method === 'GET' && fetchErr.name !== 'AbortError') {
+        await new Promise((r) => setTimeout(r, 600));
+        return this.executeNetworkRequest<T>(url, base, endpoint, options, retries - 1);
+      }
+
+      const classified = this.classifyError(fetchErr, url);
+      if (classified.type === 'CONNECTION_REFUSED' || classified.type === 'TIMEOUT') {
+        this.setBackendStatus('OFFLINE');
+        this.scheduleHealthProbe();
+      }
+
+      Logger.debug('API', 'ApiClient', `Request to ${url} failed: ${classified.message}`, 'networkFail');
+      throw fetchErr;
+    }
   }
 
   // Auth
@@ -603,6 +614,14 @@ export class ApiClient {
   }
 
   static async fetchCurrentUser(): Promise<UserProfile> {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('panorama_demo_user') : null;
+    if (!API_BASE || this.isRemoteUnreachable()) {
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch {}
+      }
+    }
     try {
       const res = await this.request<any>('/auth/me');
       return {
@@ -625,7 +644,6 @@ export class ApiClient {
         created_at: res.createdAt || res.created_at,
       };
     } catch (err) {
-      const saved = localStorage.getItem('panorama_demo_user');
       if (saved) {
         try {
           return JSON.parse(saved);

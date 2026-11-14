@@ -536,9 +536,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // 1. Session verification on startup
   useEffect(() => {
+    let completed = false;
+    const safetyTimer = setTimeout(() => {
+      if (!completed) {
+        setAuthLoading(false);
+      }
+    }, 3500);
+
     const checkAuthSession = async () => {
       const token = localStorage.getItem('panorama_token');
       if (!token) {
+        completed = true;
+        clearTimeout(safetyTimer);
         setIsAuthenticated(false);
         setCurrentUser(null);
         setActiveScreen('login');
@@ -548,6 +557,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       try {
         const user = await ApiClient.fetchCurrentUser();
+        completed = true;
+        clearTimeout(safetyTimer);
         setCurrentUser(user);
         setIsAuthenticated(true);
         const parsed = AppRouter.parseCurrentRoute();
@@ -557,6 +568,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setActiveScreen(targetScreen);
         AppRouter.navigate(targetScreen, parsed.trainNumber || selectedTrainNumber, parsed.coachNumber || selectedCoachNumber);
       } catch (err) {
+        completed = true;
+        clearTimeout(safetyTimer);
         console.warn('[AppContext] Stale or invalid session token. Resetting to login:', err);
         ApiClient.logout();
         setIsAuthenticated(false);
@@ -564,11 +577,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setActiveScreen('login');
         AppRouter.navigate('login');
       } finally {
+        completed = true;
+        clearTimeout(safetyTimer);
         setAuthLoading(false);
       }
     };
 
     checkAuthSession();
+    return () => {
+      completed = true;
+      clearTimeout(safetyTimer);
+    };
   }, []);
 
   // Listen to browser URL navigation (Back/Forward buttons, hashchange)
