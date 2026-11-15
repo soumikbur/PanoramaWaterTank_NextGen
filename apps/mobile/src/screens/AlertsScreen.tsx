@@ -246,17 +246,7 @@ export const AlertsScreen: React.FC = () => {
 
   // Generic Sensor Health Status (Zero hardware model references)
   const sensorHealth = useMemo((): { status: StandardSensorHealth; color: string } => {
-    // 1. Offline state: device is offline or network disconnected
-    if (isOffline || (liveTank && liveTank.isOnline === false)) {
-      return { status: formatSensorHealth('Offline'), color: getSensorHealthColor('Offline') };
-    }
-
-    // 2. Awaiting Telemetry: no live telemetry received yet or explicit awaiting state
-    if ((!hasData && !liveTank?.lastUpdate) || liveTank?.alarmStatus === 'AWAITING_TELEMETRY') {
-      return { status: formatSensorHealth('Awaiting Telemetry'), color: getSensorHealthColor('Awaiting Telemetry') };
-    }
-
-    // 3. Fault state: sensor fault/disconnection alarm active
+    // 1. Fault state: sensor fault/disconnection alarm active
     const hasSensorFault =
       liveTank?.alarmStatus === 'SENSOR_FAULT' ||
       activeAlertsList.some((a) => a.type === 'sensor' && a.severity === 'CRITICAL') ||
@@ -266,7 +256,7 @@ export const AlertsScreen: React.FC = () => {
       return { status: formatSensorHealth('Fault'), color: getSensorHealthColor('Fault') };
     }
 
-    // 4. Warning state: sensor warning or stale telemetry alarm active
+    // 2. Warning state: sensor warning or stale telemetry alarm active
     const hasSensorWarning =
       liveTank?.alarmStatus === 'SENSOR_WARNING' ||
       liveTank?.isStale === true ||
@@ -277,9 +267,23 @@ export const AlertsScreen: React.FC = () => {
       return { status: formatSensorHealth('Warning'), color: getSensorHealthColor('Warning') };
     }
 
-    // 5. Normal healthy sensor state
-    return { status: formatSensorHealth('Healthy'), color: getSensorHealthColor('Healthy') };
-  }, [isOffline, liveTank, hasData, activeAlertsList, activeAlarms]);
+    // 3. Offline state: device itself is explicitly offline
+    if (liveTank && liveTank.isOnline === false) {
+      return { status: formatSensorHealth('Offline'), color: getSensorHealthColor('Offline') };
+    }
+
+    // 4. Awaiting Telemetry: explicit awaiting telemetry alarm state
+    if (liveTank?.alarmStatus === 'AWAITING_TELEMETRY') {
+      return { status: formatSensorHealth('Awaiting Telemetry'), color: getSensorHealthColor('Awaiting Telemetry') };
+    }
+
+    // 5. Default actual sensor state: Healthy (normalized from Healthy (ADS1115 Active))
+    const rawStatus = (liveTank as any)?.sensorStatus || 'Healthy (ADS1115 Active)';
+    return {
+      status: formatSensorHealth(rawStatus),
+      color: getSensorHealthColor(rawStatus),
+    };
+  }, [liveTank, activeAlertsList, activeAlarms]);
 
   const handleAcknowledgeOne = async (alert: AlertItemData) => {
     if (alert.id === 'ALT-WLI-CRIT' || alert.id === 'ALT-WLI-WARN' || alert.id === 'ALT-WLI-OVERFLOW') {
