@@ -6,7 +6,6 @@ import { ApiClient } from '../api/client';
 import { alertNotificationService } from '../services/alertNotificationService';
 import { NOTIFICATION_CONFIG } from '../config/notificationConfig';
 import { CheckCircle2, Bell, BellOff, Clock } from 'lucide-react';
-import { formatSensorHealth, getSensorHealthColor, StandardSensorHealth } from '../utils/formatters';
 
 interface AlertItemData {
   id: string;
@@ -243,47 +242,6 @@ export const AlertsScreen: React.FC = () => {
   const warningCount = activeAlertsList.filter((a) => a.severity === 'WARNING').length;
   const activeCount = activeAlertsList.length;
   const resolvedCount = alertHistory.filter((h) => h.status === 'Resolved').length;
-
-  // Generic Sensor Health Status (Zero hardware model references)
-  const sensorHealth = useMemo((): { status: StandardSensorHealth; color: string } => {
-    // 1. Fault state: sensor fault/disconnection alarm active
-    const hasSensorFault =
-      liveTank?.alarmStatus === 'SENSOR_FAULT' ||
-      activeAlertsList.some((a) => a.type === 'sensor' && a.severity === 'CRITICAL') ||
-      (activeAlarms && activeAlarms.some((a) => (a.alarmType || '').toUpperCase().includes('SENSOR_FAULT')));
-
-    if (hasSensorFault) {
-      return { status: formatSensorHealth('Fault'), color: getSensorHealthColor('Fault') };
-    }
-
-    // 2. Warning state: sensor warning or stale telemetry alarm active
-    const hasSensorWarning =
-      liveTank?.alarmStatus === 'SENSOR_WARNING' ||
-      liveTank?.isStale === true ||
-      activeAlertsList.some((a) => a.type === 'sensor' && a.severity === 'WARNING') ||
-      (activeAlarms && activeAlarms.some((a) => (a.alarmType || '').toUpperCase().includes('SENSOR_WARN')));
-
-    if (hasSensorWarning) {
-      return { status: formatSensorHealth('Warning'), color: getSensorHealthColor('Warning') };
-    }
-
-    // 3. Offline state: device itself is explicitly offline
-    if (liveTank && liveTank.isOnline === false) {
-      return { status: formatSensorHealth('Offline'), color: getSensorHealthColor('Offline') };
-    }
-
-    // 4. Awaiting Telemetry: explicit awaiting telemetry alarm state
-    if (liveTank?.alarmStatus === 'AWAITING_TELEMETRY') {
-      return { status: formatSensorHealth('Awaiting Telemetry'), color: getSensorHealthColor('Awaiting Telemetry') };
-    }
-
-    // 5. Default actual sensor state: Healthy (normalized from Healthy (ADS1115 Active))
-    const rawStatus = (liveTank as any)?.sensorStatus || 'Healthy (ADS1115 Active)';
-    return {
-      status: formatSensorHealth(rawStatus),
-      color: getSensorHealthColor(rawStatus),
-    };
-  }, [liveTank, activeAlertsList, activeAlarms]);
 
   const handleAcknowledgeOne = async (alert: AlertItemData) => {
     if (alert.id === 'ALT-WLI-CRIT' || alert.id === 'ALT-WLI-WARN' || alert.id === 'ALT-WLI-OVERFLOW') {
@@ -524,7 +482,7 @@ export const AlertsScreen: React.FC = () => {
 
       {/* 3. Current Live System Status Strip */}
       <BaseCard style={{ padding: '14px', boxSizing: 'border-box' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))', alignItems: 'center', gap: '14px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', alignItems: 'center', gap: '14px' }}>
           <div>
             <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B', fontFamily: typography.fontFamily }}>
               CURRENT WATER LEVEL
@@ -548,25 +506,6 @@ export const AlertsScreen: React.FC = () => {
               }}
             >
               {alarmLevel.toUpperCase()}
-            </div>
-          </div>
-
-          <div>
-            <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B', fontFamily: typography.fontFamily }}>
-              SENSOR HEALTH
-            </div>
-            <div
-              id="alerts-sensor-health-status"
-              data-testid="alerts-sensor-health"
-              style={{
-                fontSize: '15px',
-                fontWeight: 600,
-                color: sensorHealth.color,
-                fontFamily: typography.fontFamily,
-                marginTop: '2px',
-              }}
-            >
-              {sensorHealth.status}
             </div>
           </div>
 

@@ -25,26 +25,6 @@ Item {
     readonly property double waterHeight: TankModel.waterHeightCm
     readonly property double maxHeight: TankModel.tankHeightCm > 0 ? TankModel.tankHeightCm : 50.0
     readonly property string alarmLevel: TankModel.alarmLevel !== "" ? TankModel.alarmLevel : "Normal"
-    function formatSensorHealth(status) {
-        if (!status || typeof status !== "string") return "Awaiting Telemetry";
-        var trimmed = status.trim();
-        if (!trimmed || trimmed === "--" || trimmed === "N/A") return "Awaiting Telemetry";
-        var base = trimmed.split(/[\(\[\{]/)[0].trim().toLowerCase();
-        if (base === "healthy" || base === "operational" || base === "normal" || base === "ok") return "Healthy";
-        if (base === "warning" || base === "warn" || base === "stale") return "Warning";
-        if (base === "fault" || base === "sensor fault" || base === "error" || base === "critical") return "Fault";
-        if (base === "offline" || base === "disconnected" || base === "unreachable") return "Offline";
-        if (base.indexOf("awaiting") !== -1 || base.indexOf("waiting") !== -1) return "Awaiting Telemetry";
-        var upper = trimmed.toUpperCase();
-        if (upper.indexOf("AWAITING") !== -1 || upper.indexOf("WAITING") !== -1) return "Awaiting Telemetry";
-        if (upper.indexOf("OFFLINE") !== -1 || upper.indexOf("DISCONNECT") !== -1) return "Offline";
-        if (upper.indexOf("FAULT") !== -1 || upper.indexOf("ERROR") !== -1 || upper.indexOf("CRITICAL") !== -1) return "Fault";
-        if (upper.indexOf("WARN") !== -1 || upper.indexOf("STALE") !== -1) return "Warning";
-        if (upper.indexOf("HEALTHY") !== -1 || upper.indexOf("NORMAL") !== -1 || upper.indexOf("OPERATIONAL") !== -1) return "Healthy";
-        return "Healthy";
-    }
-
-    readonly property string sensorHealth: formatSensorHealth(TankModel.sensorStatus !== "" ? TankModel.sensorStatus : "Healthy")
     readonly property bool isOffline: TankModel.connectionState === "Offline" || !TankModel.hasValidData
 
     // Direct bindings to authoritative TankModel alerts and counts
@@ -308,21 +288,6 @@ Item {
                             color: root.alarmLevel === "Critical" || root.alarmLevel === "Overflow" ? "#DC2626" : (root.alarmLevel === "Warning" ? "#D97706" : "#059669")
                             font.pixelSize: 15
                             font.weight: Font.Bold
-                            font.family: Theme.typography.fontFamily
-                        }
-                    }
-
-                    Rectangle { width: 1; height: 32; color: "#E2E8F0" }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 2
-                        Text { text: "SENSOR HEALTH"; color: "#64748B"; font.pixelSize: 11; font.weight: Font.Bold; font.family: Theme.typography.fontFamily }
-                        Text {
-                            text: root.sensorHealth
-                            color: root.sensorHealth === "Fault" ? "#DC2626" : (root.sensorHealth === "Warning" ? "#D97706" : (root.sensorHealth === "Offline" || root.sensorHealth === "Awaiting Telemetry" ? "#64748B" : "#059669"))
-                            font.pixelSize: 15
-                            font.weight: Font.DemiBold
                             font.family: Theme.typography.fontFamily
                         }
                     }
