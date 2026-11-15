@@ -31,6 +31,9 @@ export interface TrainLocation {
   nearest_station?: string | null;
   last_update?: string | null;
   waypoints: GPSWaypoint[];
+  has_route?: boolean;
+  route_stops_count?: number;
+  route?: CorridorStation[];
 }
 
 export interface CorridorStation {

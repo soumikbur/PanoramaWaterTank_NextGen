@@ -807,7 +807,7 @@ Item {
 
                 InfoRow { Layout.fillWidth: true; label: "Atmospheric Pressure"; value: root.selectedDevice ? root.selectedDevice.pressure.toFixed(1) + " hPa (LIVE)" : "--" }
                 InfoRow { Layout.fillWidth: true; label: "Relative Humidity"; value: root.selectedDevice ? root.selectedDevice.humidity.toFixed(1) + " % RH" : "--" }
-                InfoRow { Layout.fillWidth: true; label: "BME280 Health"; value: "Healthy (EEPROM Backup Ready)" }
+                InfoRow { Layout.fillWidth: true; label: "Environmental Sensor Health"; value: "Healthy" }
 
                 Rectangle { Layout.fillWidth: true; height: 1; color: "#F1F5F9" }
 

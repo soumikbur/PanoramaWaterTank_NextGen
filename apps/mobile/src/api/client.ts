@@ -1571,6 +1571,15 @@ export class ApiClient {
     }
   }
 
+  static async fetchAllCorridors(): Promise<Record<string, import('../types').CorridorStation[]>> {
+    if (!API_BASE || this.isRemoteUnreachable()) return {};
+    try {
+      return await this.request<Record<string, import('../types').CorridorStation[]>>('/location/corridors');
+    } catch {
+      return {};
+    }
+  }
+
   // Tanks
   static async fetchTanks(): Promise<TankLiveStatus[]> {
     if (!API_BASE || this.isRemoteUnreachable()) {

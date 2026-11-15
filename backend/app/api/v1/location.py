@@ -1,9 +1,10 @@
 """GPS Location & Tracking API Router."""
 import json
+import logging
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 
@@ -11,6 +12,9 @@ from app.core.database import get_db
 from app.models.device import Device
 from app.models.telemetry import TelemetryReading
 from app.models.train import Train
+from app.services.station_service import StationService
+
+logger = logging.getLogger("panorama.location")
 
 router = APIRouter(prefix="/location", tags=["Location"])
 
@@ -22,6 +26,21 @@ class GPSWaypoint(BaseModel):
     speed_kmh: Optional[float] = None
     satellites: Optional[int] = None
     timestamp: str
+
+
+class CorridorStation(BaseModel):
+    id: str
+    name: str
+    code: str
+    latitude: float
+    longitude: float
+    route_order: int
+    water_refill_available: bool
+    water_capacity_liters: float
+    operational_status: str
+    last_verified: str
+    is_source: bool = False
+    is_destination: bool = False
 
 
 class TrainLocation(BaseModel):
@@ -44,73 +63,161 @@ class TrainLocation(BaseModel):
     nearest_station: Optional[str] = None
     last_update: Optional[str] = None
     waypoints: List[GPSWaypoint] = []
+    has_route: bool = False
+    route_stops_count: int = 0
+    route: List[CorridorStation] = Field(default_factory=list)
 
 
-class CorridorStation(BaseModel):
-    id: str
-    name: str
-    code: str
-    latitude: float
-    longitude: float
-    route_order: int
-    water_refill_available: bool
-    water_capacity_liters: float
-    operational_status: str
-    last_verified: str
-    is_source: bool = False
-    is_destination: bool = False
+def build_corridor_stations_for_train(db_train: Train) -> List[CorridorStation]:
+    """Build verified route stations for a train using its route_json or terminal station codes.
+    
+    Zero invented coordinates: only returns stations with verified geographic coordinates
+    from the train record or the official DataMeet railway station repository.
+    """
+    stations: List[CorridorStation] = []
+    tr_num = db_train.train_number.strip()
+
+    # 1. Parse route_json if configured
+    if db_train.route_json:
+        try:
+            raw_route = json.loads(db_train.route_json)
+            if isinstance(raw_route, list) and len(raw_route) > 0:
+                for idx, stop in enumerate(raw_route):
+                    if not isinstance(stop, dict):
+                        continue
+                    st_code = str(stop.get("station_code") or stop.get("code") or f"ST{idx+1}").strip().upper()
+                    st_name = str(stop.get("station_name") or stop.get("name") or st_code).strip()
+
+                    lat = stop.get("latitude") or stop.get("lat")
+                    lon = stop.get("longitude") or stop.get("lng") or stop.get("lon")
+
+                    # Enrich missing coordinates via DataMeet StationService
+                    if lat is None or lon is None:
+                        coords = StationService.get_station_coords(st_code)
+                        if coords:
+                            lat, lon, res_name = coords
+                            if not st_name or st_name == st_code:
+                                st_name = res_name
+
+                    if lat is not None and lon is not None:
+                        try:
+                            lat_f, lon_f = float(lat), float(lon)
+                            if -90.0 <= lat_f <= 90.0 and -180.0 <= lon_f <= 180.0 and (lat_f != 0 or lon_f != 0):
+                                is_refill = bool(stop.get("water_refill_available", False))
+                                cap = float(stop.get("water_capacity_liters", 0.0) or 0.0)
+                                st_info = StationService.get_station_info(st_code)
+                                if st_info:
+                                    if "water_refill" in st_info and not is_refill:
+                                        is_refill = bool(st_info["water_refill"])
+                                    if "capacity" in st_info and cap <= 0:
+                                        cap = float(st_info["capacity"])
+
+                                stations.append(
+                                    CorridorStation(
+                                        id=f"{tr_num}_{st_code.lower()}_{idx}",
+                                        name=st_name,
+                                        code=st_code,
+                                        latitude=round(lat_f, 5),
+                                        longitude=round(lon_f, 5),
+                                        route_order=idx,
+                                        water_refill_available=is_refill,
+                                        water_capacity_liters=cap,
+                                        operational_status="Operational" if is_refill else "Route Halt",
+                                        last_verified=db_train.last_verified_at.isoformat() if db_train.last_verified_at else "",
+                                        is_source=(idx == 0),
+                                        is_destination=(idx == len(raw_route) - 1),
+                                    )
+                                )
+                        except (ValueError, TypeError):
+                            pass
+        except Exception as e:
+            logger.warning(f"Error parsing route_json for train {tr_num}: {e}")
+
+    # 2. Fallback: If route_json produced fewer than 2 valid stations, attempt terminal station resolution
+    src_code = db_train.source_code
+    dst_code = db_train.destination_code
+    src_name = db_train.source_station
+    dst_name = db_train.destination_station
+
+    if len(stations) < 2 and (not src_code or not dst_code):
+        terminals = StationService.lookup_train_terminals(tr_num)
+        if terminals:
+            src_code, src_name, dst_code, dst_name = terminals
+
+    if len(stations) < 2 and src_code and dst_code:
+        src_coords = StationService.get_station_coords(src_code)
+        dst_coords = StationService.get_station_coords(dst_code)
+        if src_coords and dst_coords:
+            src_lat, src_lon, res_src_name = src_coords
+            dst_lat, dst_lon, res_dst_name = dst_coords
+            src_info = StationService.get_station_info(src_code) or {}
+            dst_info = StationService.get_station_info(dst_code) or {}
+            stations = [
+                CorridorStation(
+                    id=f"{tr_num}_{src_code.lower()}_0",
+                    name=src_name or res_src_name,
+                    code=src_code.upper(),
+                    latitude=round(src_lat, 5),
+                    longitude=round(src_lon, 5),
+                    route_order=0,
+                    water_refill_available=bool(src_info.get("water_refill", True)),
+                    water_capacity_liters=float(src_info.get("capacity", 50000.0)),
+                    operational_status="Origin Station",
+                    last_verified=db_train.last_verified_at.isoformat() if db_train.last_verified_at else "",
+                    is_source=True,
+                    is_destination=False,
+                ),
+                CorridorStation(
+                    id=f"{tr_num}_{dst_code.lower()}_1",
+                    name=dst_name or res_dst_name,
+                    code=dst_code.upper(),
+                    latitude=round(dst_lat, 5),
+                    longitude=round(dst_lon, 5),
+                    route_order=1,
+                    water_refill_available=bool(dst_info.get("water_refill", True)),
+                    water_capacity_liters=float(dst_info.get("capacity", 40000.0)),
+                    operational_status="Terminus Station",
+                    last_verified=db_train.last_verified_at.isoformat() if db_train.last_verified_at else "",
+                    is_source=False,
+                    is_destination=True,
+                ),
+            ]
+
+    return stations
 
 
-# Do not seed or serve hardcoded demonstration corridors; return empty unless real route stops exist.
+@router.get("/corridors", response_model=Dict[str, List[CorridorStation]])
+async def get_all_route_corridors(db: AsyncSession = Depends(get_db)):
+    """Retrieve verified route corridors indexed by train number for all registered trains."""
+    trains_res = await db.execute(select(Train).where(Train.is_deleted == False))
+    trains = list(trains_res.scalars().all())
+    corridors: Dict[str, List[CorridorStation]] = {}
+    for t in trains:
+        tr_num = t.train_number.strip()
+        corridors[tr_num] = build_corridor_stations_for_train(t)
+    return corridors
+
+
 @router.get("/corridor", response_model=List[CorridorStation])
 async def get_route_corridor(
     train_number: Optional[str] = Query(None, description="Configured train number"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Retrieve route stations only when verified route metadata exists for a configured train."""
-    if not train_number:
-        return []
-    res = await db.execute(select(Train).where(Train.train_number == train_number.strip()))
-    db_train = res.scalar_one_or_none()
-    if not db_train or not db_train.route_json:
-        return []
-    try:
-        raw_route = json.loads(db_train.route_json)
-    except Exception:
-        return []
-    stations: List[CorridorStation] = []
-    if isinstance(raw_route, list):
-        for idx, stop in enumerate(raw_route):
-            if not isinstance(stop, dict):
-                continue
-            lat = stop.get("latitude") or stop.get("lat")
-            lon = stop.get("longitude") or stop.get("lng") or stop.get("lon")
-            if lat is None or lon is None:
-                continue
-            try:
-                lat_f, lon_f = float(lat), float(lon)
-            except (TypeError, ValueError):
-                continue
-            if not (-90.0 <= lat_f <= 90.0 and -180.0 <= lon_f <= 180.0) or (lat_f == 0 and lon_f == 0):
-                continue
-            code = str(stop.get("station_code") or f"ST{idx+1}")
-            stations.append(
-                CorridorStation(
-                    id=code.lower(),
-                    name=str(stop.get("station_name") or code),
-                    code=code,
-                    latitude=lat_f,
-                    longitude=lon_f,
-                    route_order=idx,
-                    water_refill_available=False,
-                    water_capacity_liters=0.0,
-                    operational_status="Route Halt",
-                    last_verified=db_train.last_verified_at.isoformat() if db_train.last_verified_at else "",
-                    is_source=(idx == 0),
-                    is_destination=(idx == len(raw_route) - 1),
-                )
-            )
-    return stations
+    """Retrieve route stations for a specific train, or all stations if train_number is omitted."""
+    if train_number:
+        res = await db.execute(select(Train).where(Train.train_number == train_number.strip()))
+        db_train = res.scalar_one_or_none()
+        if not db_train:
+            return []
+        return build_corridor_stations_for_train(db_train)
+
+    # Return all corridor stations across all registered trains
+    trains_res = await db.execute(select(Train).where(Train.is_deleted == False))
+    trains = list(trains_res.scalars().all())
+    all_stations: List[CorridorStation] = []
+    for t in trains:
+        all_stations.extend(build_corridor_stations_for_train(t))
+    return all_stations
 
 
 @router.get("", response_model=List[TrainLocation])
@@ -119,16 +226,16 @@ async def get_train_locations(
     limit_waypoints: int = Query(25, ge=5, le=100, description="Number of recent waypoints"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Retrieve real-time GPS locations and tracking metadata for all registered trains."""
+    """Retrieve real-time GPS locations, route corridors, and tracking metadata for all registered trains."""
     # 1. Fetch registered trains
-    train_stmt = select(Train)
+    train_stmt = select(Train).where(Train.is_deleted == False)
     if train_number:
         train_stmt = train_stmt.where(Train.train_number == train_number.strip())
     trains_res = await db.execute(train_stmt)
     registered_trains = list(trains_res.scalars().all())
 
     # 2. Fetch all devices to map online status and telemetry
-    dev_stmt = select(Device)
+    dev_stmt = select(Device).where(Device.is_deleted == False)
     if train_number:
         dev_stmt = dev_stmt.where(Device.train_number == train_number.strip())
     devices_res = await db.execute(dev_stmt)
@@ -141,7 +248,6 @@ async def get_train_locations(
         if tr:
             devices_by_train.setdefault(tr, []).append(d)
 
-    existing_train_nums = {t.train_number.strip() for t in registered_trains}
     locations: List[TrainLocation] = []
 
     # Process all registered trains
@@ -209,22 +315,18 @@ async def get_train_locations(
                 if last_seens:
                     last_upd = max(last_seens).isoformat()
 
-        # Find nearest route station if GPS coordinates and route_json are available
-        if has_gps and curr_lat and curr_lon and t.route_json:
-            try:
-                raw_route = json.loads(t.route_json)
-                if isinstance(raw_route, list):
-                    min_dist = float("inf")
-                    for st in raw_route:
-                        s_lat = st.get("latitude") or st.get("lat")
-                        s_lon = st.get("longitude") or st.get("lon")
-                        if s_lat is not None and s_lon is not None:
-                            dist = ((float(s_lat) - curr_lat) ** 2 + (float(s_lon) - curr_lon) ** 2) ** 0.5
-                            if dist < min_dist:
-                                min_dist = dist
-                                nearest_st = str(st.get("station_name") or st.get("station_code"))
-            except Exception:
-                pass
+        # Build verified route corridor for this train
+        train_route = build_corridor_stations_for_train(t)
+        has_route = len(train_route) >= 2
+
+        # Find nearest route station if GPS coordinates and route are available
+        if has_gps and curr_lat and curr_lon and train_route:
+            min_dist = float("inf")
+            for st in train_route:
+                dist = ((st.latitude - curr_lat) ** 2 + (st.longitude - curr_lon) ** 2) ** 0.5
+                if dist < min_dist:
+                    min_dist = dist
+                    nearest_st = st.name
 
         locations.append(
             TrainLocation(
@@ -244,9 +346,12 @@ async def get_train_locations(
                 current_altitude=curr_alt,
                 current_speed_kmh=curr_spd,
                 satellites=sat_cnt,
-                nearest_station=nearest_st or t.source_station or "Live Corridor",
+                nearest_station=nearest_st or t.source_station or ("Live Corridor" if has_route else "No Route Configured"),
                 last_update=last_upd or (t.updated_at.isoformat() if t.updated_at else None),
                 waypoints=waypoints,
+                has_route=has_route,
+                route_stops_count=len(train_route),
+                route=train_route,
             )
         )
 

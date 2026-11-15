@@ -579,7 +579,7 @@ Rectangle {
             readonly property color statusSurfaceColor: isOperational ? Theme.colors.successSurface : (hasSensorError ? Theme.colors.criticalSurface : ((isWaitingData || isStale || TankModel.connectionState === "Connecting") ? Theme.colors.warningSurface : Theme.colors.criticalSurface))
             readonly property color statusBorderColor: isOperational ? "#DCFCE7" : (hasSensorError ? "#FEE2E2" : ((isWaitingData || isStale || TankModel.connectionState === "Connecting") ? "#FEF3C7" : "#FEE2E2"))
             readonly property string statusTitle: isOperational ? "All Systems Operational" : (hasSensorError ? "Sensor Fault" : (isWaitingData ? "Waiting for Telemetry" : (isStale ? "Data Stale" : (TankModel.connectionState === "Connecting" ? "Connecting..." : "System Offline"))))
-            readonly property string statusSubtext: isOperational ? "Monitoring active" : (hasSensorError ? "Check ADS1115 / Sensor" : (isWaitingData ? "Device connected" : (isStale ? "Telemetry delayed" : (TankModel.connectionState === "Connecting" ? "Negotiating link" : "Check network link"))))
+            readonly property string statusSubtext: isOperational ? "Monitoring active" : (hasSensorError ? "Sensor fault detected" : (isWaitingData ? "Device connected" : (isStale ? "Telemetry delayed" : (TankModel.connectionState === "Connecting" ? "Negotiating link" : "Check network link"))))
 
             RowLayout {
                 anchors.fill: parent

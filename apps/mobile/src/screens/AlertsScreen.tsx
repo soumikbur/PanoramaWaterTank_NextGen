@@ -6,6 +6,7 @@ import { ApiClient } from '../api/client';
 import { alertNotificationService } from '../services/alertNotificationService';
 import { NOTIFICATION_CONFIG } from '../config/notificationConfig';
 import { CheckCircle2, Bell, BellOff, Clock } from 'lucide-react';
+import { formatSensorHealth, getSensorHealthColor, StandardSensorHealth } from '../utils/formatters';
 
 interface AlertItemData {
   id: string;
@@ -242,6 +243,43 @@ export const AlertsScreen: React.FC = () => {
   const warningCount = activeAlertsList.filter((a) => a.severity === 'WARNING').length;
   const activeCount = activeAlertsList.length;
   const resolvedCount = alertHistory.filter((h) => h.status === 'Resolved').length;
+
+  // Generic Sensor Health Status (Zero hardware model references)
+  const sensorHealth = useMemo((): { status: StandardSensorHealth; color: string } => {
+    // 1. Offline state: device is offline or network disconnected
+    if (isOffline || (liveTank && liveTank.isOnline === false)) {
+      return { status: formatSensorHealth('Offline'), color: getSensorHealthColor('Offline') };
+    }
+
+    // 2. Awaiting Telemetry: no live telemetry received yet or explicit awaiting state
+    if ((!hasData && !liveTank?.lastUpdate) || liveTank?.alarmStatus === 'AWAITING_TELEMETRY') {
+      return { status: formatSensorHealth('Awaiting Telemetry'), color: getSensorHealthColor('Awaiting Telemetry') };
+    }
+
+    // 3. Fault state: sensor fault/disconnection alarm active
+    const hasSensorFault =
+      liveTank?.alarmStatus === 'SENSOR_FAULT' ||
+      activeAlertsList.some((a) => a.type === 'sensor' && a.severity === 'CRITICAL') ||
+      (activeAlarms && activeAlarms.some((a) => (a.alarmType || '').toUpperCase().includes('SENSOR_FAULT')));
+
+    if (hasSensorFault) {
+      return { status: formatSensorHealth('Fault'), color: getSensorHealthColor('Fault') };
+    }
+
+    // 4. Warning state: sensor warning or stale telemetry alarm active
+    const hasSensorWarning =
+      liveTank?.alarmStatus === 'SENSOR_WARNING' ||
+      liveTank?.isStale === true ||
+      activeAlertsList.some((a) => a.type === 'sensor' && a.severity === 'WARNING') ||
+      (activeAlarms && activeAlarms.some((a) => (a.alarmType || '').toUpperCase().includes('SENSOR_WARN')));
+
+    if (hasSensorWarning) {
+      return { status: formatSensorHealth('Warning'), color: getSensorHealthColor('Warning') };
+    }
+
+    // 5. Normal healthy sensor state
+    return { status: formatSensorHealth('Healthy'), color: getSensorHealthColor('Healthy') };
+  }, [isOffline, liveTank, hasData, activeAlertsList, activeAlarms]);
 
   const handleAcknowledgeOne = async (alert: AlertItemData) => {
     if (alert.id === 'ALT-WLI-CRIT' || alert.id === 'ALT-WLI-WARN' || alert.id === 'ALT-WLI-OVERFLOW') {
@@ -513,8 +551,18 @@ export const AlertsScreen: React.FC = () => {
             <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B', fontFamily: typography.fontFamily }}>
               SENSOR HEALTH
             </div>
-            <div style={{ fontSize: '15px', fontWeight: 600, color: '#059669', fontFamily: typography.fontFamily, marginTop: '2px' }}>
-              Healthy (ADS1115 Active)
+            <div
+              id="alerts-sensor-health-status"
+              data-testid="alerts-sensor-health"
+              style={{
+                fontSize: '15px',
+                fontWeight: 600,
+                color: sensorHealth.color,
+                fontFamily: typography.fontFamily,
+                marginTop: '2px',
+              }}
+            >
+              {sensorHealth.status}
             </div>
           </div>
 

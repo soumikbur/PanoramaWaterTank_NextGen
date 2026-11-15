@@ -22,14 +22,11 @@ import {
   Layers,
   Crosshair,
   Navigation,
-  ExternalLink,
   Plus,
   Minus,
-  Droplets,
   MapPin,
   X,
   Info,
-  Globe,
   Search,
   Train as TrainIcon,
   RotateCcw,
@@ -38,7 +35,8 @@ import {
   AlertCircle,
   HelpCircle,
   ArrowRight,
-  Filter,
+  Eye,
+  Route,
 } from 'lucide-react';
 
 // Great-circle Haversine formula with calibrated railway track winding factor (1.12x)
@@ -65,6 +63,33 @@ function calculateEta(distanceKm: number, speedKmh: number | null | undefined): 
   return `${hours}h ${mins}m`;
 }
 
+// Deterministic high-contrast color palette for train routes
+export const TRAIN_ROUTE_PALETTE = [
+  '#2563EB', // Blue
+  '#7C3AED', // Purple
+  '#0D9488', // Teal
+  '#D97706', // Amber
+  '#DC2626', // Crimson Red
+  '#059669', // Emerald Green
+  '#DB2777', // Rose Pink
+  '#4F46E5', // Indigo
+  '#0891B2', // Cyan
+  '#EA580C', // Orange
+  '#65A30D', // Lime
+  '#9333EA', // Violet
+];
+
+export function getTrainRouteColor(trainNumber: string, fallbackIndex: number = 0): string {
+  if (!trainNumber) return TRAIN_ROUTE_PALETTE[fallbackIndex % TRAIN_ROUTE_PALETTE.length];
+  let hash = 0;
+  for (let i = 0; i < trainNumber.length; i++) {
+    hash = (hash << 5) - hash + trainNumber.charCodeAt(i);
+    hash |= 0;
+  }
+  const idx = Math.abs(hash) % TRAIN_ROUTE_PALETTE.length;
+  return TRAIN_ROUTE_PALETTE[idx];
+}
+
 const WORLD_MAP_BOUNDS: L.LatLngBoundsExpression = [
   [-85.05112878, -180],
   [85.05112878, 180],
@@ -89,6 +114,10 @@ export interface UnifiedTrainTrackingItem {
   last_update: string | null;
   status: 'ONLINE' | 'OFFLINE' | 'GPS_UNAVAILABLE';
   is_updating?: boolean;
+  has_route: boolean;
+  route_stops_count: number;
+  route_stations: CorridorStation[];
+  route_color: string;
 }
 
 export const LocationScreen: React.FC = () => {
@@ -96,7 +125,6 @@ export const LocationScreen: React.FC = () => {
     selectedTrainNumber,
     setSelectedTrainNumber,
     setActiveScreen,
-    sidebarCollapsed,
     selectedStationCode: contextStationCode,
     setSelectedStationCode: setContextStationCode,
     mqttConnectionStatus,
@@ -105,7 +133,7 @@ export const LocationScreen: React.FC = () => {
 
   // State
   const [locations, setLocations] = useState<TrainLocation[]>([]);
-  const [stations, setStations] = useState<CorridorStation[]>([]);
+  const [corridorsMap, setCorridorsMap] = useState<Record<string, CorridorStation[]>>({});
   const [selectedStationCode, setSelectedStationCode] = useState<string>('');
   const [selectedEntity, setSelectedEntity] = useState<CorridorStation | null>(null);
 
@@ -124,7 +152,6 @@ export const LocationScreen: React.FC = () => {
   const [tileMode, setTileMode] = useState<'street' | 'satellite'>('street');
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
-  const [isLayersOpen, setIsLayersOpen] = useState<boolean>(false);
   const [isMobileBottomSheetOpen, setIsMobileBottomSheetOpen] = useState<boolean>(false);
 
   // Transient set of trains that actively received an MQTT telemetry position update in the last 3s
@@ -148,10 +175,8 @@ export const LocationScreen: React.FC = () => {
   const mapInstanceRef = useRef<L.Map | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const trainMarkersRef = useRef<Record<string, L.Marker>>({});
-  const stationMarkersRef = useRef<Record<string, L.Marker | L.CircleMarker>>({});
-  const corridorPolylineRef = useRef<L.Polyline | null>(null);
-  const selectedTrainTrailRef = useRef<L.Polyline | null>(null);
-  const layersMenuRef = useRef<HTMLDivElement>(null);
+  const routePolylinesRef = useRef<Record<string, L.Polyline>>({});
+  const routeStationMarkersRef = useRef<Record<string, L.Marker[]>>({});
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
   // Auto-dismiss toast
@@ -172,23 +197,12 @@ export const LocationScreen: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Close layers menu on outside click
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (layersMenuRef.current && !layersMenuRef.current.contains(e.target as Node)) {
-        setIsLayersOpen(false);
-      }
-    };
-    if (isLayersOpen) {
-      document.addEventListener('mousedown', handleOutsideClick);
-    }
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, [isLayersOpen]);
-
   // Handle external selection from Global Search
   useEffect(() => {
-    if (contextStationCode && stations.length > 0) {
-      const target = stations.find((s) => s.code.toLowerCase() === contextStationCode.toLowerCase());
+    if (contextStationCode && selectedTrainNumber && corridorsMap[selectedTrainNumber]) {
+      const target = corridorsMap[selectedTrainNumber].find(
+        (s) => s.code.toLowerCase() === contextStationCode.toLowerCase()
+      );
       if (target) {
         setSelectedStationCode(target.code);
         setSelectedEntity(target);
@@ -197,14 +211,29 @@ export const LocationScreen: React.FC = () => {
         }
       }
     }
-  }, [contextStationCode, stations]);
+  }, [contextStationCode, selectedTrainNumber, corridorsMap]);
 
-  // Fetch train locations from backend or local fleet store
+  // Fetch train locations and corridors from backend or local fleet store
   const fetchLocationsData = useCallback(async () => {
     try {
-      const locs = await ApiClient.fetchLocations();
+      const [locs, corrMap] = await Promise.all([
+        ApiClient.fetchLocations(),
+        ApiClient.fetchAllCorridors().catch(() => ({} as Record<string, CorridorStation[]>)),
+      ]);
+
       if (Array.isArray(locs)) {
         setLocations(locs);
+        // Ingest any routes returned directly inside location items
+        const incomingMap: Record<string, CorridorStation[]> = {};
+        locs.forEach((l) => {
+          if (l.train_number && l.route && Array.isArray(l.route) && l.route.length > 0) {
+            incomingMap[l.train_number.trim()] = l.route;
+          }
+        });
+        if (corrMap && typeof corrMap === 'object') {
+          Object.assign(incomingMap, corrMap);
+        }
+        setCorridorsMap((prev) => ({ ...prev, ...incomingMap }));
       }
     } catch (err) {
       console.warn('[LocationScreen] Error fetching locations:', err);
@@ -216,28 +245,6 @@ export const LocationScreen: React.FC = () => {
     const interval = setInterval(fetchLocationsData, 5000);
     return () => clearInterval(interval);
   }, [fetchLocationsData]);
-
-  // Fetch route corridor halts when a train is selected
-  useEffect(() => {
-    let isMounted = true;
-    if (!selectedTrainNumber || selectedTrainNumber.trim() === '') {
-      setStations([]);
-      return;
-    }
-    ApiClient.fetchCorridorStations(selectedTrainNumber)
-      .then((data) => {
-        if (isMounted) {
-          setStations(Array.isArray(data) ? data : []);
-        }
-      })
-      .catch(() => {
-        if (isMounted) setStations([]);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedTrainNumber]);
 
   // Subscribe to live MQTT telemetry without creating duplicate connections
   useEffect(() => {
@@ -292,15 +299,18 @@ export const LocationScreen: React.FC = () => {
     const mapByNum = new Map<string, UnifiedTrainTrackingItem>();
 
     // 1. Ingest all configured trains from AppContext
-    configuredTrains.forEach((t) => {
+    configuredTrains.forEach((t, idx) => {
       const num = (t.train_number || '').trim();
       if (!num) return;
+      const corridor = corridorsMap[num] || [];
+      const hasRoute = Boolean(corridor && corridor.length >= 2);
+
       mapByNum.set(num, {
         train_number: num,
         train_name: t.name || `Train ${num}`,
         region: t.region || 'NORTH',
-        source_station: t.source_station || 'Source',
-        destination_station: t.destination_station || 'Destination',
+        source_station: t.source_station || (corridor[0]?.name ?? 'Source'),
+        destination_station: t.destination_station || (corridor[corridor.length - 1]?.name ?? 'Destination'),
         total_coaches: t.coaches_count || t.total_coaches || 1,
         connected_devices: 0,
         is_online: Boolean(t.is_online),
@@ -313,14 +323,21 @@ export const LocationScreen: React.FC = () => {
         nearest_station: t.source_station || 'Live Corridor',
         last_update: t.last_verified_at || null,
         status: t.is_online ? 'ONLINE' : 'OFFLINE',
+        has_route: hasRoute,
+        route_stops_count: corridor.length,
+        route_stations: corridor,
+        route_color: getTrainRouteColor(num, idx),
       });
     });
 
     // 2. Merge backend / persistent store locations
-    locations.forEach((l) => {
+    locations.forEach((l, idx) => {
       const num = (l.train_number || '').trim();
       if (!num) return;
       const existing = mapByNum.get(num);
+
+      const corridor = corridorsMap[num] || (l.route && l.route.length > 0 ? l.route : existing?.route_stations || []);
+      const hasRoute = Boolean(corridor && corridor.length >= 2);
 
       const hasValidBackendGps = Boolean(
         l.has_gps &&
@@ -340,6 +357,9 @@ export const LocationScreen: React.FC = () => {
         existing.connected_devices = l.connected_devices ?? existing.connected_devices;
         existing.is_online = l.is_online || existing.is_online;
         existing.nearest_station = l.nearest_station || existing.nearest_station;
+        existing.has_route = hasRoute;
+        existing.route_stops_count = corridor.length;
+        existing.route_stations = corridor;
         if (hasValidBackendGps) {
           existing.has_gps = true;
           existing.current_latitude = l.current_latitude!;
@@ -354,8 +374,8 @@ export const LocationScreen: React.FC = () => {
           train_number: num,
           train_name: l.train_name || `Train ${num}`,
           region: l.region || 'NORTH',
-          source_station: l.source_station || 'Source',
-          destination_station: l.destination_station || 'Destination',
+          source_station: l.source_station || (corridor[0]?.name ?? 'Source'),
+          destination_station: l.destination_station || (corridor[corridor.length - 1]?.name ?? 'Destination'),
           total_coaches: l.total_coaches || 1,
           connected_devices: l.connected_devices || 0,
           is_online: l.is_online,
@@ -368,6 +388,10 @@ export const LocationScreen: React.FC = () => {
           nearest_station: l.nearest_station || 'Live Corridor',
           last_update: l.last_update || null,
           status: l.is_online ? 'ONLINE' : 'OFFLINE',
+          has_route: hasRoute,
+          route_stops_count: corridor.length,
+          route_stations: corridor,
+          route_color: getTrainRouteColor(num, idx),
         });
       }
     });
@@ -394,6 +418,7 @@ export const LocationScreen: React.FC = () => {
           existing.last_update = new Date(fix.receivedAt).toISOString();
           existing.is_online = mqttConnectionStatus === 'CONNECTED';
         } else {
+          const corridor = corridorsMap[cleanNum] || [];
           mapByNum.set(cleanNum, {
             train_number: cleanNum,
             train_name: `Train ${cleanNum}`,
@@ -412,6 +437,10 @@ export const LocationScreen: React.FC = () => {
             nearest_station: 'Live Corridor',
             last_update: new Date(fix.receivedAt).toISOString(),
             status: mqttConnectionStatus === 'CONNECTED' ? 'ONLINE' : 'OFFLINE',
+            has_route: Boolean(corridor && corridor.length >= 2),
+            route_stops_count: corridor.length,
+            route_stations: corridor,
+            route_color: getTrainRouteColor(cleanNum, 0),
           });
         }
       }
@@ -419,6 +448,7 @@ export const LocationScreen: React.FC = () => {
 
     // 4. Calculate definitive status and updating flags
     const result: UnifiedTrainTrackingItem[] = [];
+    let sortIdx = 0;
     mapByNum.forEach((item) => {
       const isUpdating = recentlyUpdatedTrains.has(item.train_number);
       let status: 'ONLINE' | 'OFFLINE' | 'GPS_UNAVAILABLE' = 'OFFLINE';
@@ -435,17 +465,19 @@ export const LocationScreen: React.FC = () => {
         ...item,
         status,
         is_updating: isUpdating,
+        route_color: getTrainRouteColor(item.train_number, sortIdx++),
       });
     });
 
     return result.sort((a, b) => a.train_number.localeCompare(b.train_number));
-  }, [configuredTrains, locations, mqttTrainFixes, recentlyUpdatedTrains, mqttConnectionStatus]);
+  }, [configuredTrains, locations, corridorsMap, mqttTrainFixes, recentlyUpdatedTrains, mqttConnectionStatus]);
 
   // Fleet Statistics
   const totalRegisteredTrains = unifiedTrains.length;
   const onlineTrainsCount = unifiedTrains.filter((t) => t.is_online && t.has_gps).length;
   const offlineTrainsCount = unifiedTrains.filter((t) => !t.is_online && t.has_gps).length;
   const gpsUnavailableTrainsCount = unifiedTrains.filter((t) => !t.has_gps).length;
+  const trainsWithRoutesCount = unifiedTrains.filter((t) => t.has_route).length;
 
   // Filtered train list according to toolbar controls
   const filteredTrains = useMemo(() => {
@@ -456,6 +488,7 @@ export const LocationScreen: React.FC = () => {
       if (statusFilter === 'ONLINE' && t.status !== 'ONLINE') return false;
       if (statusFilter === 'OFFLINE' && t.status !== 'OFFLINE') return false;
       if (statusFilter === 'GPS_UNAVAILABLE' && t.status !== 'GPS_UNAVAILABLE') return false;
+      if (statusFilter === 'WITH_ROUTE' && !t.has_route) return false;
 
       if (searchQuery.trim()) {
         const q = searchQuery.trim().toLowerCase();
@@ -473,6 +506,12 @@ export const LocationScreen: React.FC = () => {
     if (!selectedTrainNumber) return null;
     return unifiedTrains.find((t) => t.train_number === selectedTrainNumber) || null;
   }, [unifiedTrains, selectedTrainNumber]);
+
+  // Active corridor stations for selected train (or empty if in all view)
+  const activeCorridorStations = useMemo(() => {
+    if (!activeSelectedTrain) return [];
+    return activeSelectedTrain.route_stations || [];
+  }, [activeSelectedTrain]);
 
   // Initialize Leaflet Map
   useEffect(() => {
@@ -533,47 +572,11 @@ export const LocationScreen: React.FC = () => {
         mapInstanceRef.current = null;
         tileLayerRef.current = null;
         trainMarkersRef.current = {};
-        stationMarkersRef.current = {};
-        corridorPolylineRef.current = null;
-        selectedTrainTrailRef.current = null;
+        routePolylinesRef.current = {};
+        routeStationMarkersRef.current = {};
       }
     };
   }, []);
-
-  // Handle delegated button clicks inside Leaflet Popups
-  useEffect(() => {
-    const handleMapPopupClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const detailsBtn = target.closest('[data-action="view-train-details"]') as HTMLElement;
-      if (detailsBtn) {
-        const trainNo = detailsBtn.getAttribute('data-train-number');
-        if (trainNo) {
-          setSelectedTrainNumber(trainNo);
-          setActiveScreen('coach-details');
-        }
-        return;
-      }
-
-      const selectBtn = target.closest('[data-action="select-train"]') as HTMLElement;
-      if (selectBtn) {
-        const trainNo = selectBtn.getAttribute('data-train-number');
-        if (trainNo) {
-          handleSelectTrain(trainNo);
-        }
-        return;
-      }
-    };
-
-    const container = mapContainerRef.current;
-    if (container && typeof container.addEventListener === 'function') {
-      container.addEventListener('click', handleMapPopupClick);
-    }
-    return () => {
-      if (container && typeof container.removeEventListener === 'function') {
-        container.removeEventListener('click', handleMapPopupClick);
-      }
-    };
-  }, [setSelectedTrainNumber, setActiveScreen]);
 
   // Manage Tile Layer (Street vs Satellite)
   useEffect(() => {
@@ -616,37 +619,33 @@ export const LocationScreen: React.FC = () => {
     }
   }, [tileMode]);
 
-  // Build HTML for Train Marker Pin
+  // Build HTML for Train Marker Pin with distinct route color badge
   const buildTrainMarkerHtml = (train: UnifiedTrainTrackingItem) => {
-    // Determine pin color: Blue (Updating), Green (Online), Red (Offline)
     let pinBg = '#16A34A';
     let pinRing = 'rgba(22, 163, 74, 0.35)';
-    let statusLabel = 'ONLINE';
 
     if (train.is_updating) {
       pinBg = '#2563EB';
       pinRing = 'rgba(37, 99, 235, 0.45)';
-      statusLabel = 'UPDATING';
     } else if (train.status === 'ONLINE') {
       pinBg = '#16A34A';
       pinRing = 'rgba(22, 163, 74, 0.35)';
-      statusLabel = 'ONLINE';
     } else {
       pinBg = '#DC2626';
       pinRing = 'rgba(220, 38, 38, 0.35)';
-      statusLabel = 'OFFLINE';
     }
 
     const isSelected = selectedTrainNumber === train.train_number;
+    const routeColor = train.route_color || '#2563EB';
 
     return `
       <div class="train-map-marker-wrap ${isSelected ? 'is-selected' : ''}" style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transform: translate3d(0,0,0);">
         <!-- Pulse ring for active/online trains -->
-        <div style="position: absolute; width: 44px; height: 44px; border-radius: 50%; background-color: ${pinRing}; animation: pulse 1.8s infinite; pointer-events: none;"></div>
+        <div style="position: absolute; width: 46px; height: 46px; border-radius: 50%; background-color: ${pinRing}; animation: pulse 1.8s infinite; pointer-events: none;"></div>
         
-        <!-- Main Circular Pin -->
-        <div style="position: relative; width: 34px; height: 34px; border-radius: 50%; background-color: ${pinBg}; border: 2.5px solid #FFFFFF; box-shadow: 0 3px 10px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; color: #FFFFFF; z-index: 2; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <!-- Main Circular Pin with Train Route Color Ring -->
+        <div style="position: relative; width: 34px; height: 34px; border-radius: 50%; background-color: ${pinBg}; border: 3px solid ${routeColor}; box-shadow: 0 4px 12px rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; color: #FFFFFF; z-index: 2; transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <rect width="16" height="16" x="4" y="3" rx="2"></rect>
             <path d="M4 11h16"></path>
             <path d="M12 3v8"></path>
@@ -657,9 +656,10 @@ export const LocationScreen: React.FC = () => {
           </svg>
         </div>
 
-        <!-- Train Number Pill Label -->
-        <div style="position: relative; margin-top: 3px; z-index: 3; background-color: rgba(15, 23, 42, 0.94); color: #FFFFFF; font-family: Inter, sans-serif; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.4); box-shadow: 0 2px 6px rgba(0,0,0,0.3); white-space: nowrap; pointer-events: none;">
-          ${train.train_number}
+        <!-- Train Number Pill Label with Route Color Dot -->
+        <div style="position: relative; margin-top: 3px; z-index: 3; background-color: rgba(15, 23, 42, 0.95); color: #FFFFFF; font-family: Inter, sans-serif; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 4px; border: 1.5px solid ${routeColor}; box-shadow: 0 2px 6px rgba(0,0,0,0.3); white-space: nowrap; pointer-events: none; display: flex; align-items: center; gap: 4px;">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background-color: ${routeColor}; display: inline-block;"></span>
+          <span>${train.train_number}</span>
         </div>
       </div>
     `;
@@ -674,17 +674,24 @@ export const LocationScreen: React.FC = () => {
       statusBadge = '<span style="background-color: #FEE2E2; color: #DC2626; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 10px;">OFFLINE</span>';
     }
 
+    const routeBadge = train.has_route
+      ? `<span style="background-color: #F1F5F9; color: ${train.route_color}; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 10px; border: 1px solid ${train.route_color};">${train.route_stops_count} Halts Configured</span>`
+      : '<span style="background-color: #F1F5F9; color: #64748B; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 10px;">No Route Configured</span>';
+
     const latStr = train.current_latitude != null ? `${train.current_latitude.toFixed(5)}° N` : '—';
     const lonStr = train.current_longitude != null ? `${train.current_longitude.toFixed(5)}° E` : '—';
     const speedStr = train.current_speed_kmh != null ? `${train.current_speed_kmh.toFixed(1)} km/h` : '—';
     const lastUpdateStr = train.last_update ? new Date(train.last_update).toLocaleTimeString() : '—';
 
     return `
-      <div style="font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; min-width: 260px; max-width: 300px; line-height: 1.45; color: #0F172A; padding: 2px;">
+      <div style="font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 12px; min-width: 270px; max-width: 320px; line-height: 1.45; color: #0F172A; padding: 2px;">
         <!-- Header -->
         <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #E2E8F0; padding-bottom: 6px; margin-bottom: 6px;">
           <div>
-            <div style="font-size: 14px; font-weight: 800; color: #1E293B;">Train ${train.train_number}</div>
+            <div style="font-size: 14px; font-weight: 800; color: #1E293B; display: flex; align-items: center; gap: 6px;">
+              <span style="width: 10px; height: 10px; border-radius: 50%; background-color: ${train.route_color}; display: inline-block;"></span>
+              <span>Train ${train.train_number}</span>
+            </div>
             <div style="font-size: 11px; font-weight: 600; color: #64748B;">${train.train_name}</div>
           </div>
           <div>${statusBadge}</div>
@@ -701,28 +708,377 @@ export const LocationScreen: React.FC = () => {
           <div><span style="color: #64748B;">Nearest Stn:</span> <strong>${train.nearest_station || 'Live Corridor'}</strong></div>
           <div><span style="color: #64748B;">Last Fix:</span> <strong>${lastUpdateStr}</strong></div>
           <div><span style="color: #64748B;">Coaches:</span> <strong>${train.total_coaches}</strong></div>
-          <div><span style="color: #64748B;">Devices:</span> <strong>${train.connected_devices} Online</strong></div>
+          <div><span style="color: #64748B;">Route:</span> ${routeBadge}</div>
         </div>
 
-        <!-- Action Button -->
+        <!-- Action Buttons -->
         <div style="border-top: 1px solid #E2E8F0; padding-top: 8px; display: flex; gap: 6px;">
+          <button 
+            data-action="track-isolated-train" 
+            data-train-number="${train.train_number}"
+            style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; background-color: ${train.route_color}; color: #FFFFFF; border: none; padding: 7px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer;"
+          >
+            <span>Track This Train</span>
+          </button>
           <button 
             data-action="view-train-details" 
             data-train-number="${train.train_number}"
-            style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; background-color: #2563EB; color: #FFFFFF; border: none; padding: 7px 12px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer; transition: background 0.15s ease;"
+            style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; background-color: #F1F5F9; color: #1E293B; border: 1px solid #CBD5E1; padding: 7px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; cursor: pointer;"
           >
-            <span>View Train Details</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M5 12h14"></path>
-              <path d="m12 5 7 7-7 7"></path>
-            </svg>
+            <span>Details</span>
           </button>
         </div>
       </div>
     `;
   };
 
-  // Manage Leaflet Markers dynamically (Zero map reload, zero layer churn)
+  // Handlers for switching modes and selecting trains
+  const handleSelectTrain = useCallback((trainNum: string) => {
+    setSelectedTrainNumber(trainNum);
+    setViewMode('selected');
+    const target = unifiedTrains.find((t) => t.train_number === trainNum);
+    if (!target) return;
+
+    const map = mapInstanceRef.current;
+    if (map) {
+      if (target.has_gps && target.current_latitude != null && target.current_longitude != null) {
+        map.flyTo([target.current_latitude, target.current_longitude], 12, { duration: 1.2 });
+        setTimeout(() => {
+          trainMarkersRef.current[trainNum]?.openPopup();
+        }, 1250);
+        setFeedbackToast(`Tracking Train ${trainNum} (${target.train_name}) — Route isolated.`);
+      } else if (target.has_route && target.route_stations.length >= 2) {
+        const coords: [number, number][] = target.route_stations
+          .filter((s) => s.latitude != null && s.longitude != null)
+          .map((s) => [s.latitude, s.longitude]);
+        if (coords.length > 0) {
+          const bounds = L.latLngBounds(coords);
+          map.fitBounds(bounds, { padding: [60, 60], maxZoom: 11, animate: true });
+        }
+        setFeedbackToast(`Train ${trainNum} — GPS unavailable, displaying configured route corridor.`);
+      } else {
+        setFeedbackToast(`Train ${trainNum} registered — No GPS fix or route configured.`);
+      }
+    }
+
+    if (isMobileViewport) {
+      setIsMobileBottomSheetOpen(true);
+    }
+  }, [setSelectedTrainNumber, unifiedTrains, isMobileViewport]);
+
+  const handleReturnToAllTrains = useCallback(() => {
+    setViewMode('all');
+    setSelectedTrainNumber('');
+    setIsMobileBottomSheetOpen(false);
+    setSelectedEntity(null);
+    setSelectedStationCode('');
+
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    // Collect all points across the fleet (GPS fixes + route halts) to fit bounds
+    const allPoints: [number, number][] = [];
+    unifiedTrains.forEach((t) => {
+      if (t.has_gps && t.current_latitude != null && t.current_longitude != null) {
+        allPoints.push([t.current_latitude, t.current_longitude]);
+      }
+      if (t.has_route && t.route_stations) {
+        t.route_stations.forEach((s) => {
+          if (s.latitude != null && s.longitude != null) {
+            allPoints.push([s.latitude, s.longitude]);
+          }
+        });
+      }
+    });
+
+    if (allPoints.length > 0) {
+      const bounds = L.latLngBounds(allPoints);
+      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 8, animate: true });
+    } else {
+      map.setView([22.5, 82.0], 5, { animate: true });
+    }
+    setFeedbackToast('Returned to Fleet Overview — displaying all registered train routes and positions.');
+  }, [setSelectedTrainNumber, unifiedTrains]);
+
+  const handleCenterMap = useCallback(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    if (viewMode === 'selected' && activeSelectedTrain) {
+      if (activeSelectedTrain.has_gps && activeSelectedTrain.current_latitude != null) {
+        map.flyTo([activeSelectedTrain.current_latitude, activeSelectedTrain.current_longitude!], 13, { duration: 1.0 });
+        setFeedbackToast(`Centered on Train ${activeSelectedTrain.train_number}`);
+        return;
+      }
+      if (activeSelectedTrain.has_route && activeSelectedTrain.route_stations.length >= 2) {
+        const coords: [number, number][] = activeSelectedTrain.route_stations
+          .filter((s) => s.latitude != null && s.longitude != null)
+          .map((s) => [s.latitude, s.longitude]);
+        const bounds = L.latLngBounds(coords);
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 11, animate: true });
+        setFeedbackToast(`Centered on Train ${activeSelectedTrain.train_number} route`);
+        return;
+      }
+    }
+
+    // Default to fleet bounds
+    const allPoints: [number, number][] = [];
+    unifiedTrains.forEach((t) => {
+      if (t.has_gps && t.current_latitude != null && t.current_longitude != null) {
+        allPoints.push([t.current_latitude, t.current_longitude]);
+      }
+      if (t.has_route && t.route_stations) {
+        t.route_stations.forEach((s) => {
+          if (s.latitude != null && s.longitude != null) {
+            allPoints.push([s.latitude, s.longitude]);
+          }
+        });
+      }
+    });
+
+    if (allPoints.length > 0) {
+      const bounds = L.latLngBounds(allPoints);
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 8, animate: true });
+      setFeedbackToast('Centered map on registered fleet');
+    } else {
+      map.setView([22.5, 82.0], 5, { animate: true });
+      setFeedbackToast('Awaiting GPS fixes — centered on Indian Railway network');
+    }
+  }, [viewMode, activeSelectedTrain, unifiedTrains]);
+
+  const handleFitAllTrains = useCallback(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const allPoints: [number, number][] = [];
+    unifiedTrains.forEach((t) => {
+      if (t.has_gps && t.current_latitude != null && t.current_longitude != null) {
+        allPoints.push([t.current_latitude, t.current_longitude]);
+      }
+      if (t.has_route && t.route_stations) {
+        t.route_stations.forEach((s) => {
+          if (s.latitude != null && s.longitude != null) {
+            allPoints.push([s.latitude, s.longitude]);
+          }
+        });
+      }
+    });
+
+    if (allPoints.length === 0) {
+      setFeedbackToast('No registered trains with routes or GPS coordinates.');
+      return;
+    }
+    const bounds = L.latLngBounds(allPoints);
+    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 8, animate: true });
+    setFeedbackToast(`Fitted bounds to entire registered fleet (${unifiedTrains.length} trains)`);
+  }, [unifiedTrains]);
+
+  // Handle delegated button clicks inside Leaflet Popups
+  useEffect(() => {
+    const handleMapPopupClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const detailsBtn = target.closest('[data-action="view-train-details"]') as HTMLElement;
+      if (detailsBtn) {
+        const trainNo = detailsBtn.getAttribute('data-train-number');
+        if (trainNo) {
+          setSelectedTrainNumber(trainNo);
+          setActiveScreen('coach-details');
+        }
+        return;
+      }
+
+      const trackBtn = target.closest('[data-action="track-isolated-train"]') as HTMLElement;
+      if (trackBtn) {
+        const trainNo = trackBtn.getAttribute('data-train-number');
+        if (trainNo) {
+          handleSelectTrain(trainNo);
+        }
+        return;
+      }
+    };
+
+    const container = mapContainerRef.current;
+    if (container && typeof container.addEventListener === 'function') {
+      container.addEventListener('click', handleMapPopupClick);
+    }
+    return () => {
+      if (container && typeof container.removeEventListener === 'function') {
+        container.removeEventListener('click', handleMapPopupClick);
+      }
+    };
+  }, [setSelectedTrainNumber, setActiveScreen, handleSelectTrain]);
+
+  // Manage Leaflet Route Polylines dynamically (Simultaneous Multi-Route Fleet Rendering)
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    // In Fleet Overview: show routes of all trains that have configured routes.
+    // In Individual Tracking mode: isolate only the selected train's route.
+    const trainsWithRoutes = viewMode === 'selected' && activeSelectedTrain
+      ? (activeSelectedTrain.has_route ? [activeSelectedTrain] : [])
+      : filteredTrains.filter((t) => t.has_route && t.route_stations.length >= 2);
+
+    const activeTrainNumbersWithRoutes = new Set(trainsWithRoutes.map((t) => t.train_number));
+
+    // 1. Remove old polylines for trains no longer displayed
+    Object.keys(routePolylinesRef.current).forEach((trNo) => {
+      if (!activeTrainNumbersWithRoutes.has(trNo)) {
+        try {
+          map.removeLayer(routePolylinesRef.current[trNo]);
+        } catch (e) {}
+        delete routePolylinesRef.current[trNo];
+      }
+    });
+
+    // 2. Remove old station markers for trains not active
+    Object.keys(routeStationMarkersRef.current).forEach((trNo) => {
+      if (viewMode !== 'selected' || trNo !== activeSelectedTrain?.train_number) {
+        routeStationMarkersRef.current[trNo]?.forEach((m) => {
+          try {
+            map.removeLayer(m);
+          } catch (e) {}
+        });
+        delete routeStationMarkersRef.current[trNo];
+      }
+    });
+
+    // 3. Add or update polylines for each active train route
+    trainsWithRoutes.forEach((train) => {
+      const coords: [number, number][] = train.route_stations
+        .filter((s) => s && typeof s.latitude === 'number' && typeof s.longitude === 'number')
+        .map((s) => [s.latitude, s.longitude]);
+
+      if (coords.length < 2) return;
+
+      const isSelected = viewMode === 'selected' && activeSelectedTrain?.train_number === train.train_number;
+      const polyColor = train.route_color || '#2563EB';
+      const polyWeight = isSelected ? 5.5 : 3.5;
+      const polyOpacity = isSelected ? 1.0 : 0.85;
+
+      const existingPoly = routePolylinesRef.current[train.train_number];
+      if (!existingPoly) {
+        const poly = L.polyline(coords, {
+          color: polyColor,
+          weight: polyWeight,
+          opacity: polyOpacity,
+          lineJoin: 'round',
+          lineCap: 'round',
+        }).addTo(map);
+
+        poly.bindTooltip(
+          `<strong>Train ${train.train_number}</strong>: ${train.train_name}<br/>` +
+          `<span style="font-size:10px; color:#64748B;">${train.source_station} &rarr; ${train.destination_station} (${train.route_stops_count} halts)</span>`,
+          { sticky: true }
+        );
+
+        poly.on('click', () => {
+          handleSelectTrain(train.train_number);
+        });
+
+        routePolylinesRef.current[train.train_number] = poly;
+      } else {
+        existingPoly.setLatLngs(coords);
+        existingPoly.setStyle({
+          color: polyColor,
+          weight: polyWeight,
+          opacity: polyOpacity,
+        });
+      }
+    });
+
+    // 4. In Individual Tracking mode, render station pins for the isolated train
+    if (viewMode === 'selected' && activeSelectedTrain && activeSelectedTrain.has_route) {
+      const trNo = activeSelectedTrain.train_number;
+      if (!routeStationMarkersRef.current[trNo]) {
+        routeStationMarkersRef.current[trNo] = [];
+      }
+      // Remove any existing station markers before re-creating
+      routeStationMarkersRef.current[trNo].forEach((m) => {
+        try {
+          map.removeLayer(m);
+        } catch (e) {}
+      });
+      routeStationMarkersRef.current[trNo] = [];
+
+      activeSelectedTrain.route_stations.forEach((st, idx) => {
+        const isSource = idx === 0 || Boolean(st.is_source);
+        const isDestination = idx === activeSelectedTrain.route_stations.length - 1 || Boolean(st.is_destination);
+        const isRefill = st.water_refill_available && !isDestination;
+        const isStationSelected = selectedStationCode === st.code;
+
+        let iconHtml = '';
+        if (isSource) {
+          iconHtml = `
+            <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+              <div style="background-color: #059669; color: #FFFFFF; border: 2px solid #FFFFFF; border-radius: 6px; padding: 2px 6px; font-weight: 800; font-size: 10px; font-family: Inter, sans-serif; box-shadow: 0 3px 8px rgba(0,0,0,0.35); text-align: center;">
+                SRC: ${st.code}
+              </div>
+            </div>
+          `;
+        } else if (isDestination) {
+          iconHtml = `
+            <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+              <div style="background-color: #7C3AED; color: #FFFFFF; border: 2px solid #FFFFFF; border-radius: 6px; padding: 2px 6px; font-weight: 800; font-size: 10px; font-family: Inter, sans-serif; box-shadow: 0 3px 8px rgba(0,0,0,0.35); text-align: center;">
+                DST: ${st.code}
+              </div>
+            </div>
+          `;
+        } else if (isRefill) {
+          iconHtml = `
+            <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+              <div style="background-color: #0284C7; color: #FFFFFF; border: 2px solid #FFFFFF; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 8px rgba(0,0,0,0.3);">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                </svg>
+              </div>
+              <div style="background: rgba(15,23,42,0.9); color: #FFF; font-size: 8px; font-weight: 800; padding: 0 3px; border-radius: 3px; font-family: Inter, sans-serif; margin-top: 1px;">
+                ${st.code}
+              </div>
+            </div>
+          `;
+        } else {
+          iconHtml = `
+            <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+              <div style="background-color: #FFFFFF; border: 2.5px solid #475569; border-radius: 50%; width: 12px; height: 12px; box-shadow: 0 1px 5px rgba(0,0,0,0.25);"></div>
+              <div style="background: rgba(248,250,252,0.95); color: #334155; font-size: 8px; font-weight: 700; padding: 0 3px; border-radius: 2px; font-family: Inter, sans-serif; border: 1px solid #CBD5E1; margin-top: 1px;">
+                ${st.code}
+              </div>
+            </div>
+          `;
+        }
+
+        const icon = L.divIcon({
+          html: iconHtml,
+          className: `station-marker ${isStationSelected ? 'marker-selected' : ''}`,
+          iconSize: [36, 36],
+          iconAnchor: [18, 18],
+        });
+
+        const stMarker = L.marker([st.latitude, st.longitude], { icon }).addTo(map);
+        stMarker.bindPopup(`
+          <div style="font-family: Inter, sans-serif; font-size: 12px; min-width: 200px; line-height: 1.5; color: #0F172A;">
+            <div style="font-weight: 800; font-size: 13px; margin-bottom: 2px;">${st.name} (${st.code})</div>
+            <div style="font-size: 11px; color: #475569;">
+              ${st.water_refill_available ? '<span style="color:#059669; font-weight:700;">✓ Water Refill Available</span>' : '<span style="color:#64748B;">Passenger Halt</span>'}<br/>
+              Refill Capacity: <strong>${st.water_capacity_liters > 0 ? st.water_capacity_liters.toLocaleString() + ' L' : '—'}</strong><br/>
+              Coordinates: <strong>${st.latitude.toFixed(4)}° N, ${st.longitude.toFixed(4)}° E</strong>
+            </div>
+          </div>
+        `);
+
+        stMarker.on('click', () => {
+          setSelectedStationCode(st.code);
+          setSelectedEntity(st);
+          map.setView([st.latitude, st.longitude], 12, { animate: true });
+        });
+
+        routeStationMarkersRef.current[trNo].push(stMarker);
+      });
+    }
+  }, [filteredTrains, viewMode, activeSelectedTrain, selectedStationCode, tileMode, handleSelectTrain]);
+
+  // Manage Leaflet GPS Markers dynamically
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -736,7 +1092,9 @@ export const LocationScreen: React.FC = () => {
     // 1. Remove markers for trains no longer visible or without GPS
     Object.keys(trainMarkersRef.current).forEach((trainNum) => {
       if (!activeTrainNumbers.has(trainNum)) {
-        map.removeLayer(trainMarkersRef.current[trainNum]);
+        try {
+          map.removeLayer(trainMarkersRef.current[trainNum]);
+        } catch (e) {}
         delete trainMarkersRef.current[trainNum];
       }
     });
@@ -751,8 +1109,8 @@ export const LocationScreen: React.FC = () => {
       const icon = L.divIcon({
         html: iconHtml,
         className: 'custom-train-div-icon',
-        iconSize: [44, 52],
-        iconAnchor: [22, 26],
+        iconSize: [46, 54],
+        iconAnchor: [23, 27],
       });
 
       if (!existingMarker) {
@@ -775,191 +1133,33 @@ export const LocationScreen: React.FC = () => {
         existingMarker.setPopupContent(buildTrainPopupHtml(train));
       }
     });
-  }, [filteredTrains, viewMode, activeSelectedTrain, selectedTrainNumber]);
+  }, [filteredTrains, viewMode, activeSelectedTrain, selectedTrainNumber, handleSelectTrain]);
 
-  // Render Station Markers and Route Corridor Polyline when an individual train is isolated
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
-
-    if (corridorPolylineRef.current) {
-      map.removeLayer(corridorPolylineRef.current);
-      corridorPolylineRef.current = null;
-    }
-    Object.values(stationMarkersRef.current).forEach((m) => map.removeLayer(m));
-    stationMarkersRef.current = {};
-
-    if (viewMode !== 'selected' || stations.length === 0) return;
-
-    const corridorCoords: [number, number][] = stations
-      .filter((s) => s && typeof s.latitude === 'number' && typeof s.longitude === 'number')
-      .map((s) => [s.latitude, s.longitude]);
-
-    if (corridorCoords.length >= 2) {
-      const isSatellite = tileMode === 'satellite';
-      const polyline = L.polyline(corridorCoords, {
-        color: isSatellite ? '#38BDF8' : '#1D4ED8',
-        weight: 4,
-        opacity: 0.9,
-        dashArray: '8, 6',
-      }).addTo(map);
-      corridorPolylineRef.current = polyline;
-    }
-
-    stations.forEach((st) => {
-      const isDestination = Boolean(st.is_destination);
-      const isRefill = st.water_refill_available && !isDestination;
-      const isSelected = selectedStationCode === st.code;
-
-      let iconHtml = '';
-      if (isDestination) {
-        iconHtml = `
-          <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 34px; height: 34px;">
-            <div style="background-color: #7C3AED; color: #FFFFFF; border: 2px solid #FFFFFF; border-radius: 6px; padding: 2px 5px; font-weight: 800; font-size: 10px; font-family: Inter, sans-serif; box-shadow: 0 3px 8px rgba(0,0,0,0.35); text-align: center;">
-              ${st.code}
-            </div>
-          </div>
-        `;
-      } else if (isRefill) {
-        iconHtml = `
-          <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 32px; height: 36px;">
-            <div style="background-color: #0284C7; color: #FFFFFF; border: 2px solid #FFFFFF; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 8px rgba(0,0,0,0.3);">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
-              </svg>
-            </div>
-            <div style="background: rgba(15,23,42,0.9); color: #FFF; font-size: 8px; font-weight: 800; padding: 0 3px; border-radius: 3px; font-family: Inter, sans-serif; margin-top: 1px;">
-              ${st.code}
-            </div>
-          </div>
-        `;
-      } else {
-        iconHtml = `
-          <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 26px; height: 30px;">
-            <div style="background-color: #FFFFFF; border: 2.5px solid #475569; border-radius: 50%; width: 13px; height: 13px; box-shadow: 0 1px 5px rgba(0,0,0,0.25);"></div>
-            <div style="background: rgba(248,250,252,0.95); color: #334155; font-size: 8px; font-weight: 700; padding: 0 3px; border-radius: 2px; font-family: Inter, sans-serif; border: 1px solid #CBD5E1; margin-top: 1px;">
-              ${st.code}
-            </div>
-          </div>
-        `;
-      }
-
-      const icon = L.divIcon({
-        html: iconHtml,
-        className: `station-marker ${isSelected ? 'marker-selected' : ''}`,
-        iconSize: [34, 36],
-        iconAnchor: [17, 18],
-      });
-
-      const marker = L.marker([st.latitude, st.longitude], { icon }).addTo(map);
-      marker.bindPopup(`
-        <div style="font-family: Inter, sans-serif; font-size: 12px; min-width: 200px; line-height: 1.5; color: #0F172A;">
-          <div style="font-weight: 800; font-size: 13px; margin-bottom: 2px;">${st.name} (${st.code})</div>
-          <div style="font-size: 11px; color: #475569;">
-            ${st.water_refill_available ? '<span style="color:#059669; font-weight:700;">✓ Water Refill Available</span>' : '<span style="color:#64748B;">Passenger Halt</span>'}<br/>
-            Refill Capacity: <strong>${st.water_capacity_liters > 0 ? st.water_capacity_liters.toLocaleString() + ' L' : '—'}</strong><br/>
-            Coordinates: <strong>${st.latitude.toFixed(4)}° N, ${st.longitude.toFixed(4)}° E</strong>
-          </div>
-        </div>
-      `);
-
-      marker.on('click', () => {
-        setSelectedStationCode(st.code);
-        setSelectedEntity(st);
-        map.setView([st.latitude, st.longitude], 12, { animate: true });
-      });
-
-      stationMarkersRef.current[st.code] = marker;
-    });
-  }, [stations, viewMode, tileMode, selectedStationCode]);
-
-  // Initial bounds fit once trains or stations are ready
+  // Initial bounds fit once trains or routes are ready
   const initialFitDoneRef = useRef(false);
   useEffect(() => {
     const map = mapInstanceRef.current;
-    if (!map || initialFitDoneRef.current) return;
+    if (!map || initialFitDoneRef.current || unifiedTrains.length === 0) return;
 
-    const trainsWithGps = unifiedTrains.filter((t) => t.has_gps && t.current_latitude != null && t.current_longitude != null);
-    if (trainsWithGps.length > 0) {
-      const bounds = L.latLngBounds(trainsWithGps.map((t) => [t.current_latitude!, t.current_longitude!]));
+    const allPoints: [number, number][] = [];
+    unifiedTrains.forEach((t) => {
+      if (t.has_gps && t.current_latitude != null && t.current_longitude != null) {
+        allPoints.push([t.current_latitude, t.current_longitude]);
+      }
+      if (t.has_route && t.route_stations) {
+        t.route_stations.forEach((s) => {
+          if (s.latitude != null && s.longitude != null) {
+            allPoints.push([s.latitude, s.longitude]);
+          }
+        });
+      }
+    });
+
+    if (allPoints.length > 0) {
+      const bounds = L.latLngBounds(allPoints);
       map.fitBounds(bounds, { padding: [60, 60], maxZoom: 8, animate: false });
       initialFitDoneRef.current = true;
     }
-  }, [unifiedTrains]);
-
-  // Handlers
-  const handleSelectTrain = useCallback((trainNum: string) => {
-    setSelectedTrainNumber(trainNum);
-    setViewMode('selected');
-    const target = unifiedTrains.find((t) => t.train_number === trainNum);
-    if (!target) return;
-
-    if (target.has_gps && target.current_latitude != null && target.current_longitude != null) {
-      mapInstanceRef.current?.flyTo([target.current_latitude, target.current_longitude], 13, { duration: 1.2 });
-      setTimeout(() => {
-        trainMarkersRef.current[trainNum]?.openPopup();
-      }, 1250);
-      setFeedbackToast(`Isolated Train ${trainNum} (${target.train_name})`);
-    } else {
-      setFeedbackToast(`Train ${trainNum} registered — GPS coordinates unavailable.`);
-    }
-
-    if (isMobileViewport) {
-      setIsMobileBottomSheetOpen(true);
-    }
-  }, [setSelectedTrainNumber, unifiedTrains, isMobileViewport]);
-
-  const handleReturnToAllTrains = useCallback(() => {
-    setViewMode('all');
-    setSelectedTrainNumber('');
-    setIsMobileBottomSheetOpen(false);
-    setSelectedEntity(null);
-    setSelectedStationCode('');
-
-    const map = mapInstanceRef.current;
-    if (!map) return;
-
-    const trainsWithGps = unifiedTrains.filter((t) => t.has_gps && t.current_latitude != null && t.current_longitude != null);
-    if (trainsWithGps.length > 0) {
-      const bounds = L.latLngBounds(trainsWithGps.map((t) => [t.current_latitude!, t.current_longitude!]));
-      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 8, animate: true });
-    }
-    setFeedbackToast('Returned to All Trains mode — displaying full registered fleet.');
-  }, [setSelectedTrainNumber, unifiedTrains]);
-
-  const handleCenterMap = useCallback(() => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
-
-    if (viewMode === 'selected' && activeSelectedTrain?.has_gps && activeSelectedTrain.current_latitude != null) {
-      map.flyTo([activeSelectedTrain.current_latitude, activeSelectedTrain.current_longitude!], 13, { duration: 1.0 });
-      setFeedbackToast(`Centered on Train ${activeSelectedTrain.train_number}`);
-      return;
-    }
-
-    const trainsWithGps = unifiedTrains.filter((t) => t.has_gps && t.current_latitude != null && t.current_longitude != null);
-    if (trainsWithGps.length > 0) {
-      const bounds = L.latLngBounds(trainsWithGps.map((t) => [t.current_latitude!, t.current_longitude!]));
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 8, animate: true });
-      setFeedbackToast('Centered map on registered train locations');
-    } else {
-      map.setView([22.5, 82.0], 5, { animate: true });
-      setFeedbackToast('Awaiting GPS fixes — centered on Indian Railway network');
-    }
-  }, [viewMode, activeSelectedTrain, unifiedTrains]);
-
-  const handleFitAllTrains = useCallback(() => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
-
-    const trainsWithGps = unifiedTrains.filter((t) => t.has_gps && t.current_latitude != null && t.current_longitude != null);
-    if (trainsWithGps.length === 0) {
-      setFeedbackToast('No registered trains with active GPS fixes to fit.');
-      return;
-    }
-    const bounds = L.latLngBounds(trainsWithGps.map((t) => [t.current_latitude!, t.current_longitude!]));
-    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 8, animate: true });
-    setFeedbackToast(`Fitted bounds to ${trainsWithGps.length} active train GPS fixes`);
   }, [unifiedTrains]);
 
   const handleToggleFullscreen = () => {
@@ -994,7 +1194,7 @@ export const LocationScreen: React.FC = () => {
     const trainLon = activeSelectedTrain?.current_longitude;
     const hasGps = activeSelectedTrain?.has_gps && trainLat != null && trainLon != null;
 
-    return stations.map((st) => {
+    return activeCorridorStations.map((st) => {
       let distanceKm = 0;
       let etaString = '—';
       if (hasGps) {
@@ -1007,7 +1207,7 @@ export const LocationScreen: React.FC = () => {
         etaString,
       };
     });
-  }, [stations, activeSelectedTrain]);
+  }, [activeCorridorStations, activeSelectedTrain]);
 
   return (
     <div
@@ -1101,10 +1301,10 @@ export const LocationScreen: React.FC = () => {
                   letterSpacing: '-0.3px',
                 }}
               >
-                Live Train Tracking
+                Fleet-Wide Train Tracking & Route Visualization
               </h1>
               <p style={{ margin: 0, fontSize: '11px', color: colors.textMuted }}>
-                Real-Time GNSS Multi-Train Tracking & Interactive GIS Fleet Management
+                Simultaneous Fleet Route Corridors & Real-Time GNSS Positioning Across All Registered Trains
               </p>
             </div>
           </div>
@@ -1149,12 +1349,12 @@ export const LocationScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* 4 Fleet Statistics Metric Badges */}
+        {/* 5 Fleet Statistics Metric Badges */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: isMobileViewport ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
-            gap: isMobileViewport ? '8px' : '12px',
+            gridTemplateColumns: isMobileViewport ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)',
+            gap: isMobileViewport ? '8px' : '10px',
           }}
         >
           {/* Total Registered Trains */}
@@ -1190,6 +1390,42 @@ export const LocationScreen: React.FC = () => {
               }}
             >
               <TrainIcon size={16} />
+            </div>
+          </div>
+
+          {/* Trains With Routes */}
+          <div
+            style={{
+              backgroundColor: '#F5F3FF',
+              border: '1px solid #DDD6FE',
+              borderRadius: '8px',
+              padding: '10px 14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: '10px', fontWeight: 800, color: '#7C3AED', letterSpacing: '0.5px' }}>
+                ACTIVE ROUTES
+              </div>
+              <div style={{ fontSize: '20px', fontWeight: 800, color: '#6D28D9', marginTop: '2px' }}>
+                {trainsWithRoutesCount}
+              </div>
+            </div>
+            <div
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                backgroundColor: '#EDE9FE',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#7C3AED',
+              }}
+            >
+              <Route size={16} />
             </div>
           </div>
 
@@ -1350,7 +1586,7 @@ export const LocationScreen: React.FC = () => {
               <option value="ALL">All Registered Trains ({totalRegisteredTrains})</option>
               {unifiedTrains.map((t) => (
                 <option key={t.train_number} value={t.train_number}>
-                  Train {t.train_number} - {t.train_name} ({t.has_gps ? (t.is_online ? 'Online' : 'Offline') : 'No GPS'})
+                  Train {t.train_number} - {t.train_name} ({t.has_route ? `${t.route_stops_count} Halts` : 'No Route'}) [{t.status}]
                 </option>
               ))}
             </select>
@@ -1467,6 +1703,7 @@ export const LocationScreen: React.FC = () => {
             <option value="ONLINE">Online Only</option>
             <option value="OFFLINE">Offline Only</option>
             <option value="GPS_UNAVAILABLE">GPS Unavailable</option>
+            <option value="WITH_ROUTE">Configured Routes Only</option>
           </select>
         </div>
 
@@ -1476,7 +1713,7 @@ export const LocationScreen: React.FC = () => {
           <button
             id="btn-fit-all-trains"
             onClick={handleFitAllTrains}
-            title="Fit Map Viewport to All Registered Trains"
+            title="Fit Map Viewport to All Registered Trains and Routes"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -1584,9 +1821,10 @@ export const LocationScreen: React.FC = () => {
           flexDirection: 'column',
         }}
       >
-        {/* Active Selection Floating Pill */}
+        {/* Active Tracking Mode Floating Banner */}
         {viewMode === 'selected' && activeSelectedTrain && (
           <div
+            id="tracking-mode-banner"
             style={{
               position: 'absolute',
               top: '12px',
@@ -1595,47 +1833,60 @@ export const LocationScreen: React.FC = () => {
               backgroundColor: 'rgba(15, 23, 42, 0.94)',
               backdropFilter: 'blur(8px)',
               color: '#FFFFFF',
-              padding: '6px 12px',
+              padding: '8px 14px',
               borderRadius: '8px',
-              border: '1px solid #334155',
-              boxShadow: '0 4px 14px rgba(0,0,0,0.25)',
+              border: `1.5px solid ${activeSelectedTrain.route_color || '#334155'}`,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
               display: 'flex',
               alignItems: 'center',
-              gap: '10px',
+              gap: '12px',
               fontSize: '12px',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span
                 style={{
-                  width: '8px',
-                  height: '8px',
+                  width: '10px',
+                  height: '10px',
                   borderRadius: '50%',
-                  backgroundColor:
-                    activeSelectedTrain.status === 'ONLINE'
-                      ? '#16A34A'
-                      : activeSelectedTrain.status === 'OFFLINE'
-                      ? '#DC2626'
-                      : '#64748B',
+                  backgroundColor: activeSelectedTrain.route_color || '#2563EB',
+                  display: 'inline-block',
                 }}
               />
               <span style={{ fontWeight: 800 }}>Tracking Train {activeSelectedTrain.train_number}</span>
               <span style={{ color: '#94A3B8', fontSize: '11px' }}>({activeSelectedTrain.train_name})</span>
+              <span
+                style={{
+                  fontSize: '10px',
+                  padding: '1px 6px',
+                  borderRadius: '3px',
+                  backgroundColor: activeSelectedTrain.has_gps ? '#065F46' : '#334155',
+                  color: activeSelectedTrain.has_gps ? '#A7F3D0' : '#CBD5E1',
+                  fontWeight: 700,
+                }}
+              >
+                {activeSelectedTrain.has_gps ? 'GPS LIVE' : 'GPS UNAVAILABLE (ROUTE ONLY)'}
+              </span>
             </div>
             <button
+              id="banner-btn-show-all-trains"
               onClick={handleReturnToAllTrains}
               style={{
                 backgroundColor: '#2563EB',
                 border: 'none',
                 color: '#FFFFFF',
-                borderRadius: '4px',
-                padding: '2px 8px',
+                borderRadius: '5px',
+                padding: '4px 10px',
                 fontSize: '11px',
                 fontWeight: 700,
                 cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
               }}
             >
-              Show All Trains
+              <RotateCcw size={12} />
+              <span>Show All Trains</span>
             </button>
           </div>
         )}
@@ -1654,7 +1905,7 @@ export const LocationScreen: React.FC = () => {
           }}
         />
 
-        {/* Floating Zoom & FAB Controls on Map */}
+        {/* Floating Zoom & Controls on Map */}
         <div
           style={{
             position: 'absolute',
@@ -1769,20 +2020,20 @@ export const LocationScreen: React.FC = () => {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ width: 14, height: 4, borderRadius: '2px', backgroundColor: '#2563EB', display: 'inline-block' }} />
+              <span style={{ fontWeight: 600 }}>Multi-Train Routes (Simultaneous)</span>
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
               <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#16A34A', display: 'inline-block' }} />
-              <span>Online Train</span>
+              <span>Online GPS Fix</span>
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
               <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#DC2626', display: 'inline-block' }} />
-              <span>Offline Train</span>
-            </span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-              <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#2563EB', display: 'inline-block' }} />
-              <span>Updating (Live Fix)</span>
+              <span>Offline GPS Fix</span>
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
               <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#64748B', display: 'inline-block' }} />
-              <span>GPS Unavailable (Table Only)</span>
+              <span>GPS Unavailable (Route Corridors Visible)</span>
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
               <span style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#0284C7', display: 'inline-block' }} />
@@ -1854,7 +2105,7 @@ export const LocationScreen: React.FC = () => {
             <div><span style={{ color: '#64748B' }}>Speed:</span> <strong>{activeSelectedTrain.current_speed_kmh != null ? `${activeSelectedTrain.current_speed_kmh.toFixed(1)} km/h` : '—'}</strong></div>
             <div><span style={{ color: '#64748B' }}>Region:</span> <strong>{activeSelectedTrain.region}</strong></div>
             <div><span style={{ color: '#64748B' }}>Coordinates:</span> <strong>{activeSelectedTrain.current_latitude ? `${activeSelectedTrain.current_latitude.toFixed(4)}° N, ${activeSelectedTrain.current_longitude?.toFixed(4)}° E` : '—'}</strong></div>
-            <div><span style={{ color: '#64748B' }}>Nearest Stn:</span> <strong>{activeSelectedTrain.nearest_station || 'Live Corridor'}</strong></div>
+            <div><span style={{ color: '#64748B' }}>Route Status:</span> <strong>{activeSelectedTrain.has_route ? `${activeSelectedTrain.route_stops_count} Halts` : 'No Route'}</strong></div>
           </div>
 
           <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
@@ -1953,7 +2204,7 @@ export const LocationScreen: React.FC = () => {
               <span>TRAIN FLEET TRACKING ({filteredTrains.length})</span>
             </button>
 
-            {viewMode === 'selected' && stations.length > 0 && (
+            {viewMode === 'selected' && activeCorridorStations.length > 0 && (
               <button
                 id="tab-route-corridor"
                 onClick={() => setBottomTab('corridor')}
@@ -1972,14 +2223,14 @@ export const LocationScreen: React.FC = () => {
                 }}
               >
                 <MapPin size={14} />
-                <span>ROUTE CORRIDOR & REFILL HUBS ({stations.length})</span>
+                <span>ROUTE CORRIDOR & REFILL HUBS ({activeCorridorStations.length})</span>
               </button>
             )}
           </div>
 
           <div style={{ fontSize: '11px', color: colors.textMuted }}>
             {bottomTab === 'fleet'
-              ? 'Click a row to locate and isolate train on map'
+              ? 'Click any row or Track button to isolate and track train route'
               : `Corridor for Train ${selectedTrainNumber}`}
           </div>
         </div>
@@ -2009,9 +2260,10 @@ export const LocationScreen: React.FC = () => {
                   }}
                 >
                   <th style={{ padding: '9px 14px' }}>TRAIN NUMBER</th>
-                  <th style={{ padding: '9px 14px' }}>TRAIN NAME</th>
+                  <th style={{ padding: '9px 14px' }}>TRAIN NAME & CORRIDOR</th>
                   <th style={{ padding: '9px 14px' }}>REGION</th>
-                  <th style={{ padding: '9px 14px' }}>STATUS</th>
+                  <th style={{ padding: '9px 14px' }}>GPS STATUS</th>
+                  <th style={{ padding: '9px 14px' }}>ROUTE STATUS</th>
                   <th style={{ padding: '9px 14px' }}>LATITUDE</th>
                   <th style={{ padding: '9px 14px' }}>LONGITUDE</th>
                   <th style={{ padding: '9px 14px' }}>SPEED</th>
@@ -2022,7 +2274,7 @@ export const LocationScreen: React.FC = () => {
               <tbody>
                 {filteredTrains.length === 0 ? (
                   <tr>
-                    <td colSpan={9} style={{ padding: '24px', textAlign: 'center', color: colors.textMuted }}>
+                    <td colSpan={10} style={{ padding: '24px', textAlign: 'center', color: colors.textMuted }}>
                       No registered trains match the selected filters.
                     </td>
                   </tr>
@@ -2048,20 +2300,28 @@ export const LocationScreen: React.FC = () => {
                             : '#F8FAFC',
                           cursor: 'pointer',
                           transition: 'background-color 0.15s ease',
-                          borderLeft: isSelected ? `4px solid ${colors.primary}` : '4px solid transparent',
+                          borderLeft: isSelected ? `4px solid ${train.route_color || colors.primary}` : '4px solid transparent',
                         }}
                       >
-                        {/* Train Number */}
+                        {/* Train Number with Route Color Dot */}
                         <td style={{ padding: '10px 14px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <TrainIcon size={14} color={isSelected ? colors.primary : '#64748B'} />
+                            <span
+                              style={{
+                                width: '10px',
+                                height: '10px',
+                                borderRadius: '50%',
+                                backgroundColor: train.route_color || '#2563EB',
+                                display: 'inline-block',
+                              }}
+                            />
                             <strong style={{ fontSize: '12px', color: isSelected ? colors.primary : colors.textPrimary }}>
                               {train.train_number}
                             </strong>
                           </div>
                         </td>
 
-                        {/* Train Name */}
+                        {/* Train Name & Corridor */}
                         <td style={{ padding: '10px 14px', fontWeight: 600, color: colors.textPrimary }}>
                           <div>{train.train_name}</div>
                           <div style={{ fontSize: '10px', color: colors.textMuted }}>
@@ -2086,7 +2346,7 @@ export const LocationScreen: React.FC = () => {
                           </span>
                         </td>
 
-                        {/* Status */}
+                        {/* GPS Status */}
                         <td style={{ padding: '10px 14px' }}>
                           <span
                             style={{
@@ -2135,6 +2395,43 @@ export const LocationScreen: React.FC = () => {
                           </span>
                         </td>
 
+                        {/* Route Status */}
+                        <td style={{ padding: '10px 14px' }}>
+                          {train.has_route ? (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '2px 7px',
+                                borderRadius: '4px',
+                                fontSize: '10px',
+                                fontWeight: 700,
+                                backgroundColor: '#F8FAFC',
+                                color: train.route_color || '#2563EB',
+                                border: `1px solid ${train.route_color || '#CBD5E1'}`,
+                              }}
+                            >
+                              <Route size={11} color={train.route_color || '#2563EB'} />
+                              <span>{train.route_stops_count} Halts Configured</span>
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                padding: '2px 7px',
+                                borderRadius: '4px',
+                                fontSize: '10px',
+                                fontWeight: 600,
+                                backgroundColor: '#F1F5F9',
+                                color: '#94A3B8',
+                                border: '1px solid #E2E8F0',
+                              }}
+                            >
+                              No Route Configured
+                            </span>
+                          )}
+                        </td>
+
                         {/* Latitude */}
                         <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: '11px' }}>
                           {latStr}
@@ -2165,9 +2462,9 @@ export const LocationScreen: React.FC = () => {
                                 handleSelectTrain(train.train_number);
                               }}
                               style={{
-                                backgroundColor: isSelected ? colors.primary : '#F1F5F9',
+                                backgroundColor: isSelected ? train.route_color || colors.primary : '#F1F5F9',
                                 color: isSelected ? '#FFFFFF' : colors.textPrimary,
-                                border: `1px solid ${isSelected ? colors.primary : colors.borderStrong}`,
+                                border: `1px solid ${isSelected ? train.route_color || colors.primary : colors.borderStrong}`,
                                 borderRadius: '4px',
                                 padding: '4px 8px',
                                 fontSize: '10px',

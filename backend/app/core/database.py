@@ -155,6 +155,31 @@ def _sync_schema_migration(sync_conn) -> None:
             for col_name, col_type in telemetry_columns:
                 if col_name not in telemetry_cols:
                     sync_conn.exec_driver_sql(f"ALTER TABLE telemetry_readings ADD COLUMN {col_name} {col_type}")
+
+            # Railway regions table migration
+            res_reg = sync_conn.exec_driver_sql("PRAGMA table_info(railway_regions)").fetchall()
+            reg_cols = {row[1] for row in res_reg}
+            reg_columns = [
+                ("id", "VARCHAR(36)"),
+                ("updated_at", "DATETIME"),
+            ]
+            for col_name, col_type in reg_columns:
+                if col_name not in reg_cols:
+                    sync_conn.exec_driver_sql(f"ALTER TABLE railway_regions ADD COLUMN {col_name} {col_type}")
+            sync_conn.exec_driver_sql("UPDATE railway_regions SET id = code WHERE id IS NULL")
+
+            # Railway zones table migration
+            res_zone = sync_conn.exec_driver_sql("PRAGMA table_info(railway_zones)").fetchall()
+            zone_cols = {row[1] for row in res_zone}
+            zone_columns = [
+                ("id", "VARCHAR(36)"),
+                ("region_id", "VARCHAR(36)"),
+                ("updated_at", "DATETIME"),
+            ]
+            for col_name, col_type in zone_columns:
+                if col_name not in zone_cols:
+                    sync_conn.exec_driver_sql(f"ALTER TABLE railway_zones ADD COLUMN {col_name} {col_type}")
+            sync_conn.exec_driver_sql("UPDATE railway_zones SET id = code WHERE id IS NULL")
         except Exception as e:
             logger.warning(f"Column check notice: {e}")
 

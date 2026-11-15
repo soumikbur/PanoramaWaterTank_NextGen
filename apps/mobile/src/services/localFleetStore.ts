@@ -951,6 +951,9 @@ export const localFleetStore = {
               },
             ]
           : [],
+        has_route: Boolean(train.route && train.route.length > 0),
+        route_stops_count: Array.isArray(train.route) ? train.route.length : 0,
+        route: Array.isArray(train.route) ? train.route : [],
       });
     }
     return locations;

@@ -3,6 +3,7 @@ import { colors, metrics, typography } from '../../theme';
 import { BaseCard } from '../common/BaseCard';
 import { InfoRow } from '../common/InfoRow';
 import { TankLiveStatus } from '../../types';
+import { formatSensorHealth, getSensorHealthColor } from '../../utils/formatters';
 
 interface TankInfoCardProps {
   tank: TankLiveStatus | null;
@@ -43,15 +44,14 @@ export const TankInfoCard: React.FC<TankInfoCardProps> = ({
     ? new Date(tank.lastUpdate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : 'Awaiting Telemetry';
 
-  const sensorStatus = !isTelemetryAvailable
-    ? 'Awaiting Data'
+  const rawSensorStatus = !isTelemetryAvailable
+    ? 'Awaiting Telemetry'
     : isStale
-    ? 'Stale Data'
-    : isZero
-    ? 'Healthy (0.00 cm)'
+    ? 'Warning'
     : tank?.alarmStatus === 'SENSOR_FAULT'
-    ? 'Sensor Fault'
+    ? 'Fault'
     : 'Healthy';
+  const sensorStatus = formatSensorHealth(rawSensorStatus);
 
   const tankHeight = `${(tank?.maxHeightCm ?? 50.0).toFixed(2)} cm`;
   const capacity = `${(tank?.capacityLiters ?? 20.0).toFixed(2)} L`;
@@ -127,7 +127,7 @@ export const TankInfoCard: React.FC<TankInfoCardProps> = ({
         <InfoRow
           label="Sensor Status"
           value={sensorStatus}
-          valueColor={sensorStatus.includes('Healthy') ? colors.success : sensorStatus === 'Awaiting Data' ? '#D97706' : colors.critical}
+          valueColor={getSensorHealthColor(sensorStatus)}
         />
         <Divider />
 

@@ -5,6 +5,7 @@ import { ApiClient } from '../api/client';
 import { BaseCard } from '../components/common/BaseCard';
 import { InfoRow } from '../components/common/InfoRow';
 import { RefreshCw, X, Plus, Edit3, Trash2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { formatSensorHealth, getSensorHealthColor } from '../utils/formatters';
 
 export interface DeviceTelemetry {
   dbId: string;
@@ -693,11 +694,11 @@ export const DevicesScreen: React.FC = () => {
                       style={{
                         fontSize: '12px',
                         fontWeight: 500,
-                        color: dev.sensorStatus === 'Healthy' || dev.sensorStatus === 'Operational' ? '#059669' : '#D97706',
+                        color: getSensorHealthColor(dev.sensorStatus),
                         fontFamily: typography.fontFamily,
                       }}
                     >
-                      {dev.sensorStatus}
+                      {formatSensorHealth(dev.sensorStatus)}
                     </span>
 
                     {/* Firmware Version */}
@@ -891,7 +892,7 @@ export const DevicesScreen: React.FC = () => {
 
             <InfoRow label="Configured Tank Height" value={`${selectedDevice.tankHeightCm.toFixed(1)} cm`} />
             <InfoRow label="Liquid Volume" value={selectedDevice.volumeLiters != null ? `${selectedDevice.volumeLiters.toFixed(1)} L` : 'N/A'} />
-            <InfoRow label="Sensor Health Status" value={selectedDevice.sensorStatus} />
+            <InfoRow label="Sensor Health Status" value={formatSensorHealth(selectedDevice.sensorStatus)} valueColor={getSensorHealthColor(selectedDevice.sensorStatus)} />
 
             <div style={{ width: '100%', height: '1px', backgroundColor: '#F1F5F9' }} />
 

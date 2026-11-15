@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import init_db, get_db
 from app.mqtt.client import mqtt_service
+from app.services.outbox_service import outbox_worker_loop
 from app.api.v1 import api_router, trains as trains_v1
 from app.api.v1.health import health_check
 from app.api.v1.ws import websocket_live_stream
@@ -50,10 +51,21 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to start MQTT service: {e}")
 
+    # 3. Start Transactional Outbox Background Worker
+    outbox_task = asyncio.create_task(outbox_worker_loop())
+    logger.info("Transactional outbox worker task spawned.")
+
     yield
 
     # Shutdown
     logger.info("Shutting down Panorama Water Tank Monitor...")
+    outbox_task.cancel()
+    try:
+        await outbox_task
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        logger.warning(f"Error terminating outbox task: {e}")
     try:
         mqtt_service.stop()
         logger.info("MQTT Client stopped cleanly.")
