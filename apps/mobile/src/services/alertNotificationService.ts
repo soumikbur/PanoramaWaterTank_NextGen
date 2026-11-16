@@ -19,6 +19,7 @@ import {
   BrowserNotificationPayload,
   BrowserNotificationPermission,
 } from './browserNotificationBridge';
+import { nativeBridge } from './nativeBridge';
 
 export interface AlertToast {
   id: string;
@@ -840,6 +841,25 @@ class AlertNotificationService {
     void browserNotificationBridge.showNotification(
       this.buildBrowserNotificationPayload(record, false)
     );
+
+    // Native Android/iOS system notification in notification shade
+    if (nativeBridge.isNativeApp()) {
+      void nativeBridge.scheduleAlarmNotification({
+        alertKey: record.alertKey,
+        severity: record.severity,
+        title: record.severity === 'CRITICAL'
+          ? `CRITICAL LOW WATER - ${record.coachNumber || 'COACH'}`
+          : record.title,
+        body: record.message,
+        channelId: record.severity === 'CRITICAL' ? 'critical-water-alerts' : 'warning-alerts',
+        trainNumber: record.trainNumber,
+        coachNumber: record.coachNumber,
+        tankName: record.tankName,
+        tankId: record.tankId,
+        levelPercent: record.levelPercent,
+        threshold: this.config.criticalThreshold,
+      });
+    }
   }
 
   /**
@@ -939,6 +959,11 @@ class AlertNotificationService {
 
     this.saveManagedAlerts();
     this.emitAlertsChange();
+
+    if (nativeBridge.isNativeApp() && target.alertKey) {
+      void nativeBridge.cancelAlarmNotification(target.alertKey);
+    }
+
     return { ...target };
   }
 
@@ -954,6 +979,9 @@ class AlertNotificationService {
   }
 
   private resolveManagedAlertsByKey(alertKey: string, resolvedAt: string) {
+    if (nativeBridge.isNativeApp()) {
+      void nativeBridge.cancelAlarmNotification(alertKey);
+    }
     let changed = false;
     for (const alert of this.managedAlerts) {
       if (alert.alertKey === alertKey && alert.status !== 'RESOLVED') {

@@ -13,6 +13,8 @@ import { wsService } from './services/websocket';
 
 // Expose services for automated verification scripts and SCADA diagnostic instrumentation
 if (typeof window !== 'undefined') {
+  (window as any).alertNotificationService = alertNotificationService;
+  (window as any).nativeBridge = nativeBridge;
   (window as any).__testModules = {
     alertNotificationService,
     ApiClient,

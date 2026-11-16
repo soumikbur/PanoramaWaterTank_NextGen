@@ -11,9 +11,9 @@ let gradleTask = 'assembleDebug';
 if (mode === 'release') gradleTask = 'assembleRelease';
 else if (mode === 'bundle') gradleTask = 'bundleRelease';
 
-console.log(`[GRADLE] Running task ${gradleTask} in ${androidDir}...`);
+console.log(`[GRADLE] Running tasks clean ${gradleTask} in ${androidDir}...`);
 
-const result = spawnSync(gradlewCmd, [gradleTask], {
+const result = spawnSync(gradlewCmd, ['clean', gradleTask], {
   cwd: androidDir,
   stdio: 'inherit',
   shell: true,

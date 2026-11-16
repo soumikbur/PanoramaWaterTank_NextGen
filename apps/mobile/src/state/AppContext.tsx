@@ -323,12 +323,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       startTicker();
     }
 
+    const handleNotificationClicked = (e: any) => {
+      const detail = e?.detail;
+      console.log('[AppContext] Notification clicked handler:', detail);
+      if (detail?.trainNumber) setSelectedTrainNumber(detail.trainNumber);
+      if (detail?.coachNumber) setSelectedCoachNumber(detail.coachNumber);
+      if (detail?.tankId) setSelectedTankId(detail.tankId);
+      setActiveScreen('alerts');
+      AppRouter.navigate('alerts');
+    };
+
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', handleVisibility);
     }
     if (typeof window !== 'undefined') {
       window.addEventListener('panorama:app_paused', handleAppPaused);
       window.addEventListener('panorama:app_resumed', handleAppResumed);
+      window.addEventListener('panorama:notification_clicked', handleNotificationClicked);
     }
 
     return () => {
@@ -339,6 +350,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (typeof window !== 'undefined') {
         window.removeEventListener('panorama:app_paused', handleAppPaused);
         window.removeEventListener('panorama:app_resumed', handleAppResumed);
+        window.removeEventListener('panorama:notification_clicked', handleNotificationClicked);
       }
     };
   }, []);

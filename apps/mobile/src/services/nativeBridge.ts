@@ -132,8 +132,75 @@ class NativeBridge {
       console.warn('[NativeBridge] App lifecycle listener warning:', err);
     }
 
-    // 5. Pre-request notification permission
+    // 5. Initialize Notification Channels & Action Performed Listener
+    await this.createNotificationChannels();
+
+    // 6. Pre-request notification permission (Android 13+ / iOS)
     this.requestNotificationPermissions();
+  }
+
+  /**
+   * Create dedicated Android notification channels:
+   * - Critical Water Alerts: HIGH importance (5), audible, red light & vibration
+   * - Warning Alerts: DEFAULT importance (3), vibration
+   * - System Notifications: LOW importance (2)
+   */
+  public async createNotificationChannels(): Promise<void> {
+    if (!this.isNative) return;
+    try {
+      const LocalNotifications = this.getCapacitorPlugin('LocalNotifications');
+      if (!LocalNotifications || typeof LocalNotifications.createChannel !== 'function') return;
+
+      // 1. Critical Water Alerts (HIGH importance)
+      await LocalNotifications.createChannel({
+        id: 'critical-water-alerts',
+        name: 'Critical Water Alerts',
+        description: 'Audible emergency alerts for critical low water levels and overflows',
+        importance: 5, // NotificationManager.IMPORTANCE_HIGH
+        visibility: 1, // NotificationCompat.VISIBILITY_PUBLIC
+        sound: 'beep.wav',
+        vibration: true,
+        lights: true,
+        lightColor: '#DC2626',
+      }).catch((e: any) => console.warn('[NativeBridge] Channel create error (critical):', e));
+
+      // 2. Warning Alerts (DEFAULT importance)
+      await LocalNotifications.createChannel({
+        id: 'warning-alerts',
+        name: 'Warning Alerts',
+        description: 'Advisory notifications for low water and fleet warnings',
+        importance: 3, // NotificationManager.IMPORTANCE_DEFAULT
+        visibility: 1,
+        vibration: true,
+        lights: false,
+      }).catch((e: any) => console.warn('[NativeBridge] Channel create error (warning):', e));
+
+      // 3. System Notifications (LOW importance)
+      await LocalNotifications.createChannel({
+        id: 'system-notifications',
+        name: 'System Notifications',
+        description: 'Background status, sync updates and network state changes',
+        importance: 2, // NotificationManager.IMPORTANCE_LOW
+        visibility: 0,
+        vibration: false,
+        lights: false,
+      }).catch((e: any) => console.warn('[NativeBridge] Channel create error (system):', e));
+
+      // Register notification tap/action listener to open app & navigate to relevant alert
+      if (typeof LocalNotifications.addListener === 'function') {
+        LocalNotifications.addListener('localNotificationActionPerformed', (action: any) => {
+          console.log('[NativeBridge] Notification clicked:', action);
+          const extra = action?.notification?.extra || {};
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('panorama:notification_clicked', { detail: extra }));
+          }
+        });
+      }
+
+      console.log('[NativeBridge] Android notification channels and tap listener registered.');
+    } catch (err) {
+      console.warn('[NativeBridge] Error creating notification channels:', err);
+    }
   }
 
   /**
@@ -150,6 +217,10 @@ class NativeBridge {
         this.notificationPermissionGranted = true;
         return true;
       }
+      if (status.display === 'denied') {
+        // Do not repeatedly prompt if user already denied permission
+        return false;
+      }
       const req = await LocalNotifications.requestPermissions();
       this.notificationPermissionGranted = req.display === 'granted';
       return this.notificationPermissionGranted;
@@ -162,59 +233,118 @@ class NativeBridge {
   private lastNotificationTime: number = 0;
 
   /**
-   * Schedule a high-priority native notification for critical SCADA alarms (e.g. Tank < 10%)
-   * Consolidated and throttled to prevent flooding Android NotificationManager under low-resource conditions.
+   * Deterministic 32-bit positive integer hash for notification IDs.
+   * Updates existing notification in Android shade rather than spawning duplicates.
+   */
+  public getDeterministicNotificationId(key: string): number {
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) {
+      hash = (hash << 5) - hash + key.charCodeAt(i);
+      hash |= 0;
+    }
+    return (Math.abs(hash) % 900000) + 10000;
+  }
+
+  /**
+   * Schedule a high-priority native notification for critical SCADA alarms.
+   * Conforms strictly to mobile notification appearance & channels.
    */
   public async scheduleAlarmNotification(options: {
     id?: number;
+    alertKey?: string;
     title: string;
     body: string;
-    channelId?: string;
+    channelId?: 'critical-water-alerts' | 'warning-alerts' | 'system-notifications';
+    severity?: 'CRITICAL' | 'WARNING' | 'NORMAL';
+    trainNumber?: string;
+    coachNumber?: string;
+    tankName?: string;
+    tankId?: string;
+    levelPercent?: number | null;
+    threshold?: number;
   }): Promise<void> {
     if (!this.isNative) return;
-
-    // Throttle notifications to prevent notification flooding (minimum 10s between audible alerts)
-    const now = Date.now();
-    if (now - this.lastNotificationTime < 10000 && !options.id) {
-      return;
-    }
-    this.lastNotificationTime = now;
 
     try {
       const LocalNotifications = this.getCapacitorPlugin('LocalNotifications');
       if (!LocalNotifications) return;
 
-      // Deterministic notification ID: updates existing notification rather than creating infinite cards
-      let notifId = options.id;
-      if (!notifId) {
-        let hash = 0;
-        const str = options.channelId || options.title || 'alarm';
-        for (let i = 0; i < str.length; i++) {
-          hash = (hash << 5) - hash + str.charCodeAt(i);
-          hash |= 0;
-        }
-        notifId = (Math.abs(hash) % 90000) + 10000;
+      const isCrit = options.severity === 'CRITICAL';
+      const channelId = options.channelId || (isCrit ? 'critical-water-alerts' : 'warning-alerts');
+
+      // Title formatting per specification: CRITICAL LOW WATER - <COACH>
+      let formattedTitle = options.title;
+      if (isCrit) {
+        const coachLabel = (options.coachNumber || 'COACH').toUpperCase();
+        formattedTitle = options.title.startsWith('CRITICAL LOW WATER')
+          ? options.title
+          : `CRITICAL LOW WATER - ${coachLabel}`;
       }
+
+      // Body formatting per specification: Water level: X.X% | Below critical threshold: Y%
+      let formattedBody = options.body;
+      if (isCrit && options.levelPercent !== null && options.levelPercent !== undefined) {
+        const pct = options.levelPercent.toFixed(1);
+        const thresh = options.threshold ?? 10;
+        formattedBody = `Water level: ${pct}% | Below critical threshold: ${thresh}%`;
+        const extraDetails: string[] = [];
+        if (options.trainNumber) extraDetails.push(`Train: ${options.trainNumber}`);
+        if (options.coachNumber) extraDetails.push(`Coach: ${options.coachNumber}`);
+        if (options.tankName) extraDetails.push(`Tank: ${options.tankName}`);
+        if (extraDetails.length > 0) {
+          formattedBody += `\n${extraDetails.join(' | ')}`;
+        }
+      }
+
+      // Deterministic notification ID by alertKey/tankId to prevent duplicate cards
+      const notifId = options.id ?? this.getDeterministicNotificationId(options.alertKey || options.tankId || formattedTitle);
 
       await LocalNotifications.schedule({
         notifications: [
           {
             id: notifId,
-            title: options.title,
-            body: options.body,
-            schedule: { at: new Date(Date.now() + 100) },
+            title: formattedTitle,
+            body: formattedBody,
+            channelId,
+            schedule: { at: new Date(Date.now() + 50) },
             sound: 'beep.wav',
             smallIcon: 'ic_stat_panorama',
-            iconColor: '#2563EB',
+            iconColor: isCrit ? '#DC2626' : '#2563EB',
+            autoCancel: true,
+            group: 'panorama_water_alerts',
+            groupSummary: false,
             extra: {
-              source: 'panorama_alarm',
+              alertKey: options.alertKey,
+              trainNumber: options.trainNumber,
+              coachNumber: options.coachNumber,
+              tankName: options.tankName,
+              tankId: options.tankId,
+              severity: options.severity || (isCrit ? 'CRITICAL' : 'WARNING'),
+              screen: 'alerts',
             },
           },
         ],
       });
-      console.log(`[NativeBridge] Native notification scheduled (#${notifId}):`, options.title);
+      console.log(`[NativeBridge] Native notification scheduled (#${notifId}, channel: ${channelId}):`, formattedTitle);
     } catch (err) {
       console.warn('[NativeBridge] Failed to schedule notification:', err);
+    }
+  }
+
+  /**
+   * Cancel / dismiss an active notification from the Android shade by alertKey
+   */
+  public async cancelAlarmNotification(alertKey: string): Promise<void> {
+    if (!this.isNative) return;
+    try {
+      const LocalNotifications = this.getCapacitorPlugin('LocalNotifications');
+      if (!LocalNotifications) return;
+
+      const notifId = this.getDeterministicNotificationId(alertKey);
+      await LocalNotifications.cancel({ notifications: [{ id: notifId }] });
+      console.log(`[NativeBridge] Dismissed notification #${notifId} for key: ${alertKey}`);
+    } catch (err) {
+      console.warn('[NativeBridge] Failed to cancel notification:', err);
     }
   }
 

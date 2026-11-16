@@ -9,6 +9,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { AlertToastBanner } from './components/common/AlertToastBanner';
 import { ActiveAlertBanner } from './components/common/ActiveAlertBanner';
+import { isNativeCapacitorApp } from './services/nativeBridge';
 import { ShieldAlert } from 'lucide-react';
 
 // Screens
@@ -183,14 +184,19 @@ const AppShell: React.FC = () => {
   return (
     <DisplayPreferencesProvider activeUsername={currentUser?.username}>
       <AppLayout>
-        <AlertToastBanner
-          toast={alertToast}
-          onDismiss={dismissAlertToast}
-          onViewAlerts={() => setActiveScreen('alerts')}
-          onAcknowledge={(id) => void acknowledgeAlarm(id, 'Acknowledged from alert banner')}
-        />
+        {/* On desktop browsers, retain alert banner reminders; on mobile and native apps, notifications are delivered natively */}
+        {!isNativeCapacitorApp() && (
+          <div className="hide-on-mobile">
+            <AlertToastBanner
+              toast={alertToast}
+              onDismiss={dismissAlertToast}
+              onViewAlerts={() => setActiveScreen('alerts')}
+              onAcknowledge={(id) => void acknowledgeAlarm(id, 'Acknowledged from alert banner')}
+            />
+            <ActiveAlertBanner />
+          </div>
+        )}
         <Header />
-        <ActiveAlertBanner />
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           <Sidebar />
           <MainContent />

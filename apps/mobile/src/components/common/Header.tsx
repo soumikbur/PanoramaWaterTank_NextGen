@@ -1102,113 +1102,12 @@ export const Header: React.FC = () => {
               </div>
             </div>
 
-            {/* Right: Quick actions (Search, Connection, Alerts) */}
+            {/* Right: Exactly 4 responsive controls: MQTT indicator, Notification bell, Settings, Profile menu */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-              {/* Install App Button (Hidden on native Capacitor apps) */}
-              {!isNativeApp && (
-                <button
-                  type="button"
-                  id="mobile-install-app-btn"
-                  onClick={() => setIsInstallModalOpen(true)}
-                  aria-label="Install Android App"
-                  title="Install Android APK / iOS Setup"
-                  className="touch-target-44"
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#2563EB',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '8px',
-                    borderRadius: '6px',
-                  }}
-                >
-                  <Download size={18} />
-                </button>
-              )}
-
-              {/* Search Toggle Button */}
-              <button
-                type="button"
-                onClick={() => setIsMobileSearchOpen(true)}
-                aria-label="Search fleet"
-                className="touch-target-44"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#475569',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '8px',
-                  borderRadius: '6px',
-                }}
-              >
-                <Search size={18} />
-              </button>
-
-              {/* Mobile Central Sync Indicator */}
+              {/* 1. MQTT Connection Indicator */}
               <div
-                id="mobile-sync-status-pill"
-                onClick={() => triggerSync()}
-                style={{
-                  height: '28px',
-                  padding: '0 6px',
-                  borderRadius: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '3px',
-                  backgroundColor:
-                    syncState === 'SYNCHRONIZED'
-                      ? '#E8F8EE'
-                      : syncState === 'SYNCHRONIZING'
-                      ? '#FEF3C7'
-                      : '#FDECEC',
-                  border: `1px solid ${
-                    syncState === 'SYNCHRONIZED'
-                      ? '#BBF7D0'
-                      : syncState === 'SYNCHRONIZING'
-                      ? '#FDE68A'
-                      : '#FECACA'
-                  }`,
-                  cursor: 'pointer',
-                }}
-                title={`Central Sync: ${syncState}\nLast: ${lastSyncTime ? lastSyncTime.toLocaleTimeString() : 'Never'}`}
-              >
-                <div
-                  style={{
-                    width: '6px',
-                    height: '6px',
-                    borderRadius: '50%',
-                    backgroundColor:
-                      syncState === 'SYNCHRONIZED'
-                        ? '#16A34A'
-                        : syncState === 'SYNCHRONIZING'
-                        ? '#D97706'
-                        : '#DC2626',
-                  }}
-                />
-                <span
-                  style={{
-                    fontSize: '9px',
-                    fontWeight: 700,
-                    color:
-                      syncState === 'SYNCHRONIZED'
-                        ? '#16A34A'
-                        : syncState === 'SYNCHRONIZING'
-                        ? '#D97706'
-                        : '#DC2626',
-                  }}
-                >
-                  {syncState === 'SYNCHRONIZED' ? 'SYNC' : syncState === 'SYNCHRONIZING' ? '...' : 'OFF'}
-                </span>
-              </div>
-
-              {/* Mobile Connection Pill */}
-              <div
+                id="mobile-mqtt-status-pill"
+                title={`MQTT Telemetry Broker: ${mqttConnectionStatus}`}
                 style={{
                   height: '28px',
                   padding: '0 7px',
@@ -1230,7 +1129,6 @@ export const Header: React.FC = () => {
                       : '#FEE2E2'
                   }`,
                 }}
-                title={`Status: ${mqttConnectionStatus}`}
               >
                 <div
                   style={{
@@ -1261,22 +1159,23 @@ export const Header: React.FC = () => {
                 </span>
               </div>
 
-              {/* Mobile Alerts Bell Button */}
+              {/* 2. Mobile Alerts Bell Button */}
               <button
                 type="button"
+                id="mobile-alerts-bell-btn"
                 onClick={() => setActiveScreen('alerts')}
                 aria-label="View Alerts"
                 className="touch-target-44"
                 style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: activeAlarmCount > 0 ? '#EF4444' : '#475569',
+                  background: activeScreen === 'alerts' ? '#EFF6FF' : 'transparent',
+                  border: activeScreen === 'alerts' ? '1px solid #BFDBFE' : 'none',
+                  color: activeAlarmCount > 0 ? '#EF4444' : activeScreen === 'alerts' ? '#2563EB' : '#475569',
                   cursor: 'pointer',
                   position: 'relative',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  padding: '8px',
+                  padding: '6px',
                   borderRadius: '6px',
                 }}
               >
@@ -1285,8 +1184,8 @@ export const Header: React.FC = () => {
                   <span
                     style={{
                       position: 'absolute',
-                      top: '6px',
-                      right: '6px',
+                      top: '4px',
+                      right: '4px',
                       backgroundColor: '#EF4444',
                       color: '#FFFFFF',
                       fontSize: '9px',
@@ -1305,7 +1204,7 @@ export const Header: React.FC = () => {
                 )}
               </button>
 
-              {/* Direct Mobile Settings Button */}
+              {/* 3. Direct Mobile Settings Button */}
               <button
                 type="button"
                 id="mobile-header-settings-btn"
@@ -1321,14 +1220,14 @@ export const Header: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  padding: '8px',
+                  padding: '6px',
                   borderRadius: '6px',
                 }}
               >
                 <SettingsIcon size={18} />
               </button>
 
-              {/* Mobile Dedicated Account & Session Menu */}
+              {/* 4. Mobile Dedicated Account & Session Menu */}
               {currentUser && (
                 <div ref={mobileAccountMenuRef} style={{ position: 'relative' }}>
                   <button
@@ -1400,6 +1299,60 @@ export const Header: React.FC = () => {
                           }}
                         >
                           {isAdmin ? 'ADMINISTRATOR' : 'EMPLOYEE'}
+                        </span>
+                      </div>
+
+                      {/* Search Shortcut */}
+                      <button
+                        type="button"
+                        id="mobile-menu-search-btn"
+                        onClick={() => {
+                          setIsMobileAccountMenuOpen(false);
+                          setIsMobileSearchOpen(true);
+                        }}
+                        style={{
+                          padding: '8px 10px',
+                          borderRadius: '6px',
+                          backgroundColor: '#F8FAFC',
+                          border: '1px solid #CBD5E1',
+                          color: '#0F172A',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          textAlign: 'left',
+                          width: '100%',
+                        }}
+                      >
+                        <Search size={14} color="#64748B" />
+                        <span>Search Trains & Coaches</span>
+                      </button>
+
+                      {/* Central Sync Item */}
+                      <div
+                        id="mobile-menu-sync-item"
+                        onClick={() => {
+                          triggerSync();
+                        }}
+                        style={{
+                          padding: '8px 10px',
+                          borderRadius: '6px',
+                          backgroundColor: '#F8FAFC',
+                          border: '1px solid #CBD5E1',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <RefreshCw size={14} color="#64748B" className={syncState === 'SYNCHRONIZING' ? 'spin' : ''} />
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: '#0F172A' }}>Central Sync</span>
+                        </div>
+                        <span style={{ fontSize: '10px', fontWeight: 700, color: syncState === 'SYNCHRONIZED' ? '#16A34A' : '#D97706' }}>
+                          {syncState === 'SYNCHRONIZED' ? 'SYNCED' : syncState === 'SYNCHRONIZING' ? 'SYNCING...' : 'OFFLINE'}
                         </span>
                       </div>
 
