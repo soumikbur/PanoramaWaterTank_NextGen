@@ -103,12 +103,18 @@ export const LevelTrendCard: React.FC<LevelTrendCardProps> = ({ tankId, height, 
     return labels;
   })();
 
-  // Transform historyPoints into TrendPoint array strictly from real telemetry
+  // Transform historyPoints into TrendPoint array strictly from real telemetry with mobile downsampling
   const trendPoints: TrendPoint[] = (() => {
-    const source = historyPoints && historyPoints.length > 0 ? historyPoints : [];
+    let source = historyPoints && historyPoints.length > 0 ? historyPoints : [];
 
     if (source.length === 0) {
       return [];
+    }
+
+    // Downsample points to max 48 points for smooth SVG rendering on low-end hardware
+    if (source.length > 48) {
+      const stride = Math.ceil(source.length / 48);
+      source = source.filter((_: any, idx: number) => idx % stride === 0 || idx === source.length - 1);
     }
 
     return source.map((pt: any, idx: number) => {

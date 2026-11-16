@@ -23,6 +23,7 @@ import {
   Trash2,
   Sliders,
   ExternalLink,
+  Terminal,
 } from 'lucide-react';
 
 type FilterTab = 'ALL' | 'DISCOVERED' | 'REGISTERED' | 'ENGAGED' | 'AVAILABLE' | 'OFFLINE';
@@ -402,6 +403,27 @@ export const DeviceMappingScreen: React.FC = () => {
             <Radio size={14} color={mqttBrokerStatus === 'CONNECTED' ? '#16A34A' : '#DC2626'} />
             <span>Broker: <strong>{mqttBrokerStatus === 'CONNECTED' ? 'Online' : 'Reconnecting'}</strong></span>
           </div>
+
+          <button
+            onClick={() => setActiveScreen('raw-data')}
+            title="Open Live MQTT Raw Data Monitor & Terminal"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 14px',
+              backgroundColor: '#0F172A',
+              color: '#FFFFFF',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <Terminal size={15} color="#38BDF8" />
+            <span>Raw Data Monitor</span>
+          </button>
 
           <button
             onClick={() => setIsRegisterModalOpen(true)}

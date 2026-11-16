@@ -86,6 +86,7 @@ export interface TrainCreatePayload {
   has_official_composition?: boolean;
   api_provider?: string | null;
   last_verified_at?: string | null;
+  route?: any[];
 }
 
 export interface TrainOverviewItem {
@@ -113,6 +114,7 @@ export interface TrainOverviewItem {
   has_official_composition?: boolean;
   api_provider?: string | null;
   last_verified_at?: string | null;
+  route?: any[];
 }
 
 export interface RegionSummary {
@@ -189,5 +191,6 @@ export interface TrainConsist {
   has_official_composition?: boolean;
   api_provider?: string | null;
   last_verified_at?: string | null;
+  route?: any[];
 }
 

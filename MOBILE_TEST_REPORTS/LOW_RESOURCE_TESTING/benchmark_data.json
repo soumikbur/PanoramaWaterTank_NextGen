@@ -1,0 +1,233 @@
+{
+  "testStartTime": "2026-11-16T06:35:44.394Z",
+  "device": {
+    "name": "Panorama_ULTRA_LOW_RESOURCE",
+    "abi": "x86_64",
+    "androidVersion": "11",
+    "apiLevel": "30",
+    "ramTargetMb": 1024,
+    "vmHeapSize": "128M",
+    "display": "720x1280 240dpi",
+    "gpu": "swiftshader_indirect (software)"
+  },
+  "startupBenchmarks": {
+    "coldStart": {
+      "totalTimeMs": 745,
+      "waitTimeMs": 751
+    },
+    "warmStart": {
+      "totalTimeMs": 69,
+      "waitTimeMs": 70
+    }
+  },
+  "profileATests": {
+    "Dashboard": {
+      "hash": "#/dashboard?train=12249",
+      "totalPssMb": "104.05",
+      "totalPssKb": 106546,
+      "javaHeapKb": 10448,
+      "nativeHeapKb": 25060,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    },
+    "Train Management": {
+      "hash": "#/trains",
+      "totalPssMb": "106.11",
+      "totalPssKb": 108655,
+      "javaHeapKb": 10788,
+      "nativeHeapKb": 25140,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    },
+    "All Tanks": {
+      "hash": "#/watertank",
+      "totalPssMb": "106.16",
+      "totalPssKb": 108707,
+      "javaHeapKb": 10756,
+      "nativeHeapKb": 25236,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    },
+    "Devices": {
+      "hash": "#/devices",
+      "totalPssMb": "106.44",
+      "totalPssKb": 108990,
+      "javaHeapKb": 10756,
+      "nativeHeapKb": 25436,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    },
+    "Location & GPS Map": {
+      "hash": "#/location",
+      "totalPssMb": "111.04",
+      "totalPssKb": 113701,
+      "javaHeapKb": 11272,
+      "nativeHeapKb": 27984,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    },
+    "Alerts": {
+      "hash": "#/alerts",
+      "totalPssMb": "110.66",
+      "totalPssKb": 113313,
+      "javaHeapKb": 10804,
+      "nativeHeapKb": 28056,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    },
+    "History & Charts": {
+      "hash": "#/history",
+      "totalPssMb": "112.18",
+      "totalPssKb": 114875,
+      "javaHeapKb": 10800,
+      "nativeHeapKb": 30620,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    },
+    "Reports": {
+      "hash": "#/reports",
+      "totalPssMb": "110.51",
+      "totalPssKb": 113159,
+      "javaHeapKb": 10788,
+      "nativeHeapKb": 28908,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    },
+    "Settings": {
+      "hash": "#/settings",
+      "totalPssMb": "111.57",
+      "totalPssKb": 114251,
+      "javaHeapKb": 10860,
+      "nativeHeapKb": 29912,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    }
+  },
+  "profileBTests": {
+    "Dashboard": {
+      "hash": "#/dashboard?train=12249",
+      "totalPssMb": "110.48",
+      "totalPssKb": 113131,
+      "javaHeapKb": 10788,
+      "nativeHeapKb": 28848,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    },
+    "Train Management": {
+      "hash": "#/trains",
+      "totalPssMb": "110.24",
+      "totalPssKb": 112887,
+      "javaHeapKb": 10816,
+      "nativeHeapKb": 28740,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    },
+    "All Tanks": {
+      "hash": "#/watertank",
+      "totalPssMb": "110.27",
+      "totalPssKb": 112920,
+      "javaHeapKb": 10788,
+      "nativeHeapKb": 28788,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    },
+    "Devices": {
+      "hash": "#/devices",
+      "totalPssMb": "110.45",
+      "totalPssKb": 113100,
+      "javaHeapKb": 10788,
+      "nativeHeapKb": 28956,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    },
+    "Location & GPS Map": {
+      "hash": "#/location",
+      "totalPssMb": "111.60",
+      "totalPssKb": 114278,
+      "javaHeapKb": 10852,
+      "nativeHeapKb": 29576,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    },
+    "Alerts": {
+      "hash": "#/alerts",
+      "totalPssMb": "111.68",
+      "totalPssKb": 114361,
+      "javaHeapKb": 10796,
+      "nativeHeapKb": 29664,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    },
+    "History & Charts": {
+      "hash": "#/history",
+      "totalPssMb": "111.42",
+      "totalPssKb": 114093,
+      "javaHeapKb": 10800,
+      "nativeHeapKb": 29792,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    },
+    "Reports": {
+      "hash": "#/reports",
+      "totalPssMb": "111.38",
+      "totalPssKb": 114053,
+      "javaHeapKb": 10796,
+      "nativeHeapKb": 29752,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    },
+    "Settings": {
+      "hash": "#/settings",
+      "totalPssMb": "111.52",
+      "totalPssKb": 114197,
+      "javaHeapKb": 10788,
+      "nativeHeapKb": 29876,
+      "graphicsKb": 0,
+      "cpuPercent": 0,
+      "cpuString": "+0% 6081/com.panorama.watertankmonitor: 0% user + 0% kernel"
+    }
+  },
+  "profileCTests": {
+    "name": "Dashboard (Baseline Steady-State)",
+    "totalPssMb": "114.15",
+    "totalPssKb": 116887,
+    "javaHeapKb": 11360,
+    "nativeHeapKb": 32688,
+    "graphicsKb": 0,
+    "cpuPercent": 0
+  },
+  "stressLoopResults": {
+    "startPssMb": "111.52",
+    "endPssMb": "118.74",
+    "memoryDeltaMb": "7.22",
+    "endCpuPercent": 0
+  },
+  "lifecycleTests": {
+    "backgroundPssMb": "115.44",
+    "restoredPssMb": "114.15",
+    "webViewAliveAfterPressure": true
+  },
+  "networkTests": {},
+  "crashesAndAnrs": {
+    "hasAnr": false,
+    "hasCrash": false,
+    "exitInfoSnippet": "ACTIVITY MANAGER PROCESS EXIT INFO (dumpsys activity exit-info)\r\nLast Timestamp of Persistence Into Persistent Storage: 1970-01-01 05:30:00.000\r\n  package: com.panorama.watertankmonitor\r\n    Historical Process Exit for userId=10167\r\n        ApplicationExitInfo #0:\r\n          timestamp=2026-11-16 12:05:44.228\r\n          pid=6109\r\n          realUid=99001\r\n          packageUid=10167\r\n          definingUid=10167\r\n          user=0\r\n          process=com.google.android.webview:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:0\r\n          reason=13 (OTHER KILLS BY SYSTEM)\r\n          status=0\r\n          importance=300\r\n          pss=73MB\r\n          rss=141MB\r\n          description=isolated not needed\r\n          state=empty\r\n          trace=null\r\n        ApplicationExitInfo #1:\r\n          timestamp=2026-11-16 12:05:44.216\r\n          pid=6081\r\n          realUid=10167\r\n          packageUid=10167\r\n          definingUid=10167\r\n          user=0\r\n          process=com.panorama.wat"
+  }
+}

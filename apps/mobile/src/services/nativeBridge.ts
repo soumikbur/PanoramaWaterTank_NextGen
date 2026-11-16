@@ -76,7 +76,8 @@ class NativeBridge {
     try {
       const StatusBar = this.getCapacitorPlugin('StatusBar');
       if (StatusBar) {
-        await StatusBar.setStyle({ style: 'DARK' }).catch(() => {});
+        await StatusBar.show().catch(() => {});
+        await StatusBar.setStyle({ style: 'LIGHT' }).catch(() => {});
         await StatusBar.setBackgroundColor({ color: '#FFFFFF' }).catch(() => {});
         await StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
         console.log('[NativeBridge] StatusBar configured.');
@@ -85,14 +86,12 @@ class NativeBridge {
       console.warn('[NativeBridge] StatusBar config warning:', err);
     }
 
-    // 2. Hide Splash Screen smoothly after DOM hydration
+    // 2. Hide Splash Screen immediately once native subsystems initialize
     try {
       const SplashScreen = this.getCapacitorPlugin('SplashScreen');
       if (SplashScreen) {
-        setTimeout(async () => {
-          await SplashScreen.hide({ fadeOutDuration: 400 }).catch(() => {});
-          console.log('[NativeBridge] SplashScreen hidden.');
-        }, 500);
+        await SplashScreen.hide().catch(() => {});
+        console.log('[NativeBridge] SplashScreen hidden.');
       }
     } catch (err) {
       console.warn('[NativeBridge] SplashScreen hide warning:', err);
@@ -160,8 +159,11 @@ class NativeBridge {
     }
   }
 
+  private lastNotificationTime: number = 0;
+
   /**
    * Schedule a high-priority native notification for critical SCADA alarms (e.g. Tank < 10%)
+   * Consolidated and throttled to prevent flooding Android NotificationManager under low-resource conditions.
    */
   public async scheduleAlarmNotification(options: {
     id?: number;
@@ -170,11 +172,30 @@ class NativeBridge {
     channelId?: string;
   }): Promise<void> {
     if (!this.isNative) return;
+
+    // Throttle notifications to prevent notification flooding (minimum 10s between audible alerts)
+    const now = Date.now();
+    if (now - this.lastNotificationTime < 10000 && !options.id) {
+      return;
+    }
+    this.lastNotificationTime = now;
+
     try {
       const LocalNotifications = this.getCapacitorPlugin('LocalNotifications');
       if (!LocalNotifications) return;
 
-      const notifId = options.id || Math.floor(Date.now() % 10000000);
+      // Deterministic notification ID: updates existing notification rather than creating infinite cards
+      let notifId = options.id;
+      if (!notifId) {
+        let hash = 0;
+        const str = options.channelId || options.title || 'alarm';
+        for (let i = 0; i < str.length; i++) {
+          hash = (hash << 5) - hash + str.charCodeAt(i);
+          hash |= 0;
+        }
+        notifId = (Math.abs(hash) % 90000) + 10000;
+      }
+
       await LocalNotifications.schedule({
         notifications: [
           {

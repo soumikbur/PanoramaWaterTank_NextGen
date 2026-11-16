@@ -53,6 +53,8 @@ export type ScreenName =
   | 'coach-details'
   | 'watertank'
   | 'devices'
+  | 'raw-data'
+  | 'mqtt-monitor'
   | 'location'
   | 'monitoring'
   | 'alerts'
@@ -285,11 +287,60 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   useEffect(() => {
-    // 1-second ticker to re-evaluate telemetry timeout dynamically
-    const interval = setInterval(() => {
+    // Low-resource optimization: 3-second ticker in foreground, completely paused in background
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    const startTicker = () => {
+      if (interval) return;
+      interval = setInterval(() => {
+        setTelemetryTick((t) => (t + 1) % 1000000);
+      }, 3000);
+    };
+
+    const stopTicker = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        stopTicker();
+      } else {
+        setTelemetryTick((t) => (t + 1) % 1000000);
+        startTicker();
+      }
+    };
+
+    const handleAppPaused = () => stopTicker();
+    const handleAppResumed = () => {
       setTelemetryTick((t) => (t + 1) % 1000000);
-    }, 1000);
-    return () => clearInterval(interval);
+      startTicker();
+    };
+
+    if (typeof document === 'undefined' || document.visibilityState !== 'hidden') {
+      startTicker();
+    }
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibility);
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('panorama:app_paused', handleAppPaused);
+      window.addEventListener('panorama:app_resumed', handleAppResumed);
+    }
+
+    return () => {
+      stopTicker();
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibility);
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('panorama:app_paused', handleAppPaused);
+        window.removeEventListener('panorama:app_resumed', handleAppResumed);
+      }
+    };
   }, []);
 
   const handleSetTelemetryTimeout = (seconds: number) => {
@@ -1809,7 +1860,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       AppRouter.navigate('login');
       return;
     }
-    const adminOnlyScreens: ScreenName[] = ['users', 'logs'];
+    const adminOnlyScreens: ScreenName[] = ['users', 'logs', 'mqtt-monitor', 'raw-data'];
     if (adminOnlyScreens.includes(screen) && currentUser?.role !== 'ADMIN') {
       setActiveScreen(screen); // App.tsx will gracefully render AccessDeniedScreen
       AppRouter.navigate(screen);

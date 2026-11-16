@@ -139,6 +139,34 @@ class DeviceRegistryService {
           }
         }
       }
+
+      // Ensure target hardware device is available in device registry
+      if (!this.devices.has('002F00654B42501203203533332') && !this.deletedUids.has('002F00654B42501203203533332')) {
+        this.devices.set('002F00654B42501203203533332', {
+          uid: '002F00654B42501203203533332',
+          name: 'WLI Hardware Node (002F...332)',
+          trainNumber: null,
+          coachNumber: null,
+          registrationStatus: 'REGISTERED',
+          assignmentStatus: 'AVAILABLE',
+          isOnline: false,
+          batteryPercent: 97,
+          batteryVoltage: 3.7,
+          tank1Level: 0,
+          tank1HeightCm: 50,
+          tank2Level: 0,
+          tank2HeightCm: 50,
+          valve1Normal: true,
+          valve2Normal: true,
+          latitude: 22.556949,
+          longitude: 88.352447,
+          speedKmh: 0.9,
+          lastSeen: 'Available for MQTT Stream',
+          lastSeenTimestamp: 0,
+          firstDiscovered: 'Hardware Node',
+          hardwareModel: 'WLI EC200U-CN Standard Node',
+        });
+      }
     } catch (e) {
       console.warn('[DeviceRegistry] Error reading storage, initializing fresh:', e);
     }

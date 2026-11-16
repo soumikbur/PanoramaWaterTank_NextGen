@@ -27,6 +27,7 @@ import { ReportsScreen } from './screens/ReportsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { UsersScreen } from './screens/UsersScreen';
 import { LogsScreen } from './screens/LogsScreen';
+import { MqttMonitorScreen } from './screens/MqttMonitorScreen';
 
 const AccessDeniedScreen: React.FC = () => {
   const { setActiveScreen } = useApp();
@@ -115,6 +116,7 @@ const MainContent: React.FC = () => {
           {activeScreen === 'coach-details' && <CoachDetailsScreen />}
           {activeScreen === 'watertank' && <WaterTankScreen />}
           {activeScreen === 'devices' && <DeviceMappingScreen />}
+          {(activeScreen === 'raw-data' || activeScreen === 'mqtt-monitor') && (isAdmin ? <MqttMonitorScreen /> : <AccessDeniedScreen />)}
           {activeScreen === 'location' && <LocationScreen />}
           {activeScreen === 'monitoring' && <MonitoringScreen />}
           {activeScreen === 'alerts' && <AlertsScreen />}

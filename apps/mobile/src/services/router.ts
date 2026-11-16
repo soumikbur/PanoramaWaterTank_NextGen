@@ -59,6 +59,9 @@ export class AppRouter {
       }
 
       if (screen) {
+        if (screen === 'mqtt-monitor') {
+          screen = 'raw-data';
+        }
         return {
           screen,
           trainNumber,
@@ -84,7 +87,8 @@ export class AppRouter {
   public static navigate(screen: string, trainNumber?: string, coachNumber?: string) {
     if (typeof window === 'undefined') return;
 
-    let targetHash = `#/${screen}`;
+    const normalizedScreen = screen === 'mqtt-monitor' ? 'raw-data' : screen;
+    let targetHash = `#/${normalizedScreen}`;
     const params = new URLSearchParams();
     if (trainNumber) params.set('train', trainNumber);
     if (coachNumber) params.set('coach', coachNumber);

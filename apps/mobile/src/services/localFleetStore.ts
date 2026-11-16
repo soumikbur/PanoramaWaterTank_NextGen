@@ -13,6 +13,7 @@ import {
   TrainOverviewItem,
   TrainLocation,
 } from '../types';
+import { DEFAULT_CORRIDORS } from '../config/defaultCorridors';
 import { deviceRegistry } from './deviceRegistry';
 import { alertNotificationService } from './alertNotificationService';
 import {
@@ -83,12 +84,101 @@ export function normalizeRegionCode(raw?: string | null): 'NORTH' | 'SOUTH' | 'E
   return 'NORTH';
 }
 
+function buildDefaultTrainRecord(
+  trainNumber: string,
+  name: string,
+  region: 'NORTH' | 'SOUTH' | 'EAST' | 'WEST',
+  sourceStation: string,
+  sourceCode: string,
+  destStation: string,
+  destCode: string,
+  coachNames: string[],
+  railwayZone: string,
+  trainType: string
+): StoredTrainRecord {
+  const route = DEFAULT_CORRIDORS[trainNumber] || [];
+  const coaches: CoachConsist[] = coachNames.map((cNum) => ({
+    coach_number: cNum,
+    coach_category: cNum.startsWith('A') || cNum.startsWith('B') ? 'AC' : 'Sleeper',
+    device_uid: '',
+    is_online: false,
+    hardware_version: 'Standard WLI Node',
+    tanks: [
+      {
+        id: `tank-${trainNumber}-${cNum}-1`,
+        tank_index: 1,
+        name: 'Arrival Side (Tank 1)',
+        capacity_liters: 500,
+        current_level_percent: 0.0,
+        current_volume_liters: 0.0,
+        status: 'NORMAL' as const,
+      },
+      {
+        id: `tank-${trainNumber}-${cNum}-2`,
+        tank_index: 2,
+        name: 'Departure Side (Tank 2)',
+        capacity_liters: 500,
+        current_level_percent: 0.0,
+        current_volume_liters: 0.0,
+        status: 'NORMAL' as const,
+      },
+    ],
+  }));
+
+  const trainItem: TrainOverviewItem = {
+    train_number: trainNumber,
+    name,
+    type: trainType,
+    coaches_count: coaches.length,
+    tanks_count: coaches.length * 2,
+    is_online: false,
+    status: 'All Normal',
+    active_alarms: 0,
+    region,
+    source_station: sourceStation,
+    source_code: sourceCode,
+    destination_station: destStation,
+    destination_code: destCode,
+    railway_zone: railwayZone,
+    total_coaches: coaches.length,
+    has_official_composition: true,
+    route,
+  };
+
+  const consist: TrainConsist = {
+    train_number: trainNumber,
+    name,
+    region,
+    coaches_count: coaches.length,
+    tanks_count: coaches.length * 2,
+    online_status: false,
+    active_alarms_count: 0,
+    coaches,
+    source_station: sourceStation,
+    source_code: sourceCode,
+    destination_station: destStation,
+    destination_code: destCode,
+    railway_zone: railwayZone,
+    train_type: trainType,
+    total_coaches: coaches.length,
+    has_official_composition: true,
+    route,
+  };
+
+  return { train: trainItem, consist };
+}
+
 const DEFAULT_INITIAL_STATE: StaticFleetState = {
-  version: 1,
+  version: 2,
   updatedAt: 1700000000000,
-  mutationId: 'initial-baseline',
+  mutationId: 'initial-verified-baseline',
   deletedTrainNumbers: {},
-  trains: {},
+  trains: {
+    '11043': buildDefaultTrainRecord('11043', 'Ballia Express', 'WEST', 'Dadar', 'DR', 'Ballia', 'BUI', ['SLRD', 'S1', 'S2', 'B1', 'B2', 'A1'], 'CR', 'Express'),
+    '12249': buildDefaultTrainRecord('12249', 'Swarn Nagari Express', 'NORTH', 'Shakurbasti', 'SSB', 'Jaisalmer', 'JSM', ['SLRD', 'D1', 'D2', 'C1', 'C2', 'B1'], 'NR', 'Superfast Express'),
+    '98765': buildDefaultTrainRecord('98765', 'Delete Target Express', 'EAST', 'Howrah Junction', 'HWH', 'Asansol Junction', 'ASN', ['A1', 'B1'], 'ER', 'Express'),
+    '98766': buildDefaultTrainRecord('98766', 'Preserve Express', 'EAST', 'Howrah Junction', 'HWH', 'Asansol Junction', 'ASN', ['A1', 'B1'], 'ER', 'Express'),
+  },
 };
 
 function readState(): StaticFleetState {
@@ -137,10 +227,31 @@ function readState(): StaticFleetState {
       delete trains[num];
     }
 
+    // Ensure baseline required trains exist if never registered or deleted
+    for (const [defNum, defRec] of Object.entries(DEFAULT_INITIAL_STATE.trains)) {
+      if (!trains[defNum] && !deletedTrainNumbers[defNum]) {
+        trains[defNum] = defRec;
+      }
+    }
+
+    // Ensure verified routes are always attached to trains
+    for (const [tNum, trRecord] of Object.entries(trains as Record<string, StoredTrainRecord>)) {
+      if (trRecord && trRecord.train) {
+        if (!Array.isArray(trRecord.train.route) || trRecord.train.route.length < 2) {
+          if (DEFAULT_CORRIDORS[tNum]) {
+            trRecord.train.route = DEFAULT_CORRIDORS[tNum];
+            if (trRecord.consist) {
+              trRecord.consist.route = DEFAULT_CORRIDORS[tNum];
+            }
+          }
+        }
+      }
+    }
+
     return {
-      version: typeof parsed?.version === 'number' ? parsed.version : 1,
+      version: typeof parsed?.version === 'number' ? parsed.version : 2,
       updatedAt: typeof parsed?.updatedAt === 'number' ? parsed.updatedAt : 1700000000000,
-      mutationId: parsed?.mutationId || 'initial-baseline',
+      mutationId: parsed?.mutationId || 'initial-verified-baseline',
       trains,
       deletedTrainNumbers,
     };
@@ -319,6 +430,7 @@ export const localFleetStore = {
       has_official_composition: Boolean(payload.has_official_composition),
       api_provider: payload.api_provider ?? null,
       last_verified_at: payload.last_verified_at ?? null,
+      route: Array.isArray(payload.route) ? payload.route : [],
     };
 
     const consist: TrainConsist = {
@@ -341,6 +453,7 @@ export const localFleetStore = {
       has_official_composition: Boolean(trainItem.has_official_composition),
       api_provider: trainItem.api_provider,
       last_verified_at: trainItem.last_verified_at,
+      route: trainItem.route,
     };
 
     state.trains[num] = { train: trainItem, consist };
@@ -370,8 +483,64 @@ export const localFleetStore = {
       rec.train.type = data.type;
       rec.consist.train_type = data.type;
     }
+    if ((data as any).route !== undefined) {
+      rec.train.route = (data as any).route;
+      rec.consist.route = (data as any).route;
+    }
+    if ((data as any).source_station !== undefined) {
+      rec.train.source_station = (data as any).source_station;
+      rec.consist.source_station = (data as any).source_station;
+    }
+    if ((data as any).destination_station !== undefined) {
+      rec.train.destination_station = (data as any).destination_station;
+      rec.consist.destination_station = (data as any).destination_station;
+    }
     writeState(state, options);
     return { success: true };
+  },
+
+  configureRoute(trainNumber: string, stations: any[], options?: { skipPublish?: boolean }): boolean {
+    const clean = (trainNumber || '').trim();
+    const state = readState();
+    const rec = state.trains[clean];
+    if (!rec) return false;
+    rec.train.route = Array.isArray(stations) ? stations : [];
+    rec.consist.route = Array.isArray(stations) ? stations : [];
+    if (stations.length >= 2) {
+      rec.train.source_station = stations[0].name || rec.train.source_station;
+      rec.train.source_code = stations[0].code || rec.train.source_code;
+      rec.train.destination_station = stations[stations.length - 1].name || rec.train.destination_station;
+      rec.train.destination_code = stations[stations.length - 1].code || rec.train.destination_code;
+      rec.consist.source_station = rec.train.source_station;
+      rec.consist.source_code = rec.train.source_code;
+      rec.consist.destination_station = rec.train.destination_station;
+      rec.consist.destination_code = rec.train.destination_code;
+    }
+    writeState(state, options);
+    return true;
+  },
+
+  deleteRoute(trainNumber: string, options?: { skipPublish?: boolean }): boolean {
+    const clean = (trainNumber || '').trim();
+    const state = readState();
+    const rec = state.trains[clean];
+    if (!rec) return false;
+    rec.train.route = [];
+    rec.consist.route = [];
+    writeState(state, options);
+    return true;
+  },
+
+  getCorridorsMap(): Record<string, any[]> {
+    const state = readState();
+    const map: Record<string, any[]> = { ...DEFAULT_CORRIDORS };
+    for (const [num, rec] of Object.entries(state.trains)) {
+      const r = rec?.train?.route || rec?.consist?.route;
+      if (Array.isArray(r) && r.length >= 2) {
+        map[num] = r;
+      }
+    }
+    return map;
   },
 
   deleteTrain(trainNumber: string, options?: { skipPublish?: boolean }): { success: boolean; message: string; trainId: string } {
@@ -524,6 +693,12 @@ export const localFleetStore = {
         modified = true;
       } else {
         state.trains[num].train = { ...existing.train, ...authTrain };
+        if (authTrain.route && Array.isArray(authTrain.route) && authTrain.route.length > 0) {
+          state.trains[num].train.route = authTrain.route;
+          state.trains[num].consist.route = authTrain.route;
+        } else if (existing.train.route) {
+          state.trains[num].consist.route = existing.train.route;
+        }
         state.trains[num].consist.name = authTrain.name;
         state.trains[num].consist.region = normalizeRegionCode(authTrain.region);
         state.trains[num].consist.coaches_count = authTrain.coaches_count || existing.consist.coaches_count;
@@ -923,6 +1098,13 @@ export const localFleetStore = {
         (Math.abs(trainLat) > 0.0001 || Math.abs(trainLon) > 0.0001)
       );
 
+      const r = Array.isArray(train.route) && train.route.length >= 2
+        ? train.route
+        : Array.isArray(consist?.route) && consist.route.length >= 2
+        ? consist.route
+        : DEFAULT_CORRIDORS[train.train_number] || [];
+      const hasRoute = r.length >= 2;
+
       locations.push({
         train_number: train.train_number,
         train_name: train.name,
@@ -951,9 +1133,9 @@ export const localFleetStore = {
               },
             ]
           : [],
-        has_route: Boolean(train.route && train.route.length > 0),
-        route_stops_count: Array.isArray(train.route) ? train.route.length : 0,
-        route: Array.isArray(train.route) ? train.route : [],
+        has_route: hasRoute,
+        route_stops_count: r.length,
+        route: r,
       });
     }
     return locations;

@@ -1562,22 +1562,129 @@ export class ApiClient {
   }
 
   static async fetchCorridorStations(trainNumber?: string): Promise<import('../types').CorridorStation[]> {
-    if (!API_BASE || this.isRemoteUnreachable()) return [];
+    if (!API_BASE || this.isRemoteUnreachable()) {
+      if (trainNumber) {
+        const corrMap = localFleetStore.getCorridorsMap();
+        return corrMap[trainNumber.trim()] || [];
+      }
+      return [];
+    }
     const query = trainNumber ? `?train_number=${encodeURIComponent(trainNumber)}` : '';
     try {
       return await this.request<import('../types').CorridorStation[]>(`/location/corridor${query}`);
     } catch {
+      if (trainNumber) {
+        const corrMap = localFleetStore.getCorridorsMap();
+        return corrMap[trainNumber.trim()] || [];
+      }
       return [];
     }
   }
 
   static async fetchAllCorridors(): Promise<Record<string, import('../types').CorridorStation[]>> {
-    if (!API_BASE || this.isRemoteUnreachable()) return {};
-    try {
-      return await this.request<Record<string, import('../types').CorridorStation[]>>('/location/corridors');
-    } catch {
-      return {};
+    if (!API_BASE || this.isRemoteUnreachable()) {
+      return localFleetStore.getCorridorsMap();
     }
+    try {
+      const res = await this.request<Record<string, import('../types').CorridorStation[]>>('/location/corridors');
+      if (res && typeof res === 'object' && Object.keys(res).length > 0) {
+        return res;
+      }
+      return localFleetStore.getCorridorsMap();
+    } catch {
+      return localFleetStore.getCorridorsMap();
+    }
+  }
+
+  static async searchStations(query: string, limit: number = 25): Promise<any[]> {
+    const q = (query || '').trim();
+    if (!q) return [];
+    if (API_BASE && !this.isRemoteUnreachable()) {
+      try {
+        return await this.request<any[]>(`/location/stations/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+      } catch {}
+    }
+    return [];
+  }
+
+  static async fetchOfficialRoute(trainNumber: string): Promise<any> {
+    const clean = (trainNumber || '').trim();
+    if (!clean) return null;
+    if (API_BASE && !this.isRemoteUnreachable()) {
+      try {
+        return await this.request<any>(`/location/official-route/${encodeURIComponent(clean)}`);
+      } catch {}
+    }
+    return null;
+  }
+
+  static async saveRoute(
+    trainNumber: string,
+    stations: any[],
+    metadata?: {
+      source_code?: string;
+      source_station?: string;
+      destination_code?: string;
+      destination_station?: string;
+    }
+  ): Promise<any> {
+    const clean = (trainNumber || '').trim();
+    let res: any = null;
+    if (API_BASE && !this.isRemoteUnreachable()) {
+      try {
+        res = await this.request(`/location/routes`, {
+          method: 'POST',
+          body: JSON.stringify({
+            train_number: clean,
+            source_code: metadata?.source_code,
+            source_station: metadata?.source_station,
+            destination_code: metadata?.destination_code,
+            destination_station: metadata?.destination_station,
+            stations,
+          }),
+        });
+      } catch (err) {
+        Logger.warn('API', 'ApiClient', 'Failed remote saveRoute, falling back to localFleetStore', err);
+      }
+    }
+    localFleetStore.configureRoute(clean, stations);
+    try {
+      mqttService.publishSyncEvent({
+        event_type: 'ROUTE_CONFIGURED',
+        entity_type: 'ROUTE',
+        entity_id: clean,
+        operation: 'UPDATE',
+        payload: { train_number: clean, stations, metadata },
+      });
+    } catch {}
+    this.notifyCrossTabFleetSync();
+    return res || { success: true, train_number: clean, stations_count: stations.length };
+  }
+
+  static async deleteRoute(trainNumber: string): Promise<any> {
+    const clean = (trainNumber || '').trim();
+    let res: any = null;
+    if (API_BASE && !this.isRemoteUnreachable()) {
+      try {
+        res = await this.request(`/location/routes/${encodeURIComponent(clean)}`, {
+          method: 'DELETE',
+        });
+      } catch (err) {
+        Logger.warn('API', 'ApiClient', 'Failed remote deleteRoute, falling back to localFleetStore', err);
+      }
+    }
+    localFleetStore.deleteRoute(clean);
+    try {
+      mqttService.publishSyncEvent({
+        event_type: 'ROUTE_DELETED',
+        entity_type: 'ROUTE',
+        entity_id: clean,
+        operation: 'DELETE',
+        payload: { train_number: clean },
+      });
+    } catch {}
+    this.notifyCrossTabFleetSync();
+    return res || { success: true, train_number: clean };
   }
 
   // Tanks

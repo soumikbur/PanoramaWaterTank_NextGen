@@ -154,6 +154,14 @@ export const Header: React.FC = () => {
       title: 'Devices',
       subtitle: 'Industrial IoT Hardware & Telemetry',
     },
+    'raw-data': {
+      title: 'Raw Data',
+      subtitle: 'Real-Time WLI Device Serial Terminal & Frame Inspector',
+    },
+    'mqtt-monitor': {
+      title: 'Raw Data',
+      subtitle: 'Real-Time WLI Device Serial Terminal & Frame Inspector',
+    },
     location: {
       title: 'Location',
       subtitle: 'Route intelligence & water refill monitoring',
@@ -202,6 +210,8 @@ export const Header: React.FC = () => {
     'coach-details': 'Coach Details',
     watertank: 'All Tanks',
     devices: 'Devices',
+    'raw-data': 'Raw Data',
+    'mqtt-monitor': 'Raw Data',
     location: 'Location',
     monitoring: 'Monitoring',
     alerts: 'Alerts',

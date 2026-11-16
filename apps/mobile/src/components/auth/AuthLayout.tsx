@@ -48,7 +48,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
         justifyContent: 'center',
         minHeight: '100vh',
         width: '100vw',
-        padding: '32px 16px',
+        padding: 'calc(32px + var(--safe-area-top, 0px)) calc(16px + var(--safe-area-right, 0px)) calc(32px + var(--safe-area-bottom, 0px)) calc(16px + var(--safe-area-left, 0px))',
         boxSizing: 'border-box',
         backgroundColor: '#F5F7FB',
         overflowY: 'auto',

@@ -59,6 +59,42 @@ export const CENTRAL_DELTA_SYNC_TOPIC = 'panorama/central/sync/v2';
 export const SYNC_EVENTS_TOPIC = 'panorama/sync/events';
 export const SYNC_WILDCARD_TOPIC = 'panorama/sync/#';
 
+export interface RawMqttFrame {
+  id: string;
+  topic: string;
+  payloadString: string;
+  payloadSize: number;
+  qos: number;
+  retained: boolean;
+  receivedAt: number;
+  receivedAtFormatted: string;
+  deviceTimestamp: string | null;
+  uid: string | null;
+  isJson: boolean;
+  parsedJson: Record<string, any> | null;
+  error?: string;
+}
+
+export function formatMqttTimestamp(date: Date = new Date()): string {
+  const pad = (n: number, z = 2) => String(n).padStart(z, '0');
+  const d = pad(date.getDate());
+  const m = pad(date.getMonth() + 1);
+  const y = date.getFullYear();
+  const hr = pad(date.getHours());
+  const min = pad(date.getMinutes());
+  const sec = pad(date.getSeconds());
+  const ms = pad(date.getMilliseconds(), 3);
+  return `${y}-${m}-${d} ${hr}:${min}:${sec}.${ms}`;
+}
+
+export function formatMqttMessageBlock(frame: RawMqttFrame): string {
+  const payloadFormatted =
+    frame.isJson && frame.parsedJson
+      ? JSON.stringify(frame.parsedJson, null, 4)
+      : frame.payloadString;
+  return `[${frame.receivedAtFormatted}] MQTT MESSAGE RECEIVED\n\nTOPIC:\n${frame.topic}\n\nPAYLOAD:\n${payloadFormatted}`;
+}
+
 export type TelemetryCallback = (payload: LiveTelemetryPayload) => void;
 export type MqttStatusCallback = (status: MqttConnectionStatus) => void;
 
@@ -77,6 +113,9 @@ export class MqttService {
   private centralUsersListeners: Set<(event: any) => void> = new Set();
   private centralDeltaListeners: Set<(event: any) => void> = new Set();
   private syncEventListeners: Set<(event: any) => void> = new Set();
+  private rawMessageListeners: Set<(frame: RawMqttFrame) => void> = new Set();
+  private rawMessageHistory: RawMqttFrame[] = [];
+  private dynamicSubscriptions: Map<string, number> = new Map();
   private seenSyncEventIds: Map<string, number> = new Map();
   private reconnectTimer: any = null;
   private staleTimer: any = null;
@@ -161,7 +200,72 @@ export class MqttService {
       this.client.onMessageArrived = (message: any) => {
         try {
           const destination = message.destinationName || message.topic || '';
-          const payloadStr = message.payloadString;
+          const payloadStr = typeof message.payloadString === 'string' ? message.payloadString : String(message.payloadBytes || '');
+          const qos = typeof message.qos === 'number' ? message.qos : 0;
+          const retained = Boolean(message.retained);
+          const receivedDate = new Date();
+          const receivedAt = receivedDate.getTime();
+          const receivedAtFormatted = formatMqttTimestamp(receivedDate);
+          const payloadSize = typeof Blob !== 'undefined' ? new Blob([payloadStr]).size : payloadStr.length;
+
+          let isJson = false;
+          let parsedJson: Record<string, any> | null = null;
+          let deviceTimestamp: string | null = null;
+          let uid: string | null = null;
+          let parseError: string | undefined = undefined;
+
+          try {
+            parsedJson = JSON.parse(payloadStr);
+            if (parsedJson && typeof parsedJson === 'object') {
+              isJson = true;
+              if (parsedJson.time && typeof parsedJson.time === 'string') {
+                deviceTimestamp = parsedJson.time;
+              }
+              if (parsedJson.uid) {
+                uid = String(parsedJson.uid);
+              } else if (parsedJson.deviceId) {
+                uid = String(parsedJson.deviceId);
+              }
+            }
+          } catch (e: any) {
+            isJson = false;
+            parseError = e?.message || 'Malformed JSON';
+          }
+
+          if (!uid && destination) {
+            const parts = destination.split('/');
+            uid = parts[0] || parts[parts.length - 1] || null;
+          }
+
+          const frame: RawMqttFrame = {
+            id: `mqtt-${receivedAt}-${Math.random().toString(36).substring(2, 7)}`,
+            topic: destination,
+            payloadString: payloadStr,
+            payloadSize,
+            qos,
+            retained,
+            receivedAt,
+            receivedAtFormatted,
+            deviceTimestamp,
+            uid,
+            isJson,
+            parsedJson,
+            error: parseError,
+          };
+
+          this.rawMessageHistory.push(frame);
+          if (this.rawMessageHistory.length > 1000) {
+            this.rawMessageHistory.shift();
+          }
+
+          this.rawMessageListeners.forEach((cb) => {
+            try {
+              cb(frame);
+            } catch (err) {
+              console.error('[MQTT] Raw message listener error:', err);
+            }
+          });
+
           if (destination === SYNC_EVENTS_TOPIC || destination.startsWith('panorama/sync/')) {
             this.handleSyncEvent(payloadStr);
             return;
@@ -226,6 +330,17 @@ export class MqttService {
               this.client.subscribe(`${DEFAULT_MQTT_TOPIC}/s`, { qos: 1 });
               this.client.subscribe(`${DEFAULT_MQTT_TOPIC}/#`, { qos: 1 });
             }
+            // Target hardware device telemetry topics
+            this.client.subscribe('002F00654B42501203203533332', { qos: 1 });
+            this.client.subscribe('002F00654B42501203203533332/s', { qos: 1 });
+            this.client.subscribe('002F00654B42501203203533332/#', { qos: 1 });
+            this.client.subscribe('002F00654B425012032053332', { qos: 1 });
+            this.client.subscribe('002F00654B425012032053332/s', { qos: 1 });
+            this.client.subscribe('002F00654B425012032053332/#', { qos: 1 });
+            this.client.subscribe('panorama/telemetry/002F00654B42501203203533332', { qos: 1 });
+            this.client.subscribe('panorama/telemetry/002F00654B425012032053332', { qos: 1 });
+            this.client.subscribe('panorama/telemetry/#', { qos: 1 });
+
             this.client.subscribe(CENTRAL_FLEET_TOPIC, { qos: 1 });
             this.client.subscribe(CENTRAL_DEVICES_TOPIC, { qos: 1 });
             this.client.subscribe(CENTRAL_SETTINGS_TOPIC, { qos: 1 });
@@ -233,6 +348,17 @@ export class MqttService {
             this.client.subscribe(CENTRAL_DELTA_SYNC_TOPIC, { qos: 1 });
             this.client.subscribe('panorama/fleet/sync', { qos: 1 });
             this.client.subscribe('panorama/devices/sync', { qos: 1 });
+
+            // Re-subscribe to all dynamic topic subscriptions
+            this.dynamicSubscriptions.forEach((qos, top) => {
+              try {
+                this.client.subscribe(top, { qos });
+                console.info(`[MQTT] Re-subscribed to dynamic topic: ${top} (QoS ${qos})`);
+              } catch (dynErr) {
+                console.warn(`[MQTT] Failed to resubscribe to dynamic topic ${top}:`, dynErr);
+              }
+            });
+
             this.topicSubscribed = true;
           } catch (subErr) {
             this.topicSubscribed = false;
@@ -862,6 +988,91 @@ export class MqttService {
       this.publish(CENTRAL_DELTA_SYNC_TOPIC, fullEvent, false, 1);
     }
     return p1;
+  }
+
+  public subscribeTopic(topic: string, qos: number = 0): boolean {
+    const cleanTopic = topic.trim();
+    if (!cleanTopic) return false;
+    this.dynamicSubscriptions.set(cleanTopic, qos);
+    if (this.client && this.client.isConnected && this.client.isConnected()) {
+      try {
+        this.client.subscribe(cleanTopic, { qos });
+        console.info(`[MQTT] Subscribed to topic: ${cleanTopic} (QoS ${qos})`);
+        return true;
+      } catch (err) {
+        console.error(`[MQTT] Failed to subscribe to ${cleanTopic}:`, err);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  public unsubscribeTopic(topic: string): boolean {
+    const cleanTopic = topic.trim();
+    if (!cleanTopic) return false;
+    this.dynamicSubscriptions.delete(cleanTopic);
+    if (this.client && this.client.isConnected && this.client.isConnected()) {
+      try {
+        this.client.unsubscribe(cleanTopic);
+        console.info(`[MQTT] Unsubscribed from topic: ${cleanTopic}`);
+        return true;
+      } catch (err) {
+        console.error(`[MQTT] Failed to unsubscribe from ${cleanTopic}:`, err);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  public getSubscribedTopics(): string[] {
+    return Array.from(this.dynamicSubscriptions.keys());
+  }
+
+  public onRawMessage(callback: (frame: RawMqttFrame) => void): () => void {
+    this.rawMessageListeners.add(callback);
+    return () => {
+      this.rawMessageListeners.delete(callback);
+    };
+  }
+
+  public getRawMessages(): RawMqttFrame[] {
+    return [...this.rawMessageHistory];
+  }
+
+  public clearRawMessages(): void {
+    this.rawMessageHistory = [];
+  }
+
+  public getBrokerInfo(): {
+    host: string;
+    port: number;
+    path: string;
+    useSSL: boolean;
+    status: MqttConnectionStatus;
+  } {
+    return {
+      host: this.brokerHost,
+      port: this.brokerPort,
+      path: this.brokerPath,
+      useSSL: this.useSSL,
+      status: this.status,
+    };
+  }
+
+  public reconfigureBroker(host: string, port: number, path: string = '/mqtt', useSSL: boolean = true): void {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem('panorama_mqtt_host', host);
+      localStorage.setItem('panorama_mqtt_port', String(port));
+      localStorage.setItem('panorama_mqtt_ssl', String(useSSL));
+    }
+    this.brokerHost = host;
+    this.brokerPort = port;
+    this.brokerPath = path;
+    this.useSSL = useSSL;
+    this.disconnect();
+    setTimeout(() => {
+      this.connect();
+    }, 500);
   }
 
   disconnect(): void {

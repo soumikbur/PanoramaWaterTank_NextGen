@@ -75,6 +75,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           fontFamily: typography.fontFamily,
           color: 'var(--color-text-primary, #0F172A)',
           boxSizing: 'border-box',
+          paddingTop: 'var(--safe-area-top, 0px)',
+          paddingBottom: 'var(--safe-area-bottom, 0px)',
+          paddingLeft: 'var(--safe-area-left, 0px)',
+          paddingRight: 'var(--safe-area-right, 0px)',
         } as React.CSSProperties
       }
     >

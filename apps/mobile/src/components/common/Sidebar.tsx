@@ -26,6 +26,7 @@ import {
   Droplet,
   X,
   RadioTower,
+  Terminal,
 } from 'lucide-react';
 import { useDisplayPreferences } from '../../context/DisplayPreferencesContext';
 
@@ -102,6 +103,7 @@ export const Sidebar: React.FC = () => {
     { id: 'trains', label: 'Train Management', icon: Train },
     { id: 'watertank', label: 'All Tanks', icon: Gauge },
     { id: 'devices', label: 'Devices', icon: Cpu },
+    ...(isAdmin ? [{ id: 'raw-data' as ScreenName, label: 'Raw Data', icon: Terminal }] : []),
     { id: 'location', label: 'Location', icon: MapPin },
     { id: 'alerts', label: 'Alerts', icon: AlertTriangle, badge: unackedAlertCount },
     { id: 'history', label: 'History', icon: LineChart },
@@ -358,6 +360,8 @@ export const Sidebar: React.FC = () => {
               ? activeScreen === 'dashboard'
               : item.id === 'trains'
               ? activeScreen === 'trains' || activeScreen === 'coaches' || activeScreen === 'coach-details'
+              : item.id === 'raw-data'
+              ? activeScreen === 'raw-data' || activeScreen === 'mqtt-monitor'
               : activeScreen === item.id;
           const IconComp = item.icon;
 
@@ -802,6 +806,8 @@ export const Sidebar: React.FC = () => {
                 const isActive =
                   item.id === 'trains'
                     ? activeScreen === 'trains' || activeScreen === 'coaches' || activeScreen === 'coach-details'
+                    : item.id === 'raw-data'
+                    ? activeScreen === 'raw-data' || activeScreen === 'mqtt-monitor'
                     : activeScreen === item.id;
                 const IconComp = item.icon;
                 return (

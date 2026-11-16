@@ -27,8 +27,8 @@ export const NOTIFICATION_CONFIG = {
     return ALERT_REMINDER_INTERVAL_MS;
   },
 
-  /** Scheduler tick resolution in milliseconds */
-  REMINDER_CHECK_INTERVAL_MS: 1000,
+  /** Scheduler tick resolution in milliseconds (optimized for low-end devices: 5s interval) */
+  REMINDER_CHECK_INTERVAL_MS: 5000,
 
   /** Maximum alert history records kept in local storage */
   MAX_HISTORY_ENTRIES: 200,
