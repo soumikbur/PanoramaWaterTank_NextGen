@@ -12,6 +12,7 @@ const SCADA_MODULES = [
   { id: 'coach-details', hash: '#/coach-details', name: 'Coach Telemetry & Dual Tanks' },
   { id: 'watertank', hash: '#/watertank', name: 'All Tanks Overview' },
   { id: 'devices', hash: '#/devices', name: 'Device Hardware Registry' },
+  { id: 'raw-data', hash: '#/raw-data', name: 'Live MQTT Raw Data Monitor' },
   { id: 'location', hash: '#/location', name: 'GPS Corridor Tracking' },
   { id: 'monitoring', hash: '#/monitoring', name: 'Live Telemetry Monitoring' },
   { id: 'alerts', hash: '#/alerts', name: 'Alarm & Notification Center' },

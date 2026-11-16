@@ -608,7 +608,7 @@ All configuration parameters are managed through environment variables. Copy `co
 
 | Issue | Likely Cause | Resolution Steps |
 |:---|:---|:---|
-| **Remote Backend Unreachable** | Backend is stopped or loopback IP incorrect on emulator. | 1. Run `curl http://127.0.0.1:8000/api/v1/health`.<br>2. On Android emulators, ensure API base resolves to `10.0.2.2:8000`. |
+| **Remote Backend Unreachable** | Stale local loopback in `localStorage`, backend offline, or mixed-content on HTTPS. | 1. The client now automatically invalidates stale `http://localhost:8000` overrides when running over HTTPS or Capacitor.<br>2. On local dev, verify `curl.exe http://127.0.0.1:8000/api/v1/health`.<br>3. In production, requests default safely to Render (`https://panorama-water-tank-backend.onrender.com/api/v1`). |
 | **PostgreSQL Connection Refused** | PostgreSQL container is stopped or invalid credentials. | 1. Check `docker ps` or `pg_isready -p 5432`.<br>2. Verify `DATABASE_URL` credentials in `backend/.env`. |
 | **MQTT Broker Disconnected** | Port 8884 / 1883 blocked by firewall. | 1. Verify `curl -I https://broker.hivemq.com:8884/mqtt`.<br>2. Ensure WebSocket TLS protocol is allowed. |
 | **Device Telemetry Not Arriving** | Topic mismatch or hardware modem disconnected. | 1. Confirm topic `002F00654B42501320353332` in Raw Data Monitor.<br>2. Check cellular LED on Quectel EC200U modem. |

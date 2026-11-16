@@ -11,6 +11,18 @@ export const DEFAULT_PRODUCTION_API_URL = 'https://panorama-water-tank-backend.o
 export const DEFAULT_LOCAL_API_URL = 'http://127.0.0.1:8000/api/v1';
 export const DEFAULT_PRODUCTION_WS_URL = 'wss://panorama-water-tank-backend.onrender.com/api/v1/ws/live';
 
+// Compile-time bundled environment variables (replaced directly by esbuild define)
+declare const process: any;
+const BUNDLED_API_URL: string =
+  (typeof process !== 'undefined' && process.env && process.env.VITE_API_BASE_URL) ?
+    String(process.env.VITE_API_BASE_URL) :
+    DEFAULT_PRODUCTION_API_URL;
+
+const BUNDLED_WS_URL: string =
+  (typeof process !== 'undefined' && process.env && process.env.VITE_WS_URL) ?
+    String(process.env.VITE_WS_URL) :
+    DEFAULT_PRODUCTION_WS_URL;
+
 export const STORAGE_KEY_API_URL = 'panorama_backend_url';
 export const STORAGE_KEY_WS_URL = 'panorama_ws_url';
 export const STORAGE_KEY_BACKEND_VERIFIED = 'panorama_backend_verified';
@@ -35,9 +47,9 @@ export function isValidHttpUrl(urlCandidate: string): boolean {
 /**
  * Resolves the active REST API Base URL with strict precedence:
  * 1. User manual runtime override in localStorage (`panorama_backend_url`).
- * 2. Local loopback / development host detection (localhost, 127.0.0.1, 10.0.2.2).
- * 3. Vite / process environment variable injection (`VITE_API_BASE_URL`).
- * 4. Production backend URL default.
+ * 2. Bundled environment configuration injected at compile-time (`VITE_API_BASE_URL`).
+ * 3. Default production backend URL (`DEFAULT_PRODUCTION_API_URL`).
+ * Note: Never defaults to localhost for Android Capacitor or deployed production clients.
  */
 export function resolveApiBaseUrl(): string {
   // 1. Manual user override stored in localStorage
@@ -45,54 +57,35 @@ export function resolveApiBaseUrl(): string {
     try {
       const custom = window.localStorage.getItem(STORAGE_KEY_API_URL);
       if (custom && custom.trim() && isValidHttpUrl(custom.trim())) {
-        return custom.trim().replace(/\/+$/, '');
+        const clean = custom.trim().replace(/\/+$/, '');
+        const isLoopback = clean.includes('localhost') || clean.includes('127.0.0.1') || clean.includes('10.0.2.2');
+        const isHttpsHost = typeof window !== 'undefined' && window.location && window.location.protocol === 'https:';
+        if (isLoopback && (isHttpsHost || isAndroidCapacitorApp())) {
+          window.localStorage.removeItem(STORAGE_KEY_API_URL);
+        } else {
+          return clean;
+        }
       }
     } catch {}
   }
 
-  // 2. Build-time environment variable injection (e.g. production build)
-  const envUrl =
-    (typeof process !== 'undefined' && (
-      process.env?.VITE_API_BASE_URL ||
-      process.env?.VITE_BACKEND_URL ||
-      process.env?.VITE_API_URL ||
-      process.env?.API_BASE_URL ||
-      process.env?.API_URL ||
-      process.env?.REACT_APP_API_URL
-    )) ||
-    (typeof import.meta !== 'undefined' && (
-      (import.meta as any).env?.VITE_API_BASE_URL ||
-      (import.meta as any).env?.VITE_BACKEND_URL ||
-      (import.meta as any).env?.VITE_API_URL
-    ));
-
-  if (envUrl && String(envUrl).trim()) {
-    const clean = String(envUrl).trim().replace(/\/+$/, '');
-    if (isValidHttpUrl(clean)) {
-      return clean;
-    }
-  }
-
-  // 3. Android Capacitor native environment check
+  // 2. Android Capacitor native environment check: always use production backend by default
   if (typeof window !== 'undefined' && isAndroidCapacitorApp()) {
-    // In Android emulator, host development machine loopback is at 10.0.2.2:8000
-    return 'http://10.0.2.2:8000/api/v1';
+    return DEFAULT_PRODUCTION_API_URL;
   }
 
-  // 4. Local desktop / web development loopback
+  // 3. Local desktop FastAPI server detection (only when the web client itself is served from port 8000)
   if (typeof window !== 'undefined' && window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
     const host = window.location.hostname || '127.0.0.1';
     const port = window.location.port || '';
-    if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0') {
-      if (port === '8000') {
-        return `http://${host}:${port}/api/v1`;
-      }
-      return `http://127.0.0.1:8000/api/v1`;
+    if ((host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0') && port === '8000') {
+      return `http://${host}:${port}/api/v1`;
     }
-    // Hosted GitHub Pages or custom web domain without build envUrl
-    if (host.endsWith('github.io') || host.endsWith('vercel.app')) {
-      return DEFAULT_PRODUCTION_API_URL;
-    }
+  }
+
+  // 4. Build-time environment variable injection
+  if (BUNDLED_API_URL && isValidHttpUrl(BUNDLED_API_URL)) {
+    return BUNDLED_API_URL.replace(/\/+$/, '');
   }
 
   // 5. Default production backend URL
@@ -108,7 +101,14 @@ export function resolveWsUrl(): string {
     try {
       const customWs = window.localStorage.getItem(STORAGE_KEY_WS_URL);
       if (customWs && customWs.trim()) {
-        return customWs.trim();
+        const cleanWs = customWs.trim();
+        const isWsLoopback = cleanWs.includes('localhost') || cleanWs.includes('127.0.0.1') || cleanWs.includes('10.0.2.2');
+        const isHttpsHost = typeof window !== 'undefined' && window.location && window.location.protocol === 'https:';
+        if (isWsLoopback && (isHttpsHost || isAndroidCapacitorApp())) {
+          window.localStorage.removeItem(STORAGE_KEY_WS_URL);
+        } else {
+          return cleanWs;
+        }
       }
     } catch {}
   }
