@@ -6,6 +6,7 @@ import {
   RawMqttFrame,
   formatMqttTimestamp,
 } from '../services/mqttService';
+import { deviceRegistry, ManagedDevice } from '../services/deviceRegistry';
 import {
   Terminal,
   Play,
@@ -24,30 +25,177 @@ import {
   RefreshCw,
   Wifi,
   WifiOff,
-  Plus,
-  Layers,
-  ArrowDownLeft,
+  Filter,
 } from 'lucide-react';
 
-export const TARGET_MQTT_TOPIC = '002F00654B42501320353332';
+export const DEFAULT_HARDWARE_UID = '002F00654B42501320353332';
+export const TARGET_MQTT_TOPIC = DEFAULT_HARDWARE_UID;
 const MAX_MESSAGE_BUFFER = 500;
 
+/**
+ * Strict 15 telemetry fields permitted in the Raw Data console.
+ * Strictly in canonical order per the industrial specification.
+ */
+export const ALLOWED_TELEMETRY_FIELDS = [
+  'uid',
+  'lat',
+  'long',
+  'speed',
+  'time',
+  'cm1',
+  'cm2',
+  'wlp1',
+  'wlp2',
+  'wlv1',
+  'wlv2',
+  'bat',
+  'temp',
+  'chno',
+  'trno',
+] as const;
+
+export type TelemetryFieldKey = typeof ALLOWED_TELEMETRY_FIELDS[number];
+
+export interface CleanDeviceTelemetry {
+  uid: string;
+  lat: number | null;
+  long: number | null;
+  speed: number | null;
+  time: string | null;
+  cm1: number | null;
+  cm2: number | null;
+  wlp1: number | null;
+  wlp2: number | null;
+  wlv1: boolean | null;
+  wlv2: boolean | null;
+  bat: number | null;
+  temp: number | null;
+  chno: string | null;
+  trno: string | null;
+}
+
+export interface CleanTelemetryFrame {
+  id: string;
+  topic: string;
+  receivedAt: number;
+  receivedAtFormatted: string; // Broker reception timestamp (e.g. 2026-11-16 12:20:23.444)
+  deviceTimestamp: string | null; // Device internal time (e.g. "12:20:14")
+  payload: CleanDeviceTelemetry;
+  rawJsonString: string;
+  qos: number;
+  payloadSize: number;
+}
+
+/**
+ * Filter an incoming MQTT payload strictly to the 15 telemetry fields.
+ * Discards fleet synchronization, configuration JSON, train metadata,
+ * deleted train records, and unrelated device messages.
+ */
+export function filterDeviceTelemetry(
+  raw: any,
+  expectedUid: string
+): CleanDeviceTelemetry | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return null;
+  }
+
+  // Reject fleet-wide configuration, train metadata, or synchronization packets
+  if (
+    'trains' in raw ||
+    'devices' in raw ||
+    'consist' in raw ||
+    'settings' in raw ||
+    'action' in raw ||
+    'fleet' in raw ||
+    'delta' in raw ||
+    'event' in raw ||
+    'eventType' in raw ||
+    'sync_type' in raw
+  ) {
+    return null;
+  }
+
+  // Extract UID
+  const rawUid = raw.uid !== undefined ? String(raw.uid).trim() : (raw.deviceId !== undefined ? String(raw.deviceId).trim() : null);
+  if (!rawUid) {
+    return null;
+  }
+
+  // Strict UID validation against selected device
+  if (expectedUid && rawUid !== expectedUid.trim()) {
+    return null;
+  }
+
+  // Construct projected object with strictly allowed fields in canonical order
+  const result: CleanDeviceTelemetry = {
+    uid: rawUid,
+    lat: raw.lat !== undefined ? (typeof raw.lat === 'number' ? raw.lat : (Number.isFinite(Number(raw.lat)) ? Number(raw.lat) : null)) : null,
+    long: raw.long !== undefined ? (typeof raw.long === 'number' ? raw.long : (Number.isFinite(Number(raw.long)) ? Number(raw.long) : null)) : (raw.lon !== undefined ? (typeof raw.lon === 'number' ? raw.lon : (Number.isFinite(Number(raw.lon)) ? Number(raw.lon) : null)) : null),
+    speed: raw.speed !== undefined ? (typeof raw.speed === 'number' ? raw.speed : (Number.isFinite(Number(raw.speed)) ? Number(raw.speed) : null)) : null,
+    time: raw.time !== undefined && raw.time !== null ? String(raw.time) : null,
+    cm1: raw.cm1 !== undefined ? (typeof raw.cm1 === 'number' ? raw.cm1 : (Number.isFinite(Number(raw.cm1)) ? Number(raw.cm1) : null)) : null,
+    cm2: raw.cm2 !== undefined ? (typeof raw.cm2 === 'number' ? raw.cm2 : (Number.isFinite(Number(raw.cm2)) ? Number(raw.cm2) : null)) : null,
+    wlp1: raw.wlp1 !== undefined ? (typeof raw.wlp1 === 'number' ? raw.wlp1 : (Number.isFinite(Number(raw.wlp1)) ? Number(raw.wlp1) : null)) : null,
+    wlp2: raw.wlp2 !== undefined ? (typeof raw.wlp2 === 'number' ? raw.wlp2 : (Number.isFinite(Number(raw.wlp2)) ? Number(raw.wlp2) : null)) : null,
+    wlv1: raw.wlv1 !== undefined ? (typeof raw.wlv1 === 'boolean' ? raw.wlv1 : Boolean(raw.wlv1)) : (raw.wlvl !== undefined ? (typeof raw.wlvl === 'boolean' ? raw.wlvl : Boolean(raw.wlvl)) : null),
+    wlv2: raw.wlv2 !== undefined ? (typeof raw.wlv2 === 'boolean' ? raw.wlv2 : Boolean(raw.wlv2)) : null,
+    bat: raw.bat !== undefined ? (typeof raw.bat === 'number' ? raw.bat : (Number.isFinite(Number(raw.bat)) ? Number(raw.bat) : null)) : null,
+    temp: raw.temp !== undefined ? (typeof raw.temp === 'number' ? raw.temp : (Number.isFinite(Number(raw.temp)) ? Number(raw.temp) : null)) : null,
+    chno: raw.chno !== undefined && raw.chno !== null ? String(raw.chno) : null,
+    trno: raw.trno !== undefined && raw.trno !== null ? String(raw.trno) : null,
+  };
+
+  return result;
+}
+
+/**
+ * Format telemetry to clean JSON string with exact 2-space indentation,
+ * canonical field ordering, and float precision formatting for 0.0 parity with MQTT.fx.
+ */
+export function formatTelemetryJson(t: CleanDeviceTelemetry): string {
+  const lines: string[] = ['{'];
+  const keys = ALLOWED_TELEMETRY_FIELDS;
+  keys.forEach((k, idx) => {
+    const val = (t as any)[k];
+    const isLast = idx === keys.length - 1;
+    let renderedVal: string;
+    if (typeof val === 'string') {
+      renderedVal = `"${val}"`;
+    } else if (typeof val === 'number') {
+      renderedVal = (['cm1', 'cm2', 'wlp1', 'wlp2', 'bat', 'temp', 'speed'].includes(k) && val % 1 === 0)
+        ? val.toFixed(1)
+        : String(val);
+    } else if (typeof val === 'boolean') {
+      renderedVal = String(val);
+    } else {
+      renderedVal = 'null';
+    }
+    lines.push(`  "${k}": ${renderedVal}${isLast ? '' : ','}`);
+  });
+  lines.push('}');
+  return lines.join('\n');
+}
+
 interface JsonSyntaxViewerProps {
-  data: any;
+  data: CleanDeviceTelemetry;
   onCopyValue?: (key: string, val: any) => void;
 }
 
+/**
+ * Syntax-highlighted JSON viewer matching MQTT.fx Plain Text / JSON Decoder.
+ * Renders keys in blue, numbers in orange, strings in green, booleans in coral, and null in gray.
+ */
 const JsonSyntaxViewer: React.FC<JsonSyntaxViewerProps> = ({ data, onCopyValue }) => {
-  if (data === null || data === undefined) {
+  if (!data || typeof data !== 'object') {
     return <span style={{ color: '#8B949E' }}>null</span>;
   }
 
-  const renderValue = (val: any, path: string = ''): React.ReactNode => {
+  const renderValue = (val: any, keyName: string): React.ReactNode => {
     if (typeof val === 'string') {
       return (
         <span
-          title="Click to copy string value"
-          onClick={() => onCopyValue?.(path, val)}
+          title={`Click to copy ${keyName}`}
+          onClick={() => onCopyValue?.(keyName, val)}
           style={{ color: '#7EE787', cursor: 'pointer' }}
         >
           &quot;{val}&quot;
@@ -55,21 +203,24 @@ const JsonSyntaxViewer: React.FC<JsonSyntaxViewerProps> = ({ data, onCopyValue }
       );
     }
     if (typeof val === 'number') {
+      const formattedNum = (['cm1', 'cm2', 'wlp1', 'wlp2', 'bat', 'temp', 'speed'].includes(keyName) && val % 1 === 0)
+        ? val.toFixed(1)
+        : String(val);
       return (
         <span
-          title="Click to copy number"
-          onClick={() => onCopyValue?.(path, val)}
+          title={`Click to copy ${keyName}`}
+          onClick={() => onCopyValue?.(keyName, val)}
           style={{ color: '#FFA657', cursor: 'pointer', fontWeight: 600 }}
         >
-          {val}
+          {formattedNum}
         </span>
       );
     }
     if (typeof val === 'boolean') {
       return (
         <span
-          title="Click to copy boolean"
-          onClick={() => onCopyValue?.(path, val)}
+          title={`Click to copy ${keyName}`}
+          onClick={() => onCopyValue?.(keyName, val)}
           style={{ color: '#FF7B72', cursor: 'pointer', fontWeight: 700 }}
         >
           {String(val)}
@@ -77,53 +228,19 @@ const JsonSyntaxViewer: React.FC<JsonSyntaxViewerProps> = ({ data, onCopyValue }
       );
     }
     if (val === null) {
-      return <span style={{ color: '#8B949E' }}>null</span>;
-    }
-    if (Array.isArray(val)) {
-      if (val.length === 0) return <span>[]</span>;
       return (
-        <span>
-          [
-          <div style={{ paddingLeft: '18px' }}>
-            {val.map((item, idx) => (
-              <div key={idx} style={{ lineHeight: '18px' }}>
-                {renderValue(item, `${path}[${idx}]`)}
-                {idx < val.length - 1 ? <span style={{ color: '#8B949E' }}>,</span> : ''}
-              </div>
-            ))}
-          </div>
-          ]
-        </span>
-      );
-    }
-    if (typeof val === 'object') {
-      const keys = Object.keys(val);
-      if (keys.length === 0) return <span>{'{}'}</span>;
-      return (
-        <span>
-          {'{'}
-          <div style={{ paddingLeft: '18px' }}>
-            {keys.map((k, idx) => (
-              <div key={k} style={{ lineHeight: '18px' }}>
-                <span
-                  title="Click to copy key name"
-                  onClick={() => onCopyValue?.(k, k)}
-                  style={{ color: '#79C0FF', cursor: 'pointer' }}
-                >
-                  &quot;{k}&quot;
-                </span>
-                <span style={{ color: '#C9D1D9' }}>: </span>
-                {renderValue(val[k], path ? `${path}.${k}` : k)}
-                {idx < keys.length - 1 ? <span style={{ color: '#8B949E' }}>,</span> : ''}
-              </div>
-            ))}
-          </div>
-          {'}'}
+        <span
+          title={`${keyName} is missing/null`}
+          style={{ color: '#8B949E', fontStyle: 'italic' }}
+        >
+          null
         </span>
       );
     }
     return <span>{String(val)}</span>;
   };
+
+  const keys = ALLOWED_TELEMETRY_FIELDS;
 
   return (
     <pre
@@ -131,25 +248,53 @@ const JsonSyntaxViewer: React.FC<JsonSyntaxViewerProps> = ({ data, onCopyValue }
         margin: 0,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
         fontSize: '12px',
-        lineHeight: '18px',
+        lineHeight: '19px',
         color: '#C9D1D9',
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-word',
+        whiteSpace: 'pre',
       }}
     >
-      {renderValue(data)}
+      {'{'}{'\n'}
+      {keys.map((k, idx) => {
+        const val = (data as any)[k];
+        const isLast = idx === keys.length - 1;
+        return (
+          <div key={k} style={{ paddingLeft: '20px' }}>
+            <span
+              title={`Click to copy "${k}"`}
+              onClick={() => onCopyValue?.(k, k)}
+              style={{ color: '#79C0FF', cursor: 'pointer' }}
+            >
+              &quot;{k}&quot;
+            </span>
+            <span style={{ color: '#C9D1D9' }}>: </span>
+            {renderValue(val, k)}
+            {!isLast ? <span style={{ color: '#8B949E' }}>,</span> : ''}
+          </div>
+        );
+      })}
+      {'}'}
     </pre>
   );
 };
 
 export const MqttMonitorScreen: React.FC = () => {
-  const { mqttBrokerStatus } = useApp();
+  const { mqttBrokerStatus, devices } = useApp();
 
-  // Local component states
-  const [messages, setMessages] = useState<RawMqttFrame[]>(() => {
-    const existing = mqttService.getRawMessages();
-    return existing.slice(-MAX_MESSAGE_BUFFER);
+  // Selected device UID state (persisted in localStorage)
+  const [selectedDeviceUid, setSelectedDeviceUid] = useState<string>(() => {
+    if (typeof window === 'undefined') return DEFAULT_HARDWARE_UID;
+    const saved = localStorage.getItem('panorama_mqtt_selected_device') || localStorage.getItem('panorama_mqtt_target_topic');
+    if (saved && !saved.includes('33332') && !saved.includes('0023004D') && !saved.startsWith('panorama/')) {
+      return saved.split('/')[0].trim();
+    }
+    return DEFAULT_HARDWARE_UID;
   });
+
+  const selectedDeviceUidRef = useRef<string>(selectedDeviceUid);
+  selectedDeviceUidRef.current = selectedDeviceUid;
+
+  // Raw telemetry message buffer
+  const [messages, setMessages] = useState<CleanTelemetryFrame[]>([]);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [autoScroll, setAutoScroll] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
@@ -159,33 +304,9 @@ export const MqttMonitorScreen: React.FC = () => {
     if (typeof window === 'undefined') return true;
     return localStorage.getItem('panorama_mqtt_show_timestamps') !== 'false';
   });
-  const [formatMode, setFormatMode] = useState<'pretty' | 'raw'>(() => {
-    if (typeof window === 'undefined') return 'pretty';
-    return (localStorage.getItem('panorama_mqtt_format_mode') as 'pretty' | 'raw') || 'pretty';
-  });
 
-  const [topicInput, setTopicInput] = useState<string>(() => {
-    if (typeof window === 'undefined') return TARGET_MQTT_TOPIC;
-    const saved = localStorage.getItem('panorama_mqtt_target_topic');
-    if (saved && !saved.includes('33332') && !saved.includes('0023004D')) {
-      return saved;
-    }
-    return TARGET_MQTT_TOPIC;
-  });
-  const [qosInput, setQosInput] = useState<number>(0);
-  const [subscribedTopics, setSubscribedTopics] = useState<string[]>(() => {
-    const list = mqttService.getSubscribedTopics().filter((t) => !t.includes('33332'));
-    if (!list.includes(TARGET_MQTT_TOPIC)) {
-      list.unshift(TARGET_MQTT_TOPIC);
-    }
-    return list;
-  });
-
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
-  const [totalBytesReceived, setTotalBytesReceived] = useState<number>(0);
-  const [totalMessagesCount, setTotalMessagesCount] = useState<number>(() => messages.length);
+  const [totalMessagesCount, setTotalMessagesCount] = useState<number>(0);
 
   const terminalStreamRef = useRef<HTMLDivElement | null>(null);
   const isPausedRef = useRef<boolean>(isPaused);
@@ -196,25 +317,106 @@ export const MqttMonitorScreen: React.FC = () => {
   const brokerInfo = mqttService.getBrokerInfo();
   const isBrokerConnected = mqttBrokerStatus === 'CONNECTED' || brokerInfo.status === 'CONNECTED';
 
-  // Ensure default target topic is subscribed upon mounting
+  // Compute available devices list for dropdown
+  const availableDevices = useMemo(() => {
+    const list: Array<{ uid: string; label: string }> = [];
+    const seenUids = new Set<string>();
+
+    // Always put default hardware device at the top
+    list.push({
+      uid: DEFAULT_HARDWARE_UID,
+      label: `${DEFAULT_HARDWARE_UID} (Physical Hardware Node)`,
+    });
+    seenUids.add(DEFAULT_HARDWARE_UID);
+
+    // Merge from app context & device registry
+    const registryDevices = deviceRegistry.getDevices();
+    const all = [...(devices || []), ...registryDevices];
+
+    all.forEach((d) => {
+      if (!d || !d.uid || seenUids.has(d.uid) || d.uid.startsWith('PANORAMA-')) return;
+      seenUids.add(d.uid);
+      const assignment = d.trainNumber && d.coachNumber ? ` • ${d.trainNumber} / ${d.coachNumber}` : '';
+      list.push({
+        uid: d.uid,
+        label: `${d.uid}${assignment}`,
+      });
+    });
+
+    // If current selected device is not yet in the list, add it
+    if (!seenUids.has(selectedDeviceUid)) {
+      list.push({
+        uid: selectedDeviceUid,
+        label: selectedDeviceUid,
+      });
+    }
+
+    return list;
+  }, [devices, selectedDeviceUid]);
+
+  // Ensure default target topic is subscribed upon mounting; do NOT subscribe to '#' wildcard
   useEffect(() => {
-    mqttService.subscribeTopic(TARGET_MQTT_TOPIC, 0);
-    mqttService.subscribeTopic(`${TARGET_MQTT_TOPIC}/#`, 0);
-    setSubscribedTopics(mqttService.getSubscribedTopics());
+    const uid = selectedDeviceUidRef.current;
+    mqttService.subscribeTopic(uid, 0);
+    // Explicitly clean up any previous wildcard subscriptions
+    mqttService.unsubscribeTopic(`${uid}/#`);
+    mqttService.unsubscribeTopic(`${DEFAULT_HARDWARE_UID}/#`);
   }, []);
 
   // Listen directly to incoming MQTT message frames from Paho client
   useEffect(() => {
     const unsubscribe = mqttService.onRawMessage((frame: RawMqttFrame) => {
-      setTotalBytesReceived((prev) => prev + frame.payloadSize);
+      // 1. Drop any messages from fleet, central, or sync topics
+      if (
+        frame.topic.startsWith('panorama/') ||
+        frame.topic.includes('fleet') ||
+        frame.topic.includes('sync') ||
+        frame.topic.includes('central') ||
+        frame.topic.includes('settings') ||
+        frame.topic.includes('users')
+      ) {
+        return;
+      }
+
+      const activeUid = selectedDeviceUidRef.current.trim();
+      const topicBase = frame.topic.split('/')[0].trim();
+
+      // 2. Reject messages from unrelated device topics
+      if (frame.topic !== activeUid && topicBase !== activeUid) {
+        return;
+      }
+
+      // 3. Must be valid JSON object
+      if (!frame.isJson || !frame.parsedJson) {
+        return;
+      }
+
+      // 4. Validate UID and filter strictly to the 15 telemetry fields
+      const filtered = filterDeviceTelemetry(frame.parsedJson, activeUid);
+      if (!filtered) {
+        return;
+      }
+
       setTotalMessagesCount((prev) => prev + 1);
 
       if (isPausedRef.current) {
         return;
       }
 
+      const cleanFrame: CleanTelemetryFrame = {
+        id: frame.id,
+        topic: frame.topic,
+        receivedAt: frame.receivedAt,
+        receivedAtFormatted: frame.receivedAtFormatted,
+        deviceTimestamp: filtered.time,
+        payload: filtered,
+        rawJsonString: formatTelemetryJson(filtered),
+        qos: frame.qos,
+        payloadSize: frame.payloadSize,
+      };
+
       setMessages((prev) => {
-        const next = [...prev, frame];
+        const next = [...prev, cleanFrame];
         if (next.length > MAX_MESSAGE_BUFFER) {
           return next.slice(next.length - MAX_MESSAGE_BUFFER);
         }
@@ -234,26 +436,34 @@ export const MqttMonitorScreen: React.FC = () => {
     }
   }, [messages, autoScroll, isPaused]);
 
-  // Topic subscription handlers
-  const handleSubscribe = useCallback(() => {
-    const clean = topicInput.trim();
-    if (!clean) return;
-    mqttService.subscribeTopic(clean, qosInput);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('panorama_mqtt_target_topic', clean);
+  // Handle device selection change from dropdown
+  const handleDeviceChange = useCallback((newUid: string) => {
+    const cleanUid = newUid.trim();
+    if (!cleanUid || cleanUid === selectedDeviceUid) return;
+
+    // 1. Unsubscribe from previous device topic
+    if (selectedDeviceUid) {
+      mqttService.unsubscribeTopic(selectedDeviceUid);
+      mqttService.unsubscribeTopic(`${selectedDeviceUid}/#`);
     }
-    setSubscribedTopics(mqttService.getSubscribedTopics());
-  }, [topicInput, qosInput]);
 
-  const handleUnsubscribe = useCallback((topicToUnsub?: string) => {
-    const target = (topicToUnsub || topicInput).trim();
-    if (!target) return;
-    mqttService.unsubscribeTopic(target);
-    setSubscribedTopics(mqttService.getSubscribedTopics());
-  }, [topicInput]);
+    // 2. Subscribe specifically to new device topic (no '#' wildcard)
+    mqttService.subscribeTopic(cleanUid, 0);
 
+    // 3. Update state & persist
+    setSelectedDeviceUid(cleanUid);
+    selectedDeviceUidRef.current = cleanUid;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('panorama_mqtt_selected_device', cleanUid);
+      localStorage.setItem('panorama_mqtt_target_topic', cleanUid);
+    }
+
+    // 4. Reset messages buffer for the newly selected device
+    setMessages([]);
+  }, [selectedDeviceUid]);
+
+  // Terminal Controls
   const handleClearConsole = useCallback(() => {
-    mqttService.clearRawMessages();
     setMessages([]);
     setCopyFeedback('Console cleared');
     setTimeout(() => setCopyFeedback(null), 1500);
@@ -283,13 +493,6 @@ export const MqttMonitorScreen: React.FC = () => {
     });
   }, []);
 
-  const handleSetFormatMode = useCallback((mode: 'pretty' | 'raw') => {
-    setFormatMode(mode);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('panorama_mqtt_format_mode', mode);
-    }
-  }, []);
-
   // Copy helper
   const handleCopy = useCallback((text: string, label: string) => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -300,23 +503,18 @@ export const MqttMonitorScreen: React.FC = () => {
     }
   }, []);
 
-  const toggleMessageCollapse = useCallback((id: string) => {
-    setCollapsedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
+  // Copy latest telemetry JSON
+  const handleCopyLatestJson = useCallback(() => {
+    if (messages.length === 0) {
+      setCopyFeedback('No telemetry to copy');
+      setTimeout(() => setCopyFeedback(null), 1500);
+      return;
+    }
+    const latest = messages[messages.length - 1];
+    handleCopy(latest.rawJsonString, 'Latest JSON copied');
+  }, [messages, handleCopy]);
 
-  const lastMessageTime = useMemo(() => {
-    if (messages.length === 0) return 'None yet';
-    const last = messages[messages.length - 1];
-    return last.receivedAtFormatted;
-  }, [messages]);
+  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
 
   return (
     <div
@@ -378,17 +576,43 @@ export const MqttMonitorScreen: React.FC = () => {
                   border: '1px solid #CBD5E1',
                 }}
               >
-                MQTT.fx Engine
+                MQTT.fx Terminal
               </span>
             </div>
             <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
-              Direct HiveMQ WebSocket Stream • Zero-Backend Real-Time Telemetry
+              Direct HiveMQ WebSocket Stream • Sensor Telemetry Only • Zero Synthetic Data
             </div>
           </div>
         </div>
 
         {/* Status Metrics Badges */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
+          {/* Selected Device UID Header Identifier */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              backgroundColor: '#EFF6FF',
+              border: '1px solid #BFDBFE',
+            }}
+          >
+            <Cpu size={13} color="#2563EB" />
+            <span style={{ fontSize: '11px', color: '#1E40AF', fontWeight: 700 }}>DEVICE:</span>
+            <span
+              style={{
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                fontWeight: 800,
+                color: '#1D4ED8',
+              }}
+            >
+              {selectedDeviceUid}
+            </span>
+          </div>
+
           {/* Broker Status */}
           <div
             style={{
@@ -425,7 +649,7 @@ export const MqttMonitorScreen: React.FC = () => {
             </span>
           </div>
 
-          {/* Subscribed Topic */}
+          {/* Live Streaming Indicator */}
           <div
             style={{
               display: 'flex',
@@ -433,21 +657,27 @@ export const MqttMonitorScreen: React.FC = () => {
               gap: '6px',
               padding: '6px 10px',
               borderRadius: '6px',
-              backgroundColor: '#F8FAFC',
-              border: '1px solid #E2E8F0',
+              backgroundColor: isPaused ? '#FFFBEB' : '#F0FDF4',
+              border: `1px solid ${isPaused ? '#FDE68A' : '#BBF7D0'}`,
             }}
           >
-            <Radio size={13} color="#2563EB" />
-            <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>Topic:</span>
+            <span
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: isPaused ? '#D97706' : '#16A34A',
+                display: 'inline-block',
+              }}
+            />
             <span
               style={{
                 fontSize: '11px',
-                fontFamily: 'monospace',
                 fontWeight: 700,
-                color: '#0F172A',
+                color: isPaused ? '#B45309' : '#15803D',
               }}
             >
-              {TARGET_MQTT_TOPIC}
+              {isPaused ? 'STREAM PAUSED' : 'STREAMING LIVE'}
             </span>
           </div>
 
@@ -465,33 +695,14 @@ export const MqttMonitorScreen: React.FC = () => {
           >
             <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>Messages:</span>
             <span style={{ fontSize: '11px', fontWeight: 800, color: '#2563EB' }}>
-              {totalMessagesCount}
+              {messages.length}
             </span>
-            <span style={{ fontSize: '10px', color: '#94A3B8' }}>({messages.length}/{MAX_MESSAGE_BUFFER})</span>
-          </div>
-
-          {/* Last Seen Timestamp */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 10px',
-              borderRadius: '6px',
-              backgroundColor: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-            }}
-          >
-            <Clock size={13} color="#64748B" />
-            <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>Last:</span>
-            <span style={{ fontSize: '11px', fontFamily: 'monospace', fontWeight: 700, color: '#334155' }}>
-              {lastMessageTime.split(' ').pop() || 'None'}
-            </span>
+            <span style={{ fontSize: '10px', color: '#94A3B8' }}>/ {MAX_MESSAGE_BUFFER}</span>
           </div>
         </div>
       </div>
 
-      {/* 2. TOPIC SUBSCRIPTION CONTROLS TOOLBAR */}
+      {/* 2. DEVICE SELECTION & TERMINAL CONTROLS TOOLBAR */}
       <div
         style={{
           backgroundColor: '#FFFFFF',
@@ -505,9 +716,9 @@ export const MqttMonitorScreen: React.FC = () => {
           gap: '12px',
         }}
       >
-        {/* Topic Input + Subscribe / Unsubscribe */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', flex: '1 1 450px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 1, minWidth: '260px' }}>
+        {/* Device Selection Dropdown */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', flex: '1 1 360px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: '280px' }}>
             <span
               style={{
                 fontSize: '11px',
@@ -516,99 +727,43 @@ export const MqttMonitorScreen: React.FC = () => {
                 textTransform: 'uppercase',
                 letterSpacing: '0.4px',
                 whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
               }}
             >
-              Topic:
+              <Filter size={13} color="#2563EB" />
+              Device UID:
             </span>
-            <input
-              type="text"
-              value={topicInput}
-              onChange={(e) => setTopicInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSubscribe();
-              }}
-              placeholder="e.g. 002F00654B42501320353332 or 002F00654B42501320353332/#"
+            <select
+              value={selectedDeviceUid}
+              onChange={(e) => handleDeviceChange(e.target.value)}
               style={{
                 flex: 1,
                 padding: '7px 10px',
                 fontFamily: 'monospace',
                 fontSize: '12px',
-                fontWeight: 600,
+                fontWeight: 700,
                 color: '#0F172A',
                 backgroundColor: '#F8FAFC',
                 border: '1px solid #CBD5E1',
                 borderRadius: '6px',
                 outline: 'none',
+                cursor: 'pointer',
               }}
-            />
+            >
+              {availableDevices.map((d) => (
+                <option key={d.uid} value={d.uid}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
           </div>
-
-          {/* QoS Selection */}
-          <select
-            value={qosInput}
-            onChange={(e) => setQosInput(Number(e.target.value))}
-            style={{
-              padding: '6px 8px',
-              fontSize: '12px',
-              fontWeight: 600,
-              color: '#334155',
-              backgroundColor: '#F8FAFC',
-              border: '1px solid #CBD5E1',
-              borderRadius: '6px',
-              cursor: 'pointer',
-            }}
-          >
-            <option value={0}>QoS 0</option>
-            <option value={1}>QoS 1</option>
-          </select>
-
-          {/* Subscribe Button */}
-          <button
-            onClick={handleSubscribe}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '7px 14px',
-              backgroundColor: '#2563EB',
-              color: '#FFFFFF',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '12px',
-              fontWeight: 700,
-              cursor: 'pointer',
-              transition: 'background-color 0.15s ease',
-            }}
-          >
-            <Plus size={14} />
-            Subscribe
-          </button>
-
-          {/* Unsubscribe Button */}
-          <button
-            onClick={() => handleUnsubscribe()}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '7px 12px',
-              backgroundColor: '#FFFFFF',
-              color: '#DC2626',
-              border: '1px solid #FECACA',
-              borderRadius: '6px',
-              fontSize: '12px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            <X size={14} />
-            Unsubscribe
-          </button>
         </div>
 
-        {/* Terminal Controls: Pause, Clear, Timestamps, Autoscroll, Format */}
+        {/* Action Controls: Pause, Clear, Timestamps, Auto Scroll, Copy JSON */}
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
-          {/* Pause / Resume */}
+          {/* Pause / Resume Button */}
           <button
             onClick={handleTogglePause}
             style={{
@@ -629,7 +784,7 @@ export const MqttMonitorScreen: React.FC = () => {
             {isPaused ? 'Resume Stream' : 'Pause Stream'}
           </button>
 
-          {/* Clear Console */}
+          {/* Clear Console Button */}
           <button
             onClick={handleClearConsole}
             style={{
@@ -653,29 +808,28 @@ export const MqttMonitorScreen: React.FC = () => {
           {/* Vertical Separator */}
           <div style={{ height: '22px', width: '1px', backgroundColor: '#E2E8F0', margin: '0 2px' }} />
 
-          {/* Timestamps Toggle */}
-          <label
+          {/* Show / Hide Timestamps Button */}
+          <button
+            onClick={handleToggleTimestamps}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
+              padding: '7px 12px',
+              backgroundColor: showTimestamps ? '#EFF6FF' : '#F8FAFC',
+              color: showTimestamps ? '#1D4ED8' : '#64748B',
+              border: `1px solid ${showTimestamps ? '#BFDBFE' : '#CBD5E1'}`,
+              borderRadius: '6px',
               fontSize: '12px',
-              fontWeight: 600,
-              color: '#334155',
+              fontWeight: 700,
               cursor: 'pointer',
-              userSelect: 'none',
             }}
           >
-            <input
-              type="checkbox"
-              checked={showTimestamps}
-              onChange={handleToggleTimestamps}
-              style={{ cursor: 'pointer' }}
-            />
-            Show Timestamps
-          </label>
+            <Clock size={13} />
+            {showTimestamps ? 'Hide Timestamps' : 'Show Timestamps'}
+          </button>
 
-          {/* Auto Scroll Toggle */}
+          {/* Auto Scroll Checkbox */}
           <label
             style={{
               display: 'flex',
@@ -686,6 +840,7 @@ export const MqttMonitorScreen: React.FC = () => {
               color: '#334155',
               cursor: 'pointer',
               userSelect: 'none',
+              padding: '0 4px',
             }}
           >
             <input
@@ -697,111 +852,51 @@ export const MqttMonitorScreen: React.FC = () => {
             Auto Scroll
           </label>
 
-          {/* Pretty / Raw Toggle */}
-          <div
+          {/* Copy Latest JSON Button */}
+          <button
+            onClick={handleCopyLatestJson}
+            disabled={messages.length === 0}
             style={{
               display: 'flex',
-              border: '1px solid #CBD5E1',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 12px',
+              backgroundColor: messages.length > 0 ? '#238636' : '#94A3B8',
+              color: '#FFFFFF',
+              border: 'none',
               borderRadius: '6px',
-              overflow: 'hidden',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: messages.length > 0 ? 'pointer' : 'not-allowed',
             }}
           >
-            <button
-              onClick={() => handleSetFormatMode('pretty')}
+            <Code2 size={13} />
+            Copy JSON
+          </button>
+
+          {/* Toast / Feedback Banner */}
+          {copyFeedback && (
+            <span
               style={{
-                padding: '5px 10px',
                 fontSize: '11px',
                 fontWeight: 700,
-                border: 'none',
-                backgroundColor: formatMode === 'pretty' ? '#0F172A' : '#F8FAFC',
-                color: formatMode === 'pretty' ? '#FFFFFF' : '#64748B',
-                cursor: 'pointer',
+                color: '#16A34A',
+                backgroundColor: '#DCFCE7',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                border: '1px solid #86EFAC',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
               }}
             >
-              Pretty JSON
-            </button>
-            <button
-              onClick={() => handleSetFormatMode('raw')}
-              style={{
-                padding: '5px 10px',
-                fontSize: '11px',
-                fontWeight: 700,
-                border: 'none',
-                backgroundColor: formatMode === 'raw' ? '#0F172A' : '#F8FAFC',
-                color: formatMode === 'raw' ? '#FFFFFF' : '#64748B',
-                cursor: 'pointer',
-              }}
-            >
-              Raw String
-            </button>
-          </div>
+              <Check size={12} /> {copyFeedback}
+            </span>
+          )}
         </div>
       </div>
 
-      {/* 3. ACTIVE SUBSCRIPTIONS PILL CHIPS */}
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          gap: '8px',
-          padding: '0 4px',
-        }}
-      >
-        <span style={{ fontSize: '11px', fontWeight: 700, color: '#64748B' }}>
-          Active Subscriptions ({subscribedTopics.length}):
-        </span>
-        {subscribedTopics.map((top) => (
-          <span
-            key={top}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '3px 8px',
-              borderRadius: '12px',
-              backgroundColor: '#EFF6FF',
-              color: '#1D4ED8',
-              border: '1px solid #BFDBFE',
-              fontSize: '11px',
-              fontFamily: 'monospace',
-              fontWeight: 600,
-            }}
-          >
-            <Radio size={10} color="#2563EB" />
-            {top}
-            {top !== TARGET_MQTT_TOPIC && (
-              <X
-                size={12}
-                onClick={() => handleUnsubscribe(top)}
-                style={{ cursor: 'pointer', color: '#64748B' }}
-              />
-            )}
-          </span>
-        ))}
-
-        {copyFeedback && (
-          <span
-            style={{
-              marginLeft: 'auto',
-              fontSize: '11px',
-              fontWeight: 700,
-              color: '#16A34A',
-              backgroundColor: '#DCFCE7',
-              padding: '3px 10px',
-              borderRadius: '6px',
-              border: '1px solid #86EFAC',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
-          >
-            <Check size={12} /> {copyFeedback}
-          </span>
-        )}
-      </div>
-
-      {/* 4. LIVE MQTT TERMINAL VIEW (MQTT.fx Terminal Appearance) */}
+      {/* 3. LIVE MQTT TERMINAL VIEW (Direct MQTT.fx Terminal Appearance) */}
       <div
         style={{
           backgroundColor: '#0D1117',
@@ -834,13 +929,13 @@ export const MqttMonitorScreen: React.FC = () => {
               <span style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#27C93F' }} />
             </div>
             <span style={{ color: '#C9D1D9', fontWeight: 600 }}>
-              terminal@panorama: mqtt://broker.hivemq.com:8884
+              terminal@panorama: mqtt://broker.hivemq.com:8884/{selectedDeviceUid}
             </span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <span>Buffer: {messages.length}/{MAX_MESSAGE_BUFFER}</span>
-            <span>Total Data: {(totalBytesReceived / 1024).toFixed(1)} KB</span>
+            <span>QoS: 0</span>
           </div>
         </div>
 
@@ -848,14 +943,14 @@ export const MqttMonitorScreen: React.FC = () => {
         <div
           ref={terminalStreamRef}
           style={{
-            height: 'calc(100vh - 310px)',
-            minHeight: '440px',
+            height: 'calc(100vh - 290px)',
+            minHeight: '450px',
             maxHeight: '750px',
             overflowY: 'auto',
-            padding: '14px',
+            padding: '16px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px',
+            gap: '14px',
             backgroundColor: '#0D1117',
           }}
         >
@@ -867,7 +962,7 @@ export const MqttMonitorScreen: React.FC = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 height: '100%',
-                minHeight: '300px',
+                minHeight: '320px',
                 gap: '12px',
                 color: '#8B949E',
                 textAlign: 'center',
@@ -883,22 +978,19 @@ export const MqttMonitorScreen: React.FC = () => {
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: '#58A6FF',
-                  animation: 'pulse 2s infinite',
                 }}
               >
                 <Radio size={22} />
               </div>
-              <div style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: 600, color: '#C9D1D9' }}>
-                Waiting for live MQTT telemetry on topic: {TARGET_MQTT_TOPIC}
+              <div style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: 700, color: '#C9D1D9' }}>
+                Waiting for live MQTT telemetry on topic: {selectedDeviceUid}
               </div>
-              <div style={{ fontSize: '12px', maxWidth: '480px', lineHeight: 1.5 }}>
-                Directly connected to HiveMQ broker over WebSocket TLS. When the hardware device broadcasts data, the full raw JSON payload will stream here instantaneously.
+              <div style={{ fontSize: '12px', maxWidth: '500px', lineHeight: 1.5, color: '#8B949E' }}>
+                Directly connected to HiveMQ broker over WebSocket TLS. When device {selectedDeviceUid} broadcasts its hardware telemetry packet, the exact 15-field JSON payload will stream here instantaneously.
               </div>
             </div>
           ) : (
             messages.map((frame, index) => {
-              const isCollapsed = collapsedIds.has(frame.id);
-
               return (
                 <div
                   key={frame.id}
@@ -911,189 +1003,114 @@ export const MqttMonitorScreen: React.FC = () => {
                     flexDirection: 'column',
                   }}
                 >
-                  {/* Message Frame Header Bar */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '8px 12px',
-                      backgroundColor: '#21262D',
-                      borderBottom: isCollapsed ? 'none' : '1px solid #30363D',
-                      fontFamily: 'monospace',
-                      fontSize: '11px',
-                      gap: '8px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ color: '#58A6FF', fontWeight: 800 }}>#{index + 1}</span>
-                      <span
-                        style={{
-                          backgroundColor: '#1F2937',
-                          color: '#79C0FF',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          border: '1px solid #374151',
-                          fontWeight: 700,
-                        }}
-                      >
-                        {frame.topic}
-                      </span>
-                      <span style={{ color: '#8B949E' }}>QoS: {frame.qos}</span>
-                      <span style={{ color: '#8B949E' }}>{frame.payloadSize} B</span>
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {/* Copy Raw Payload */}
-                      <button
-                        onClick={() => handleCopy(frame.payloadString, `Payload #${index + 1} copied`)}
-                        title="Copy raw payload string"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '3px 8px',
-                          backgroundColor: '#30363D',
-                          color: '#C9D1D9',
-                          border: 'none',
-                          borderRadius: '4px',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Copy size={11} />
-                        Copy Raw
-                      </button>
-
-                      {/* Copy JSON */}
-                      {frame.isJson && (
-                        <button
-                          onClick={() => {
-                            const pretty = JSON.stringify(frame.parsedJson, null, 2);
-                            handleCopy(pretty, `JSON #${index + 1} copied`);
+                  {/* Timestamp Mode: Display Broker Reception Header Banner */}
+                  {showTimestamps && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '8px 12px',
+                        backgroundColor: '#21262D',
+                        borderBottom: '1px solid #30363D',
+                        fontFamily: 'monospace',
+                        fontSize: '11px',
+                        gap: '8px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ color: '#58A6FF', fontWeight: 800 }}>#{index + 1}</span>
+                        <span style={{ color: '#58A6FF', fontWeight: 700 }}>
+                          [{frame.receivedAtFormatted}] MQTT MESSAGE RECEIVED
+                        </span>
+                        <span
+                          style={{
+                            backgroundColor: '#1F2937',
+                            color: '#79C0FF',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            border: '1px solid #374151',
+                            fontWeight: 700,
                           }}
+                        >
+                          {frame.topic}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ color: '#8B949E', fontSize: '10px' }}>
+                          Device Timestamp: &quot;{frame.deviceTimestamp || 'N/A'}&quot;
+                        </span>
+                        <button
+                          onClick={() => handleCopy(frame.rawJsonString, `Message #${index + 1} copied`)}
                           title="Copy formatted JSON"
                           style={{
                             display: 'flex',
                             alignItems: 'center',
                             gap: '4px',
-                            padding: '3px 8px',
-                            backgroundColor: '#238636',
-                            color: '#FFFFFF',
+                            padding: '2px 8px',
+                            backgroundColor: '#30363D',
+                            color: '#C9D1D9',
                             border: 'none',
                             borderRadius: '4px',
-                            fontSize: '11px',
+                            fontSize: '10px',
                             fontWeight: 700,
                             cursor: 'pointer',
                           }}
                         >
-                          <Code2 size={11} />
-                          Copy JSON
+                          <Copy size={10} />
+                          Copy
                         </button>
-                      )}
-
-                      {/* Collapse / Expand Toggle */}
-                      <button
-                        onClick={() => toggleMessageCollapse(frame.id)}
-                        title={isCollapsed ? 'Expand payload' : 'Collapse payload'}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          padding: '3px 6px',
-                          backgroundColor: 'transparent',
-                          color: '#8B949E',
-                          border: 'none',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {isCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Message Frame Body (Payload) */}
-                  {!isCollapsed && (
-                    <div style={{ padding: '12px 14px', overflowX: 'auto' }}>
-                      {/* Mode 1: Timestamp Mode ON (Display prominent timestamp header banner) */}
-                      {showTimestamps && (
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '2px',
-                            marginBottom: '10px',
-                            paddingBottom: '8px',
-                            borderBottom: '1px dashed #30363D',
-                            fontFamily: 'monospace',
-                            fontSize: '11px',
-                          }}
-                        >
-                          <div style={{ color: '#58A6FF', fontWeight: 800 }}>
-                            [{frame.receivedAtFormatted}] MQTT MESSAGE RECEIVED
-                          </div>
-                          <div style={{ color: '#8B949E', fontSize: '10px' }}>
-                            TOPIC: {frame.topic} | QoS: {frame.qos} | SIZE: {frame.payloadSize} bytes | CLIENT RX: {frame.receivedAtFormatted}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Payload rendering */}
-                      {frame.error ? (
-                        <div>
-                          <div
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              backgroundColor: '#451A1A',
-                              color: '#FF7B72',
-                              fontSize: '10px',
-                              fontWeight: 700,
-                              marginBottom: '6px',
-                            }}
-                          >
-                            <AlertTriangle size={11} />
-                            MALFORMED JSON: {frame.error}
-                          </div>
-                          <pre
-                            style={{
-                              margin: 0,
-                              fontFamily: 'monospace',
-                              fontSize: '12px',
-                              color: '#FF7B72',
-                              whiteSpace: 'pre-wrap',
-                              wordBreak: 'break-word',
-                            }}
-                          >
-                            {frame.payloadString}
-                          </pre>
-                        </div>
-                      ) : formatMode === 'pretty' && frame.isJson && frame.parsedJson ? (
-                        <JsonSyntaxViewer
-                          data={frame.parsedJson}
-                          onCopyValue={(key, val) => handleCopy(String(val), `Copied ${key}`)}
-                        />
-                      ) : (
-                        <pre
-                          style={{
-                            margin: 0,
-                            fontFamily: 'monospace',
-                            fontSize: '12px',
-                            lineHeight: '18px',
-                            color: '#7EE787',
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
-                          }}
-                        >
-                          {frame.payloadString}
-                        </pre>
-                      )}
+                      </div>
                     </div>
                   )}
+
+                  {/* Clean JSON Payload Body (Exact MQTT.fx Presentation) */}
+                  <div
+                    style={{
+                      padding: '14px 16px',
+                      overflowX: 'auto',
+                      backgroundColor: '#0D1117',
+                      position: 'relative',
+                    }}
+                  >
+                    {!showTimestamps && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '10px',
+                          right: '12px',
+                          zIndex: 2,
+                        }}
+                      >
+                        <button
+                          onClick={() => handleCopy(frame.rawJsonString, `JSON copied`)}
+                          title="Copy JSON"
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '3px 8px',
+                            backgroundColor: '#21262D',
+                            color: '#8B949E',
+                            border: '1px solid #30363D',
+                            borderRadius: '4px',
+                            fontSize: '10px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Copy size={10} />
+                          Copy
+                        </button>
+                      </div>
+                    )}
+                    <JsonSyntaxViewer
+                      data={frame.payload}
+                      onCopyValue={(key, val) => handleCopy(String(val), `Copied ${key}`)}
+                    />
+                  </div>
                 </div>
               );
             })

@@ -92,7 +92,9 @@ export const Sidebar: React.FC = () => {
   const isConnected = connectionStatus === 'CONNECTED' || mqttConnectionStatus === 'CONNECTED';
   const storedRole = typeof window !== 'undefined' ? (() => {
     try {
-      return JSON.parse(localStorage.getItem('panorama_demo_user') || '{}')?.role;
+      return JSON.parse(localStorage.getItem('panorama_demo_user') || '{}')?.role ||
+             localStorage.getItem('panorama_user_role') ||
+             JSON.parse(localStorage.getItem('panorama_user') || '{}')?.role;
     } catch {
       return '';
     }

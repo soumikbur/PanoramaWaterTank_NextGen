@@ -89,7 +89,9 @@ const MainContent: React.FC = () => {
   const { activeScreen, setActiveScreen, currentUser } = useApp();
   const storedRole = typeof window !== 'undefined' ? (() => {
     try {
-      return JSON.parse(localStorage.getItem('panorama_demo_user') || '{}')?.role;
+      return JSON.parse(localStorage.getItem('panorama_demo_user') || '{}')?.role ||
+             localStorage.getItem('panorama_user_role') ||
+             JSON.parse(localStorage.getItem('panorama_user') || '{}')?.role;
     } catch {
       return '';
     }
