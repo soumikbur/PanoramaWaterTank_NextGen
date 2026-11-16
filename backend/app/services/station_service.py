@@ -7,6 +7,7 @@ and verified Indian Railways station databases.
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List
 
@@ -62,6 +63,8 @@ VERIFIED_MAJOR_STATIONS: Dict[str, Dict[str, Any]] = {
     "UHP": {"code": "UHP", "name": "Udhampur", "lat": 32.9262, "lon": 75.0003, "zone": "NR", "water_refill": True, "capacity": 15000.0},
     "KQU": {"code": "KQU", "name": "Kamarkundu", "lat": 22.8272, "lon": 88.1969, "zone": "ER", "water_refill": False, "capacity": 0.0},
     "PAN": {"code": "PAN", "name": "Panagarh", "lat": 23.4518, "lon": 87.4382, "zone": "ER", "water_refill": False, "capacity": 0.0},
+    "KHGP": {"code": "KHGP", "name": "Khargapur", "lat": 24.8219, "lon": 79.1417, "zone": "NCR", "water_refill": False, "capacity": 0.0},
+    "MCSC": {"code": "MCSC", "name": "Chhatarpur", "lat": 24.8724, "lon": 79.5888, "zone": "NCR", "water_refill": False, "capacity": 0.0},
 }
 
 
@@ -181,3 +184,99 @@ class StationService:
             if src_c and dst_c:
                 return str(src_c).strip().upper(), str(src_n).strip(), str(dst_c).strip().upper(), str(dst_n).strip()
         return None
+
+    @classmethod
+    def search_stations(cls, query: str, limit: int = 25) -> List[Dict[str, Any]]:
+        """Search stations across DataMeet and verified index by code, name, or state."""
+        if not query:
+            return []
+        q = query.strip().upper()
+        idx = cls._load_index()
+        matches: List[Dict[str, Any]] = []
+
+        # 1. Exact code match
+        if q in idx:
+            st = idx[q]
+            matches.append({
+                "code": st.get("code") or q,
+                "name": st.get("name") or q,
+                "latitude": float(st.get("lat") or st.get("latitude") or 0.0),
+                "longitude": float(st.get("lon") or st.get("longitude") or 0.0),
+                "zone": st.get("zone", ""),
+                "state": st.get("state", ""),
+                "water_refill_available": bool(st.get("water_refill", False)),
+                "water_capacity_liters": float(st.get("capacity", 0.0) or 0.0),
+            })
+
+        # 2. Prefix / substring match
+        for code, st in idx.items():
+            if code == q:
+                continue
+            name = str(st.get("name", "")).upper()
+            state = str(st.get("state", "")).upper()
+            if q in code or q in name or q in state:
+                matches.append({
+                    "code": st.get("code") or code,
+                    "name": st.get("name") or code,
+                    "latitude": float(st.get("lat") or st.get("latitude") or 0.0),
+                    "longitude": float(st.get("lon") or st.get("longitude") or 0.0),
+                    "zone": st.get("zone", ""),
+                    "state": st.get("state", ""),
+                    "water_refill_available": bool(st.get("water_refill", False)),
+                    "water_capacity_liters": float(st.get("capacity", 0.0) or 0.0),
+                })
+                if len(matches) >= limit:
+                    break
+
+        return matches[:limit]
+
+    @classmethod
+    def enrich_route_stops(cls, stops: List[Dict[str, Any]], train_number: str = "") -> List[Dict[str, Any]]:
+        """Enrich a sequence of stops with coordinates and metadata for polyline rendering."""
+        enriched: List[Dict[str, Any]] = []
+        for idx, stop in enumerate(stops):
+            if not isinstance(stop, dict):
+                continue
+            st_code = str(stop.get("station_code") or stop.get("code") or f"ST{idx+1}").strip().upper()
+            st_name = str(stop.get("station_name") or stop.get("name") or st_code).strip()
+            lat = stop.get("latitude") or stop.get("lat")
+            lon = stop.get("longitude") or stop.get("lng") or stop.get("lon")
+
+            if lat is None or lon is None:
+                coords = cls.get_station_coords(st_code)
+                if coords:
+                    lat, lon, res_name = coords
+                    if not st_name or st_name == st_code:
+                        st_name = res_name
+
+            if lat is not None and lon is not None:
+                try:
+                    lat_f, lon_f = float(lat), float(lon)
+                    if -90.0 <= lat_f <= 90.0 and -180.0 <= lon_f <= 180.0 and (lat_f != 0 or lon_f != 0):
+                        is_refill = bool(stop.get("water_refill_available", False))
+                        cap = float(stop.get("water_capacity_liters", 0.0) or 0.0)
+                        st_info = cls.get_station_info(st_code)
+                        if st_info:
+                            if "water_refill" in st_info and not is_refill:
+                                is_refill = bool(st_info["water_refill"])
+                            if "capacity" in st_info and cap <= 0:
+                                cap = float(st_info["capacity"])
+
+                        enriched.append({
+                            "id": f"{train_number}_{st_code.lower()}_{idx}",
+                            "name": st_name,
+                            "code": st_code,
+                            "latitude": round(lat_f, 5),
+                            "longitude": round(lon_f, 5),
+                            "route_order": idx,
+                            "water_refill_available": is_refill,
+                            "water_capacity_liters": cap,
+                            "operational_status": "Operational Refill Hub" if is_refill else ("Origin Station" if idx == 0 else ("Terminus Station" if idx == len(stops) - 1 else "Route Halt")),
+                            "last_verified": datetime.now(timezone.utc).isoformat() if "datetime" in globals() else "",
+                            "is_source": (idx == 0),
+                            "is_destination": (idx == len(stops) - 1),
+                        })
+                except (ValueError, TypeError):
+                    pass
+        return enriched
+

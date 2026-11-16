@@ -160,8 +160,11 @@ class TrainUpdate(BaseModel):
     region: Optional[str] = None
     type: Optional[str] = None
     source_station: Optional[str] = None
+    source_code: Optional[str] = None
     destination_station: Optional[str] = None
+    destination_code: Optional[str] = None
     railway_zone: Optional[str] = None
+    route: Optional[List[Dict[str, Any]]] = None
 
 
 class TankConsistItem(BaseModel):
@@ -816,10 +819,17 @@ async def update_train(
             db_train.train_type = cleaned_type
     if db_train and data.source_station is not None:
         db_train.source_station = data.source_station.strip() or None
+    if db_train and data.source_code is not None:
+        db_train.source_code = data.source_code.strip().upper() or None
     if db_train and data.destination_station is not None:
         db_train.destination_station = data.destination_station.strip() or None
+    if db_train and data.destination_code is not None:
+        db_train.destination_code = data.destination_code.strip().upper() or None
     if db_train and data.railway_zone is not None:
         db_train.railway_zone = data.railway_zone.strip().upper() or None
+    if db_train and data.route is not None:
+        db_train.route_json = json.dumps(data.route) if data.route else None
+        db_train.last_verified_at = datetime.now(timezone.utc)
 
     db.add(
         AuditEvent(

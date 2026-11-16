@@ -46,8 +46,9 @@ export function parseValidGps(parsed: Record<string, any>): ParsedMqttGps {
   return { lat: rawLat, long: rawLon, alt, sats, accuracy, gpsFix: true };
 }
 
-export const DEFAULT_MQTT_TOPIC = '0023004D4B42501120353332';
-export const DEFAULT_DEVICE_UID = '0023004D4B42501120353332';
+export const DEFAULT_MQTT_TOPIC = '002F00654B42501320353332';
+export const DEFAULT_DEVICE_UID = '002F00654B42501320353332';
+export const LEGACY_DEFAULT_MQTT_TOPIC = '0023004D4B42501120353332';
 export const DEFAULT_STALE_TIMEOUT_MS = 180000; // 180 seconds (nominal 90s upload task + jitter headroom)
 export const STALE_TIMEOUT_MS = 30000; // Fast watchdog timeout for local/test runner
 
@@ -157,8 +158,16 @@ export class MqttService {
 
       if (savedHost) this.brokerHost = savedHost;
       if (savedPort) this.brokerPort = parseInt(savedPort, 10);
-      if (savedTopic) this.topic = savedTopic;
+      if (savedTopic && savedTopic !== LEGACY_DEFAULT_MQTT_TOPIC) {
+        this.topic = savedTopic;
+      } else {
+        this.topic = DEFAULT_MQTT_TOPIC;
+      }
       if (savedSsl !== null) this.useSSL = savedSsl === 'true';
+    }
+    this.dynamicSubscriptions.set(DEFAULT_MQTT_TOPIC, 0);
+    if (this.topic && this.topic !== DEFAULT_MQTT_TOPIC) {
+      this.dynamicSubscriptions.set(this.topic, 0);
     }
   }
 
@@ -330,15 +339,19 @@ export class MqttService {
               this.client.subscribe(`${DEFAULT_MQTT_TOPIC}/s`, { qos: 1 });
               this.client.subscribe(`${DEFAULT_MQTT_TOPIC}/#`, { qos: 1 });
             }
-            // Target hardware device telemetry topics
+            // Target hardware device telemetry topics (Physical UID verified from MQTT.fx)
+            this.client.subscribe('002F00654B42501320353332', { qos: 0 });
+            this.client.subscribe('002F00654B42501320353332/s', { qos: 0 });
+            this.client.subscribe('002F00654B42501320353332/#', { qos: 0 });
+            this.client.subscribe('panorama/telemetry/002F00654B42501320353332', { qos: 0 });
+            // Legacy / alternate variants for backward compatibility
             this.client.subscribe('002F00654B42501203203533332', { qos: 1 });
             this.client.subscribe('002F00654B42501203203533332/s', { qos: 1 });
             this.client.subscribe('002F00654B42501203203533332/#', { qos: 1 });
             this.client.subscribe('002F00654B425012032053332', { qos: 1 });
             this.client.subscribe('002F00654B425012032053332/s', { qos: 1 });
             this.client.subscribe('002F00654B425012032053332/#', { qos: 1 });
-            this.client.subscribe('panorama/telemetry/002F00654B42501203203533332', { qos: 1 });
-            this.client.subscribe('panorama/telemetry/002F00654B425012032053332', { qos: 1 });
+            this.client.subscribe('0023004D4B42501120353332', { qos: 1 });
             this.client.subscribe('panorama/telemetry/#', { qos: 1 });
 
             this.client.subscribe(CENTRAL_FLEET_TOPIC, { qos: 1 });
@@ -1041,6 +1054,74 @@ export class MqttService {
 
   public clearRawMessages(): void {
     this.rawMessageHistory = [];
+  }
+
+  public injectMessage(topic: string, payload: string | object, qos: number = 0, retained: boolean = false): RawMqttFrame {
+    const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
+    const receivedDate = new Date();
+    const receivedAt = receivedDate.getTime();
+    const receivedAtFormatted = formatMqttTimestamp(receivedDate);
+    const payloadSize = typeof Blob !== 'undefined' ? new Blob([payloadStr]).size : payloadStr.length;
+
+    let isJson = false;
+    let parsedJson: Record<string, any> | null = null;
+    let deviceTimestamp: string | null = null;
+    let uid: string | null = null;
+    let parseError: string | undefined = undefined;
+
+    try {
+      parsedJson = typeof payload === 'object' && payload !== null ? (payload as any) : JSON.parse(payloadStr);
+      if (parsedJson && typeof parsedJson === 'object') {
+        isJson = true;
+        if (parsedJson.time && typeof parsedJson.time === 'string') {
+          deviceTimestamp = parsedJson.time;
+        }
+        if (parsedJson.uid) {
+          uid = String(parsedJson.uid);
+        } else if (parsedJson.deviceId) {
+          uid = String(parsedJson.deviceId);
+        }
+      }
+    } catch (e: any) {
+      isJson = false;
+      parseError = e?.message || 'Malformed JSON';
+    }
+
+    if (!uid && topic) {
+      const parts = topic.split('/');
+      uid = parts[0] || parts[parts.length - 1] || null;
+    }
+
+    const frame: RawMqttFrame = {
+      id: `mqtt-${receivedAt}-${Math.random().toString(36).substring(2, 7)}`,
+      topic,
+      payloadString: payloadStr,
+      payloadSize,
+      qos,
+      retained,
+      receivedAt,
+      receivedAtFormatted,
+      deviceTimestamp,
+      uid,
+      isJson,
+      parsedJson,
+      error: parseError,
+    };
+
+    this.rawMessageHistory.push(frame);
+    if (this.rawMessageHistory.length > 1000) {
+      this.rawMessageHistory.shift();
+    }
+
+    this.rawMessageListeners.forEach((cb) => {
+      try {
+        cb(frame);
+      } catch (err) {
+        console.error('[MQTT] Raw message listener error:', err);
+      }
+    });
+
+    return frame;
   }
 
   public getBrokerInfo(): {

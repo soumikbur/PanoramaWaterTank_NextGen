@@ -3,7 +3,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
@@ -11,7 +11,7 @@ from sqlalchemy import select, desc
 from app.core.database import get_db
 from app.models.device import Device
 from app.models.telemetry import TelemetryReading
-from app.models.train import Train
+from app.models.train import Train, TrainLookupCache
 from app.services.station_service import StationService
 
 logger = logging.getLogger("panorama.location")
@@ -26,6 +26,15 @@ class GPSWaypoint(BaseModel):
     speed_kmh: Optional[float] = None
     satellites: Optional[int] = None
     timestamp: str
+
+
+class RouteConfigRequest(BaseModel):
+    train_number: str
+    source_code: Optional[str] = None
+    source_station: Optional[str] = None
+    destination_code: Optional[str] = None
+    destination_station: Optional[str] = None
+    stations: List[Dict[str, Any]]
 
 
 class CorridorStation(BaseModel):
@@ -184,6 +193,107 @@ def build_corridor_stations_for_train(db_train: Train) -> List[CorridorStation]:
             ]
 
     return stations
+
+
+@router.get("/stations/search")
+async def search_stations(
+    q: str = Query(..., min_length=1, description="Station code, name, or state"),
+    limit: int = Query(25, ge=1, le=100, description="Max search results"),
+):
+    """Search official Indian Railways station database by code, name, or city/state."""
+    return StationService.search_stations(q, limit=limit)
+
+
+@router.get("/official-route/{train_number}")
+async def get_official_train_route(
+    train_number: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve verified official railway route halts and coordinates for a train."""
+    clean = train_number.strip()
+    from app.services.train_lookup_service import TrainLookupService
+    service = TrainLookupService()
+    lookup_res = await service.lookup(clean)
+    if lookup_res and lookup_res.route and len(lookup_res.route) >= 2:
+        stops = [s.model_dump() if hasattr(s, "model_dump") else s.__dict__ for s in lookup_res.route]
+        enriched = StationService.enrich_route_stops(stops, clean)
+        return {
+            "train_number": clean,
+            "train_name": lookup_res.train_name or f"Train {clean}",
+            "source_code": lookup_res.source_code,
+            "destination_code": lookup_res.destination_code,
+            "source_station": lookup_res.source_station,
+            "destination_station": lookup_res.destination_station,
+            "status": "VERIFIED",
+            "stops_count": len(enriched),
+            "stations": enriched,
+        }
+    return {
+        "train_number": clean,
+        "status": "NOT_FOUND",
+        "message": f"No official railway route found for train {clean}",
+        "stops_count": 0,
+        "stations": [],
+    }
+
+
+@router.post("/routes", response_model=List[CorridorStation])
+async def configure_train_route(
+    payload: RouteConfigRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Configure or update railway route geometry and station stops for a train."""
+    clean = payload.train_number.strip()
+    res = await db.execute(select(Train).where(Train.train_number == clean, Train.is_deleted == False))
+    db_train = res.scalar_one_or_none()
+    if not db_train:
+        raise HTTPException(status_code=404, detail=f"Train {clean} not found.")
+
+    if not payload.stations or len(payload.stations) < 2:
+        raise HTTPException(status_code=400, detail="A valid railway route requires at least 2 stations.")
+
+    enriched = StationService.enrich_route_stops(payload.stations, clean)
+    if len(enriched) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 stations must have valid geographic coordinates.")
+
+    db_train.route_json = json.dumps(enriched)
+    db_train.source_station = payload.source_station or enriched[0]["name"]
+    db_train.source_code = payload.source_code or enriched[0]["code"]
+    db_train.destination_station = payload.destination_station or enriched[-1]["name"]
+    db_train.destination_code = payload.destination_code or enriched[-1]["code"]
+    db_train.last_verified_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(db_train)
+
+    return build_corridor_stations_for_train(db_train)
+
+
+@router.put("/routes/{train_number}", response_model=List[CorridorStation])
+async def update_train_route(
+    train_number: str,
+    payload: RouteConfigRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update railway route geometry and station stops for a train."""
+    payload.train_number = train_number
+    return await configure_train_route(payload, db)
+
+
+@router.delete("/routes/{train_number}")
+async def delete_train_route(
+    train_number: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete configured railway route for a train."""
+    clean = train_number.strip()
+    res = await db.execute(select(Train).where(Train.train_number == clean, Train.is_deleted == False))
+    db_train = res.scalar_one_or_none()
+    if not db_train:
+        raise HTTPException(status_code=404, detail=f"Train {clean} not found.")
+
+    db_train.route_json = None
+    await db.commit()
+    return {"success": True, "message": f"Route for train {clean} removed."}
 
 
 @router.get("/corridors", response_model=Dict[str, List[CorridorStation]])

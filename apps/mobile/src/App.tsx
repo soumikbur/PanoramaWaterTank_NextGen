@@ -87,7 +87,15 @@ const AccessDeniedScreen: React.FC = () => {
 
 const MainContent: React.FC = () => {
   const { activeScreen, setActiveScreen, currentUser } = useApp();
-  const isAdmin = currentUser?.role === 'ADMIN';
+  const storedRole = typeof window !== 'undefined' ? (() => {
+    try {
+      return JSON.parse(localStorage.getItem('panorama_demo_user') || '{}')?.role;
+    } catch {
+      return '';
+    }
+  })() : '';
+  const effectiveRole = currentUser?.role || storedRole || '';
+  const isAdmin = String(effectiveRole).toUpperCase() === 'ADMIN';
 
   return (
     <div

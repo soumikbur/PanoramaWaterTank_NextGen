@@ -119,9 +119,9 @@ class DeviceRegistryService {
       }
 
       // Ensure target hardware device is available in device registry
-      if (!this.devices.has('002F00654B42501203203533332') && !this.deletedUids.has('002F00654B42501203203533332')) {
-        this.devices.set('002F00654B42501203203533332', {
-          uid: '002F00654B42501203203533332',
+      if (!this.devices.has('002F00654B42501320353332') && !this.deletedUids.has('002F00654B42501320353332')) {
+        this.devices.set('002F00654B42501320353332', {
+          uid: '002F00654B42501320353332',
           name: 'WLI Hardware Node (002F...332)',
           trainNumber: null,
           coachNumber: null,

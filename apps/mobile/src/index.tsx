@@ -12,12 +12,14 @@ import { localFleetStore } from './services/localFleetStore';
 import { deviceRegistry } from './services/deviceRegistry';
 import { Logger } from './services/logger';
 import { wsService } from './services/websocket';
+import { mqttService } from './services/mqttService';
 
 // Expose services for automated verification scripts and SCADA diagnostic instrumentation
 if (typeof window !== 'undefined') {
   (window as any).alertNotificationService = alertNotificationService;
   (window as any).nativeBridge = nativeBridge;
   (window as any).adaptiveUiService = adaptiveUiService;
+  (window as any).mqttService = mqttService;
   (window as any).__testModules = {
     alertNotificationService,
     nativeBridge,
@@ -27,6 +29,7 @@ if (typeof window !== 'undefined') {
     deviceRegistry,
     Logger,
     wsService,
+    mqttService,
   };
 }
 

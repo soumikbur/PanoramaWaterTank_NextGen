@@ -90,7 +90,15 @@ export const Sidebar: React.FC = () => {
   const { sidebarMode, setSidebarMode } = useDisplayPreferences();
 
   const isConnected = connectionStatus === 'CONNECTED' || mqttConnectionStatus === 'CONNECTED';
-  const isAdmin = currentUser?.role === 'ADMIN';
+  const storedRole = typeof window !== 'undefined' ? (() => {
+    try {
+      return JSON.parse(localStorage.getItem('panorama_demo_user') || '{}')?.role;
+    } catch {
+      return '';
+    }
+  })() : '';
+  const effectiveRole = currentUser?.role || storedRole || '';
+  const isAdmin = String(effectiveRole).toUpperCase() === 'ADMIN';
 
   const unackedAlertCount = Math.max(
     managedAlerts.filter((a) => a.status === 'ACTIVE').length,
