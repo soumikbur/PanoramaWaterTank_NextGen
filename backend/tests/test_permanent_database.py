@@ -348,7 +348,7 @@ async def test_6_multi_device_sync_outbox_queue():
         assert ev.entity_id == "12301"
 
     # Flush outbox worker
-    flushed = await flush_outbox_events()
+    flushed = await flush_outbox_events(batch_size=500)
     assert flushed >= 1
 
     # Verify event transitioned to PUBLISHED

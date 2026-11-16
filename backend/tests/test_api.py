@@ -44,6 +44,47 @@ async def test_health_endpoint():
         assert response.status_code == 200
         data = response.json()
         assert data["status"] in ["HEALTHY", "DEGRADED"]
+        assert "database" in data
+        assert "mqtt" in data
+        assert "uptimeSeconds" in data
+
+
+@pytest.mark.asyncio
+async def test_granular_database_health_endpoint():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/v1/health/database")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "HEALTHY"
+        assert data["connected"] is True
+        assert "responseTimeMs" in data
+        assert "databaseEngine" in data
+
+
+@pytest.mark.asyncio
+async def test_granular_mqtt_health_endpoint():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/v1/health/mqtt")
+        assert response.status_code == 200
+        data = response.json()
+        assert "status" in data
+        assert "broker" in data
+        assert "topics" in data
+
+
+@pytest.mark.asyncio
+async def test_granular_system_health_endpoint():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get("/api/v1/health/system")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "HEALTHY"
+        assert "runtime" in data
+        assert "uptimeSeconds" in data
+        assert "pythonVersion" in data["runtime"]
 
 
 @pytest.mark.asyncio

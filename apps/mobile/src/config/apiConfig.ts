@@ -5,6 +5,8 @@
  * and environment detection across Web, Mobile (Capacitor), and Local Dev environments.
  */
 
+import { isAndroidCapacitorApp } from '../services/nativeBridge';
+
 export const DEFAULT_PRODUCTION_API_URL = 'https://panorama-water-tank-backend.onrender.com/api/v1';
 export const DEFAULT_LOCAL_API_URL = 'http://127.0.0.1:8000/api/v1';
 export const DEFAULT_PRODUCTION_WS_URL = 'wss://panorama-water-tank-backend.onrender.com/api/v1/ws/live';
@@ -48,19 +50,7 @@ export function resolveApiBaseUrl(): string {
     } catch {}
   }
 
-  // 2. Local development loopback (prioritized for local testing and emulator)
-  if (typeof window !== 'undefined' && window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
-    const host = window.location.hostname || '127.0.0.1';
-    const port = window.location.port || '';
-    if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0' || host === '10.0.2.2') {
-      if (port === '8000') {
-        return `http://${host}:${port}/api/v1`;
-      }
-      return `http://${host}:8000/api/v1`;
-    }
-  }
-
-  // 3. Build-time environment variable injection
+  // 2. Build-time environment variable injection (e.g. production build)
   const envUrl =
     (typeof process !== 'undefined' && (
       process.env?.VITE_API_BASE_URL ||
@@ -83,7 +73,29 @@ export function resolveApiBaseUrl(): string {
     }
   }
 
-  // 4. Default production backend URL
+  // 3. Android Capacitor native environment check
+  if (typeof window !== 'undefined' && isAndroidCapacitorApp()) {
+    // In Android emulator, host development machine loopback is at 10.0.2.2:8000
+    return 'http://10.0.2.2:8000/api/v1';
+  }
+
+  // 4. Local desktop / web development loopback
+  if (typeof window !== 'undefined' && window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
+    const host = window.location.hostname || '127.0.0.1';
+    const port = window.location.port || '';
+    if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0') {
+      if (port === '8000') {
+        return `http://${host}:${port}/api/v1`;
+      }
+      return `http://127.0.0.1:8000/api/v1`;
+    }
+    // Hosted GitHub Pages or custom web domain without build envUrl
+    if (host.endsWith('github.io') || host.endsWith('vercel.app')) {
+      return DEFAULT_PRODUCTION_API_URL;
+    }
+  }
+
+  // 5. Default production backend URL
   return DEFAULT_PRODUCTION_API_URL;
 }
 

@@ -147,11 +147,16 @@ class MqttService:
                 train_row = None
                 if clean_trno and clean_trno.upper() != "UNASSIGNED":
                     train_row = (
-                        await session.execute(select(Train).where(Train.train_number == clean_trno))
+                        await session.execute(
+                            select(Train).where(Train.train_number == clean_trno, Train.is_deleted == False)
+                        )
                     ).scalar_one_or_none()
 
-                if clean_trno and clean_trno.upper() != "UNASSIGNED" and train_row is None:
-                    # Telemetry claims unconfigured or deleted train: reject train assignment and do not mark online
+                # Check if clean_trno is a factory default dummy string
+                is_dummy_train = clean_trno.lower() in ("abcd123", "pano123", "test", "demo", "00000", "default", "none") or not clean_trno
+
+                if clean_trno and clean_trno.upper() != "UNASSIGNED" and not is_dummy_train and train_row is None:
+                    # Telemetry explicitly claims a deleted or unconfigured train: reject train assignment and do not mark online
                     existing_dev = await device_repo.get_by_uid(payload.uid)
                     if existing_dev:
                         existing_dev.train_number = "UNASSIGNED"
@@ -166,7 +171,8 @@ class MqttService:
                     return
 
                 if train_row is None:
-                    # Unassigned device reporting telemetry without train claim
+                    # Unassigned device reporting telemetry without train claim or with factory default strings:
+                    # Ingest and keep device ONLINE as DISCOVERED / AVAILABLE without creating phantom trains
                     device = await device_repo.get_by_uid(payload.uid)
                     if not device:
                         device = await device_repo.create_or_update(
@@ -174,19 +180,22 @@ class MqttService:
                             train_number="UNASSIGNED",
                             coach_number="UNASSIGNED",
                             name=f"WLI Node ({payload.uid[-6:]})",
-                            status="AVAILABLE"
+                            status="DISCOVERED"
                         )
+                        logger.info(f"Discovered new edge hardware node '{payload.uid}' via MQTT.")
                     else:
                         device.train_number = "UNASSIGNED"
                         device.coach_number = "UNASSIGNED"
                         device.is_online = True
                         device.last_seen_at = datetime.now(timezone.utc)
+                        await session.flush()
                 else:
                     # 1. Update/Create Device attached to verified configured train
                     device = await device_repo.create_or_update(
                         uid=payload.uid,
                         train_number=clean_trno,
-                        coach_number=payload.chno
+                        coach_number=payload.chno or "UNASSIGNED",
+                        status="ENGAGED"
                     )
 
                 # 2. Fetch Primary Tank
@@ -209,6 +218,9 @@ class MqttService:
                 except Exception:
                     ts = datetime.now(timezone.utc)
 
+                effective_bat = payload.bat if payload.bat is not None else payload.v1
+                effective_valid = payload.wlvl if payload.wlvl is not None else (payload.wlv1 if payload.wlv1 is not None else True)
+
                 # 5. Insert Telemetry Record
                 reading = TelemetryReading(
                     device_id=device.id,
@@ -218,13 +230,13 @@ class MqttService:
                     level_percent=calc_metrics["level_percent"],
                     volume_liters=calc_metrics["volume_liters"],
                     height_cm=calc_metrics["water_height_cm"],
-                    sensor_valid=payload.wlvl,
+                    sensor_valid=effective_valid,
                     latitude=payload.lat,
                     longitude=payload.effective_longitude,
                     altitude=payload.alt,
                     speed_kmh=payload.speed,
                     satellites=payload.sats,
-                    battery_v1=payload.v1,
+                    battery_v1=effective_bat,
                     auxiliary_v2=payload.v2,
                     raw_payload=payload.model_dump_json()
                 )
@@ -237,8 +249,8 @@ class MqttService:
 
                 detected_alarms = AlarmService.evaluate_reading(
                     raw_level_percent=payload.wlp1,
-                    sensor_valid=payload.wlvl,
-                    battery_voltage=payload.v1,
+                    sensor_valid=effective_valid,
+                    battery_voltage=effective_bat,
                     critical_threshold=crit_thresh,
                     warning_threshold=warn_thresh,
                     overflow_threshold=over_thresh
@@ -297,7 +309,7 @@ class MqttService:
                     "primaryRank": calc_metrics["rank"],
                     "capacityLiters": calc_metrics["capacity_liters"],
                     "secondaryLevel": payload.wlp2,
-                    "batteryVoltage": payload.v1,
+                    "batteryVoltage": effective_bat,
                     "gpsSpeed": payload.speed,
                     "status": AlarmService.determine_overall_status(detected_alarms),
                     "isOnline": True

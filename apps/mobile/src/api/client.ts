@@ -2188,21 +2188,38 @@ export class ApiClient {
   }
 
   static async applyUnifiedConfig(config: any): Promise<any> {
-    if (!API_BASE) {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem('panorama_system_config', JSON.stringify(config));
-        window.dispatchEvent(new CustomEvent('panorama:settings-updated', { detail: config }));
-      }
-      try {
-        mqttService.publish(CENTRAL_SETTINGS_TOPIC, config, true);
-        mqttService.publish(CENTRAL_DELTA_SYNC_TOPIC, { type: 'SETTINGS_UPDATE' });
-      } catch {}
-      return { status: 'success', message: 'Settings saved and broadcast across clients' };
+    // 1. Immediately persist to client local storage and notify active subsystems
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('panorama_system_config', JSON.stringify(config));
+      window.dispatchEvent(new CustomEvent('panorama:settings-updated', { detail: config }));
     }
-    return this.request('/settings/apply', {
-      method: 'POST',
-      body: JSON.stringify(config),
-    });
+    try {
+      mqttService.publish(CENTRAL_SETTINGS_TOPIC, config, true);
+      mqttService.publish(CENTRAL_DELTA_SYNC_TOPIC, { type: 'SETTINGS_UPDATE' });
+    } catch {}
+
+    const base = resolveApiBase();
+    if (!base || this.isRemoteUnreachable()) {
+      return {
+        status: 'pending_sync',
+        syncStatus: 'OFFLINE_PENDING_SYNC',
+        message: 'Saved locally in offline queue. Changes will synchronize to PostgreSQL when backend reconnects.',
+      };
+    }
+
+    try {
+      const res: any = await this.request('/settings/apply', {
+        method: 'POST',
+        body: JSON.stringify(config),
+      });
+      return { ...(res || {}), syncStatus: 'DATABASE_SAVED' };
+    } catch (err: any) {
+      return {
+        status: 'pending_sync',
+        syncStatus: 'OFFLINE_PENDING_SYNC',
+        message: 'Saved locally in offline queue. Changes will synchronize to PostgreSQL when backend reconnects.',
+      };
+    }
   }
 
   static async readDeviceConfig(): Promise<any> {

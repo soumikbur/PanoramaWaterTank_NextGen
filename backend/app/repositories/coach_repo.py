@@ -57,6 +57,21 @@ class CoachRepository:
         position: int = 1,
         device_uid: Optional[str] = None,
     ) -> Coach:
+        # Idempotently check if active or previously deleted coach exists
+        existing = await self.get_by_train_and_coach_number(train_number, coach_number, include_deleted=True)
+        if existing:
+            existing.train_id = train_id
+            existing.coach_name = coach_name or existing.coach_name
+            existing.coach_category = coach_category
+            existing.coach_type = coach_type
+            existing.position = position
+            if device_uid is not None:
+                existing.device_uid = device_uid
+            existing.is_deleted = False
+            existing.updated_at = utc_now()
+            await self.session.flush()
+            return existing
+
         coach = Coach(
             train_id=train_id,
             train_number=train_number,

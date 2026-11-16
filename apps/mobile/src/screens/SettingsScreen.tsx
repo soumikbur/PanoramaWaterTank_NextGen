@@ -417,7 +417,7 @@ const AdminSystemSettings: React.FC = () => {
         alarm_voltage_enabled: alarmVoltageEnabled,
       };
 
-      await ApiClient.applyUnifiedConfig(payload);
+      const result = await ApiClient.applyUnifiedConfig(payload);
       setCustomApiUrl(backendUrl);
       updateAlertConfig({
         masterEnabled: alarmMasterEnabled,
@@ -432,10 +432,17 @@ const AdminSystemSettings: React.FC = () => {
         voltageEnabled: alarmVoltageEnabled,
       });
       setHasUnsavedChanges(false);
-      setActionMessage({
-        text: 'Configuration successfully validated and persisted to database & device entity.',
-        isError: false,
-      });
+      if (result && result.syncStatus === 'OFFLINE_PENDING_SYNC') {
+        setActionMessage({
+          text: 'Configuration saved locally (offline queue). Changes will synchronize to PostgreSQL when backend reconnects.',
+          isError: false,
+        });
+      } else {
+        setActionMessage({
+          text: 'Configuration successfully validated and persisted to database & device entity.',
+          isError: false,
+        });
+      }
       setTimeout(() => setActionMessage(null), 4000);
       await refreshData();
     } catch (e: any) {

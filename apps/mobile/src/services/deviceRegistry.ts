@@ -7,6 +7,7 @@
 
 import { LiveTelemetryPayload } from '../types';
 import { alertNotificationService } from './alertNotificationService';
+import { resolveApiBaseUrl } from '../config/apiConfig';
 import {
   mqttService,
   CENTRAL_DEVICES_TOPIC,
@@ -18,34 +19,11 @@ const centralChannel: BroadcastChannel | null =
     ? new BroadcastChannel('panorama_central_sync')
     : null;
 
-function resolveRegistryApiBase(): string | null {
-  if (typeof window !== 'undefined' && window.location?.hostname) {
-    const host = window.location.hostname;
-    if (host.endsWith('github.io') || host.endsWith('pages.dev')) {
-      const custom = window.localStorage ? (window.localStorage.getItem('panorama_api_url') || window.localStorage.getItem('panorama_backend_url')) : null;
-      if (custom && custom.trim()) {
-        return custom.trim().replace(/\/+$/, '');
-      }
-      return null;
-    }
-    if (host === 'localhost' || host === '127.0.0.1') {
-      return `${window.location.origin}/api/v1`;
-    }
-  }
-
-  const configured =
-    (typeof process !== 'undefined' && (process.env?.API_URL || process.env?.REACT_APP_API_URL || process.env?.VITE_API_URL)) ||
-    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL);
-  if (configured && String(configured).trim()) {
-    return String(configured).trim().replace(/\/+$/, '');
-  }
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return `${window.location.origin}/api/v1`;
-  }
-  return 'http://127.0.0.1:8000/api/v1';
+function resolveRegistryApiBase(): string {
+  return resolveApiBaseUrl();
 }
 
-const API_BASE = resolveRegistryApiBase();
+const API_BASE = resolveApiBaseUrl();
 
 export type DeviceRegistrationStatus = 'DISCOVERED' | 'REGISTERED';
 export type DeviceAssignmentStatus = 'ENGAGED' | 'AVAILABLE';
