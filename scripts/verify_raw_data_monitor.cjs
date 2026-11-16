@@ -192,13 +192,13 @@ async function runVerification() {
 
     // 7. Test Device Selector Dropdown Switching
     console.log('[VERIFY] Step 7: Testing Device Selector Dropdown Switching...');
-    const deviceSelect = page.locator('select');
+    const deviceSelect = page.locator('select').first();
     const options = await deviceSelect.locator('option').allInnerTexts();
     console.log(`[VERIFY] Available devices in selector: ${options.length} options`);
 
     // Switch to another device if available
-    if (options.length > 1) {
-      const secondOptionVal = await deviceSelect.locator('option').nth(1).getAttribute('value');
+    if (options.length > 2) {
+      const secondOptionVal = await deviceSelect.locator('option').nth(2).getAttribute('value');
       console.log(`[VERIFY] Switching device selector to: ${secondOptionVal}`);
       await deviceSelect.selectOption(secondOptionVal);
       await page.waitForTimeout(500);
