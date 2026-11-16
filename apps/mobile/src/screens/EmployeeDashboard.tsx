@@ -696,7 +696,7 @@ export const EmployeeDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '11px' }}>
+          <div className="system-status-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '11px' }}>
             <div style={{ padding: '8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
               <div style={{ color: '#64748B', fontSize: '10px', fontWeight: 600 }}>Active Fleet Train</div>
               <strong style={{ color: hasConfiguredFleet ? '#2563EB' : '#64748B', fontSize: '13px' }}>
@@ -733,7 +733,7 @@ export const EmployeeDashboard: React.FC = () => {
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
             Train Summary
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '11px' }}>
+          <div className="system-status-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '11px' }}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ color: '#64748B' }}>Selected Train</span>
               <strong style={{ color: '#2563EB', fontSize: '12px' }}>{currentTrain.trainNumber} ({currentTrain.name})</strong>
@@ -790,7 +790,7 @@ export const EmployeeDashboard: React.FC = () => {
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
             Active Train Telemetry Info
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '11px' }}>
+          <div className="system-status-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '11px' }}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ color: '#64748B' }}>Train No.</span>
               <strong style={{ color: '#0F172A', fontSize: '12px' }}>{currentTrain.trainNumber}</strong>

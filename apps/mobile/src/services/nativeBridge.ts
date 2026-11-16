@@ -359,6 +359,32 @@ class NativeBridge {
 export const nativeBridge = NativeBridge.getInstance();
 
 /**
+ * Reliable Capacitor Android platform detector.
+ * Returns true ONLY when running inside native Android Capacitor app.
+ * Returns false on desktop browsers, mobile Chrome/Safari, iOS, and electron.
+ */
+export function isAndroidCapacitorApp(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const cap = (window as any).Capacitor;
+    if (cap) {
+      const isNative = typeof cap.isNativePlatform === 'function' ? cap.isNativePlatform() : false;
+      const platform = typeof cap.getPlatform === 'function' ? cap.getPlatform() : (cap.platform || '');
+      if (isNative && platform === 'android') return true;
+    }
+    if (window.location && window.location.protocol === 'capacitor:' && navigator.userAgent.includes('Android')) {
+      return true;
+    }
+    if ((window as any).__PANORAMA_FORCE_CAPACITOR_ANDROID__) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Reliable Capacitor native platform detector.
  * Returns true ONLY when running inside native Android or iOS Capacitor wrapper.
  * Returns false on standard desktop browsers, mobile Chrome, and Safari.

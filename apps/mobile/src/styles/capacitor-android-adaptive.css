@@ -1,0 +1,284 @@
+/**
+ * capacitor-android-adaptive.css
+ *
+ * Exclusively scoped to Capacitor Android via:
+ * html[data-platform="capacitor-android"]
+ *
+ * ZERO impact on desktop web browsers, desktop SCADA layouts, or standard web users.
+ */
+
+/* =========================================================================
+   1. BASE DESIGN TOKENS & CSS VARIABLES FOR CAPACITOR ANDROID
+   ========================================================================= */
+
+html[data-platform="capacitor-android"] {
+  /* Safe-Area Insets (Status bar, Navigation bar, Camera cutouts) */
+  --android-safe-top: env(safe-area-inset-top, 0px);
+  --android-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --android-safe-left: env(safe-area-inset-left, 0px);
+  --android-safe-right: env(safe-area-inset-right, 0px);
+
+  /* Centralized Spacing System — Default / Standard Phone baseline */
+  --android-page-padding-x: 16px;
+  --android-card-padding: 16px;
+  --android-card-gap: 12px;
+  --android-section-gap: 20px;
+  --android-btn-height: 46px;
+  --android-input-height: 46px;
+  --android-header-height: 56px;
+
+  /* Adaptive Fluid Typography System via clamp() */
+  --android-font-page-title: clamp(19px, 4.2vw, 24px);
+  --android-font-section-title: clamp(16px, 3.6vw, 20px);
+  --android-font-card-title: clamp(14px, 3.2vw, 17px);
+  --android-font-body: clamp(13px, 2.8vw, 15px);
+  --android-font-secondary: clamp(11px, 2.4vw, 13px);
+  --android-font-value-large: clamp(19px, 4.5vw, 25px);
+}
+
+/* =========================================================================
+   2. BREAKPOINT OVERRIDES (CATEGORIES)
+   ========================================================================= */
+
+/* Category 1: Compact Android Phones (< 360px, e.g. 320x640) */
+html[data-platform="capacitor-android"][data-android-device="compact"] {
+  --android-page-padding-x: 12px;
+  --android-card-padding: 12px;
+  --android-card-gap: 10px;
+  --android-section-gap: 16px;
+  --android-btn-height: 44px;
+  --android-input-height: 44px;
+  --android-header-height: 54px;
+
+  --android-font-page-title: 19px;
+  --android-font-section-title: 16px;
+  --android-font-card-title: 14px;
+  --android-font-body: 13px;
+  --android-font-secondary: 11px;
+  --android-font-value-large: 19px;
+}
+
+/* Category 2: Standard Android Phones (360px - 389px, e.g. 360x720, 360x800) */
+html[data-platform="capacitor-android"][data-android-device="standard"] {
+  --android-page-padding-x: 16px;
+  --android-card-padding: 16px;
+  --android-card-gap: 12px;
+  --android-section-gap: 20px;
+  --android-btn-height: 46px;
+  --android-input-height: 46px;
+  --android-header-height: 56px;
+
+  --android-font-page-title: 21px;
+  --android-font-section-title: 17px;
+  --android-font-card-title: 15px;
+  --android-font-body: 14px;
+  --android-font-secondary: 12px;
+  --android-font-value-large: 21px;
+}
+
+/* Category 3: Large Android Phones (390px - 429px, e.g. 390x844, 412x915 Pixel 7) */
+html[data-platform="capacitor-android"][data-android-device="large"] {
+  --android-page-padding-x: 18px;
+  --android-card-padding: 18px;
+  --android-card-gap: 14px;
+  --android-section-gap: 24px;
+  --android-btn-height: 48px;
+  --android-input-height: 48px;
+  --android-header-height: 58px;
+
+  --android-font-page-title: 23px;
+  --android-font-section-title: 19px;
+  --android-font-card-title: 16px;
+  --android-font-body: 15px;
+  --android-font-secondary: 13px;
+  --android-font-value-large: 23px;
+}
+
+/* Category 4: Extra-Large Phones (430px - 599px, e.g. 480x1280 720p/1.5x AVD) */
+html[data-platform="capacitor-android"][data-android-device="xlarge"] {
+  --android-page-padding-x: 20px;
+  --android-card-padding: 18px;
+  --android-card-gap: 14px;
+  --android-section-gap: 24px;
+  --android-btn-height: 48px;
+  --android-input-height: 48px;
+  --android-header-height: 58px;
+
+  --android-font-page-title: 24px;
+  --android-font-section-title: 19px;
+  --android-font-card-title: 16px;
+  --android-font-body: 15px;
+  --android-font-secondary: 13px;
+  --android-font-value-large: 24px;
+}
+
+/* Category 5: Android Tablets (>= 600px, e.g. 768x1024, 800x1280) */
+html[data-platform="capacitor-android"][data-android-device="tablet"] {
+  --android-page-padding-x: 24px;
+  --android-card-padding: 20px;
+  --android-card-gap: 16px;
+  --android-section-gap: 28px;
+  --android-btn-height: 48px;
+  --android-input-height: 48px;
+  --android-header-height: 64px;
+
+  --android-font-page-title: 26px;
+  --android-font-section-title: 20px;
+  --android-font-card-title: 17px;
+  --android-font-body: 15px;
+  --android-font-secondary: 13px;
+  --android-font-value-large: 26px;
+}
+
+/* =========================================================================
+   3. APP SHELL & SAFE-AREA INTEGRATION
+   ========================================================================= */
+
+html[data-platform="capacitor-android"] body,
+html[data-platform="capacitor-android"] #root,
+html[data-platform="capacitor-android"] .app-layout {
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  width: 100vw !important;
+  max-width: 100vw !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  /* Safe-area insets */
+  padding-left: var(--android-safe-left, 0px) !important;
+  padding-right: var(--android-safe-right, 0px) !important;
+}
+
+html[data-platform="capacitor-android"] .app-layout main {
+  padding: 12px var(--android-page-padding-x) calc(var(--android-safe-bottom, 0px) + 24px) var(--android-page-padding-x) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* =========================================================================
+   4. ADAPTIVE HEADER
+   ========================================================================= */
+
+html[data-platform="capacitor-android"] .app-layout header {
+  height: var(--android-header-height, 56px) !important;
+  min-height: var(--android-header-height, 56px) !important;
+  padding-left: var(--android-page-padding-x) !important;
+  padding-right: var(--android-page-padding-x) !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  flex-shrink: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+/* Compact header fine-tuning (< 360px) */
+html[data-platform="capacitor-android"][data-android-device="compact"] .app-layout header {
+  gap: 4px !important;
+}
+
+html[data-platform="capacitor-android"][data-android-device="compact"] [data-testid="mobile-header-section-name"] {
+  font-size: 13px !important;
+}
+
+/* =========================================================================
+   5. ADAPTIVE DASHBOARD COMPONENTS
+   ========================================================================= */
+
+/* Mobile Dashboard Cards Container */
+html[data-platform="capacitor-android"] .dashboard-train-cards-mobile {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: var(--android-card-gap) !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+html[data-platform="capacitor-android"] .dashboard-train-cards-mobile > div {
+  padding: var(--android-card-padding) !important;
+  border-radius: 8px !important;
+  box-sizing: border-box !important;
+}
+
+/* System Status Grid: 1 column on compact, 2 columns on standard/large/xlarge/tablet */
+html[data-platform="capacitor-android"][data-android-device="compact"] .system-status-grid,
+html[data-platform="capacitor-android"][data-android-device="compact"] .dashboard-train-cards-mobile .system-status-grid {
+  grid-template-columns: 1fr !important;
+  gap: 6px !important;
+}
+
+html[data-platform="capacitor-android"]:not([data-android-device="compact"]) .system-status-grid,
+html[data-platform="capacitor-android"]:not([data-android-device="compact"]) .dashboard-train-cards-mobile .system-status-grid {
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 8px !important;
+}
+
+/* Telemetry KPI & Status Items */
+html[data-platform="capacitor-android"] .telemetry-kpi-val {
+  font-size: var(--android-font-value-large) !important;
+}
+
+html[data-platform="capacitor-android"] .telemetry-card-title {
+  font-size: var(--android-font-card-title) !important;
+}
+
+/* =========================================================================
+   6. TANK VISUALIZATION CONTAINER & PROPORTIONS
+   ========================================================================= */
+
+html[data-platform="capacitor-android"] .tank-visualization-wrapper,
+html[data-platform="capacitor-android"] .coach-details-tank-card {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  border-radius: 8px !important;
+}
+
+/* =========================================================================
+   7. TOUCH TARGETS, BUTTONS & INPUTS
+   ========================================================================= */
+
+html[data-platform="capacitor-android"] button.touch-target-44,
+html[data-platform="capacitor-android"] .touch-target-44 {
+  min-height: var(--android-btn-height) !important;
+  min-width: 44px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+html[data-platform="capacitor-android"] input,
+html[data-platform="capacitor-android"] select,
+html[data-platform="capacitor-android"] textarea {
+  min-height: var(--android-input-height) !important;
+  font-size: var(--android-font-body) !important;
+  border-radius: 6px !important;
+  box-sizing: border-box !important;
+}
+
+/* =========================================================================
+   8. ADAPTIVE NAVIGATION DRAWER
+   ========================================================================= */
+
+html[data-platform="capacitor-android"] aside.sidebar-mobile,
+html[data-platform="capacitor-android"] .mobile-nav-drawer {
+  padding-top: calc(var(--android-safe-top, 0px) + 12px) !important;
+  padding-bottom: calc(var(--android-safe-bottom, 0px) + 16px) !important;
+  padding-left: calc(var(--android-safe-left, 0px) + 12px) !important;
+  padding-right: 12px !important;
+  box-sizing: border-box !important;
+  width: min(85vw, 320px) !important;
+  max-width: 85vw !important;
+}
+
+html[data-platform="capacitor-android"] aside.sidebar-mobile button,
+html[data-platform="capacitor-android"] .mobile-nav-drawer button {
+  min-height: var(--android-btn-height) !important;
+  font-size: var(--android-font-body) !important;
+}
