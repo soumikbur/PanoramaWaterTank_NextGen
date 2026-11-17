@@ -1311,7 +1311,7 @@ export class ApiClient {
     return res;
   }
 
-  static async updateTrain(trainNumber: string, data: { name?: string; region?: string; type?: string }): Promise<any> {
+  static async updateTrain(trainNumber: string, data: { name?: string; region?: string; type?: string; railway_zone?: string }): Promise<any> {
     let res: any;
     if (API_BASE && !this.isRemoteUnreachable()) {
       try {

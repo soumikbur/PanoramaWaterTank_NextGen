@@ -462,7 +462,7 @@ export const localFleetStore = {
     return { success: true, train_number: num, coaches_created: coaches.length };
   },
 
-  updateTrain(trainNumber: string, data: { name?: string; region?: string; type?: string }, options?: { skipPublish?: boolean }): { success: boolean } {
+  updateTrain(trainNumber: string, data: { name?: string; region?: string; type?: string; railway_zone?: string }, options?: { skipPublish?: boolean }): { success: boolean } {
     const clean = (trainNumber || '').trim();
     const state = readState();
     const rec = state.trains[clean];
@@ -482,6 +482,11 @@ export const localFleetStore = {
     if (data.type !== undefined) {
       rec.train.type = data.type;
       rec.consist.train_type = data.type;
+    }
+    if (data.railway_zone !== undefined) {
+      const z = data.railway_zone ? String(data.railway_zone).trim().toUpperCase() : null;
+      rec.train.railway_zone = z;
+      rec.consist.railway_zone = z;
     }
     if ((data as any).route !== undefined) {
       rec.train.route = (data as any).route;

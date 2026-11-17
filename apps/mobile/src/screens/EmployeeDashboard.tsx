@@ -118,6 +118,7 @@ export const EmployeeDashboard: React.FC = () => {
   const [editTrainSource, setEditTrainSource] = useState('');
   const [editTrainDestination, setEditTrainDestination] = useState('');
   const [editTrainRegion, setEditTrainRegion] = useState('EAST');
+  const [editTrainZone, setEditTrainZone] = useState('');
   const [editTrainStatus, setEditTrainStatus] = useState('Running');
 
   // Load backend trains
@@ -492,6 +493,7 @@ export const EmployeeDashboard: React.FC = () => {
     setEditTrainSource(train.source || 'Chennai (MAS)');
     setEditTrainDestination(train.destination || 'Howrah (HWH)');
     setEditTrainRegion(train.region || 'EAST');
+    setEditTrainZone(train.railway_zone || train.railwayZone || '');
     setEditTrainStatus(train.operationalStatus || train.type || 'Running');
     setFormError(null);
     setIsEditModalOpen(true);
@@ -510,6 +512,7 @@ export const EmployeeDashboard: React.FC = () => {
         name: editTrainName.trim(),
         region: editTrainRegion,
         type: editTrainStatus,
+        railway_zone: editTrainZone.trim().toUpperCase() || undefined,
       });
 
       setIsEditModalOpen(false);
@@ -3000,6 +3003,29 @@ export const EmployeeDashboard: React.FC = () => {
                   value={editTrainName}
                   onChange={(e) => setEditTrainName(e.target.value)}
                   required
+                  style={{
+                    width: '100%',
+                    height: '34px',
+                    padding: '0 10px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--color-border, #CBD5E1)',
+                    backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
+                    color: 'var(--color-text-primary, #0F172A)',
+                    fontSize: '12px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'var(--color-text-secondary, #475569)', marginBottom: '4px' }}>
+                  Railway Zone (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={editTrainZone}
+                  onChange={(e) => setEditTrainZone(e.target.value)}
+                  placeholder="e.g. NR, WR, SR, ER (Optional)"
                   style={{
                     width: '100%',
                     height: '34px',

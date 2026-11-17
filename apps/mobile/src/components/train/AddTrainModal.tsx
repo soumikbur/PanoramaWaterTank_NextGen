@@ -53,7 +53,7 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
   const [destinationStation, setDestinationStation] = useState('');
   const [destinationCode, setDestinationCode] = useState('');
   const [region, setRegion] = useState('NORTH');
-  const [railwayZone, setRailwayZone] = useState('NR');
+  const [railwayZone, setRailwayZone] = useState('');
   const [trainType, setTrainType] = useState('Express');
   const [initialCoach, setInitialCoach] = useState('B1');
   const [useOfficialConsist, setUseOfficialConsist] = useState(true);
@@ -145,8 +145,6 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
     if (res.railway_zone) {
       setRailwayZone(res.railway_zone);
       filled.add('zone');
-    } else {
-      setRailwayZone('');
     }
     if (res.train_type) {
       setTrainType(res.train_type);
@@ -566,11 +564,16 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
                   Source: {lookupResult.provider} · {lookupResult.cached ? 'Cached' : 'Live'} ({lookupResult.latency_ms} ms)
                 </span>
               </div>
-              {lookupResult.missing_fields.length > 0 && (
-                <div style={{ fontSize: '11px', opacity: 0.88 }}>
-                  Provider note: {lookupResult.missing_fields.join(', ')} not supplied by {lookupResult.provider}; app defaults preserved.
-                </div>
-              )}
+              {(() => {
+                const visibleMissing = lookupResult.missing_fields.filter(
+                  (f) => f !== 'railwayZone' && f !== 'zone'
+                );
+                return visibleMissing.length > 0 ? (
+                  <div style={{ fontSize: '11px', opacity: 0.88 }}>
+                    Provider note: {visibleMissing.join(', ')} not supplied by {lookupResult.provider}; app defaults preserved.
+                  </div>
+                ) : null;
+              })()}
             </div>
           )}
 
@@ -741,13 +744,12 @@ export const AddTrainModal: React.FC<AddTrainModalProps> = ({
 
             <div style={{ minWidth: 0 }}>
               <label style={{ display: 'flex', alignItems: 'center', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
-                Railway Zone {autoTag('zone')}
+                Railway Zone (Optional) {autoTag('zone')}
               </label>
               <input
                 data-testid="train-zone-input"
                 type="text"
-                readOnly={isVerified && autoFilledFields.has('zone')}
-                placeholder={isVerified && !autoFilledFields.has('zone') ? 'Optional (not in API)' : 'NR / WR / SR / NER'}
+                placeholder="e.g. NR, WR, SR, ER (Optional)"
                 value={railwayZone}
                 onChange={(e) => setRailwayZone(e.target.value)}
                 style={{

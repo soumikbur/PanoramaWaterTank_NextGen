@@ -86,6 +86,7 @@ export const TrainManagementScreen: React.FC = () => {
   const [editTrainNumber, setEditTrainNumber] = useState('');
   const [editTrainName, setEditTrainName] = useState('');
   const [editTrainRegion, setEditTrainRegion] = useState('NORTH');
+  const [editTrainZone, setEditTrainZone] = useState('');
   const [editTrainType, setEditTrainType] = useState('Express');
 
   const [formError, setFormError] = useState<string | null>(null);
@@ -241,7 +242,8 @@ export const TrainManagementScreen: React.FC = () => {
   const handleOpenEditTrainModal = (train: TrainOverviewItem) => {
     setEditTrainNumber(train.train_number);
     setEditTrainName(train.name);
-    setEditTrainRegion(selectedRegion || 'NORTH');
+    setEditTrainRegion(selectedRegion || train.region || 'NORTH');
+    setEditTrainZone(train.railway_zone || '');
     setEditTrainType(train.type || 'Express');
     setFormError(null);
     setIsEditModalOpen(true);
@@ -260,6 +262,7 @@ export const TrainManagementScreen: React.FC = () => {
         name: editTrainName.trim(),
         region: editTrainRegion,
         type: editTrainType.trim(),
+        railway_zone: editTrainZone.trim().toUpperCase() || undefined,
       });
 
       setIsEditModalOpen(false);
@@ -381,6 +384,7 @@ export const TrainManagementScreen: React.FC = () => {
 
           {currentUser?.role === 'ADMIN' && (
             <button
+              data-testid="open-add-train-btn"
               onClick={() => setIsAddModalOpen(true)}
               style={{
                 backgroundColor: '#2563EB',
@@ -785,7 +789,9 @@ export const TrainManagementScreen: React.FC = () => {
                     <span style={{ fontWeight: 600, color: '#1E293B', display: 'block' }}>
                       {train.name}
                     </span>
-                    <span style={{ fontSize: '11px', color: '#64748B' }}>{train.type}</span>
+                    <span style={{ fontSize: '11px', color: '#64748B' }}>
+                      {train.railway_zone ? `${train.railway_zone} • ${train.type}` : train.type}
+                    </span>
                   </div>
                   <span style={{ color: '#0F172A', fontWeight: 600 }}>{train.coaches_count}</span>
                   <span style={{ color: '#0F172A', fontWeight: 600 }}>{train.tanks_count}</span>
@@ -1270,6 +1276,26 @@ export const TrainManagementScreen: React.FC = () => {
                   <option value="EAST">EAST — Eastern Railway (ER)</option>
                   <option value="WEST">WEST — Western Railway (WR)</option>
                 </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                  Railway Zone (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={editTrainZone}
+                  onChange={(e) => setEditTrainZone(e.target.value)}
+                  placeholder="e.g. NR, WR, SR, ER (Optional)"
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '13px',
+                    boxSizing: 'border-box',
+                  }}
+                />
               </div>
 
               <div>

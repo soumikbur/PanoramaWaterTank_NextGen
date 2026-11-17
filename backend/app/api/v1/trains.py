@@ -720,7 +720,7 @@ async def create_train(
         "region": reg,
         "train_type": (data.train_type or "Express").strip(),
         "type": (data.train_type or "Express").strip(),
-        "railway_zone": getattr(data, "railway_zone", None),
+        "railway_zone": zone,
         "source_station": getattr(data, "source_station", None),
         "source_code": getattr(data, "source_code", None),
         "destination_station": getattr(data, "destination_station", None),
@@ -777,6 +777,7 @@ async def create_train(
         "message": "Train registered successfully",
         "train_number": train_number,
         "region": reg,
+        "railway_zone": zone,
         "coaches_created": len(coaches_to_create),
         "tank_height_cm": tank_h,
         "tank_capacity_liters": tank_c,
@@ -825,8 +826,12 @@ async def update_train(
         db_train.destination_station = data.destination_station.strip() or None
     if db_train and data.destination_code is not None:
         db_train.destination_code = data.destination_code.strip().upper() or None
-    if db_train and data.railway_zone is not None:
-        db_train.railway_zone = data.railway_zone.strip().upper() or None
+    if data.railway_zone is not None:
+        cleaned_zone = data.railway_zone.strip().upper() or None
+        if train_number in TRAIN_METADATA:
+            TRAIN_METADATA[train_number]["railway_zone"] = cleaned_zone
+        if db_train:
+            db_train.railway_zone = cleaned_zone
     if db_train and data.route is not None:
         db_train.route_json = json.dumps(data.route) if data.route else None
         db_train.last_verified_at = datetime.now(timezone.utc)
@@ -841,6 +846,7 @@ async def update_train(
                 "updated_by": admin.username,
                 "name": data.name,
                 "region": data.region,
+                "railway_zone": data.railway_zone,
                 "train_type": data.type,
             }),
         )
@@ -853,6 +859,7 @@ async def update_train(
         "train_number": train_number,
         "name": data.name.strip() if data.name is not None else (db_train.name if db_train else None),
         "region": db_train.region if db_train else None,
+        "railway_zone": db_train.railway_zone if db_train else (TRAIN_METADATA.get(train_number, {}).get("railway_zone")),
         "train_type": (data.type or (db_train.train_type if db_train else None) or "Express").strip(),
         "type": (data.type or (db_train.train_type if db_train else None) or "Express").strip(),
     }

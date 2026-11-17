@@ -42,6 +42,9 @@ global.window = {
     removeItem: (k) => memStorage.delete(k),
     clear: () => memStorage.clear(),
   },
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  dispatchEvent: () => true,
 };
 global.localStorage = global.window.localStorage;
 
@@ -108,8 +111,8 @@ async function run() {
     let fetchCount = 0;
     const seenProgress = [];
     global.fetch = async (url) => {
-      fetchCount++;
       if (String(url).includes('railradar.in/api/v1/trains/15120')) {
+        fetchCount++;
         await new Promise((r) => setTimeout(r, 40));
         return { ok: true, status: 200, text: async () => JSON.stringify(sample15120) };
       }
