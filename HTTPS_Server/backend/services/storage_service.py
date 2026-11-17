@@ -1,0 +1,104 @@
+"""Thread-safe bounded in-memory telemetry storage service."""
+import threading
+import time
+from collections import deque
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Union
+from backend import config
+
+
+class InMemoryStorageService:
+    """Thread-safe, bounded in-memory storage for IoT telemetry.
+    
+    Zero external database dependencies. Keeps latest readings per device
+    and a bounded circular buffer for historical records.
+    """
+
+    def __init__(self, max_history: Optional[int] = None):
+        self._max_history = max_history if max_history is not None else config.MAX_HISTORY_RECORDS
+        self._lock = threading.Lock()
+        self._latest_by_device: Dict[str, Dict[str, Any]] = {}
+        self._history: deque[Dict[str, Any]] = deque(maxlen=self._max_history)
+        self._start_time = time.time()
+        self._total_ingested: int = 0
+        self._duplicate_count: int = 0
+
+    def store_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Store a telemetry record thread-safely."""
+        device_id = str(record.get("device_id", "")).strip()
+        if not device_id:
+            raise ValueError("Record must include a valid non-empty device_id.")
+
+        with self._lock:
+            # Check for duplicate sequence_id or duplicate retransmission from the same device
+            seq = record.get("sequence_id")
+            prev_record = self._latest_by_device.get(device_id)
+            is_dup = False
+            if prev_record and seq is not None and prev_record.get("sequence_id") == seq:
+                is_dup = True
+                self._duplicate_count += 1
+            record["is_duplicate"] = is_dup
+
+            # Store copy in latest map
+            self._latest_by_device[device_id] = record.copy()
+            # Append copy to history circular buffer
+            self._history.append(record.copy())
+            self._total_ingested += 1
+
+        return record
+
+    def get_latest(self, device_id: Optional[str] = None) -> Union[Dict[str, Any], List[Dict[str, Any]], None]:
+        """Retrieve latest telemetry for a specific device, or all devices."""
+        with self._lock:
+            if device_id is not None:
+                cleaned_id = device_id.strip()
+                record = self._latest_by_device.get(cleaned_id)
+                return record.copy() if record else None
+            # Return list of all latest records
+            return [rec.copy() for rec in self._latest_by_device.values()]
+
+    def get_history(
+        self, device_id: Optional[str] = None, limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """Retrieve historical telemetry records in reverse chronological order (newest first)."""
+        clamped_limit = max(1, min(limit, self._max_history))
+        with self._lock:
+            if device_id is not None:
+                cleaned_id = device_id.strip()
+                # Filter matching device_id in reverse order (newest first)
+                matching = [
+                    rec.copy() for rec in reversed(self._history)
+                    if rec.get("device_id") == cleaned_id
+                ]
+                return matching[:clamped_limit]
+            else:
+                # Return all records in reverse order
+                records = [rec.copy() for rec in reversed(self._history)]
+                return records[:clamped_limit]
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Retrieve operational statistics and storage metrics."""
+        with self._lock:
+            devices = list(self._latest_by_device.keys())
+            return {
+                "total_records_ingested": self._total_ingested,
+                "duplicate_records_detected": self._duplicate_count,
+                "current_history_records": len(self._history),
+                "max_history_capacity": self._max_history,
+                "tracked_devices_count": len(devices),
+                "tracked_devices": devices,
+                "uptime_seconds": round(time.time() - self._start_time, 2),
+            }
+
+    def clear(self) -> None:
+        """Reset all storage state (for automated testing isolation)."""
+        with self._lock:
+            self._latest_by_device.clear()
+            self._history.clear()
+            self._total_ingested = 0
+            self._duplicate_count = 0
+            self._start_time = time.time()
+
+
+# Singleton instance shared across the application
+storage_service = InMemoryStorageService()

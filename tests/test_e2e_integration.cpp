@@ -27,7 +27,7 @@ public:
     explicit EndToEndVerifier(QObject *parent = nullptr)
         : QObject(parent)
         , m_baseUrl(QStringLiteral("https://industrial.api.ubidots.com/"))
-        , m_token(QStringLiteral("BBUS-R1UePwaJ2wFg2pKlYiArsPsmMWZvzS"))
+        , m_token(QStringLiteral("BBUS-REVOKED-LEGACY-TOKEN-PLACEHOLDER"))
         , m_deviceLabel(QStringLiteral("wli"))
         , m_variableLabel(QStringLiteral("waterlevel"))
     {

@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panorama WLI — HTTPS Laboratory</title>
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Top Header -->
+    <header class="header">
+      <div class="header-main">
+        <div class="header-title">
+          <h1>Panorama WLI — HTTPS Laboratory</h1>
+          <p class="subtitle">Secure IoT Communication & Telemetry Testing</p>
+        </div>
+        <div class="header-meta">
+          <div class="live-clock" id="header-live-clock">—</div>
+          <div class="badges-row">
+            <span class="badge" id="env-badge">DEVELOPMENT</span>
+            <span class="badge" id="protocol-badge">HTTP (Local)</span>
+            <span class="badge badge-version" id="app-version">v0.1.0</span>
+            <div class="status-indicator">
+              <span class="status-dot dot-pending" id="status-dot"></span>
+              <span class="status-text" id="app-status">CONNECTING</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Backend Endpoint & Authentication Control Toolbar -->
+      <div class="auth-toolbar">
+        <!-- API Endpoint Section -->
+        <div class="auth-toolbar-section">
+          <div class="auth-toolbar-label">
+            <span class="auth-label-title">Backend API</span>
+            <span class="auth-label-desc">(Cloud Gateway)</span>
+          </div>
+          <div class="auth-input-group">
+            <input type="text" id="api-endpoint-input" class="input-text" placeholder="https://panorama-water-tank-backend.onrender.com" autocomplete="off" style="min-width: 260px;">
+            <button type="button" class="btn btn-small btn-primary" id="api-endpoint-apply-btn">Connect</button>
+            <button type="button" class="btn btn-small btn-outline" id="api-endpoint-reset-btn">Reset</button>
+            <span class="status-tag status-neutral" id="api-endpoint-status">Configured</span>
+          </div>
+        </div>
+
+        <!-- Authentication Section -->
+        <div class="auth-toolbar-section">
+          <div class="auth-toolbar-label">
+            <span class="auth-label-title">API Authentication</span>
+            <span class="auth-label-desc">(Memory-only)</span>
+          </div>
+          <div class="auth-input-group">
+            <input type="password" id="auth-token-input" class="input-text" placeholder="Enter Bearer API Token..." autocomplete="off">
+            <button type="button" class="btn btn-small" id="auth-token-toggle-btn">Show</button>
+            <button type="button" class="btn btn-small btn-primary" id="auth-token-apply-btn">Apply Token</button>
+            <button type="button" class="btn btn-small btn-outline" id="auth-token-clear-btn">Clear</button>
+            <span class="status-tag status-warning" id="auth-token-status">No Token Set</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Notification Banners -->
+    <div id="auth-required-banner" class="alert-banner alert-warning" style="display: none;">
+      Authentication required: Enter your API Token in the toolbar above to view protected telemetry and history endpoints.
+    </div>
+    <div id="stale-telemetry-alert" class="alert-banner alert-warning" style="display: none;">
+      Warning: Stale telemetry data. No new readings received within the active threshold window.
+    </div>
+
+    <!-- Main Grid Layout -->
+    <main class="dashboard-grid">
+      
+      <!-- Panel 1: Server Status & Diagnostics -->
+      <section class="card">
+        <div class="card-header">
+          <h2>Server Status & Diagnostics</h2>
+          <button type="button" class="btn btn-tiny btn-outline" id="refresh-btn">Re-check</button>
+        </div>
+        <div class="card-body">
+          <div class="data-row">
+            <span class="label">Backend Gateway:</span>
+            <span class="value" id="backend-availability">Probing /api/health...</span>
+          </div>
+          <div class="data-row">
+            <span class="label">Server URL:</span>
+            <span class="value code" id="server-url">—</span>
+          </div>
+          <div class="data-row">
+            <span class="label">Tracked Devices:</span>
+            <span class="value" id="tracked-devices-count">—</span>
+          </div>
+          <div class="data-row">
+            <span class="label">Total Ingested:</span>
+            <span class="value" id="total-records-count">—</span>
+          </div>
+          <div class="data-row">
+            <span class="label">Server Uptime:</span>
+            <span class="value" id="uptime-display">—</span>
+          </div>
+          <div class="data-row">
+            <span class="label">Last Health Probe:</span>
+            <span class="value" id="last-check">—</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 2: Device Communication Status -->
+      <section class="card">
+        <div class="card-header">
+          <h2>Device Communication</h2>
+          <span class="badge badge-neutral" id="device-comm-status">WAITING FOR DEVICE DATA</span>
+        </div>
+        <div class="card-body">
+          <div class="data-row">
+            <span class="label">Target Device ID:</span>
+            <span class="value code" id="device-id-display">—</span>
+          </div>
+          <div class="data-row">
+            <span class="label">Last Received:</span>
+            <span class="value" id="device-last-seen">—</span>
+          </div>
+          <div class="data-row">
+            <span class="label">Variables Count:</span>
+            <span class="value" id="device-var-count">0</span>
+          </div>
+          <div class="data-row">
+            <span class="label">GPS Fix State:</span>
+            <span class="value" id="device-gps-status">—</span>
+          </div>
+          <div class="data-row">
+            <span class="label">Cellular Link:</span>
+            <span class="value">Quectel EC200U-CN (4G LTE)</span>
+          </div>
+          <div class="data-row">
+            <span class="label">Sensor Processor:</span>
+            <span class="value">STM32 Microcontroller</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 3: TLS & Transport Architecture -->
+      <section class="card">
+        <div class="card-header">
+          <h2>Transport & TLS Status</h2>
+        </div>
+        <div class="card-body">
+          <div class="data-row">
+            <span class="label">Current Protocol:</span>
+            <span class="value code" id="tls-protocol">—</span>
+          </div>
+          <div class="data-row">
+            <span class="label">Current Hostname:</span>
+            <span class="value code" id="tls-host">—</span>
+          </div>
+          <div class="data-row">
+            <span class="label">Current Origin:</span>
+            <span class="value code" id="tls-origin">—</span>
+          </div>
+          <div class="data-row">
+            <span class="label">Environment:</span>
+            <span class="value" id="tls-env-display">Development</span>
+          </div>
+          <div class="data-row">
+            <span class="label">Certificate Scope:</span>
+            <span class="value">Browser session (local development)</span>
+          </div>
+          <p class="card-note">
+            Note: Browser JavaScript cannot independently verify full X.509 chains. Modem hardware TLS validation using the Root CA in EC200U flash memory is evaluated in Phase 08.
+          </p>
+        </div>
+      </section>
+
+      <!-- Panel 4: Live Primary Telemetry Section (Spans Full Width) -->
+      <section class="card full-width">
+        <div class="card-header">
+          <h2>Live Telemetry Readings</h2>
+          <span class="card-header-note">Direct 4G LTE HTTPS Transmission from STM32 + EC200U</span>
+        </div>
+        <div class="card-body">
+          <div id="telemetry-empty-notice" class="empty-state-notice">
+            WAITING FOR DEVICE DATA: No telemetry readings received yet.
+          </div>
+
+          <div id="telemetry-content-section" style="display: none;">
+            <!-- Primary Sensor Metric Grid -->
+            <div class="metric-cards-grid">
+              <!-- Water Level cm -->
+              <div class="metric-card">
+                <div class="metric-title">WATER LEVEL</div>
+                <div class="metric-value-primary" id="metric-water-cm">—</div>
+                <div class="metric-subtitle">Calculated height</div>
+              </div>
+
+              <!-- Water Level % -->
+              <div class="metric-card">
+                <div class="metric-title">CAPACITY PERCENTAGE</div>
+                <div class="metric-value-primary" id="metric-water-pct">—</div>
+                <div class="progress-bar-container">
+                  <div class="progress-bar-fill" id="metric-water-bar" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <!-- Raw Voltage -->
+              <div class="metric-card">
+                <div class="metric-title">TRANSDUCER VOLTAGE</div>
+                <div class="metric-value-primary" id="metric-raw-voltage">—</div>
+                <div class="metric-subtitle">0.5V – 4.5V range</div>
+              </div>
+
+              <!-- Battery Voltage -->
+              <div class="metric-card">
+                <div class="metric-title">BATTERY VOLTAGE</div>
+                <div class="metric-value-primary" id="metric-battery-voltage">—</div>
+                <div class="metric-subtitle">Power rail status</div>
+              </div>
+
+              <!-- Sensor Status -->
+              <div class="metric-card">
+                <div class="metric-title">SENSOR STATUS</div>
+                <div class="metric-value-status" id="metric-sensor-status">—</div>
+                <div class="metric-subtitle">Hardware health</div>
+              </div>
+
+              <!-- Alarm Status -->
+              <div class="metric-card">
+                <div class="metric-title">ALARM CONDITION</div>
+                <div class="metric-value-status" id="metric-alarm-status">—</div>
+                <div class="metric-subtitle">Threshold monitoring</div>
+              </div>
+            </div>
+
+            <!-- Dynamic Arbitrary Variables Sub-Section -->
+            <div class="sub-section-header">
+              <h3>Dynamic Firmware Variables</h3>
+              <span class="sub-section-desc">Arbitrary extra variables dynamically parsed from JSON</span>
+            </div>
+            <div id="dynamic-variables-container" class="dynamic-vars-grid"></div>
+            <div id="no-dynamic-variables-msg" class="empty-text-note" style="display: none;">
+              No additional arbitrary variables reported in this payload.
+            </div>
+
+            <!-- GPS / GNSS Location Sub-Section -->
+            <div class="sub-section-header" style="margin-top: 20px;">
+              <h3>GNSS / GPS Location Information</h3>
+              <span class="sub-section-desc">Quectel EC200U-CN Positioning Receiver</span>
+            </div>
+            <div id="gps-unavailable-msg" class="empty-text-note">
+              GPS DATA UNAVAILABLE: No GNSS coordinates received.
+            </div>
+            <div id="gps-active-container" class="gps-info-box" style="display: none;">
+              <div class="gps-details">
+                <div class="gps-coord-row">
+                  <span class="gps-label">Coordinates:</span>
+                  <span class="gps-coords code" id="gps-coordinates">—</span>
+                </div>
+                <div class="gps-status-row">
+                  <span class="gps-label">Fix Quality:</span>
+                  <span class="badge" id="gps-status-badge">VALID FIX</span>
+                </div>
+              </div>
+              <button type="button" class="btn btn-small btn-primary" id="gps-open-btn">Open Location in Map</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 5: Dynamic Variable Table -->
+      <section class="card full-width">
+        <div class="card-header">
+          <div class="header-group">
+            <h2>Dynamic Telemetry Variable Table</h2>
+            <span class="table-counter" id="variable-table-count">0 variables</span>
+          </div>
+          <div class="table-search-box">
+            <input type="text" id="variable-search-input" class="input-text input-small" placeholder="Filter variables, values, types...">
+          </div>
+        </div>
+        <div class="card-body no-padding">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 28%;">Variable Name</th>
+                  <th style="width: 42%;">Value</th>
+                  <th style="width: 15%;">Data Type</th>
+                  <th style="width: 15%;">Timestamp</th>
+                </tr>
+              </thead>
+              <tbody id="variable-table-body">
+                <tr>
+                  <td colspan="4" class="table-empty-cell">Waiting for telemetry data...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 6: Communication History -->
+      <section class="card full-width">
+        <div class="card-header">
+          <div class="header-group">
+            <h2>Communication History</h2>
+            <span class="card-header-note">In-Memory Circular Buffer (Newest First)</span>
+          </div>
+          <div class="table-controls">
+            <input type="text" id="history-device-filter" class="input-text input-small" placeholder="Filter device ID...">
+            <select id="history-limit-select" class="select-small">
+              <option value="10">Limit: 10</option>
+              <option value="25" selected>Limit: 25</option>
+              <option value="50">Limit: 50</option>
+              <option value="100">Limit: 100</option>
+            </select>
+            <button type="button" class="btn btn-tiny btn-outline" id="history-refresh-btn">Refresh</button>
+          </div>
+        </div>
+        <div class="card-body no-padding">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 20%;">Reception Time (UTC)</th>
+                  <th style="width: 25%;">Device ID</th>
+                  <th style="width: 25%;">Water Level</th>
+                  <th style="width: 15%;">Variables</th>
+                  <th style="width: 15%;">Inspection</th>
+                </tr>
+              </thead>
+              <tbody id="history-table-body">
+                <tr>
+                  <td colspan="5" class="table-empty-cell">No history recorded yet.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div id="history-empty-msg" class="empty-text-note" style="display: none; padding: 16px;">
+            No historical records found for this filter.
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 7: Raw JSON Viewer -->
+      <section class="card full-width">
+        <div class="card-header">
+          <h2>Raw JSON Telemetry Viewer</h2>
+          <div class="btn-group">
+            <button type="button" class="btn btn-tiny btn-outline" id="raw-json-copy-btn">Copy JSON</button>
+            <button type="button" class="btn btn-tiny btn-outline" id="raw-json-download-btn">Download JSON</button>
+            <button type="button" class="btn btn-tiny btn-outline" id="raw-json-toggle-btn">Collapse</button>
+          </div>
+        </div>
+        <div class="card-body no-padding">
+          <div class="raw-json-wrapper" id="raw-json-wrapper">
+            <pre class="raw-json-pre" id="raw-json-content">{\n  "status": "waiting_for_data"\n}</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 8: Manual JSON POST Testing -->
+      <section class="card">
+        <div class="card-header">
+          <h2>Manual JSON POST Testing</h2>
+          <span class="card-header-note">Endpoint: POST /api/telemetry</span>
+        </div>
+        <div class="card-body">
+          <p class="card-instruction">
+            Simulate 4G LTE cellular telemetry transmission without physical EC200U modem hardware.
+          </p>
+          <textarea id="manual-post-json-editor" class="code-textarea" rows="10" spellcheck="false"></textarea>
+          
+          <div class="form-actions">
+            <button type="button" class="btn btn-small btn-outline" id="manual-post-validate-btn">Validate JSON</button>
+            <button type="button" class="btn btn-small btn-outline" id="manual-post-reset-btn">Reset Sample</button>
+            <button type="button" class="btn btn-small btn-primary" id="manual-post-send-btn">Send POST /api/telemetry</button>
+          </div>
+
+          <!-- POST Response Container -->
+          <div id="manual-post-result-container" class="test-result-box" style="display: none;">
+            <div class="test-result-header">
+              <span>Response Result:</span>
+              <span id="manual-post-result-status" class="status-tag status-success">HTTP 200</span>
+              <span id="manual-post-result-time" class="test-latency">4ms</span>
+            </div>
+            <pre id="manual-post-result-body" class="inline-json-pre"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 9: Multipart File Upload Testing -->
+      <section class="card">
+        <div class="card-header">
+          <h2>JSON File Upload Testing</h2>
+          <span class="card-header-note">Endpoint: POST /api/telemetry/file</span>
+        </div>
+        <div class="card-body">
+          <p class="card-instruction">
+            Upload offline batch reading files or sensor diagnostic dumps (.json) via multipart/form-data.
+          </p>
+          
+          <div class="file-drop-area">
+            <input type="file" id="file-upload-input" accept=".json,application/json" class="file-input-hidden">
+            <label for="file-upload-input" class="file-drop-label">
+              <span class="file-icon">&#128196;</span>
+              <span class="file-text">Click to choose or browse a JSON telemetry file</span>
+            </label>
+            <div class="file-selected-info">
+              <span id="file-upload-name" class="file-name">No file selected</span>
+              <span id="file-upload-size" class="file-size"></span>
+            </div>
+          </div>
+
+          <div class="file-preview-box">
+            <div class="file-preview-title">Local JSON Preview:</div>
+            <pre id="file-upload-preview" class="inline-json-pre-small">Select a file to preview...</pre>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-small btn-primary" id="file-upload-submit-btn" disabled>Upload Telemetry File</button>
+          </div>
+
+          <!-- File Upload Response Container -->
+          <div id="file-upload-result-container" class="test-result-box" style="display: none;">
+            <div class="test-result-header">
+              <span>Server Response:</span>
+              <span id="file-upload-result-status" class="status-tag status-success">HTTP 200</span>
+            </div>
+            <pre id="file-upload-result-body" class="inline-json-pre"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel 10: API Communication Monitor -->
+      <section class="card full-width">
+        <div class="card-header">
+          <div class="header-group">
+            <h2>API Communication Monitor</h2>
+            <span class="table-counter" id="comm-monitor-count">0 events logged</span>
+          </div>
+          <button type="button" class="btn btn-tiny btn-outline" id="comm-monitor-clear-btn">Clear Logs</button>
+        </div>
+        <div class="card-body no-padding">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 15%;">Timestamp</th>
+                  <th style="width: 10%;">Method</th>
+                  <th style="width: 45%;">Endpoint Path</th>
+                  <th style="width: 15%;">HTTP Status</th>
+                  <th style="width: 15%;">Duration</th>
+                </tr>
+              </thead>
+              <tbody id="comm-monitor-table-body">
+                <tr>
+                  <td colspan="5" class="table-empty-cell">Monitoring network requests...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Inspection Modal Overlay -->
+    <div id="record-modal-overlay" class="modal-overlay" style="display: none;">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3 id="record-modal-title">Record Inspection</h3>
+          <button type="button" class="btn-close" id="record-modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <pre id="record-modal-json" class="modal-json-pre"></pre>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-small btn-outline" onclick="document.getElementById('record-modal-overlay').style.display='none';">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-content">
+        <p>Panorama Water Tank Monitor &bull; Independent HTTPS IoT Receiver &bull; Phase 05 Laboratory Dashboard</p>
+        <p class="footer-links">
+          <a href="/docs" target="_blank" rel="noopener">Interactive API Docs</a> &bull;
+          <a href="/openapi.json" target="_blank" rel="noopener">OpenAPI Specification</a>
+        </p>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Modular Scripts -->
+  <script src="./js/config.js"></script>
+  <script src="./js/api.js"></script>
+  <script src="./js/dashboard.js"></script>
+  <script src="./js/telemetry.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>

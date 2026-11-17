@@ -1,0 +1,15 @@
+==================================================
+  Panorama WLI Development TLS Certificate Info  
+==================================================
+Subject:         localhost
+Issuer:          localhost (Self-Signed)
+Serial Number:   0x7198d100cf3f98bd306d7b54bf30d857485ffd4f
+Valid From:      2026-11-17T09:49:06.579996+00:00
+Valid Until:     2027-11-17T09:54:06.579996+00:00
+Public Key:      RSA 2048 bits
+Signature:       SHA-256 with RSA Encryption
+SHA-256 Digest:  82:46:DD:26:E0:42:8E:0D:30:D2:9F:10:9A:AE:44:41:B0:BF:99:E9:89:26:84:E5:B4:40:C0:A9:50:10:C9:B0
+SAN Entries:     localhost, 127.0.0.1
+Key Usage:       Digital Signature, Key Encipherment
+Extended Usage:  TLS Web Server Authentication, TLS Web Client Authentication
+==================================================

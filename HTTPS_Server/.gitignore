@@ -1,0 +1,47 @@
+# Python Virtual Environment
+.venv/
+venv/
+env/
+
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment Configuration
+.env
+.env.local
+.env.*.local
+
+# Testing and Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Logs
+logs/
+*.log
+
+# Sensitive Cryptographic Material
+*.key
+*.pem
+*.pfx
+*.p12
+*.crt
+# Allow specific public certificates or documentation explicitly
+!certificates/development/server.crt
+!certificates/development/certificate_info.txt
+!certificates/cacert.pem
+!certificates/README.md
+!certificates/production/README.md
+
+# Explicit exclusion rules
+certificates/development/server.key
+certificates/production/*
+!certificates/production/README.md
+
+# Operating System Files
+.DS_Store
+Thumbs.db

@@ -42,6 +42,9 @@ CMakeCache.txt
 .env.local
 .env.*.local
 backend/.env
+*.key
+*.pfx
+*.p12
 
 # Logs and temporary execution outputs
 .chrome-test-profile*
@@ -80,3 +83,6 @@ apps/mobile/screenshots/
 scripts/test_live_website_chrome.cjs
 
 graphify-out/*.svg
+
+.idea/
+*.exe

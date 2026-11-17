@@ -1,0 +1,28 @@
+# Render Blueprint Specification for Independent HTTPS IoT Receiver
+# Repository: https://github.com/soumikbur/PanoramaWaterTank_NextGen
+# Service Root Directory: HTTPS_Server
+
+services:
+  - type: web
+    name: panorama-wli-https-receiver
+    runtime: python
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: HTTPS_Server
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: MAX_UPLOAD_SIZE
+        value: "1048576"
+      - key: MAX_HISTORY_RECORDS
+        value: "1000"
+      - key: API_TOKEN
+        generateValue: true

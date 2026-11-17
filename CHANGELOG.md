@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [2.2.0] - 2026-11-17
+
+### Added
+- **Phase 1 Complete Technical Audit**: Exhaustive verification of embedded C++ firmware, STM32 sensor math, EC200U cellular gateway, FastAPI backend, and Laboratory Dashboard. Published `AUDIT_REPORT.md`.
+- **Phase 2 Implementation Plan & Telemetry Contracts**: Step-by-step phased migration roadmap published in `IMPLEMENTATION_PLAN.md`.
+- **Zero-Loss Telemetry Mapping**: Full 1-to-1 migration table mapping legacy MQTT fields (`cm1`, `wlp1`, `bat`, `wlv1`, `lat`, `long`, `chno`, `trno`) to modern HTTPS schema published in `MQTT_TO_HTTPS_MAPPING.md`.
+- **Hardware Telemetry Schema**: Formally specified direct JSON post (`POST /api/telemetry`) and document file upload (`POST /api/telemetry/upload`) in `TELEMETRY_SCHEMA.md`.
+- **Hardened TLS/SSL 1.2/1.3 Engine**: Configured Quectel EC200U-CN modem with `ISRG Root X1` CA trust anchor, server certificate validation (`seclevel=1`), and SNI in `TLS_CERTIFICATE_SETUP.md`.
+- **Standalone Cloud Receiver Subsystem**: Completed isolated FastAPI backend in `HTTPS_Server/` with bounded circular buffer storage, sequence deduplication, 1MB size limit middleware, and responsive Laboratory Dashboard.
+
+### Security
+- **Legacy Credential Sanitization**: Removed and sanitized exposed legacy Ubidots API token from `tests/test_e2e_integration.cpp`, replacing with placeholder.
+- **Git Exclusions**: Updated `.gitignore` to strictly exclude private keys (`*.key`, `*.pfx`, `*.p12`) and environment configuration secrets.
+
+### Verified
+- 8/8 C++ embedded modem unit & integration tests passing (`test_ec200u_firmware.exe`).
+- 6/6 physical sensor math & FreeRTOS integration tests passing (`test_phase09_e2e_firmware.exe`).
+- 62/62 cloud backend pytest test cases passing (`HTTPS_Server/tests`).
+- 10/10 end-to-end cellular AT transaction tests passing (`tools/test_ec200u_live.py`).
+
+---
+
 ## [2.0.0] - 2026-11-09
 
 ### Added
