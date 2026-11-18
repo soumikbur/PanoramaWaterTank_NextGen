@@ -1,5 +1,5 @@
 """Telemetry reading model capturing sensor frames."""
-from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, String, Integer, Float, Boolean, DateTime, ForeignKey, Text, Index
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 from app.models.base import utc_now
@@ -7,6 +7,10 @@ from app.models.base import utc_now
 
 class TelemetryReading(Base):
     __tablename__ = "telemetry_readings"
+    __table_args__ = (
+        Index("ix_telemetry_tank_timestamp", "tank_id", "timestamp"),
+        Index("ix_telemetry_device_timestamp", "device_id", "timestamp"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     device_id = Column(String(36), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False, index=True)

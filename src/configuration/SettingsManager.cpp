@@ -75,10 +75,8 @@ QString SettingsManager::apiBaseUrl() const
 void SettingsManager::loadAll()
 {
     m_apiBaseUrl = m_settings.value(kApiBaseUrl, QStringLiteral("https://industrial.api.ubidots.com/")).toString();
-    m_apiToken = m_settings.value(kApiToken, QStringLiteral("BBUS-R1UePwaJ2wFg2pKlYiArsPsmMWZvzS")).toString();
-    if (m_apiToken.trimmed().isEmpty()) {
-        m_apiToken = QStringLiteral("BBUS-R1UePwaJ2wFg2pKlYiArsPsmMWZvzS");
-    }
+    // Never embed live API tokens in source code; read from user settings or environment variable
+    m_apiToken = m_settings.value(kApiToken, qEnvironmentVariable("UBIDOTS_TOKEN", QString())).toString().trimmed();
     m_deviceLabel = m_settings.value(kDeviceLabel, QStringLiteral("wli")).toString();
     m_dataSourceId = m_settings.value(kDataSourceId, QStringLiteral("6a3a275d4fd32b529b38a792")).toString();
 

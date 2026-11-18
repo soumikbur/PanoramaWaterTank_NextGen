@@ -30,7 +30,7 @@ DEFAULT_CONFIG: Dict[str, Dict[str, Any]] = {
     "device.refresh_interval": {"category": "DEVICE", "value": 3.0, "desc": "Telemetry Refresh Interval (seconds)"},
     "ubidots.host": {"category": "UBIDOTS", "value": "https://industrial.api.ubidots.com", "desc": "Ubidots Cloud Bridge Host"},
     "ubidots.device_label": {"category": "UBIDOTS", "value": "wli", "desc": "Ubidots Target Device Label"},
-    "ubidots.token": {"category": "UBIDOTS", "value": "BBUS-sample-token-live-telemetry", "desc": "Ubidots API Auth Token"},
+    "ubidots.token": {"category": "UBIDOTS", "value": "", "desc": "Ubidots API Auth Token"},
     
     # Section B: Tank Geometry
     "tank.shape": {"category": "TANK", "value": "CYLINDRICAL", "desc": "Tank Cross-Sectional Geometry"},
@@ -136,47 +136,54 @@ async def list_settings(db: AsyncSession = Depends(get_db)):
 
 @router.get("/config", response_model=UnifiedSettingsPayload)
 async def get_unified_config(db: AsyncSession = Depends(get_db)):
-    """Retrieve structured 5-section unified configuration."""
+    """Retrieve structured 5-section unified configuration in a single database query."""
     repo = SettingsRepository(db)
+    rows = await repo.list_all()
+    kv: Dict[str, Any] = {}
+    for r in rows:
+        try:
+            kv[r.key] = json.loads(r.value)
+        except Exception:
+            kv[r.key] = r.value
 
-    async def _g(k: str, default: Any) -> Any:
-        v = await repo.get(k)
+    def _g(k: str, default: Any) -> Any:
+        v = kv.get(k)
         return v if v is not None else default
 
     return UnifiedSettingsPayload(
-        mqtt_broker=await _g("mqtt.broker", "broker.hivemq.com"),
-        mqtt_port=int(await _g("mqtt.port", 1883)),
-        mqtt_use_tls=bool(await _g("mqtt.use_tls", False)),
-        mqtt_topic=await _g("mqtt.topic", "panorama/telemetry/+"),
-        device_host=await _g("device.host", "192.168.4.1"),
-        device_port=int(await _g("device.port", 80)),
-        device_refresh_interval=float(await _g("device.refresh_interval", 3.0)),
-        ubidots_host=await _g("ubidots.host", "https://industrial.api.ubidots.com"),
-        ubidots_device_label=await _g("ubidots.device_label", "wli"),
-        ubidots_token=await _g("ubidots.token", "BBUS-sample-token-live-telemetry"),
+        mqtt_broker=_g("mqtt.broker", "broker.hivemq.com"),
+        mqtt_port=int(_g("mqtt.port", 1883)),
+        mqtt_use_tls=bool(_g("mqtt.use_tls", False)),
+        mqtt_topic=_g("mqtt.topic", "panorama/telemetry/+"),
+        device_host=_g("device.host", "192.168.4.1"),
+        device_port=int(_g("device.port", 80)),
+        device_refresh_interval=float(_g("device.refresh_interval", 3.0)),
+        ubidots_host=_g("ubidots.host", "https://industrial.api.ubidots.com"),
+        ubidots_device_label=_g("ubidots.device_label", "wli"),
+        ubidots_token=_g("ubidots.token", ""),
 
-        tank_shape=await _g("tank.shape", "CYLINDRICAL"),
-        tank_height_cm=float(await _g("tank.height_cm", 50.0)),
-        tank_diameter_cm=float(await _g("tank.diameter_cm", 22.56)),
-        tank_capacity_liters=float(await _g("tank.capacity_liters", 20.0)),
-        tank_area_m2=float(await _g("tank.area_m2", 0.04)),
+        tank_shape=_g("tank.shape", "CYLINDRICAL"),
+        tank_height_cm=float(_g("tank.height_cm", 50.0)),
+        tank_diameter_cm=float(_g("tank.diameter_cm", 22.56)),
+        tank_capacity_liters=float(_g("tank.capacity_liters", 20.0)),
+        tank_area_m2=float(_g("tank.area_m2", 0.04)),
 
-        sensor_type=await _g("sensor.type", "HYDROSTATIC_4_20MA"),
-        sensor_zero_offset_cm=float(await _g("sensor.zero_offset_cm", 0.0)),
-        sensor_span_cm=float(await _g("sensor.span_cm", 50.0)),
-        sensor_filter_constant_sec=float(await _g("sensor.filter_constant_sec", 1.0)),
-        sensor_invert=bool(await _g("sensor.invert", False)),
+        sensor_type=_g("sensor.type", "HYDROSTATIC_4_20MA"),
+        sensor_zero_offset_cm=float(_g("sensor.zero_offset_cm", 0.0)),
+        sensor_span_cm=float(_g("sensor.span_cm", 50.0)),
+        sensor_filter_constant_sec=float(_g("sensor.filter_constant_sec", 1.0)),
+        sensor_invert=bool(_g("sensor.invert", False)),
 
-        alarm_warning_percent=float(await _g("alarm.warning_percent", 20.0)),
-        alarm_critical_percent=float(await _g("alarm.critical_percent", 10.0)),
-        alarm_overflow_percent=float(await _g("alarm.overflow_percent", 100.0)),
-        alarm_master_enabled=bool(await _g("alarm.master_enabled", True)),
-        alarm_low_water_enabled=bool(await _g("alarm.low_water_enabled", True)),
-        alarm_sensor_fault_enabled=bool(await _g("alarm.sensor_fault_enabled", True)),
-        alarm_device_offline_enabled=bool(await _g("alarm.device_offline_enabled", True)),
-        alarm_modem_failure_enabled=bool(await _g("alarm.modem_failure_enabled", True)),
-        alarm_overflow_enabled=bool(await _g("alarm.overflow_enabled", True)),
-        alarm_voltage_enabled=bool(await _g("alarm.voltage_enabled", True)),
+        alarm_warning_percent=float(_g("alarm.warning_percent", 20.0)),
+        alarm_critical_percent=float(_g("alarm.critical_percent", 10.0)),
+        alarm_overflow_percent=float(_g("alarm.overflow_percent", 100.0)),
+        alarm_master_enabled=bool(_g("alarm.master_enabled", True)),
+        alarm_low_water_enabled=bool(_g("alarm.low_water_enabled", True)),
+        alarm_sensor_fault_enabled=bool(_g("alarm.sensor_fault_enabled", True)),
+        alarm_device_offline_enabled=bool(_g("alarm.device_offline_enabled", True)),
+        alarm_modem_failure_enabled=bool(_g("alarm.modem_failure_enabled", True)),
+        alarm_overflow_enabled=bool(_g("alarm.overflow_enabled", True)),
+        alarm_voltage_enabled=bool(_g("alarm.voltage_enabled", True)),
     )
 
 
@@ -388,23 +395,24 @@ async def test_device_connection(
     port = int(port_setting) if port_setting is not None else 80
 
     target = f"{host}:{port}"
+    import asyncio
     import socket
     import time
-    start = time.perf_counter()
-    reachable = False
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.settimeout(1.0)
-            result = sock.connect_ex((str(host), port))
-            elapsed_ms = round((time.perf_counter() - start) * 1000, 1)
-            if result == 0:
-                reachable = True
-                msg = f"Connected to {target} successfully"
-            else:
-                msg = f"Connection to {target} failed (code {result})"
-    except Exception as e:
-        elapsed_ms = None
-        msg = f"Connection failed: {str(e)}"
+
+    def _probe_tcp() -> tuple[bool, Optional[float], str]:
+        start = time.perf_counter()
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(1.0)
+                result = sock.connect_ex((str(host), port))
+                elapsed = round((time.perf_counter() - start) * 1000, 1)
+                if result == 0:
+                    return True, elapsed, f"Connected to {target} successfully"
+                return False, elapsed, f"Connection to {target} failed (code {result})"
+        except Exception as e:
+            return False, None, f"Connection failed: {str(e)}"
+
+    reachable, elapsed_ms, msg = await asyncio.to_thread(_probe_tcp)
 
     return {
         "status": "ONLINE" if reachable else "OFFLINE",

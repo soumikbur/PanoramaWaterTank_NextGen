@@ -35,6 +35,7 @@ if is_sqlite:
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.execute("PRAGMA busy_timeout=10000")
+        cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
 # Async session factory
@@ -122,7 +123,6 @@ def _sync_schema_migration(sync_conn) -> None:
                 ("mqtt_topic", "VARCHAR(128)"),
                 ("tank_assignment", "VARCHAR(32) DEFAULT 'BOTH'"),
                 ("description", "VARCHAR(255)"),
-                ("hardware_metadata", "TEXT"),
                 ("status", "VARCHAR(32) DEFAULT 'AVAILABLE'"),
                 ("train_id", "VARCHAR(36)"),
                 ("is_deleted", "BOOLEAN DEFAULT 0"),
@@ -212,18 +212,12 @@ async def seed_initial_accounts(session: AsyncSession) -> None:
         session.add(admin_user)
         logger.info("Seeded initial @admin account.")
     else:
-        # Upgrade existing record to canonical @admin specification
-        admin_user.username = "@admin"
-        admin_user.hashed_password = get_password_hash("Admin@123")
+        # Preserve existing hashed_password and account_status across restarts; only fill missing metadata
         admin_user.employee_id = admin_user.employee_id or "EMP-001"
-        admin_user.role = "ADMIN"
         admin_user.designation = admin_user.designation or "Chief SCADA Administrator"
         admin_user.department = admin_user.department or "Signalling & Telecommunications"
-        admin_user.account_status = "ACTIVE"
-        admin_user.is_active = True
-        admin_user.must_change_password = False
 
-    # 2. Seed or sync @employee
+    # 2. Seed @employee if missing
     result_emp = await session.execute(select(User).where((User.username == "@employee") | (User.username == "operator")))
     emp_user = result_emp.scalar_one_or_none()
     if not emp_user:
@@ -245,27 +239,21 @@ async def seed_initial_accounts(session: AsyncSession) -> None:
         session.add(emp_user)
         logger.info("Seeded initial @employee account.")
     else:
-        # Upgrade existing record to canonical @employee specification
-        emp_user.username = "@employee"
-        emp_user.hashed_password = get_password_hash("Employee@123")
+        # Preserve existing hashed_password and account_status across restarts; only fill missing metadata
         emp_user.employee_id = emp_user.employee_id or "EMP-002"
-        emp_user.role = "EMPLOYEE"
         emp_user.designation = emp_user.designation or "Lead Yard Controller"
         emp_user.department = emp_user.department or "Rolling Stock Operations"
-        emp_user.account_status = "ACTIVE"
-        emp_user.is_active = True
-        emp_user.must_change_password = False
 
     await session.commit()
 
 
 async def seed_initial_settings(session: AsyncSession) -> None:
-    """Seed baseline 5-section unified configuration idempotently."""
+    """Seed baseline 5-section unified configuration idempotently without overwriting admin customizations."""
     from app.repositories.settings_repo import SettingsRepository
     from app.api.v1.settings import DEFAULT_CONFIG
     repo = SettingsRepository(session)
     for key, item in DEFAULT_CONFIG.items():
-        await repo.upsert(key, item["value"], category=item["category"], description=item["desc"])
+        await repo.insert_if_missing(key, item["value"], category=item["category"], description=item["desc"])
     await session.commit()
 
 

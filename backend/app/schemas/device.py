@@ -1,6 +1,6 @@
 """Device Pydantic Schemas."""
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -69,24 +69,3 @@ class DeviceDiagnostics(BaseModel):
     sensor1Valid: Optional[bool] = None
     sensor2Valid: Optional[bool] = None
     lastPayloadAt: Optional[datetime] = None
-
-
-class DeviceMetadataPayload(BaseModel):
-    """Structured static hardware, firmware, and broker metadata associated with a device."""
-    deviceName: Optional[str] = None
-    deviceType: Optional[str] = None
-    hardwareModel: Optional[str] = None
-    hardware: Dict[str, Any] = Field(default_factory=dict)
-    firmware: Dict[str, Any] = Field(default_factory=dict)
-    broker: Dict[str, Any] = Field(default_factory=dict)
-
-
-class DeviceMetadataOut(BaseModel):
-    uid: str
-    deviceName: str
-    deviceType: Optional[str] = None
-    hardwareModel: Optional[str] = None
-    hardware: Dict[str, Any] = Field(default_factory=dict)
-    firmware: Dict[str, Any] = Field(default_factory=dict)
-    broker: Dict[str, Any] = Field(default_factory=dict)
-    updatedAt: Optional[datetime] = None

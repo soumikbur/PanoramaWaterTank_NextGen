@@ -87,6 +87,30 @@ class SettingsRepository:
     async def set(self, key: str, value: Any, category: str = "SYSTEM", description: Optional[str] = None) -> Setting:
         return await self.upsert(key=key, value=value, category=category, description=description)
 
+    async def insert_if_missing(self, key: str, value: Any, category: str = "SYSTEM", description: Optional[str] = None) -> None:
+        """Insert a default setting only if absent, preserving admin customizations across restarts."""
+        val_str = json.dumps(value) if not isinstance(value, str) else value
+        bind = self.session.bind
+        dialect_name = bind.dialect.name if bind else "sqlite"
+
+        if dialect_name == "sqlite":
+            from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+            stmt = sqlite_insert(Setting).values(
+                key=key, category=category, value=val_str, description=description
+            ).on_conflict_do_nothing(index_elements=["key"])
+            await self.session.execute(stmt)
+        elif dialect_name == "postgresql":
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+            stmt = pg_insert(Setting).values(
+                key=key, category=category, value=val_str, description=description
+            ).on_conflict_do_nothing(index_elements=["key"])
+            await self.session.execute(stmt)
+        else:
+            existing = await self.session.execute(select(Setting.key).where(Setting.key == key))
+            if existing.scalar_one_or_none() is None:
+                self.session.add(Setting(key=key, category=category, value=val_str, description=description))
+        await self.session.flush()
+
     async def list_all(self) -> List[Setting]:
         stmt = select(Setting).order_by(Setting.category, Setting.key)
         result = await self.session.execute(stmt)

@@ -18,6 +18,11 @@ class InMemoryRateLimiter:
         """Record attempt and raise HTTP 429 if limit exceeded within window."""
         now = time.monotonic()
         cutoff = now - self.window_seconds
+        # Opportunistically prune stale IP keys to prevent unbounded memory growth
+        if len(self._history) > 1000:
+            stale_keys = [k for k, ts in self._history.items() if not ts or ts[-1] <= cutoff]
+            for k in stale_keys:
+                del self._history[k]
         # Evict timestamps outside the window
         valid = [t for t in self._history[key] if t > cutoff]
         if len(valid) >= self.max_requests:

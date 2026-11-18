@@ -2,7 +2,7 @@
 import json
 import uuid
 from typing import Optional, List, Dict, Any
-from sqlalchemy import select, update
+from sqlalchemy import case, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.outbox import SyncOutboxEvent
 from app.models.base import utc_now
@@ -67,7 +67,7 @@ class OutboxRepository:
             .values(
                 retry_count=SyncOutboxEvent.retry_count + 1,
                 last_error=error_msg,
-                status="FAILED" if SyncOutboxEvent.retry_count >= 5 else "PENDING",
+                status=case((SyncOutboxEvent.retry_count + 1 >= 5, "FAILED"), else_="PENDING"),
             )
         )
         await self.session.execute(stmt)

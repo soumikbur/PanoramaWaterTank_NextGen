@@ -3,6 +3,7 @@
 Manages active HMI client connections and broadcasts real-time telemetry frames,
 alarm transitions, and device statuses.
 """
+import asyncio
 import json
 import logging
 from typing import Set, Dict, Any, Optional
@@ -38,16 +39,20 @@ class ConnectionManager:
             "data": data
         }, default=str)
 
-        disconnected: Set[WebSocket] = set()
-        for connection in self.active_connections:
+        targets = list(self.active_connections)
+
+        async def _send_one(connection: WebSocket) -> Optional[WebSocket]:
             try:
-                await connection.send_text(payload)
+                await asyncio.wait_for(connection.send_text(payload), timeout=2.0)
+                return None
             except Exception as e:
                 logger.warning(f"Failed to send to client: {e}")
-                disconnected.add(connection)
+                return connection
 
-        for dead in disconnected:
-            self.disconnect(dead)
+        results = await asyncio.gather(*(_send_one(c) for c in targets))
+        for dead in results:
+            if dead is not None:
+                self.disconnect(dead)
 
     @property
     def client_count(self) -> int:

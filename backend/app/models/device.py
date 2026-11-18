@@ -1,5 +1,5 @@
 """Device model representing an edge monitoring node on a railway coach."""
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship, foreign
 from app.core.database import Base
 from app.models.base import generate_uuid, utc_now
@@ -22,7 +22,6 @@ class Device(Base):
     mqtt_topic = Column(String(128), nullable=True)
     tank_assignment = Column(String(32), default="BOTH")
     description = Column(String(255), nullable=True)
-    hardware_metadata = Column(Text, nullable=True)
     status = Column(String(32), default="AVAILABLE")
     is_online = Column(Boolean, nullable=False, default=False, index=True)
     last_seen_at = Column(DateTime(timezone=True), nullable=True)
@@ -30,8 +29,8 @@ class Device(Base):
     created_at = Column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
-    # Relationships
+    # Relationships (keep telemetry_readings lazy="select" so Device/Train queries never OOM by eagerly loading full history)
     coach = relationship("Coach", primaryjoin="foreign(Device.uid) == Coach.device_uid", uselist=False, lazy="selectin")
     tanks = relationship("Tank", back_populates="device", cascade="all, delete-orphan", lazy="selectin")
-    telemetry_readings = relationship("TelemetryReading", back_populates="device", cascade="all, delete-orphan", lazy="selectin")
+    telemetry_readings = relationship("TelemetryReading", back_populates="device", cascade="all, delete-orphan", lazy="select")
     alarms = relationship("Alarm", back_populates="device", cascade="all, delete-orphan", lazy="selectin")

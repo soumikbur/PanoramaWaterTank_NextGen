@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.database import init_db, get_db
+from app.core.database import engine, init_db, get_db
 from app.mqtt.client import mqtt_service
 from app.services.outbox_service import outbox_worker_loop
 from app.api.v1 import api_router, trains as trains_v1
@@ -71,6 +71,11 @@ async def lifespan(app: FastAPI):
         logger.info("MQTT Client stopped cleanly.")
     except Exception as e:
         logger.error(f"Error stopping MQTT client: {e}")
+    try:
+        await engine.dispose()
+        logger.info("Database engine disposed cleanly.")
+    except Exception as e:
+        logger.warning(f"Error disposing database engine: {e}")
 
 
 app = FastAPI(
@@ -95,7 +100,7 @@ _explicit_origins = list(dict.fromkeys(_explicit_origins))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_explicit_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://soumikbur\.github\.io$|^https://[a-zA-Z0-9_-]+\.vercel\.app$|^https?://localhost$|^capacitor://localhost$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://soumikbur\.github\.io$|^https?://localhost$|^capacitor://localhost$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
