@@ -205,7 +205,7 @@ export class ApiClient {
 
     window.addEventListener('online', () => {
       this.backoffDelayMs = 2000;
-      this.probeHealth(true);
+      this.probeHealth(false);
     });
 
     window.addEventListener('offline', () => {

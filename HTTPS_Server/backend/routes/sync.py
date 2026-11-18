@@ -44,15 +44,20 @@ class SyncConnectionManager:
         payload_text = json.dumps(message)
         async with self._lock:
             targets = list(self._connections)
+        if not targets:
+            return 0
 
-        stale = []
-        delivered = 0
-        for ws in targets:
+        # Fan out concurrently with a per-socket timeout so one half-open offline client never blocks healthy browsers
+        async def _send_one(ws: WebSocket) -> Optional[WebSocket]:
             try:
-                await ws.send_text(payload_text)
-                delivered += 1
+                await asyncio.wait_for(ws.send_text(payload_text), timeout=2.0)
+                return None
             except Exception:
-                stale.append(ws)
+                return ws
+
+        results = await asyncio.gather(*(_send_one(ws) for ws in targets))
+        stale = [ws for ws in results if ws is not None]
+        delivered = len(targets) - len(stale)
 
         if stale:
             async with self._lock:

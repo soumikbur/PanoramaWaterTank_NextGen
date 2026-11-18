@@ -95,3 +95,39 @@ def test_sync_rest_and_websocket_multi_client_broadcast(tmp_path, monkeypatch):
     assert get_res.headers.get("access-control-allow-origin") == "https://soumikbur.github.io"
     assert get_res.json()["namespaces"]["fleet"]["version"] == 1
     assert "22895" in get_res.json()["namespaces"]["fleet"]["data"]["trains"]
+
+
+def test_broadcast_stalled_socket_does_not_block_healthy_clients():
+    """A hung/half-open offline WebSocket must be pruned and never stall healthy clients."""
+    import asyncio
+    from backend.routes.sync import SyncConnectionManager
+
+    class HungSocket:
+        async def accept(self):
+            pass
+
+        async def send_text(self, _text: str):
+            await asyncio.sleep(10)
+
+    class HealthySocket:
+        def __init__(self):
+            self.received = []
+
+        async def accept(self):
+            pass
+
+        async def send_text(self, text: str):
+            self.received.append(text)
+
+    async def _run():
+        mgr = SyncConnectionManager()
+        hung = HungSocket()
+        healthy = HealthySocket()
+        await mgr.connect(hung)
+        await mgr.connect(healthy)
+        delivered = await mgr.broadcast({"event_type": "TRAIN_DELETED", "entity_id": "22895"})
+        assert delivered == 1
+        assert len(healthy.received) == 1
+        assert mgr.active_count == 1  # Hung socket pruned
+
+    asyncio.run(_run())
