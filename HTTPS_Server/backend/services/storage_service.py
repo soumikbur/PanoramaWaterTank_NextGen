@@ -1,30 +1,145 @@
-"""Thread-safe bounded in-memory telemetry storage service."""
+"""Thread-safe bounded telemetry storage service with SQLite write-through persistence."""
+import json
+import os
+import sqlite3
 import threading
 import time
 from collections import deque
-from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from backend import config
 
 
+def _default_telemetry_db_path() -> Path:
+    configured = os.getenv("TELEMETRY_DB_PATH", "").strip()
+    if configured:
+        return Path(configured)
+    return config.PROJECT_DIR / "data" / "panorama_telemetry.db"
+
+
 class InMemoryStorageService:
-    """Thread-safe, bounded in-memory storage for IoT telemetry.
-    
-    Zero external database dependencies. Keeps latest readings per device
-    and a bounded circular buffer for historical records.
+    """Thread-safe, bounded telemetry store with optional SQLite write-through.
+
+    Keeps latest readings per device and a bounded circular buffer in RAM for low-latency
+    queries while persisting records to SQLite when `db_path` is provided.
     """
 
-    def __init__(self, max_history: Optional[int] = None):
+    def __init__(self, max_history: Optional[int] = None, db_path: Optional[Path] = None):
         self._max_history = max_history if max_history is not None else config.MAX_HISTORY_RECORDS
+        self._db_path = db_path
         self._lock = threading.Lock()
         self._latest_by_device: Dict[str, Dict[str, Any]] = {}
         self._history: deque[Dict[str, Any]] = deque(maxlen=self._max_history)
         self._start_time = time.time()
         self._total_ingested: int = 0
         self._duplicate_count: int = 0
+        if self._db_path is not None:
+            self._init_db()
+            self._hydrate_from_db()
+
+    @property
+    def db_path(self) -> Optional[Path]:
+        return self._db_path
+
+    def _connect(self) -> sqlite3.Connection:
+        assert self._db_path is not None
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(self._db_path), timeout=10.0, check_same_thread=False)
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        return conn
+
+    def _init_db(self) -> None:
+        conn = self._connect()
+        try:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS telemetry_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id TEXT NOT NULL,
+                    sequence_id INTEGER,
+                    received_at TEXT NOT NULL,
+                    is_duplicate INTEGER NOT NULL DEFAULT 0,
+                    payload_json TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_telemetry_device_id ON telemetry_records (device_id, id DESC)"
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def _hydrate_from_db(self) -> None:
+        conn = self._connect()
+        try:
+            rows = conn.execute(
+                "SELECT payload_json FROM telemetry_records ORDER BY id DESC LIMIT ?",
+                (self._max_history,),
+            ).fetchall()
+            for (payload_json,) in reversed(rows):
+                try:
+                    rec = json.loads(payload_json)
+                    if isinstance(rec, dict) and rec.get("device_id"):
+                        self._latest_by_device[str(rec["device_id"])] = rec
+                        self._history.append(rec)
+                        self._total_ingested += 1
+                        if rec.get("is_duplicate"):
+                            self._duplicate_count += 1
+                except Exception:
+                    continue
+        finally:
+            conn.close()
+
+    def _persist_record_to_db(self, record: Dict[str, Any]) -> None:
+        if self._db_path is None:
+            return
+        conn = self._connect()
+        try:
+            seq = record.get("sequence_id")
+            seq_int = int(seq) if isinstance(seq, int) and not isinstance(seq, bool) else None
+            conn.execute(
+                "INSERT INTO telemetry_records (device_id, sequence_id, received_at, is_duplicate, payload_json) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    str(record["device_id"]),
+                    seq_int,
+                    str(record.get("received_at", "")),
+                    1 if record.get("is_duplicate") else 0,
+                    json.dumps(record, separators=(",", ":")),
+                ),
+            )
+            # Keep SQLite bounded to max_history rows so disk usage stays flat
+            conn.execute(
+                "DELETE FROM telemetry_records WHERE id NOT IN "
+                "(SELECT id FROM telemetry_records ORDER BY id DESC LIMIT ?)",
+                (self._max_history,),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def get_db_record_count(self, device_id: Optional[str] = None) -> int:
+        """Return persisted SQLite telemetry row count (or 0 if running RAM-only)."""
+        if self._db_path is None:
+            return 0
+        with self._lock:
+            conn = self._connect()
+            try:
+                if device_id is not None:
+                    row = conn.execute(
+                        "SELECT COUNT(*) FROM telemetry_records WHERE device_id = ?",
+                        (device_id.strip(),),
+                    ).fetchone()
+                else:
+                    row = conn.execute("SELECT COUNT(*) FROM telemetry_records").fetchone()
+                return int(row[0]) if row else 0
+            finally:
+                conn.close()
 
     def store_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
-        """Store a telemetry record thread-safely."""
+        """Store a telemetry record thread-safely in RAM and SQLite."""
         device_id = str(record.get("device_id", "")).strip()
         if not device_id:
             raise ValueError("Record must include a valid non-empty device_id.")
@@ -38,6 +153,9 @@ class InMemoryStorageService:
                 is_dup = True
                 self._duplicate_count += 1
             record["is_duplicate"] = is_dup
+
+            # Persist to SQLite first before updating RAM caches
+            self._persist_record_to_db(record)
 
             # Store copy in latest map
             self._latest_by_device[device_id] = record.copy()
@@ -88,6 +206,7 @@ class InMemoryStorageService:
                 "tracked_devices_count": len(devices),
                 "tracked_devices": devices,
                 "uptime_seconds": round(time.time() - self._start_time, 2),
+                "sqlite_persisted": self._db_path is not None,
             }
 
     def clear(self) -> None:
@@ -98,7 +217,14 @@ class InMemoryStorageService:
             self._total_ingested = 0
             self._duplicate_count = 0
             self._start_time = time.time()
+            if self._db_path is not None and self._db_path.exists():
+                conn = self._connect()
+                try:
+                    conn.execute("DELETE FROM telemetry_records")
+                    conn.commit()
+                finally:
+                    conn.close()
 
 
-# Singleton instance shared across the application
-storage_service = InMemoryStorageService()
+# Singleton instance shared across the application (SQLite write-through enabled)
+storage_service = InMemoryStorageService(db_path=_default_telemetry_db_path())

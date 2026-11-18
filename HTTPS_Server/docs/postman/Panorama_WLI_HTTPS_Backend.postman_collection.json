@@ -1,0 +1,311 @@
+{
+  "info": {
+    "_postman_id": "a7e5c3b1-4b28-4f3c-9d11-7e5c8f9a2b01",
+    "name": "Panorama WLI — HTTPS Telemetry Receiver",
+    "description": "Importable Postman collection for Panorama Water Tank Monitor HTTPS Receiver (Render & local). Uses Postman environment variables ({{base_url}}, {{api_token}}, {{device_id}}) with zero embedded credentials.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-Device-Token",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{api_token}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://panorama-water-tank-backend.onrender.com",
+      "type": "string"
+    },
+    {
+      "key": "api_token",
+      "value": "REPLACE_WITH_YOUR_RENDER_API_TOKEN",
+      "type": "string"
+    },
+    {
+      "key": "device_id",
+      "value": "WLI_LAB_NODE_02",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/health",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "health"
+          ]
+        },
+        "description": "Public health endpoint verifying backend availability."
+      }
+    },
+    {
+      "name": "System Information",
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/system/info",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "system",
+            "info"
+          ]
+        },
+        "description": "Public diagnostics endpoint reporting uptime and storage metrics."
+      }
+    },
+    {
+      "name": "Send Telemetry (X-Device-Token)",
+      "request": {
+        "auth": {
+          "type": "apikey",
+          "apikey": [
+            {
+              "key": "key",
+              "value": "X-Device-Token",
+              "type": "string"
+            },
+            {
+              "key": "value",
+              "value": "{{api_token}}",
+              "type": "string"
+            },
+            {
+              "key": "in",
+              "value": "header",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"device_id\": \"{{device_id}}\",\n  \"sequence_id\": 1001,\n  \"timestamp\": 1794994114,\n  \"water_level_cm\": 112.5,\n  \"water_level_percentage\": 75,\n  \"raw_voltage\": 3.5,\n  \"pressure_bar\": 0.11,\n  \"sensor_status\": \"NORMAL\",\n  \"latitude\": 22.5726,\n  \"longitude\": 88.3639,\n  \"gps_valid\": true,\n  \"battery_voltage\": 12.6,\n  \"alarm_status\": \"NONE\",\n  \"signal_csq\": 28,\n  \"coach_id\": \"pano123\",\n  \"train_number\": \"12841\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/telemetry",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "telemetry"
+          ]
+        },
+        "description": "Ingest JSON telemetry authenticated via API Key header (Key: X-Device-Token, Value: {{api_token}}, Add to: Header)."
+      }
+    },
+    {
+      "name": "Send Telemetry (Bearer Token Alternative)",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{api_token}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"device_id\": \"{{device_id}}\",\n  \"sequence_id\": 1002,\n  \"timestamp\": 1794994174,\n  \"water_level_cm\": 114.0,\n  \"water_level_percentage\": 76,\n  \"raw_voltage\": 3.54,\n  \"pressure_bar\": 0.112,\n  \"sensor_status\": \"NORMAL\",\n  \"latitude\": 22.5726,\n  \"longitude\": 88.3639,\n  \"gps_valid\": true,\n  \"battery_voltage\": 12.6,\n  \"alarm_status\": \"NONE\",\n  \"signal_csq\": 28,\n  \"coach_id\": \"pano123\",\n  \"train_number\": \"12841\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/telemetry",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "telemetry"
+          ]
+        },
+        "description": "Ingest JSON telemetry authenticated via Authorization: Bearer {{api_token}}."
+      }
+    },
+    {
+      "name": "Get Latest Telemetry",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/telemetry/latest?device_id={{device_id}}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "telemetry",
+            "latest"
+          ],
+          "query": [
+            {
+              "key": "device_id",
+              "value": "{{device_id}}",
+              "description": "Uncheck to fetch latest readings for all devices"
+            }
+          ]
+        },
+        "description": "Retrieve latest stored telemetry record for a device (or all devices if device_id query param is unchecked)."
+      }
+    },
+    {
+      "name": "Get Telemetry History",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/telemetry/history?device_id={{device_id}}&limit=50",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "telemetry",
+            "history"
+          ],
+          "query": [
+            {
+              "key": "device_id",
+              "value": "{{device_id}}"
+            },
+            {
+              "key": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "description": "Retrieve reverse-chronological historical telemetry records."
+      }
+    },
+    {
+      "name": "Upload JSON File",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": [],
+              "description": "Select a .json file containing a telemetry payload object"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/telemetry/upload",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "telemetry",
+            "upload"
+          ]
+        },
+        "description": "Upload a telemetry JSON file via multipart/form-data (alias of /api/telemetry/file)."
+      }
+    }
+  ]
+}
