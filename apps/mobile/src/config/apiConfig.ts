@@ -10,6 +10,7 @@ import { isAndroidCapacitorApp } from '../services/nativeBridge';
 export const DEFAULT_PRODUCTION_API_URL = 'https://panorama-water-tank-backend.onrender.com/api/v1';
 export const DEFAULT_LOCAL_API_URL = 'http://127.0.0.1:8000/api/v1';
 export const DEFAULT_PRODUCTION_WS_URL = 'wss://panorama-water-tank-backend.onrender.com/api/v1/ws/live';
+export const DEFAULT_HTTPS_RECEIVER_HEALTH_URL = 'https://panorama-water-tank-backend.onrender.com/api/health';
 
 // Compile-time bundled environment variables (replaced directly by esbuild define)
 declare const process: any;
@@ -140,6 +141,19 @@ export function resolveHealthUrl(candidateUrl?: string): string {
     return `${httpProto}${withoutWs}/health`;
   }
   return `${httpProto}${withoutWs}/api/v1/health`;
+}
+
+/**
+ * Resolves the independent HTTPS Laboratory Receiver health endpoint (`GET /api/health`),
+ * kept separate from the main SCADA `/api/v1` API configuration.
+ */
+export function resolveHttpsReceiverHealthUrl(candidateUrl?: string): string {
+  const raw = (candidateUrl || DEFAULT_HTTPS_RECEIVER_HEALTH_URL).trim().replace(/\/+$/, '');
+  if (!raw) return DEFAULT_HTTPS_RECEIVER_HEALTH_URL;
+  const isHttps = raw.startsWith('wss://') || raw.startsWith('https://');
+  const httpProto = isHttps ? 'https://' : 'http://';
+  const hostOnly = raw.replace(/^wss?:\/\//, '').replace(/^https?:\/\//, '').split('/')[0];
+  return hostOnly ? `${httpProto}${hostOnly}/api/health` : DEFAULT_HTTPS_RECEIVER_HEALTH_URL;
 }
 
 /**

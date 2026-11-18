@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { typography } from '../theme';
 import { useApp } from '../state/AppContext';
-import { mqttService, RawMqttFrame } from '../services/mqttService';
+import { mqttService, RawMqttFrame, MqttPayloadType, classifyMqttPayload } from '../services/mqttService';
 import { deviceRegistry } from '../services/deviceRegistry';
 import {
   Terminal,
@@ -101,6 +101,9 @@ interface SerialMessage {
   topic: string;
   qos: number;
   payloadSize: number;
+  payloadType: MqttPayloadType;  // JSON | TEXT | BINARY | INVALID
+  isEmpty: boolean;
+  parseError?: string;
   receivedAt: number;
   receivedTimeShort: string;     // HH:mm:ss.SSS (local reception time)
   receivedAtFormatted: string;   // YYYY-MM-DD HH:mm:ss.SSS
@@ -110,6 +113,13 @@ interface SerialMessage {
   parsedJson: any;
   formattedJson: string | null;  // Pretty-printed JSON if valid
 }
+
+const PAYLOAD_BADGE_STYLES: Record<MqttPayloadType, { color: string; bg: string; border: string }> = {
+  JSON: { color: '#3FB950', bg: '#0F2918', border: '#1F512D' },
+  TEXT: { color: '#F59E0B', bg: '#2D2006', border: '#5C3D0C' },
+  BINARY: { color: '#C084FC', bg: '#261438', border: '#4C2473' },
+  INVALID: { color: '#F87171', bg: '#2F1114', border: '#661E24' },
+};
 
 /** Standard MQTT wildcard matcher (+ and #) so subscribing to any topic works reliably. */
 function mqttTopicMatches(subscription: string, incomingTopic: string): boolean {
@@ -232,11 +242,21 @@ const SerialLogEntry: React.FC<{
           </span>
           <span style={{ color: '#8B949E' }}>QoS {entry.qos}</span>
           <span style={{ color: '#8B949E' }}>{entry.payloadSize} B</span>
-          {!entry.isJson && (
-            <span style={{ color: '#F59E0B', backgroundColor: '#2D2006', padding: '1px 5px', borderRadius: '3px', fontSize: '10px', fontWeight: 700 }}>
-              PLAIN TEXT
-            </span>
-          )}
+          <span
+            title={entry.parseError || `Payload type: ${entry.payloadType}`}
+            style={{
+              color: PAYLOAD_BADGE_STYLES[entry.payloadType].color,
+              backgroundColor: PAYLOAD_BADGE_STYLES[entry.payloadType].bg,
+              border: `1px solid ${PAYLOAD_BADGE_STYLES[entry.payloadType].border}`,
+              padding: '1px 6px',
+              borderRadius: '3px',
+              fontSize: '10px',
+              fontWeight: 700,
+              letterSpacing: '0.3px',
+            }}
+          >
+            {entry.payloadType}
+          </span>
           {entry.deviceTimestamp && (
             <span style={{ color: '#A5D6FF' }}>Device Time: &quot;{entry.deviceTimestamp}&quot;</span>
           )}
@@ -268,9 +288,9 @@ const SerialLogEntry: React.FC<{
         </button>
       </div>
 
-      {/* Entry body: Formatted JSON or verbatim Raw payload */}
+      {/* Entry body: Formatted JSON (object or array) or verbatim Raw payload */}
       <div style={{ overflowX: 'auto', paddingLeft: '2px' }}>
-        {viewMode === 'json' && entry.isJson && entry.formattedJson !== null ? (
+        {viewMode === 'json' && entry.payloadType === 'JSON' && entry.formattedJson !== null ? (
           <HighlightedJson text={entry.formattedJson} />
         ) : (
           <pre
@@ -279,12 +299,21 @@ const SerialLogEntry: React.FC<{
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
               fontSize: '12px',
               lineHeight: '18px',
-              color: entry.isJson ? '#7EE787' : '#E6EDF3',
+              color: entry.isEmpty
+                ? '#8B949E'
+                : entry.payloadType === 'JSON'
+                  ? '#7EE787'
+                  : entry.payloadType === 'BINARY'
+                    ? '#D8B4FE'
+                    : entry.payloadType === 'INVALID'
+                      ? '#FCA5A5'
+                      : '#E6EDF3',
+              fontStyle: entry.isEmpty ? 'italic' : 'normal',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
             }}
           >
-            {entry.rawPayload}
+            {entry.isEmpty ? '(empty payload)' : entry.rawPayload}
           </pre>
         )}
       </div>
@@ -416,26 +445,35 @@ export const MqttMonitorScreen: React.FC = () => {
       const rawPayload = frame.payloadString ?? '';
       const receivedDate = new Date(frame.receivedAt || Date.now());
 
-      // Never discard invalid JSON — parse safely and fall back to plain text
-      let isJson = false;
-      let parsedJson: any = null;
-      let formattedJson: string | null = null;
-      let deviceTimestamp: string | null = null;
-
-      try {
-        const parsed = JSON.parse(rawPayload);
-        if (parsed !== null && typeof parsed === 'object') {
-          isJson = true;
-          parsedJson = parsed;
-          formattedJson = JSON.stringify(parsed, null, 2);
-          if (parsed.time !== undefined && parsed.time !== null) {
-            deviceTimestamp = String(parsed.time);
-          } else if (parsed.timestamp !== undefined && parsed.timestamp !== null) {
-            deviceTimestamp = String(parsed.timestamp);
+      // Use centralized payload classifier (JSON object/array, TEXT, BINARY, INVALID) — never discard any frame
+      const classified = frame.payloadType
+        ? {
+            payloadType: frame.payloadType,
+            isJson: Boolean(frame.isJson),
+            parsedJson: frame.parsedJson,
+            isEmpty: Boolean(frame.isEmpty ?? rawPayload.trim().length === 0),
+            error: frame.error,
           }
+        : classifyMqttPayload(rawPayload);
+
+      const formattedJson =
+        classified.payloadType === 'JSON' && classified.parsedJson !== null && classified.parsedJson !== undefined
+          ? JSON.stringify(classified.parsedJson, null, 2)
+          : null;
+
+      let deviceTimestamp: string | null = frame.deviceTimestamp ?? null;
+      if (
+        !deviceTimestamp &&
+        classified.payloadType === 'JSON' &&
+        classified.parsedJson &&
+        typeof classified.parsedJson === 'object' &&
+        !Array.isArray(classified.parsedJson)
+      ) {
+        if (classified.parsedJson.time !== undefined && classified.parsedJson.time !== null) {
+          deviceTimestamp = String(classified.parsedJson.time);
+        } else if (classified.parsedJson.timestamp !== undefined && classified.parsedJson.timestamp !== null) {
+          deviceTimestamp = String(classified.parsedJson.timestamp);
         }
-      } catch {
-        isJson = false;
       }
 
       seqRef.current += 1;
@@ -444,14 +482,17 @@ export const MqttMonitorScreen: React.FC = () => {
         seq: seqRef.current,
         topic: frame.topic,
         qos: frame.qos ?? 0,
-        payloadSize: frame.payloadSize || rawPayload.length,
+        payloadSize: typeof frame.payloadSize === 'number' ? frame.payloadSize : rawPayload.length,
+        payloadType: classified.payloadType,
+        isEmpty: classified.isEmpty,
+        parseError: classified.error,
         receivedAt: receivedDate.getTime(),
         receivedTimeShort: formatLocalTimeMs(receivedDate),
         receivedAtFormatted: frame.receivedAtFormatted || receivedDate.toISOString(),
         deviceTimestamp,
         rawPayload,
-        isJson,
-        parsedJson,
+        isJson: classified.isJson,
+        parsedJson: classified.parsedJson,
         formattedJson,
       };
 
@@ -607,6 +648,7 @@ export const MqttMonitorScreen: React.FC = () => {
         qos: m.qos,
         receivedAt: m.receivedAtFormatted,
         deviceTimestamp: m.deviceTimestamp,
+        payloadType: m.payloadType,
         isJson: m.isJson,
         payload: m.isJson ? m.parsedJson : m.rawPayload,
       })),

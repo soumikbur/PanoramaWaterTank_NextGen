@@ -60,11 +60,181 @@ export const CENTRAL_DELTA_SYNC_TOPIC = 'panorama/central/sync/v2';
 export const SYNC_EVENTS_TOPIC = 'panorama/sync/events';
 export const SYNC_WILDCARD_TOPIC = 'panorama/sync/#';
 
+export type MqttPayloadType = 'JSON' | 'TEXT' | 'BINARY' | 'INVALID';
+
+export interface ClassifiedMqttPayload {
+  payloadType: MqttPayloadType;
+  payloadString: string;
+  payloadSize: number;
+  isJson: boolean;
+  jsonKind: 'object' | 'array' | null;
+  parsedJson: any;
+  isEmpty: boolean;
+  error?: string;
+}
+
+/**
+ * Safely decode & classify any incoming MQTT payload (JSON object, JSON array,
+ * plain text, empty payload, malformed JSON, or binary/non-UTF-8 bytes).
+ * Never throws and never discards non-JSON payloads.
+ */
+export function classifyMqttPayload(
+  input: { payloadBytes?: Uint8Array | ArrayBuffer; payloadString?: string } | string | object
+): ClassifiedMqttPayload {
+  let payloadStr = '';
+  let payloadSize = 0;
+  let isBinary = false;
+  let bytes: Uint8Array | null = null;
+
+  if (typeof input === 'string') {
+    payloadStr = input;
+    payloadSize = typeof Blob !== 'undefined' ? new Blob([input]).size : input.length;
+  } else if (input && typeof input === 'object' && !('payloadBytes' in input) && !('payloadString' in input)) {
+    const serialized = JSON.stringify(input, null, 2);
+    const jsonKind = Array.isArray(input) ? 'array' : 'object';
+    return {
+      payloadType: 'JSON',
+      payloadString: serialized,
+      payloadSize: typeof Blob !== 'undefined' ? new Blob([serialized]).size : serialized.length,
+      isJson: true,
+      jsonKind,
+      parsedJson: input,
+      isEmpty: false,
+    };
+  } else if (input && typeof input === 'object') {
+    const msg = input as any;
+    try {
+      if (msg.payloadBytes instanceof Uint8Array) {
+        bytes = msg.payloadBytes;
+      } else if (msg.payloadBytes instanceof ArrayBuffer) {
+        bytes = new Uint8Array(msg.payloadBytes);
+      }
+    } catch {
+      bytes = null;
+    }
+
+    if (bytes) {
+      payloadSize = bytes.byteLength;
+      if (bytes.byteLength === 0) {
+        payloadStr = '';
+      } else {
+        // Check for NUL bytes or excessive non-printable control characters
+        let controlCount = 0;
+        let hasNull = false;
+        for (let i = 0; i < bytes.length; i++) {
+          const b = bytes[i];
+          if (b === 0) {
+            hasNull = true;
+            break;
+          }
+          if (b < 0x20 && b !== 0x09 && b !== 0x0a && b !== 0x0d) {
+            controlCount++;
+          }
+        }
+        if (hasNull || controlCount / bytes.length > 0.1) {
+          isBinary = true;
+        } else {
+          try {
+            if (typeof TextDecoder !== 'undefined') {
+              payloadStr = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+            } else {
+              payloadStr = typeof msg.payloadString === 'string' ? msg.payloadString : '';
+            }
+          } catch {
+            isBinary = true;
+          }
+        }
+      }
+    } else {
+      // Fallback when payloadBytes is unavailable; guard Paho's payloadString getter against UTF-8 throws
+      try {
+        payloadStr = typeof msg.payloadString === 'string' ? msg.payloadString : '';
+        payloadSize = typeof Blob !== 'undefined' ? new Blob([payloadStr]).size : payloadStr.length;
+      } catch {
+        isBinary = true;
+      }
+    }
+  }
+
+  if (isBinary) {
+    const hexPreview = bytes
+      ? Array.from(bytes.slice(0, 64))
+          .map((b) => b.toString(16).padStart(2, '0').toUpperCase())
+          .join(' ') + (bytes.length > 64 ? ' ...' : '')
+      : '(non-UTF-8 binary payload)';
+    return {
+      payloadType: 'BINARY',
+      payloadString: `[BINARY ${payloadSize} B] ${hexPreview}`,
+      payloadSize,
+      isJson: false,
+      jsonKind: null,
+      parsedJson: null,
+      isEmpty: payloadSize === 0,
+    };
+  }
+
+  const trimmed = payloadStr.trim();
+  if (trimmed.length === 0) {
+    return {
+      payloadType: 'TEXT',
+      payloadString: payloadStr,
+      payloadSize,
+      isJson: false,
+      jsonKind: null,
+      parsedJson: null,
+      isEmpty: true,
+    };
+  }
+
+  const looksLikeJson = trimmed.startsWith('{') || trimmed.startsWith('[');
+  if (looksLikeJson) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed !== null && typeof parsed === 'object') {
+        return {
+          payloadType: 'JSON',
+          payloadString: payloadStr,
+          payloadSize,
+          isJson: true,
+          jsonKind: Array.isArray(parsed) ? 'array' : 'object',
+          parsedJson: parsed,
+          isEmpty: false,
+        };
+      }
+    } catch (e: any) {
+      return {
+        payloadType: 'INVALID',
+        payloadString: payloadStr,
+        payloadSize,
+        isJson: false,
+        jsonKind: null,
+        parsedJson: null,
+        isEmpty: false,
+        error: e?.message || 'Invalid JSON syntax',
+      };
+    }
+  }
+
+  // Plain-text payload (e.g. "hello", status logs, AT responses) — valid non-JSON message
+  return {
+    payloadType: 'TEXT',
+    payloadString: payloadStr,
+    payloadSize,
+    isJson: false,
+    jsonKind: null,
+    parsedJson: null,
+    isEmpty: false,
+  };
+}
+
 export interface RawMqttFrame {
   id: string;
   topic: string;
   payloadString: string;
   payloadSize: number;
+  payloadType: MqttPayloadType;
+  jsonKind?: 'object' | 'array' | null;
+  isEmpty?: boolean;
   qos: number;
   retained: boolean;
   receivedAt: number;
@@ -72,7 +242,7 @@ export interface RawMqttFrame {
   deviceTimestamp: string | null;
   uid: string | null;
   isJson: boolean;
-  parsedJson: Record<string, any> | null;
+  parsedJson: any;
   error?: string;
 }
 
@@ -98,35 +268,6 @@ export function formatMqttMessageBlock(frame: RawMqttFrame): string {
 
 export type TelemetryCallback = (payload: LiveTelemetryPayload) => void;
 export type MqttStatusCallback = (status: MqttConnectionStatus) => void;
-
-export interface MqttBrokerDiagnostics {
-  brokerName: string;
-  host: string;
-  port: number;
-  path: string;
-  useSSL: boolean;
-  protocol: string;
-  mqttVersion: string;
-  transportSecurity: string;
-  authMode: string;
-  certValidation: string;
-  status: MqttConnectionStatus;
-  websocketConnected: boolean;
-  mqttSessionConnected: boolean;
-  brokerReachable: 'REACHABLE' | 'UNREACHABLE' | 'UNKNOWN';
-  confirmedTopics: string[];
-  connectedAt: number | null;
-  disconnectedAt: number | null;
-  lastError: string | null;
-  connectionLatencyMs: number | null;
-  reconnectAttempts: number;
-  autoReconnect: boolean;
-  totalBrokerMessages: number;
-  lastBrokerMessageAt: number | null;
-  keepAliveSeconds: number;
-  cleanSession: boolean;
-  clientId: string | null;
-}
 
 export class MqttService {
   private static instance: MqttService;
@@ -159,19 +300,9 @@ export class MqttService {
   private lastMessageReceivedTime = 0;
   private historyBuffer: LiveTelemetryPayload[] = [];
   private isDestroyed = false;
-
-  // Live broker connection & session diagnostics (populated solely by actual Paho events)
-  private mqttSessionConnected = false;
-  private brokerReachable: 'REACHABLE' | 'UNREACHABLE' | 'UNKNOWN' = 'UNKNOWN';
-  private confirmedSubscriptions: Set<string> = new Set();
-  private connectAttemptStartedAt: number | null = null;
-  private connectedAt: number | null = null;
-  private disconnectedAt: number | null = null;
-  private lastError: string | null = null;
-  private connectionLatencyMs: number | null = null;
-  private totalBrokerMessages = 0;
-  private lastBrokerMessageAt: number | null = null;
-  private activeClientId: string | null = null;
+  private isConnecting = false;
+  private intentionalDisconnect = false;
+  private networkListenersBound = false;
 
   private brokerHost: string = 'broker.hivemq.com';
   private brokerPort: number = 8884;
@@ -182,6 +313,50 @@ export class MqttService {
 
   private constructor() {
     this.initConfiguration();
+    this.bindNetworkListeners();
+  }
+
+  private bindNetworkListeners(): void {
+    if (this.networkListenersBound || typeof window === 'undefined') return;
+    this.networkListenersBound = true;
+
+    window.addEventListener('online', () => {
+      if (this.intentionalDisconnect || this.isDestroyed) return;
+      if (this.client && this.client.isConnected && this.client.isConnected()) return;
+      console.info('[MQTT] Browser online — restoring MQTT broker connection...');
+      this.reconnectAttempts = 0;
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+      this.connect();
+    });
+
+    window.addEventListener('offline', () => {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+      this.topicSubscribed = false;
+      this.clearStaleTimer();
+      this.isConnecting = false;
+      this.setStatus('DISCONNECTED');
+    });
+
+    window.addEventListener('beforeunload', () => {
+      this.disconnect();
+    });
+  }
+
+  private cleanupClient(): void {
+    const oldClient = this.client;
+    this.client = null;
+    if (!oldClient) return;
+    try {
+      oldClient.onConnectionLost = () => {};
+      oldClient.onMessageArrived = () => {};
+      if (oldClient.isConnected && oldClient.isConnected()) {
+        oldClient.disconnect();
+      }
+    } catch {
+      // ignore teardown errors on already-closed socket
+    }
   }
 
   static getInstance(): MqttService {
@@ -214,85 +389,90 @@ export class MqttService {
   }
 
   connect(): void {
+    if (this.isConnecting) {
+      return;
+    }
     if (this.client && this.client.isConnected && this.client.isConnected()) {
       return;
     }
 
     this.isDestroyed = false;
+    this.intentionalDisconnect = false;
+
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      this.setStatus('DISCONNECTED');
+      return;
+    }
+
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+
+    // Clean up any stale client instance before creating a fresh one (prevents duplicate clients/ghost disconnects)
+    this.cleanupClient();
+
+    this.isConnecting = true;
     this.setStatus('CONNECTING');
-    this.connectAttemptStartedAt = Date.now();
 
     const clientId = `panorama-web-${Math.random().toString(16).substring(2, 10)}`;
-    this.activeClientId = clientId;
 
     try {
       const ClientConstructor = (Paho && (Paho.Client || (Paho as any).default?.Client)) || (window as any).Paho?.MQTT?.Client;
       if (!ClientConstructor) {
+        this.isConnecting = false;
         console.warn('[MQTT] Paho.Client constructor not available in runtime.');
-        this.lastError = 'Paho MQTT client runtime unavailable';
-        this.brokerReachable = 'UNREACHABLE';
-        this.mqttSessionConnected = false;
         this.setStatus('DISCONNECTED');
         this.scheduleReconnect();
         return;
       }
 
-      this.client = new ClientConstructor(
+      const client = new ClientConstructor(
         this.brokerHost,
         this.brokerPort,
         this.brokerPath,
         clientId
       );
+      this.client = client;
 
-      this.client.onConnectionLost = (responseObject: any) => {
-        const errorMsg = responseObject?.errorMessage || 'Connection lost';
-        console.warn('[MQTT] Connection lost:', errorMsg);
-        this.mqttSessionConnected = false;
+      client.onConnectionLost = (responseObject: any) => {
+        // Ignore callbacks from stale/replaced client instances or intentional disconnects
+        if (this.client !== client) return;
+        this.isConnecting = false;
         this.topicSubscribed = false;
-        this.confirmedSubscriptions.clear();
-        this.disconnectedAt = Date.now();
-        this.lastError = errorMsg;
-        this.brokerReachable = 'UNREACHABLE';
         this.clearStaleTimer();
         this.setStatus('DISCONNECTED');
+
+        if (this.intentionalDisconnect || this.isDestroyed || responseObject?.errorCode === 0) {
+          return;
+        }
+
+        const errorMsg = responseObject?.errorMessage || 'Socket closed unexpectedly';
+        console.info('[MQTT] Connection lost, scheduling reconnect:', errorMsg);
+        this.cleanupClient();
         this.scheduleReconnect();
       };
 
-      this.client.onMessageArrived = (message: any) => {
+      client.onMessageArrived = (message: any) => {
+        if (this.client !== client) return;
         try {
-          this.totalBrokerMessages += 1;
-          this.lastBrokerMessageAt = Date.now();
           const destination = message.destinationName || message.topic || '';
-          const payloadStr = typeof message.payloadString === 'string' ? message.payloadString : String(message.payloadBytes || '');
           const qos = typeof message.qos === 'number' ? message.qos : 0;
           const retained = Boolean(message.retained);
           const receivedDate = new Date();
           const receivedAt = receivedDate.getTime();
           const receivedAtFormatted = formatMqttTimestamp(receivedDate);
-          const payloadSize = typeof Blob !== 'undefined' ? new Blob([payloadStr]).size : payloadStr.length;
 
-          let isJson = false;
-          let parsedJson: Record<string, any> | null = null;
+          // Step 1 & 2: Safely decode & classify payload (JSON | TEXT | BINARY | INVALID)
+          const classified = classifyMqttPayload(message);
+
           let deviceTimestamp: string | null = null;
           let uid: string | null = null;
-          let parseError: string | undefined = undefined;
-
-          try {
-            parsedJson = JSON.parse(payloadStr);
-            if (parsedJson && typeof parsedJson === 'object') {
-              isJson = true;
-              if (parsedJson.time && typeof parsedJson.time === 'string') {
-                deviceTimestamp = parsedJson.time;
-              }
-              if (parsedJson.uid) {
-                uid = String(parsedJson.uid);
-              } else if (parsedJson.deviceId) {
-                uid = String(parsedJson.deviceId);
-              }
-            }
-          } catch (e: any) {
-            isJson = false;
-            parseError = e?.message || 'Malformed JSON';
+          if (classified.payloadType === 'JSON' && classified.jsonKind === 'object' && classified.parsedJson) {
+            const p = classified.parsedJson;
+            if (p.time != null) deviceTimestamp = String(p.time);
+            else if (p.timestamp != null) deviceTimestamp = String(p.timestamp);
+            if (p.uid) uid = String(p.uid);
+            else if (p.deviceId) uid = String(p.deviceId);
+            else if (p.device_id) uid = String(p.device_id);
           }
 
           if (!uid && destination) {
@@ -303,19 +483,23 @@ export class MqttService {
           const frame: RawMqttFrame = {
             id: `mqtt-${receivedAt}-${Math.random().toString(36).substring(2, 7)}`,
             topic: destination,
-            payloadString: payloadStr,
-            payloadSize,
+            payloadString: classified.payloadString,
+            payloadSize: classified.payloadSize,
+            payloadType: classified.payloadType,
+            jsonKind: classified.jsonKind,
+            isEmpty: classified.isEmpty,
             qos,
             retained,
             receivedAt,
             receivedAtFormatted,
             deviceTimestamp,
             uid,
-            isJson,
-            parsedJson,
-            error: parseError,
+            isJson: classified.isJson,
+            parsedJson: classified.parsedJson,
+            error: classified.error,
           };
 
+          // Step 3: Always deliver every received frame to the Serial Monitor (never discard!)
           this.rawMessageHistory.push(frame);
           if (this.rawMessageHistory.length > 1000) {
             this.rawMessageHistory.shift();
@@ -329,6 +513,12 @@ export class MqttService {
             }
           });
 
+          // Step 4: Only pass valid JSON payloads to sync & telemetry interpreters (plain text / empty / binary stop cleanly here)
+          if (classified.payloadType !== 'JSON') {
+            return;
+          }
+
+          const payloadStr = classified.payloadString;
           if (destination === SYNC_EVENTS_TOPIC || destination.startsWith('panorama/sync/')) {
             this.handleSyncEvent(payloadStr);
             return;
@@ -364,7 +554,7 @@ export class MqttService {
             this.handleSyncEvent(payloadStr);
             return;
           }
-          this.handleIncomingPayload(payloadStr, destination);
+          this.handleIncomingPayload(payloadStr, destination, classified.parsedJson);
         } catch (e) {
           console.error('[MQTT] Error processing message frame:', e);
         }
@@ -373,151 +563,146 @@ export class MqttService {
       const connectOptions: any = {
         useSSL: this.useSSL,
         timeout: 10,
-        keepAliveInterval: 45,
+        keepAliveInterval: 30,
         cleanSession: true,
         onSuccess: () => {
-          const nowTs = Date.now();
+          if (this.client !== client || this.intentionalDisconnect) return;
+          this.isConnecting = false;
           this.reconnectAttempts = 0;
-          this.mqttSessionConnected = true;
-          this.brokerReachable = 'REACHABLE';
-          this.connectedAt = nowTs;
-          this.lastError = null;
-          if (this.connectAttemptStartedAt) {
-            this.connectionLatencyMs = Math.max(1, nowTs - this.connectAttemptStartedAt);
-          }
           this.setStatus('CONNECTED');
-          console.info(`[MQTT] Connected to ${this.brokerHost}:${this.brokerPort}. Subscribing to topics...`);
+          console.info(`[MQTT] Connected to ${this.brokerHost}:${this.brokerPort}. Restoring subscriptions...`);
           try {
-            const subWithAck = (t: string, qos: number) => {
-              this.client.subscribe(t, {
-                qos,
-                onSuccess: () => {
-                  this.confirmedSubscriptions.add(t);
-                },
-                onFailure: (subErr: any) => {
-                  this.confirmedSubscriptions.delete(t);
-                  this.lastError = `Subscribe failed (${t}): ${subErr?.errorMessage || subErr}`;
-                },
-              });
-            };
-            // Subscribe to primary synchronization bus (events and wildcard)
-            subWithAck(SYNC_EVENTS_TOPIC, 1);
-            subWithAck(SYNC_WILDCARD_TOPIC, 1);
+            // Deduplicate all subscriptions into a single map (avoids redundant overlapping SUBSCRIBE packets that can trip broker limits)
+            const subs = new Map<string, number>();
+            subs.set(SYNC_EVENTS_TOPIC, 1);
+            subs.set(SYNC_WILDCARD_TOPIC, 1);
+            subs.set(CENTRAL_FLEET_TOPIC, 1);
+            subs.set(CENTRAL_DEVICES_TOPIC, 1);
+            subs.set(CENTRAL_SETTINGS_TOPIC, 1);
+            subs.set(CENTRAL_USERS_TOPIC, 1);
+            subs.set(CENTRAL_DELTA_SYNC_TOPIC, 1);
+            subs.set('panorama/fleet/sync', 1);
+            subs.set('panorama/devices/sync', 1);
+            subs.set('panorama/telemetry/#', 0);
 
-            // Subscribe to primary configuration topic and telemetry stream (/s)
-            subWithAck(this.topic, 1);
-            subWithAck(`${this.topic}/s`, 1);
-            subWithAck(`${this.topic}/#`, 1);
-            if (this.topic !== DEFAULT_MQTT_TOPIC) {
-              subWithAck(DEFAULT_MQTT_TOPIC, 1);
-              subWithAck(`${DEFAULT_MQTT_TOPIC}/s`, 1);
-              subWithAck(`${DEFAULT_MQTT_TOPIC}/#`, 1);
+            if (this.topic) {
+              subs.set(this.topic, 0);
+              subs.set(`${this.topic}/s`, 0);
             }
-            // Target hardware device telemetry topics (Physical UID verified from MQTT.fx)
-            subWithAck('002F00654B42501320353332', 0);
-            subWithAck('002F00654B42501320353332/s', 0);
-            subWithAck('002F00654B42501320353332/#', 0);
-            subWithAck('panorama/telemetry/002F00654B42501320353332', 0);
-            // Legacy / alternate variants for backward compatibility
-            subWithAck('002F00654B42501203203533332', 1);
-            subWithAck('002F00654B42501203203533332/s', 1);
-            subWithAck('002F00654B42501203203533332/#', 1);
-            subWithAck('002F00654B425012032053332', 1);
-            subWithAck('002F00654B425012032053332/s', 1);
-            subWithAck('002F00654B425012032053332/#', 1);
-            subWithAck('0023004D4B42501120353332', 1);
-            subWithAck('panorama/telemetry/#', 1);
+            if (DEFAULT_MQTT_TOPIC) {
+              subs.set(DEFAULT_MQTT_TOPIC, 0);
+              subs.set(`${DEFAULT_MQTT_TOPIC}/s`, 0);
+            }
 
-            subWithAck(CENTRAL_FLEET_TOPIC, 1);
-            subWithAck(CENTRAL_DEVICES_TOPIC, 1);
-            subWithAck(CENTRAL_SETTINGS_TOPIC, 1);
-            subWithAck(CENTRAL_USERS_TOPIC, 1);
-            subWithAck(CENTRAL_DELTA_SYNC_TOPIC, 1);
-            subWithAck('panorama/fleet/sync', 1);
-            subWithAck('panorama/devices/sync', 1);
-
-            // Re-subscribe to all dynamic topic subscriptions
+            // User-selected dynamic subscriptions take precedence with exact chosen topic & QoS
             this.dynamicSubscriptions.forEach((qos, top) => {
+              subs.set(top, qos);
+            });
+
+            subs.forEach((qos, top) => {
               try {
-                subWithAck(top, qos);
-                console.info(`[MQTT] Re-subscribed to dynamic topic: ${top} (QoS ${qos})`);
-              } catch (dynErr) {
-                console.warn(`[MQTT] Failed to resubscribe to dynamic topic ${top}:`, dynErr);
+                client.subscribe(top, { qos });
+              } catch (subItemErr) {
+                console.warn(`[MQTT] Failed to subscribe to ${top}:`, subItemErr);
               }
             });
 
             this.topicSubscribed = true;
-          } catch (subErr: any) {
+          } catch (subErr) {
             this.topicSubscribed = false;
-            this.lastError = subErr?.message || String(subErr);
-            console.error('[MQTT] Failed to subscribe:', subErr);
+            console.error('[MQTT] Failed to restore subscriptions:', subErr);
           }
         },
         onFailure: (err: any) => {
-          this.mqttSessionConnected = false;
+          if (this.client !== client) return;
+          this.isConnecting = false;
           this.topicSubscribed = false;
-          this.confirmedSubscriptions.clear();
-          this.disconnectedAt = Date.now();
-          this.brokerReachable = 'UNREACHABLE';
-          this.lastError = err?.errorMessage || (typeof err === 'string' ? err : 'Broker connection failed');
-          console.warn('[MQTT] Connection failed:', err?.errorMessage || err);
+          console.info('[MQTT] Connection attempt failed, will retry with backoff:', err?.errorMessage || err);
           this.setStatus('DISCONNECTED');
+          this.cleanupClient();
           this.scheduleReconnect();
         },
       };
 
-      this.client.connect(connectOptions);
+      client.connect(connectOptions);
     } catch (err) {
+      this.isConnecting = false;
       console.error('[MQTT] Exception starting MQTT connection:', err);
       this.setStatus('DISCONNECTED');
+      this.cleanupClient();
       this.scheduleReconnect();
     }
   }
 
   /**
-   * Parse, validate, and dispatch incoming telemetry payload.
+   * Parse, validate, and dispatch incoming telemetry payload (supports JSON object or array of telemetry objects).
+   * Plain-text or non-JSON payloads return null cleanly without throwing or logging console warnings.
    */
-  handleIncomingPayload(rawString: string, topicName?: string): LiveTelemetryPayload | null {
-    if (!rawString || typeof rawString !== 'string') {
-      console.warn('[MQTT] Discarding invalid non-string payload');
-      return null;
-    }
-
-    let parsed: any;
-    try {
-      parsed = JSON.parse(rawString);
-    } catch (jsonErr) {
-      console.warn('[MQTT] Discarding malformed JSON payload:', jsonErr);
-      return null;
+  handleIncomingPayload(rawString: string, topicName?: string, preParsed?: any): LiveTelemetryPayload | null {
+    let parsed: any = preParsed;
+    if (parsed === undefined) {
+      if (!rawString || typeof rawString !== 'string') {
+        return null;
+      }
+      const classified = classifyMqttPayload(rawString);
+      if (classified.payloadType !== 'JSON') {
+        return null;
+      }
+      parsed = classified.parsedJson;
     }
 
     if (!parsed || typeof parsed !== 'object') {
-      console.warn('[MQTT] Discarding non-object telemetry frame');
       return null;
     }
 
-    // Validate and sanitize required fields according to contract:
-    // {"uid":"0023004D4B42501120353332","lat":22.557279,"long":88.352432,"speed":3.4,"time":"12:15:39",
-    //  "cm1":120.8,"cm2":0.0,"wlp1":12.1,"wlp2":0.0,"wlv1":true,"wlv2":false,"bat":83.6,"chno":"CR123456","trno":"225256"}
+    // Handle JSON array of telemetry records cleanly without crashing
+    if (Array.isArray(parsed)) {
+      let lastProcessed: LiveTelemetryPayload | null = null;
+      for (const item of parsed) {
+        if (item && typeof item === 'object' && !Array.isArray(item)) {
+          const res = this.handleIncomingPayload(rawString, topicName, item);
+          if (res) lastProcessed = res;
+        }
+      }
+      return lastProcessed;
+    }
+
+    // Validate and sanitize required fields according to contract (supports both STM32 compact keys & WLI HTTPS keys):
     const topicUid = topicName ? topicName.split('/')[0].trim() : '';
-    const uid = String(parsed.uid || parsed.deviceId || topicUid || DEFAULT_DEVICE_UID).trim();
-    const trno = String(parsed.trno || parsed.trainNumber || '').trim();
-    const chno = String(parsed.chno || parsed.coachNumber || '').trim();
+    const uid = String(parsed.uid || parsed.deviceId || parsed.device_id || topicUid || DEFAULT_DEVICE_UID).trim();
+    const trno = String(parsed.trno || parsed.trainNumber || parsed.train_number || '').trim();
+    const chno = String(parsed.chno || parsed.coachNumber || parsed.coach_id || '').trim();
 
     const gps = parseValidGps(parsed);
     const speed = typeof parsed.speed === 'number' && Number.isFinite(parsed.speed) && parsed.speed >= 0 ? parsed.speed : 0;
-    const time = typeof parsed.time === 'string' ? parsed.time : new Date().toLocaleTimeString('en-US', { hour12: false });
+    const time = typeof parsed.time === 'string'
+      ? parsed.time
+      : parsed.timestamp != null
+        ? String(parsed.timestamp)
+        : new Date().toLocaleTimeString('en-US', { hour12: false });
 
-    const cm1 = typeof parsed.cm1 === 'number' && parsed.cm1 >= 0 ? parsed.cm1 : (typeof parsed.primaryHeight === 'number' ? parsed.primaryHeight : 0);
+    const cm1 = typeof parsed.cm1 === 'number' && parsed.cm1 >= 0
+      ? parsed.cm1
+      : typeof parsed.water_level_cm === 'number' && parsed.water_level_cm >= 0
+        ? parsed.water_level_cm
+        : (typeof parsed.primaryHeight === 'number' ? parsed.primaryHeight : 0);
     const cm2 = typeof parsed.cm2 === 'number' && parsed.cm2 >= 0 ? parsed.cm2 : (typeof parsed.secondaryHeight === 'number' ? parsed.secondaryHeight : 0);
 
-    const wlp1 = typeof parsed.wlp1 === 'number' ? Math.max(0, Math.min(100, parsed.wlp1)) : (typeof parsed.primaryLevel === 'number' ? parsed.primaryLevel : 0);
+    const wlp1 = typeof parsed.wlp1 === 'number'
+      ? Math.max(0, Math.min(100, parsed.wlp1))
+      : typeof parsed.water_level_percentage === 'number'
+        ? Math.max(0, Math.min(100, parsed.water_level_percentage))
+        : (typeof parsed.primaryLevel === 'number' ? parsed.primaryLevel : 0);
     const wlp2 = typeof parsed.wlp2 === 'number' ? Math.max(0, Math.min(100, parsed.wlp2)) : (typeof parsed.secondaryLevel === 'number' ? parsed.secondaryLevel : 0);
 
     const wlv1 = typeof parsed.wlv1 === 'boolean' ? parsed.wlv1 : (typeof parsed.wlvl === 'boolean' ? parsed.wlvl : true);
     const wlv2 = typeof parsed.wlv2 === 'boolean' ? parsed.wlv2 : true;
 
-    const bat = typeof parsed.bat === 'number' ? Math.max(0, Math.min(100, parsed.bat)) : (typeof parsed.batteryPercent === 'number' ? parsed.batteryPercent : 85);
+    const bat = typeof parsed.bat === 'number'
+      ? Math.max(0, Math.min(100, parsed.bat))
+      : typeof parsed.battery_voltage === 'number'
+        ? Math.max(0, Math.min(100, parsed.battery_voltage))
+        : (typeof parsed.batteryPercent === 'number' ? parsed.batteryPercent : 85);
 
     // Duplicate message detection
     const signature = `${uid}-${trno}-${chno}-${gps.lat}-${gps.long}-${speed}-${gps.gpsFix}-${cm1}-${cm2}-${wlp1}-${wlp2}-${bat}-${time}`;
@@ -628,12 +813,16 @@ export class MqttService {
   }
 
   private scheduleReconnect(): void {
-    if (this.isDestroyed) return;
+    if (this.isDestroyed || this.intentionalDisconnect) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+
     this.reconnectAttempts++;
-    const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts) + Math.random() * 500, 10000);
+    // Exponential backoff: 1s -> 2s -> 4s -> 8s -> 16s -> max 30s
+    const delay = Math.min(1000 * Math.pow(2, Math.min(this.reconnectAttempts - 1, 5)), 30000);
 
     clearTimeout(this.reconnectTimer);
     this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       this.connect();
     }, delay);
   }
@@ -667,6 +856,10 @@ export class MqttService {
 
   getStatus(): MqttConnectionStatus {
     return this.status;
+  }
+
+  isIntentionalDisconnect(): boolean {
+    return this.intentionalDisconnect;
   }
 
   getLastTelemetry(): LiveTelemetryPayload | null {
@@ -1089,32 +1282,21 @@ export class MqttService {
     this.dynamicSubscriptions.set(cleanTopic, qos);
     if (this.client && this.client.isConnected && this.client.isConnected()) {
       try {
-        this.client.subscribe(cleanTopic, {
-          qos,
-          onSuccess: () => {
-            this.confirmedSubscriptions.add(cleanTopic);
-          },
-          onFailure: (err: any) => {
-            this.confirmedSubscriptions.delete(cleanTopic);
-            this.lastError = `Subscribe failed (${cleanTopic}): ${err?.errorMessage || err}`;
-          },
-        });
+        this.client.subscribe(cleanTopic, { qos });
         console.info(`[MQTT] Subscribed to topic: ${cleanTopic} (QoS ${qos})`);
         return true;
-      } catch (err: any) {
-        this.lastError = err?.message || String(err);
+      } catch (err) {
         console.error(`[MQTT] Failed to subscribe to ${cleanTopic}:`, err);
         return false;
       }
     }
-    return false;
+    return true;
   }
 
   public unsubscribeTopic(topic: string): boolean {
     const cleanTopic = topic.trim();
     if (!cleanTopic) return false;
     this.dynamicSubscriptions.delete(cleanTopic);
-    this.confirmedSubscriptions.delete(cleanTopic);
     if (this.client && this.client.isConnected && this.client.isConnected()) {
       try {
         this.client.unsubscribe(cleanTopic);
@@ -1126,12 +1308,6 @@ export class MqttService {
       }
     }
     return true;
-  }
-
-  public isTopicConfirmedSubscribed(topic: string): boolean {
-    const clean = topic.trim();
-    if (!clean || !this.mqttSessionConnected) return false;
-    return this.confirmedSubscriptions.has(clean);
   }
 
   public getSubscribedTopics(): string[] {
@@ -1153,35 +1329,24 @@ export class MqttService {
     this.rawMessageHistory = [];
   }
 
-  public injectMessage(topic: string, payload: string | object, qos: number = 0, retained: boolean = false): RawMqttFrame {
-    const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
+  public injectMessage(topic: string, payload: string | object | Uint8Array, qos: number = 0, retained: boolean = false): RawMqttFrame {
     const receivedDate = new Date();
     const receivedAt = receivedDate.getTime();
     const receivedAtFormatted = formatMqttTimestamp(receivedDate);
-    const payloadSize = typeof Blob !== 'undefined' ? new Blob([payloadStr]).size : payloadStr.length;
+    const classified =
+      payload instanceof Uint8Array
+        ? classifyMqttPayload({ payloadBytes: payload })
+        : classifyMqttPayload(payload);
 
-    let isJson = false;
-    let parsedJson: Record<string, any> | null = null;
     let deviceTimestamp: string | null = null;
     let uid: string | null = null;
-    let parseError: string | undefined = undefined;
-
-    try {
-      parsedJson = typeof payload === 'object' && payload !== null ? (payload as any) : JSON.parse(payloadStr);
-      if (parsedJson && typeof parsedJson === 'object') {
-        isJson = true;
-        if (parsedJson.time && typeof parsedJson.time === 'string') {
-          deviceTimestamp = parsedJson.time;
-        }
-        if (parsedJson.uid) {
-          uid = String(parsedJson.uid);
-        } else if (parsedJson.deviceId) {
-          uid = String(parsedJson.deviceId);
-        }
-      }
-    } catch (e: any) {
-      isJson = false;
-      parseError = e?.message || 'Malformed JSON';
+    if (classified.payloadType === 'JSON' && classified.jsonKind === 'object' && classified.parsedJson) {
+      const p = classified.parsedJson;
+      if (p.time != null) deviceTimestamp = String(p.time);
+      else if (p.timestamp != null) deviceTimestamp = String(p.timestamp);
+      if (p.uid) uid = String(p.uid);
+      else if (p.deviceId) uid = String(p.deviceId);
+      else if (p.device_id) uid = String(p.device_id);
     }
 
     if (!uid && topic) {
@@ -1192,17 +1357,20 @@ export class MqttService {
     const frame: RawMqttFrame = {
       id: `mqtt-${receivedAt}-${Math.random().toString(36).substring(2, 7)}`,
       topic,
-      payloadString: payloadStr,
-      payloadSize,
+      payloadString: classified.payloadString,
+      payloadSize: classified.payloadSize,
+      payloadType: classified.payloadType,
+      jsonKind: classified.jsonKind,
+      isEmpty: classified.isEmpty,
       qos,
       retained,
       receivedAt,
       receivedAtFormatted,
       deviceTimestamp,
       uid,
-      isJson,
-      parsedJson,
-      error: parseError,
+      isJson: classified.isJson,
+      parsedJson: classified.parsedJson,
+      error: classified.error,
     };
 
     this.rawMessageHistory.push(frame);
@@ -1217,6 +1385,10 @@ export class MqttService {
         console.error('[MQTT] Raw message listener error:', err);
       }
     });
+
+    if (classified.payloadType === 'JSON') {
+      this.handleIncomingPayload(classified.payloadString, topic, classified.parsedJson);
+    }
 
     return frame;
   }
@@ -1237,40 +1409,6 @@ export class MqttService {
     };
   }
 
-  public getDiagnostics(): MqttBrokerDiagnostics {
-    const wsConnected = Boolean(this.client && typeof this.client.isConnected === 'function' && this.client.isConnected());
-    const hostLower = (this.brokerHost || '').toLowerCase();
-    const brokerName = hostLower.includes('hivemq.com') ? 'HiveMQ' : 'Custom MQTT Broker';
-    return {
-      brokerName,
-      host: this.brokerHost,
-      port: this.brokerPort,
-      path: this.brokerPath,
-      useSSL: this.useSSL,
-      protocol: this.useSSL ? 'MQTT over WebSocket Secure (WSS)' : 'MQTT over WebSocket (WS)',
-      mqttVersion: '3.1.1 (Paho JS Default)',
-      transportSecurity: this.useSSL ? 'TLS / WSS' : 'Unencrypted WS',
-      authMode: 'Anonymous (No Credentials Configured)',
-      certValidation: this.useSSL ? 'Browser-Managed TLS Verification' : 'Not Applicable (Plain WS)',
-      status: this.status,
-      websocketConnected: wsConnected,
-      mqttSessionConnected: this.mqttSessionConnected && wsConnected,
-      brokerReachable: wsConnected ? 'REACHABLE' : this.brokerReachable,
-      confirmedTopics: Array.from(this.confirmedSubscriptions),
-      connectedAt: this.connectedAt,
-      disconnectedAt: this.disconnectedAt,
-      lastError: this.lastError,
-      connectionLatencyMs: this.connectionLatencyMs,
-      reconnectAttempts: this.reconnectAttempts,
-      autoReconnect: !this.isDestroyed,
-      totalBrokerMessages: this.totalBrokerMessages,
-      lastBrokerMessageAt: this.lastBrokerMessageAt,
-      keepAliveSeconds: 45,
-      cleanSession: true,
-      clientId: this.activeClientId,
-    };
-  }
-
   public reconfigureBroker(host: string, port: number, path: string = '/mqtt', useSSL: boolean = true): void {
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.setItem('panorama_mqtt_host', host);
@@ -1288,20 +1426,14 @@ export class MqttService {
   }
 
   disconnect(): void {
+    this.intentionalDisconnect = true;
     this.isDestroyed = true;
-    this.mqttSessionConnected = false;
+    this.isConnecting = false;
     this.topicSubscribed = false;
-    this.confirmedSubscriptions.clear();
-    this.disconnectedAt = Date.now();
     clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
     this.clearStaleTimer();
-    if (this.client && this.client.isConnected && this.client.isConnected()) {
-      try {
-        this.client.disconnect();
-      } catch (e) {
-        console.warn('[MQTT] Disconnect error:', e);
-      }
-    }
+    this.cleanupClient();
     this.setStatus('DISCONNECTED');
   }
 }

@@ -15,6 +15,7 @@ import { Logger } from './logger';
 import {
   resolveWsUrl,
   resolveHealthUrl,
+  resolveHttpsReceiverHealthUrl,
   DEFAULT_PRODUCTION_WS_URL,
 } from '../config/apiConfig';
 
@@ -54,6 +55,7 @@ export class WebSocketService {
   private lastMessageReceivedTime = 0;
   private networkListenersBound = false;
   private standbyLogged = false;
+  private httpsReceiverMode = false;
 
   private constructor() {
     this.bindNetworkListeners();
@@ -145,6 +147,34 @@ export class WebSocketService {
             if (statusRes.ok) {
               const statusData = await statusRes.json();
               if (statusData && statusData.available === false) {
+                // Verify the independent HTTPS Receiver health endpoint (`GET /api/health`) rather than reporting `/api/v1/health` offline
+                const httpsHealthUrl = resolveHttpsReceiverHealthUrl(statusData.httpsHealthUrl || wsUrl);
+                try {
+                  const hc = typeof AbortController !== 'undefined' ? new AbortController() : null;
+                  const ht = hc ? setTimeout(() => hc.abort(), 5000) : null;
+                  const hr = await fetch(httpsHealthUrl, {
+                    method: 'GET',
+                    headers: { Accept: 'application/json' },
+                    signal: hc?.signal,
+                    cache: 'no-store',
+                  });
+                  if (ht) clearTimeout(ht);
+                  if (hr.ok) {
+                    this.httpsReceiverMode = true;
+                    if (!this.standbyLogged) {
+                      this.standbyLogged = true;
+                      Logger.info(
+                        'WEBSOCKET',
+                        'WebSocketService',
+                        `HTTPS Receiver backend verified online at ${httpsHealthUrl} (HTTP ${hr.status}). Real-time telemetry is running via HiveMQ MQTT.`
+                      );
+                    }
+                    return false;
+                  }
+                } catch {
+                  // HTTPS receiver unreachable; fall through to standard standby log
+                }
+                this.httpsReceiverMode = false;
                 return false;
               }
             }
@@ -178,6 +208,10 @@ export class WebSocketService {
   private startIdlePoll(wsUrl?: string): void {
     if (this.isDestroyed) return;
     this.setStatus('DISCONNECTED');
+    // When Render is running the HTTPS Receiver (/api/health verified online), stay cleanly on MQTT without polling /api/v1/health
+    if (this.httpsReceiverMode) {
+      return;
+    }
     if (!this.standbyLogged) {
       this.standbyLogged = true;
       const target = wsUrl ? getHttpHealthUrl(wsUrl) : 'remote endpoint';

@@ -1115,7 +1115,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setConnectionStatus('RECONNECTING');
       } else if (st === 'DISCONNECTED') {
         setMqttBrokerStatus('DISCONNECTED');
-        if (mqttAttemptedRef.current) {
+        if (mqttAttemptedRef.current && !mqttService.isIntentionalDisconnect()) {
           alertNotificationService.evaluateBrokerConnectivity({
             isConnected: false,
             reason: 'MQTT broker connection lost or unreachable.',
