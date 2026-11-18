@@ -68,6 +68,8 @@ apps/mobile/scripts/measure_tank.cjs
 
 # Graphify cache
 graphify-out/cache/
+WLI_DOCS/graphify/cache/
+backend/static/assets/*.map
 test_artifacts/
 audit_screenshots/
 
@@ -76,7 +78,6 @@ audit_screenshots/
 Thumbs.db
 
 # Local test profiles and scrapers
-.chrome-test-profile/
 LIVE_WEBSITE_SCREENSHOTS/
 MOBILE_TEST_SCREENSHOTS/
 apps/mobile/screenshots/

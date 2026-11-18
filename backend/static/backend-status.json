@@ -1,6 +1,8 @@
 {
   "available": false,
+  "scadaWsAvailable": false,
+  "httpsReceiverAvailable": true,
+  "httpsHealthUrl": "https://panorama-water-tank-backend.onrender.com/api/health",
   "url": "https://panorama-water-tank-backend.onrender.com/api/v1",
-  "reason": "Render web service container dormant or pending deployment",
-  "httpStatus": 404
+  "reason": "Render hosts Panorama WLI HTTPS Receiver (/api/health); main dashboard streams live telemetry via HiveMQ MQTT"
 }
