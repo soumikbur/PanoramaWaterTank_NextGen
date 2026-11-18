@@ -213,6 +213,15 @@ tbody tr:hover {
   100% { background-position: -200% 0; }
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
 /* ========================================================================= */
 /* 8. Map Markers & Leaflet Hardware Acceleration                            */
 /* ========================================================================= */

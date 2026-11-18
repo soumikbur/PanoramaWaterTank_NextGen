@@ -641,7 +641,7 @@ html, body, #root, .app-layout {
   }
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1023px) {
   .dashboard-main-grid {
     grid-template-columns: 1fr;
   }
@@ -654,7 +654,7 @@ html, body, #root, .app-layout {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .dashboard-summary-grid {
     grid-template-columns: 1fr;
   }

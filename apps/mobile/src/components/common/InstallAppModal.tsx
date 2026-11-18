@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Smartphone,
   Download,
@@ -26,6 +26,16 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isDownloadComplete, setIsDownloadComplete] = useState(false);
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (progressTimerRef.current) {
+        clearInterval(progressTimerRef.current);
+        progressTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const handleDownloadApk = () => {
     if (isDownloading) return;
@@ -43,11 +53,15 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({ isOpen, onClos
 
     // Smooth progress indicator from 8% to 100%
     let progress = 8;
-    const interval = setInterval(() => {
+    if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    progressTimerRef.current = setInterval(() => {
       progress += Math.floor(Math.random() * 15) + 12;
       if (progress >= 100) {
         progress = 100;
-        clearInterval(interval);
+        if (progressTimerRef.current) {
+          clearInterval(progressTimerRef.current);
+          progressTimerRef.current = null;
+        }
         setDownloadProgress(100);
         setIsDownloading(false);
         setIsDownloadComplete(true);

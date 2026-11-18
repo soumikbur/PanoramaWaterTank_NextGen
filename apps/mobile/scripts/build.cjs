@@ -20,7 +20,9 @@ try {
 async function build() {
   const distDir = path.resolve(__dirname, '../dist');
   const assetsDir = path.join(distDir, 'assets');
-  if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true });
+  // Clean previous build output so stale dev sourcemaps (*.map) never leak into production
+  if (fs.existsSync(distDir)) fs.rmSync(distDir, { recursive: true, force: true });
+  fs.mkdirSync(assetsDir, { recursive: true });
 
   const enableTestLogin = process.env.VITE_ENABLE_TEST_LOGIN !== undefined
     ? process.env.VITE_ENABLE_TEST_LOGIN.trim().toLowerCase() === 'true'
@@ -77,6 +79,7 @@ async function build() {
       '.eot': 'dataurl',
     },
     minify: true,
+    legalComments: 'none',
     target: ['es2020'],
   });
 

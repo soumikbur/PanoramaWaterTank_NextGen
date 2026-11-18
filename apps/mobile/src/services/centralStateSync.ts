@@ -278,20 +278,20 @@ class CentralStateSyncService {
 
     const baseUrl = resolveCentralSyncBaseUrl();
     const url = `${baseUrl}/api/sync/state`;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 8000) : null;
     try {
-      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      const timer = controller ? setTimeout(() => controller.abort(), 8000) : null;
       const res = await fetch(url, {
         method: 'GET',
         headers: { Accept: 'application/json' },
         signal: controller?.signal,
         cache: 'no-store',
       });
-      if (timer) clearTimeout(timer);
 
       if (res.status === 404) {
-        // Backend deployment does not yet expose /api/sync/state; fall back cleanly to MQTT without spamming
+        // Backend deployment does not yet expose /api/sync/state; stop polling & fall back cleanly
         this.syncSupported = false;
+        this.clearTimers();
         this.setStatus('OFFLINE');
         return false;
       }
@@ -310,6 +310,8 @@ class CentralStateSyncService {
       return true;
     } catch {
       return false;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 

@@ -935,6 +935,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
 
     return () => {
+      centralStateSync.stop();
       unsubCentralUsers();
       unsubCentralSettings();
       unsubSyncState();
@@ -1846,6 +1847,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
 
     return () => {
+      clearTimeout(deltaDebounceTimer);
       unsubMqttStatus();
       unsubMqttSyncEvent();
       unsubMqttFleetSync();
@@ -1926,6 +1928,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as any).panoramaNavigate = (screen: ScreenName, train?: string, coach?: string) => {
+        if (!isAuthenticated && !ApiClient.hasToken() && screen !== 'login') {
+          setActiveScreen('login');
+          AppRouter.navigate('login');
+          return;
+        }
         if (train) setSelectedTrainNumber(train);
         if (coach) setSelectedCoachNumber(coach);
         setActiveScreen(screen);
