@@ -21,33 +21,37 @@ app = FastAPI(
 # Reverse proxy support: Handle X-Forwarded-Proto and X-Forwarded-For from Cloudflare/Render
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
-# CORS configuration: explicit origins to adhere to W3C standards with credentials
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=config.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
-)
-
 
 @app.middleware("http")
 async def limit_request_size(request: Request, call_next):
     """Enforce maximum incoming payload size at the gateway level."""
-    content_length = request.headers.get("content-length")
-    if content_length:
-        try:
-            if int(content_length) > config.MAX_UPLOAD_SIZE:
-                return JSONResponse(
-                    status_code=413,
-                    content={
-                        "status": "error",
-                        "message": f"Payload size exceeds limit of {config.MAX_UPLOAD_SIZE} bytes.",
-                    },
-                )
-        except ValueError:
-            pass
+    if request.method != "OPTIONS":
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                if int(content_length) > config.MAX_UPLOAD_SIZE:
+                    return JSONResponse(
+                        status_code=413,
+                        content={
+                            "status": "error",
+                            "message": f"Payload size exceeds limit of {config.MAX_UPLOAD_SIZE} bytes.",
+                        },
+                    )
+            except ValueError:
+                pass
     return await call_next(request)
+
+
+# Register CORSMiddleware LAST so it executes FIRST (outermost in Starlette LIFO stack):
+# ensures OPTIONS preflights bypass route/auth checks and all error responses (401/404/413) carry CORS headers.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Device-Token", "X-Requested-With"],
+    max_age=86400,
+)
 
 
 # Mount static assets directory

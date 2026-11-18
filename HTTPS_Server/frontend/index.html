@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Panorama WLI — HTTPS Laboratory</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230284c7'/%3E%3Cpath d='M16 6c-4 6-7 10-7 14a7 7 0 0 0 14 0c0-4-3-8-7-14z' fill='%23ffffff'/%3E%3C/svg%3E">
   <script>
     (function(){try{var vk='wli_https_lab_zoom_ver',zk='wli_https_lab_zoom';if(localStorage.getItem(vk)!=='2'){localStorage.removeItem(zk);localStorage.setItem(vk,'2');}var z=parseInt(localStorage.getItem(zk),10);if(z>=70&&z<=150){document.documentElement.style.setProperty('--ui-scale',(z/100).toFixed(2));}else{document.documentElement.style.setProperty('--ui-scale','1.00');}}catch(e){}})();
   </script>
@@ -60,13 +61,14 @@
             <span class="auth-label-title">API Token</span>
             <span class="auth-label-desc">(Memory-only)</span>
           </div>
-          <div class="auth-input-group">
-            <input type="password" id="auth-token-input" class="input-text" placeholder="Enter Bearer API Token..." autocomplete="off">
+          <form class="auth-input-group" onsubmit="return false;" autocomplete="off">
+            <input type="text" name="username" autocomplete="username" value="wli-api-token" hidden aria-hidden="true">
+            <input type="password" id="auth-token-input" class="input-text" placeholder="Enter Bearer API Token..." autocomplete="new-password">
             <button type="button" class="btn btn-small btn-outline" id="auth-token-toggle-btn">Show</button>
             <button type="button" class="btn btn-small btn-primary" id="auth-token-apply-btn">Apply Token</button>
             <button type="button" class="btn btn-small btn-outline" id="auth-token-clear-btn">Clear</button>
             <span class="status-tag status-warning" id="auth-token-status">No Token Set</span>
-          </div>
+          </form>
         </div>
       </div>
     </header>

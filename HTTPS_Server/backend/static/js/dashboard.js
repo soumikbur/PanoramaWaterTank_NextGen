@@ -13,6 +13,7 @@
 
   // Polling intervals in milliseconds
   const INTERVAL_HEALTH_MS = 15000;
+  const MAX_HEALTH_BACKOFF_MS = 60000;
   const INTERVAL_TELEMETRY_MS = 3000;
   const INTERVAL_HISTORY_MS = 10000;
 
@@ -26,6 +27,9 @@
   let _inFlightHistory = false;
 
   // State
+  let _initialized = false;
+  let _pollingActive = false;
+  let _consecutiveHealthFailures = 0;
   let _serverOnline = false;
   let _lastSuccessfulCheck = null;
   let _lastTelemetryTime = null;
@@ -213,26 +217,105 @@
     return `${h}h ${remM}m`;
   }
 
+  function showAuthRequiredState() {
+    const authBanner = document.getElementById('auth-required-banner');
+    const emptyNotice = document.getElementById('telemetry-empty-notice');
+    const contentSection = document.getElementById('telemetry-content-section');
+    const historyEmpty = document.getElementById('history-empty-msg');
+
+    if (authBanner) authBanner.style.display = 'block';
+    if (emptyNotice) {
+      emptyNotice.style.display = 'block';
+      emptyNotice.textContent = 'API Token required to view protected telemetry. Enter token above.';
+    }
+    if (contentSection) contentSection.style.display = 'none';
+    if (historyEmpty) {
+      historyEmpty.style.display = 'block';
+      historyEmpty.textContent = 'Authentication required to retrieve history.';
+    }
+  }
+
+  function stopDataPolling() {
+    if (_timerTelemetry) {
+      clearInterval(_timerTelemetry);
+      _timerTelemetry = null;
+    }
+    if (_timerHistory) {
+      clearInterval(_timerHistory);
+      _timerHistory = null;
+    }
+  }
+
+  function startDataPolling(triggerImmediate = false) {
+    if (!_pollingActive || !_serverOnline) {
+      stopDataPolling();
+      return;
+    }
+    if (!window.LabApi || !window.LabApi.hasToken()) {
+      stopDataPolling();
+      showAuthRequiredState();
+      return;
+    }
+    if (triggerImmediate) {
+      pollTelemetry();
+      pollHistory();
+    }
+    if (!_timerTelemetry) {
+      _timerTelemetry = setInterval(pollTelemetry, INTERVAL_TELEMETRY_MS);
+    }
+    if (!_timerHistory) {
+      _timerHistory = setInterval(pollHistory, INTERVAL_HISTORY_MS);
+    }
+  }
+
+  function scheduleNextHealthCheck() {
+    if (_timerHealth) {
+      clearTimeout(_timerHealth);
+      _timerHealth = null;
+    }
+    if (!_pollingActive) return;
+    // Exponential backoff while backend is unreachable (15s -> 30s -> 60s max)
+    const delay = _consecutiveHealthFailures === 0
+      ? INTERVAL_HEALTH_MS
+      : Math.min(MAX_HEALTH_BACKOFF_MS, INTERVAL_HEALTH_MS * Math.pow(2, _consecutiveHealthFailures - 1));
+    _timerHealth = setTimeout(pollHealth, delay);
+  }
+
   // Polling Handlers
   async function pollHealth() {
     if (_inFlightHealth) return;
     _inFlightHealth = true;
+    const wasOnline = _serverOnline;
     try {
-      const [healthRes, sysRes] = await Promise.all([
-        window.LabApi.getHealth(),
-        window.LabApi.getSystemInfo().catch(() => null),
-      ]);
-      const isOnline = healthRes.data && healthRes.data.status === 'online';
-      updateServerDisplay(isOnline, sysRes ? sysRes.data : null);
+      // Probe /api/health first before issuing secondary /api/system/info or protected calls
+      const healthRes = await window.LabApi.getHealth();
+      const isOnline = Boolean(healthRes.data && healthRes.data.status === 'online');
+      if (!isOnline) {
+        throw new Error('Health probe returned non-online status');
+      }
+      _consecutiveHealthFailures = 0;
+      const sysRes = await window.LabApi.getSystemInfo().catch(() => null);
+      updateServerDisplay(true, sysRes ? sysRes.data : null);
+
+      // Start protected telemetry/history polling only when backend is confirmed online and authenticated
+      startDataPolling(!wasOnline);
     } catch (err) {
-      updateServerDisplay(false, null, err.message);
+      _consecutiveHealthFailures += 1;
+      stopDataPolling();
+      updateServerDisplay(false, null, err && err.message ? err.message : 'Backend Unreachable');
     } finally {
       _inFlightHealth = false;
+      scheduleNextHealthCheck();
     }
   }
 
   async function pollTelemetry() {
-    if (_inFlightTelemetry) return;
+    if (_inFlightTelemetry || !_serverOnline) return;
+    if (!window.LabApi || !window.LabApi.hasToken()) {
+      stopDataPolling();
+      showAuthRequiredState();
+      return;
+    }
     _inFlightTelemetry = true;
     try {
       if (typeof window.LabTelemetry === 'object' && typeof window.LabTelemetry.refreshLatest === 'function') {
@@ -240,21 +323,29 @@
         updateDeviceStatus(latestRecord);
       }
     } catch (err) {
-      // Telemetry fetch failed (e.g. 401 Unauthorized or server offline)
+      if (err && err.status === 401) {
+        stopDataPolling();
+      }
     } finally {
       _inFlightTelemetry = false;
     }
   }
 
   async function pollHistory() {
-    if (_inFlightHistory) return;
+    if (_inFlightHistory || !_serverOnline) return;
+    if (!window.LabApi || !window.LabApi.hasToken()) {
+      stopDataPolling();
+      return;
+    }
     _inFlightHistory = true;
     try {
       if (typeof window.LabTelemetry === 'object' && typeof window.LabTelemetry.refreshHistory === 'function') {
         await window.LabTelemetry.refreshHistory();
       }
     } catch (err) {
-      // History fetch failed
+      if (err && err.status === 401) {
+        stopDataPolling();
+      }
     } finally {
       _inFlightHistory = false;
     }
@@ -262,24 +353,39 @@
 
   function startPolling() {
     stopPolling();
-    // Immediate initial poll
+    _pollingActive = true;
+    _consecutiveHealthFailures = 0;
+    // Health probe drives system info and authenticated telemetry/history polling sequentially
     pollHealth();
-    pollTelemetry();
-    pollHistory();
-
-    // Start intervals
-    _timerHealth = setInterval(pollHealth, INTERVAL_HEALTH_MS);
-    _timerTelemetry = setInterval(pollTelemetry, INTERVAL_TELEMETRY_MS);
-    _timerHistory = setInterval(pollHistory, INTERVAL_HISTORY_MS);
   }
 
   function stopPolling() {
-    if (_timerHealth) clearInterval(_timerHealth);
-    if (_timerTelemetry) clearInterval(_timerTelemetry);
-    if (_timerHistory) clearInterval(_timerHistory);
-    _timerHealth = null;
-    _timerTelemetry = null;
-    _timerHistory = null;
+    _pollingActive = false;
+    if (_timerHealth) {
+      clearTimeout(_timerHealth);
+      _timerHealth = null;
+    }
+    stopDataPolling();
+  }
+
+  function reconnect() {
+    _serverOnline = false;
+    startPolling();
+  }
+
+  function onAuthChanged() {
+    if (!_serverOnline) {
+      reconnect();
+      return;
+    }
+    if (window.LabApi && window.LabApi.hasToken()) {
+      const authBanner = document.getElementById('auth-required-banner');
+      if (authBanner) authBanner.style.display = 'none';
+      startDataPolling(true);
+    } else {
+      stopDataPolling();
+      showAuthRequiredState();
+    }
   }
 
   function setupVisibilityHandler() {
@@ -290,17 +396,19 @@
         startPolling();
       }
     });
+    window.addEventListener('beforeunload', stopPolling);
   }
 
   function init() {
+    if (_initialized) return;
+    _initialized = true;
+
     initElements();
     setupVisibilityHandler();
 
     if (el.refreshBtn) {
       el.refreshBtn.addEventListener('click', () => {
-        pollHealth();
-        pollTelemetry();
-        pollHistory();
+        reconnect();
       });
     }
 
@@ -313,6 +421,8 @@
     pollHealth,
     pollTelemetry,
     pollHistory,
+    reconnect,
+    onAuthChanged,
     updateDeviceStatus,
     isOnline: () => _serverOnline,
   };

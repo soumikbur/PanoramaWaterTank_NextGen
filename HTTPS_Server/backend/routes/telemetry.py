@@ -43,6 +43,13 @@ async def receive_telemetry_json(
 
 
 @router.post(
+    "/upload",
+    response_model=FileIngestResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Receive IoT Telemetry via Multipart File Upload (Frontend Alias)",
+    description="Laboratory test endpoint for uploading a telemetry JSON file via multipart/form-data.",
+)
+@router.post(
     "/file",
     response_model=FileIngestResponse,
     status_code=status.HTTP_200_OK,

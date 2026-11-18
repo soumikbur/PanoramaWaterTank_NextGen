@@ -122,11 +122,10 @@
         const newUrl = el.endpointInput.value.trim();
         if (newUrl) {
           window.LabApi.setBaseUrl(newUrl);
+          el.endpointInput.value = window.LabApi.getBaseUrl();
           updateEndpointBadge();
-          if (window.LabDashboard) {
-            window.LabDashboard.pollHealth();
-            window.LabDashboard.pollTelemetry();
-            window.LabDashboard.pollHistory();
+          if (window.LabDashboard && typeof window.LabDashboard.reconnect === 'function') {
+            window.LabDashboard.reconnect();
           }
         }
       });
@@ -137,10 +136,8 @@
         window.LabApi.resetBaseUrl();
         el.endpointInput.value = window.LabApi.getBaseUrl();
         updateEndpointBadge();
-        if (window.LabDashboard) {
-          window.LabDashboard.pollHealth();
-          window.LabDashboard.pollTelemetry();
-          window.LabDashboard.pollHistory();
+        if (window.LabDashboard && typeof window.LabDashboard.reconnect === 'function') {
+          window.LabDashboard.reconnect();
         }
       });
     }
@@ -179,10 +176,9 @@
         window.LabApi.setToken(token);
         updateAuthBadge();
 
-        // Immediately poll with new token
-        if (window.LabDashboard) {
-          window.LabDashboard.pollTelemetry();
-          window.LabDashboard.pollHistory();
+        // Immediately start authenticated telemetry & history polling
+        if (window.LabDashboard && typeof window.LabDashboard.onAuthChanged === 'function') {
+          window.LabDashboard.onAuthChanged();
         }
       });
     }
@@ -192,8 +188,8 @@
         el.tokenInput.value = '';
         window.LabApi.clearToken();
         updateAuthBadge();
-        if (window.LabDashboard) {
-          window.LabDashboard.pollTelemetry();
+        if (window.LabDashboard && typeof window.LabDashboard.onAuthChanged === 'function') {
+          window.LabDashboard.onAuthChanged();
         }
       });
     }

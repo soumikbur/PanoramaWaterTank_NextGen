@@ -44,21 +44,27 @@ TLS_CERT_FILE = os.getenv("TLS_CERT_FILE", "certificates/development/server.crt"
 TLS_KEY_FILE = os.getenv("TLS_KEY_FILE", "certificates/development/server.key")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
-# CORS Allowed Origins
+# CORS Allowed Origins (explicit allowlist — never wildcard '*' with credentials)
+_DEFAULT_CORS_ORIGINS: List[str] = [
+    "https://soumikbur.github.io",
+    "http://localhost:8000",
+    "https://localhost:8443",
+    "http://127.0.0.1:8000",
+    "https://127.0.0.1:8443",
+]
 _raw_cors = os.getenv("CORS_ORIGINS", "").strip()
 if _raw_cors:
     try:
-        CORS_ORIGINS: List[str] = json.loads(_raw_cors) if _raw_cors.startswith("[") else [o.strip() for o in _raw_cors.split(",") if o.strip()]
+        _parsed_cors = json.loads(_raw_cors) if _raw_cors.startswith("[") else [o.strip() for o in _raw_cors.split(",") if o.strip()]
     except Exception:
-        CORS_ORIGINS = [o.strip() for o in _raw_cors.split(",") if o.strip()]
+        _parsed_cors = [o.strip() for o in _raw_cors.split(",") if o.strip()]
+    # Strip wildcard '*' and guarantee the official GitHub Pages frontend origin is permitted
+    _filtered_cors = [o.rstrip("/") for o in _parsed_cors if isinstance(o, str) and o.strip() and o.strip() != "*"]
+    if "https://soumikbur.github.io" not in _filtered_cors:
+        _filtered_cors.insert(0, "https://soumikbur.github.io")
+    CORS_ORIGINS: List[str] = list(dict.fromkeys(_filtered_cors))
 else:
-    CORS_ORIGINS = [
-        "https://soumikbur.github.io",
-        "http://localhost:8000",
-        "https://localhost:8443",
-        "http://127.0.0.1:8000",
-        "https://127.0.0.1:8443",
-    ]
+    CORS_ORIGINS = list(_DEFAULT_CORS_ORIGINS)
 
 
 def get_resolved_tls_paths() -> Tuple[Optional[Path], Optional[Path]]:

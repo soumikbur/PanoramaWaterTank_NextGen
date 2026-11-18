@@ -24,5 +24,7 @@ services:
         value: "1048576"
       - key: MAX_HISTORY_RECORDS
         value: "1000"
+      - key: CORS_ORIGINS
+        value: "https://soumikbur.github.io,http://localhost:8000,http://127.0.0.1:8000"
       - key: API_TOKEN
         generateValue: true

@@ -13,21 +13,28 @@
   // Base API URL resolution
   const STORAGE_KEY_BASE_URL = 'wli_api_base_url';
   
+  function normalizeBaseUrl(rawUrl) {
+    if (typeof rawUrl !== 'string') return '';
+    return rawUrl.trim().replace(/\/+$/, '').replace(/\/api$/i, '');
+  }
+
   function resolveDefaultBaseUrl() {
-    const saved = localStorage.getItem(STORAGE_KEY_BASE_URL);
-    if (saved && saved.trim()) {
-      return saved.trim().replace(/\/+$/, '');
-    }
-    
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_BASE_URL);
+      if (saved && saved.trim()) {
+        return normalizeBaseUrl(saved);
+      }
+    } catch (e) {}
+
     if (window.WLI_CONFIG && window.WLI_CONFIG.defaultApiBaseUrl) {
       // If hosted on GitHub Pages or file:///, default to configured cloud URL
       if (window.location.hostname.endsWith('github.io') || window.location.protocol === 'file:') {
-        return window.WLI_CONFIG.defaultApiBaseUrl.replace(/\/+$/, '');
+        return normalizeBaseUrl(window.WLI_CONFIG.defaultApiBaseUrl);
       }
     }
-    
+
     // Otherwise fallback to current origin (for local FastAPI server)
-    return window.location.origin;
+    return normalizeBaseUrl(window.location.origin);
   }
 
   let _baseUrl = resolveDefaultBaseUrl();
@@ -59,8 +66,9 @@
   }
 
   function setBaseUrl(url) {
-    if (typeof url === 'string' && url.trim()) {
-      _baseUrl = url.trim().replace(/\/+$/, '');
+    const normalized = normalizeBaseUrl(url);
+    if (normalized) {
+      _baseUrl = normalized;
       try {
         localStorage.setItem(STORAGE_KEY_BASE_URL, _baseUrl);
       } catch (e) {
