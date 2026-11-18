@@ -13,6 +13,7 @@ import {
   CENTRAL_DEVICES_TOPIC,
   CENTRAL_DELTA_SYNC_TOPIC,
 } from './mqttService';
+import { centralStateSync } from './centralStateSync';
 
 const centralChannel: BroadcastChannel | null =
   typeof window !== 'undefined' && typeof (window as any).BroadcastChannel === 'function'
@@ -176,6 +177,7 @@ class DeviceRegistryService {
       });
 
       if (!options?.skipPublish) {
+        centralStateSync.pushNamespace('devices', stateObj, 'DEVICE_UPDATED');
         mqttService.publish(CENTRAL_DEVICES_TOPIC, stateObj, true);
         mqttService.publish(CENTRAL_DELTA_SYNC_TOPIC, {
           type: 'DEVICE_UPDATE',
@@ -198,8 +200,13 @@ class DeviceRegistryService {
     }
   }
 
-  public handleCentralSync(remote: any): boolean {
+  public handleCentralSync(remote: any, opts?: { authoritative?: boolean }): boolean {
     if (!remote) return false;
+    if (opts?.authoritative) {
+      (this as any)._hasAuthoritativeBackendSync = true;
+    } else if ((this as any)._hasAuthoritativeBackendSync) {
+      return false;
+    }
     const rawDevices: ManagedDevice[] = Array.isArray(remote)
       ? remote
       : Array.isArray(remote.devices)
@@ -257,7 +264,7 @@ class DeviceRegistryService {
     });
 
     this.version = Math.max(this.version, remoteVersion);
-    this.updatedAt = Math.max(this.updatedAt, remoteUpdatedAt, Date.now());
+    this.updatedAt = remoteUpdatedAt > 0 ? remoteUpdatedAt : this.updatedAt;
 
     this.saveToStorage({ skipPublish: true });
     this.notify();
@@ -741,6 +748,10 @@ class DeviceRegistryService {
 export const deviceRegistry = DeviceRegistryService.getInstance();
 
 if (typeof window !== 'undefined') {
+  centralStateSync.onRemoteUpdate('devices', (data, meta) => {
+    deviceRegistry.handleCentralSync(data, { authoritative: meta.authoritative });
+  });
+
   mqttService.onCentralDeviceSync((data) => {
     deviceRegistry.handleCentralSync(data);
   });

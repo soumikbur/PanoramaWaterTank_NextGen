@@ -21,6 +21,7 @@ import { ApiClient, BackendConnectivityStatus } from '../api/client';
 import { wsService, WebSocketStatus } from '../services/websocket';
 import { mqttService } from '../services/mqttService';
 import { syncService, SyncState } from '../services/syncService';
+import { centralStateSync } from '../services/centralStateSync';
 import { DisplayPreferencesService, ScalePreset } from '../services/displayPreferencesService';
 import { AppRouter } from '../services/router';
 import { deviceRegistry, ManagedDevice } from '../services/deviceRegistry';
@@ -876,6 +877,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Central authoritative synchronization listener
   useEffect(() => {
+    // Start centralized backend DB + WebSocket state synchronization
+    centralStateSync.start();
+    const unsubCentralUsers = centralStateSync.onRemoteUpdate('users', (data) => {
+      if (typeof window !== 'undefined' && window.localStorage && data) {
+        if (Array.isArray(data.users)) {
+          window.localStorage.setItem('panorama_users_store', JSON.stringify(data.users));
+        }
+        if (Array.isArray(data.registrations)) {
+          window.localStorage.setItem('panorama_registrations_store', JSON.stringify(data.registrations));
+        }
+        window.dispatchEvent(new CustomEvent('panorama:users-updated'));
+      }
+    });
+    const unsubCentralSettings = centralStateSync.onRemoteUpdate('settings', (data) => {
+      if (typeof window !== 'undefined' && window.localStorage && data) {
+        window.localStorage.setItem('panorama_system_config', JSON.stringify(data));
+        window.dispatchEvent(new CustomEvent('panorama:settings-updated', { detail: data }));
+      }
+    });
+
     const unsubSyncState = syncService.onStateChange((st, time) => {
       setSyncState(st);
       setLastSyncTime(time);
@@ -914,6 +935,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
 
     return () => {
+      unsubCentralUsers();
+      unsubCentralSettings();
       unsubSyncState();
       unsubSyncEvents();
       if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {

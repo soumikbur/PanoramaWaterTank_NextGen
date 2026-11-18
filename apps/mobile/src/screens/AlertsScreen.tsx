@@ -730,6 +730,8 @@ export const AlertsScreen: React.FC = () => {
 
           <div style={{ width: '100%', height: '1px', backgroundColor: '#E2E8F0' }} />
 
+          <div className="scada-table-scroll-container" style={{ border: 'none' }}>
+          <div style={{ minWidth: '760px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {/* Table Column Headers */}
           <div
             style={{
@@ -823,6 +825,8 @@ export const AlertsScreen: React.FC = () => {
               </span>
             </div>
           ))}
+          </div>
+          </div>
         </div>
       </BaseCard>
     </div>

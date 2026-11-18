@@ -3,7 +3,7 @@ import { colors, typography, metrics } from '../theme';
 import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
 import { RegionSummary, TrainOverviewItem, TrainConsist } from '../types';
-import { localFleetStore } from '../services/localFleetStore';
+import { localFleetStore, FLEET_UPDATED_EVENT } from '../services/localFleetStore';
 import { Train, Plus, Trash2, X, ChevronRight, MapPin, ArrowLeft, ArrowRight, CheckCircle2, Edit3, SlidersHorizontal } from 'lucide-react';
 import { AddTrainModal } from '../components/train/AddTrainModal';
 import { ManageCoachModal } from '../components/coach/ManageCoachModal';
@@ -141,14 +141,28 @@ export const TrainManagementScreen: React.FC = () => {
       }
     };
 
+    const handleFleetUpdated = () => {
+      if (selectedTrainRef.current) {
+        const currentTr = selectedTrainRef.current.train_number.trim();
+        const freshConsist = localFleetStore.getTrainConsist(currentTr);
+        if (!freshConsist) {
+          setSelectedTrain(null);
+        } else {
+          setSelectedTrain({ ...freshConsist });
+        }
+      }
+    };
+
     if (typeof window !== 'undefined') {
       window.addEventListener('panorama:section-root', handleRootNav);
       window.addEventListener('panorama:sync-event', handleSync);
+      window.addEventListener(FLEET_UPDATED_EVENT, handleFleetUpdated);
     }
     return () => {
       if (typeof window !== 'undefined') {
         window.removeEventListener('panorama:section-root', handleRootNav);
         window.removeEventListener('panorama:sync-event', handleSync);
+        window.removeEventListener(FLEET_UPDATED_EVENT, handleFleetUpdated);
       }
     };
   }, []);
@@ -307,22 +321,27 @@ export const TrainManagementScreen: React.FC = () => {
         minHeight: '100%',
       }}
     >
-      {/* 1. Top Breadcrumb & Action Header (Height ~46px, Surface #FFFFFF, Border #E2E8F0) */}
+      {/* 1. Top Breadcrumb & Action Header (Fluid height, wraps cleanly on tablet/mobile) */}
       <div
+        className="train-mgmt-topbar"
         style={{
-          height: '48px',
+          minHeight: '48px',
+          height: 'auto',
+          flexShrink: 0,
           backgroundColor: '#FFFFFF',
           border: '1px solid #E2E8F0',
           borderRadius: '8px',
-          padding: '0 16px',
+          padding: '8px 14px',
           display: 'flex',
+          flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
+          gap: '8px 12px',
           boxSizing: 'border-box',
         }}
       >
         {/* Interactive Breadcrumb Hierarchy */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px 8px', fontSize: '13px', minWidth: 0 }}>
           <span
             onClick={handleResetToRegions}
             style={{
@@ -698,10 +717,10 @@ export const TrainManagementScreen: React.FC = () => {
 
       {/* 3. LEVEL 2: TRAINS LIST WITHIN SELECTED REGION */}
       {selectedRegion && !selectedTrain && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0F172A', margin: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', minWidth: 0 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+            <div style={{ minWidth: 0 }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0F172A', margin: 0, overflowWrap: 'break-word' }}>
                 {activeRegionObj?.name} ({selectedRegion})
               </h2>
               <span style={{ fontSize: '12px', color: '#64748B' }}>
@@ -723,6 +742,7 @@ export const TrainManagementScreen: React.FC = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px',
+                flexShrink: 0,
               }}
             >
               <ArrowLeft size={13} />
@@ -730,30 +750,17 @@ export const TrainManagementScreen: React.FC = () => {
             </button>
           </div>
 
-          {/* Trains Table / Card List */}
+          {/* Desktop & Tablet Responsive Trains Table (>= 768px) */}
           <div
-            className="scada-table-scroll-container"
+            className="scada-table-scroll-container train-mgmt-table-desktop"
             style={{
               backgroundColor: '#FFFFFF',
               border: '1px solid #E2E8F0',
               borderRadius: '8px',
-              overflowX: 'auto',
             }}
           >
-            <div style={{ minWidth: '600px' }}>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '120px 2fr 100px 100px 120px 140px',
-                  padding: '12px 16px',
-                  backgroundColor: '#F8FAFC',
-                  borderBottom: '1px solid #E2E8F0',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  color: '#64748B',
-                  letterSpacing: '0.4px',
-                }}
-              >
+            <div className="train-mgmt-table-inner">
+              <div className="train-mgmt-grid-row train-mgmt-grid-header">
                 <span>TRAIN NO.</span>
                 <span>NAME / CORRIDOR</span>
                 <span>COACHES</span>
@@ -762,8 +769,134 @@ export const TrainManagementScreen: React.FC = () => {
                 <span style={{ textAlign: 'right' }}>ACTIONS</span>
               </div>
 
+              {(!activeRegionObj?.trains || activeRegionObj.trains.length === 0) && (
+                <div style={{ padding: '30px', textAlign: 'center', color: '#94A3B8', fontSize: '13px' }}>
+                  No trains configured. Please add a train to begin monitoring.
+                </div>
+              )}
+
+              {activeRegionObj?.trains.map((train) => {
+                const isOnline = isTrainOnline(train.train_number);
+                return (
+                  <div
+                    key={train.train_number}
+                    data-testid={`train-row-${train.train_number}`}
+                    data-train-number={train.train_number}
+                    className="train-mgmt-grid-row train-mgmt-grid-item"
+                  >
+                    <span className="train-mgmt-num">{train.train_number}</span>
+                    <div className="train-mgmt-name-cell">
+                      <span className="train-mgmt-name-title">{train.name}</span>
+                      <span className="train-mgmt-name-meta">
+                        {train.railway_zone ? `${train.railway_zone} • ${train.type}` : train.type}
+                      </span>
+                    </div>
+                    <span style={{ color: '#0F172A', fontWeight: 600 }}>{train.coaches_count}</span>
+                    <span style={{ color: '#0F172A', fontWeight: 600 }}>{train.tanks_count}</span>
+                    <div>
+                      <span
+                        style={{
+                          backgroundColor: isOnline ? '#ECFDF5' : '#F1F5F9',
+                          color: isOnline ? '#16A34A' : '#64748B',
+                          border: `1px solid ${isOnline ? '#DCFCE7' : '#E2E8F0'}`,
+                          borderRadius: '10px',
+                          padding: '2px 8px',
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          whiteSpace: 'nowrap',
+                          display: 'inline-block',
+                        }}
+                      >
+                        {isOnline ? 'ONLINE' : 'OFFLINE'}
+                      </span>
+                    </div>
+                    <div className="train-mgmt-actions-cell">
+                      <button
+                        onClick={() => handleInspectTrain(train.train_number)}
+                        title="Manage Coach Fleet & Consist"
+                        style={{
+                          backgroundColor: '#EFF6FF',
+                          border: '1px solid #BFDBFE',
+                          color: '#2563EB',
+                          borderRadius: '4px',
+                          padding: '5px 9px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <span>Manage</span>
+                        <ChevronRight size={12} />
+                      </button>
+                      {currentUser?.role === 'ADMIN' && (
+                        <>
+                          <button
+                            onClick={() => handleOpenEditTrainModal(train)}
+                            style={{
+                              backgroundColor: '#F1F5F9',
+                              border: '1px solid #CBD5E1',
+                              color: '#475569',
+                              borderRadius: '4px',
+                              padding: '5px 7px',
+                              fontSize: '11px',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                            title="Edit train configuration"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                          <button
+                            onClick={() => requestDeleteTrain(train)}
+                            data-testid={`delete-train-${train.train_number}`}
+                            style={{
+                              backgroundColor: '#FFF1F2',
+                              border: '1px solid #FECDD3',
+                              color: '#E11D48',
+                              borderRadius: '4px',
+                              padding: '5px 7px',
+                              fontSize: '11px',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                            title="Delete train"
+                          >
+                            <Trash2 size={13} color="#DC2626" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Mobile Responsive Train Cards (< 768px) */}
+          <div className="train-mgmt-cards-mobile">
             {(!activeRegionObj?.trains || activeRegionObj.trains.length === 0) && (
-              <div style={{ padding: '30px', textAlign: 'center', color: '#94A3B8', fontSize: '13px' }}>
+              <div
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  border: '1px solid #E2E8F0',
+                  borderRadius: '8px',
+                  padding: '24px 16px',
+                  textAlign: 'center',
+                  color: '#94A3B8',
+                  fontSize: '13px',
+                }}
+              >
                 No trains configured. Please add a train to begin monitoring.
               </div>
             )}
@@ -772,30 +905,15 @@ export const TrainManagementScreen: React.FC = () => {
               const isOnline = isTrainOnline(train.train_number);
               return (
                 <div
-                  key={train.train_number}
-                  data-testid={`train-row-${train.train_number}`}
+                  key={`card-${train.train_number}`}
+                  data-testid={`train-card-${train.train_number}`}
                   data-train-number={train.train_number}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '120px 2fr 100px 100px 120px 140px',
-                    padding: '12px 16px',
-                    borderBottom: '1px solid #F1F5F9',
-                    fontSize: '12px',
-                    alignItems: 'center',
-                  }}
+                  className="train-mgmt-card"
                 >
-                  <span style={{ fontWeight: 700, color: '#0F172A' }}>{train.train_number}</span>
-                  <div>
-                    <span style={{ fontWeight: 600, color: '#1E293B', display: 'block' }}>
-                      {train.name}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <span style={{ fontWeight: 800, fontSize: '13px', color: '#0F172A', fontFamily: 'monospace' }}>
+                      TRAIN: {train.train_number}
                     </span>
-                    <span style={{ fontSize: '11px', color: '#64748B' }}>
-                      {train.railway_zone ? `${train.railway_zone} • ${train.type}` : train.type}
-                    </span>
-                  </div>
-                  <span style={{ color: '#0F172A', fontWeight: 600 }}>{train.coaches_count}</span>
-                  <span style={{ color: '#0F172A', fontWeight: 600 }}>{train.tanks_count}</span>
-                  <div>
                     <span
                       style={{
                         backgroundColor: isOnline ? '#ECFDF5' : '#F1F5F9',
@@ -805,31 +923,55 @@ export const TrainManagementScreen: React.FC = () => {
                         padding: '2px 8px',
                         fontSize: '10px',
                         fontWeight: 700,
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       {isOnline ? 'ONLINE' : 'OFFLINE'}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', color: '#64748B', marginBottom: '2px' }}>Name:</div>
+                    <div style={{ fontWeight: 700, fontSize: '14px', color: '#0F172A', lineHeight: 1.35, overflowWrap: 'break-word' }}>
+                      {train.name}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
+                      {train.railway_zone ? `${train.railway_zone} • ${train.type}` : train.type}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '6px 10px', fontSize: '12px' }}>
+                      <span style={{ color: '#64748B' }}>Coaches: </span>
+                      <strong style={{ color: '#0F172A' }}>{train.coaches_count}</strong>
+                    </div>
+                    <div style={{ backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '6px', padding: '6px 10px', fontSize: '12px' }}>
+                      <span style={{ color: '#64748B' }}>Tanks: </span>
+                      <strong style={{ color: '#0F172A' }}>{train.tanks_count}</strong>
+                    </div>
+                  </div>
+
+                  <div className="train-mgmt-card-actions">
                     <button
                       onClick={() => handleInspectTrain(train.train_number)}
-                      title="Manage Coach Fleet & Consist"
                       style={{
+                        flex: '1 1 auto',
                         backgroundColor: '#EFF6FF',
                         border: '1px solid #BFDBFE',
                         color: '#2563EB',
-                        borderRadius: '4px',
-                        padding: '4px 8px',
-                        fontSize: '11px',
-                        fontWeight: 600,
+                        borderRadius: '6px',
+                        padding: '8px 12px',
+                        fontSize: '12px',
+                        fontWeight: 700,
                         cursor: 'pointer',
                         display: 'inline-flex',
                         alignItems: 'center',
+                        justifyContent: 'center',
                         gap: '4px',
                       }}
                     >
                       <span>Manage</span>
-                      <ChevronRight size={12} />
+                      <ChevronRight size={13} />
                     </button>
                     {currentUser?.role === 'ADMIN' && (
                       <>
@@ -839,33 +981,37 @@ export const TrainManagementScreen: React.FC = () => {
                             backgroundColor: '#F1F5F9',
                             border: '1px solid #CBD5E1',
                             color: '#475569',
-                            borderRadius: '4px',
-                            padding: '4px 6px',
-                            fontSize: '11px',
+                            borderRadius: '6px',
+                            padding: '8px 12px',
+                            fontSize: '12px',
+                            fontWeight: 600,
                             cursor: 'pointer',
-                            display: 'flex',
+                            display: 'inline-flex',
                             alignItems: 'center',
-                            justifyContent: 'center',
+                            gap: '4px',
                           }}
-                          title="Edit train configuration"
                         >
                           <Edit3 size={13} />
+                          <span>Edit</span>
                         </button>
                         <button
                           onClick={() => requestDeleteTrain(train)}
-                          data-testid={`delete-train-${train.train_number}`}
                           style={{
                             backgroundColor: '#FFF1F2',
                             border: '1px solid #FECDD3',
                             color: '#E11D48',
-                            borderRadius: '4px',
-                            padding: '4px 6px',
-                            fontSize: '11px',
+                            borderRadius: '6px',
+                            padding: '8px 12px',
+                            fontSize: '12px',
+                            fontWeight: 600,
                             cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
                           }}
-                          title="Delete train"
                         >
-                          <Trash2 size={13} color="#DC2626" />
+                          <Trash2 size={13} />
+                          <span>Delete</span>
                         </button>
                       </>
                     )}
@@ -873,31 +1019,32 @@ export const TrainManagementScreen: React.FC = () => {
                 </div>
               );
             })}
-            </div>
           </div>
         </div>
       )}
 
       {/* 4. LEVEL 3: DETAILED TRAIN CONSIST & TANK DRILL-DOWN */}
       {selectedTrain && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}>
           {/* Header Card */}
           <div
             style={{
               backgroundColor: '#FFFFFF',
               border: '1px solid #E2E8F0',
               borderRadius: '8px',
-              padding: '16px 20px',
+              padding: '14px 16px',
               display: 'flex',
+              flexWrap: 'wrap',
               alignItems: 'center',
               justifyContent: 'space-between',
+              gap: '12px',
             }}
           >
-            <div>
-              <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0F172A', margin: '0 0 4px 0' }}>
+            <div style={{ minWidth: 0 }}>
+              <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0F172A', margin: '0 0 6px 0', overflowWrap: 'break-word' }}>
                 Train {selectedTrain.train_number} — {selectedTrain.name}
               </h2>
-              <div style={{ fontSize: '12px', color: '#64748B', display: 'flex', gap: '14px' }}>
+              <div style={{ fontSize: '12px', color: '#64748B', display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>
                 <span>Region: <strong>{selectedTrain.region}</strong></span>
                 <span>Coaches: <strong>{selectedTrain.coaches_count}</strong></span>
                 <span>Tanks: <strong>{selectedTrain.tanks_count}</strong></span>

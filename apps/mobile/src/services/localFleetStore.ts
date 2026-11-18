@@ -21,10 +21,12 @@ import {
   CENTRAL_FLEET_TOPIC,
   CENTRAL_DELTA_SYNC_TOPIC,
 } from './mqttService';
+import { centralStateSync } from './centralStateSync';
 
 export const FLEET_STORAGE_KEY = 'panorama_static_fleet_v2';
 const LEGACY_FLEET_KEY = 'panorama_static_fleet_v1';
 export const FLEET_UPDATED_EVENT = 'panorama:fleet-updated';
+let hasAuthoritativeBackendSync = false;
 
 const centralChannel: BroadcastChannel | null =
   typeof window !== 'undefined' && typeof (window as any).BroadcastChannel === 'function'
@@ -269,7 +271,10 @@ try {
   // Ignore storage access errors
 }
 
-function writeState(state: StaticFleetState, options?: { skipPublish?: boolean }): void {
+function writeState(
+  state: StaticFleetState,
+  options?: { skipPublish?: boolean; eventType?: string; entityId?: string }
+): void {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
     if (!options?.skipPublish) {
@@ -286,11 +291,19 @@ function writeState(state: StaticFleetState, options?: { skipPublish?: boolean }
       state,
     });
 
-    // Central cross-user MQTT synchronization
+    // Central cross-browser persistence (SQLite Backend + WebSocket) and MQTT redundancy
     if (!options?.skipPublish) {
+      centralStateSync.pushNamespace(
+        'fleet',
+        state,
+        options?.eventType || 'FLEET_SYNC',
+        options?.entityId
+      );
       mqttService.publish(CENTRAL_FLEET_TOPIC, state, true);
       mqttService.publish(CENTRAL_DELTA_SYNC_TOPIC, {
         type: 'FLEET_UPDATE',
+        event_type: options?.eventType || 'FLEET_SYNC',
+        entity_id: options?.entityId || '',
         version: state.version,
         updatedAt: state.updatedAt,
         mutationId: state.mutationId,
@@ -457,7 +470,10 @@ export const localFleetStore = {
     };
 
     state.trains[num] = { train: trainItem, consist };
-    writeState(state, options);
+    if (state.deletedTrainNumbers && state.deletedTrainNumbers[num]) {
+      delete state.deletedTrainNumbers[num];
+    }
+    writeState(state, { ...options, eventType: 'TRAIN_CREATED', entityId: num });
 
     return { success: true, train_number: num, coaches_created: coaches.length };
   },
@@ -480,8 +496,12 @@ export const localFleetStore = {
       rec.consist.region = reg;
     }
     if (data.type !== undefined) {
-      rec.train.type = data.type;
-      rec.consist.train_type = data.type;
+      const cleanType = String(data.type).trim();
+      const isSyncSentinel = /^(FLEET_UPDATE|DEVICE_UPDATE|STATE_SNAPSHOT|SYNC|TRAIN_UPDATED)$/i.test(cleanType);
+      if (cleanType && !isSyncSentinel) {
+        rec.train.type = cleanType;
+        rec.consist.train_type = cleanType;
+      }
     }
     if (data.railway_zone !== undefined) {
       const z = data.railway_zone ? String(data.railway_zone).trim().toUpperCase() : null;
@@ -500,7 +520,7 @@ export const localFleetStore = {
       rec.train.destination_station = (data as any).destination_station;
       rec.consist.destination_station = (data as any).destination_station;
     }
-    writeState(state, options);
+    writeState(state, { ...options, eventType: 'TRAIN_UPDATED', entityId: clean });
     return { success: true };
   },
 
@@ -557,7 +577,7 @@ export const localFleetStore = {
     state.deletedTrainNumbers = state.deletedTrainNumbers || {};
     state.deletedTrainNumbers[clean] = Date.now();
     delete state.trains[clean];
-    writeState(state, options);
+    writeState(state, { ...options, eventType: 'TRAIN_DELETED', entityId: clean });
     try {
       deviceRegistry.detachTrain(clean);
       alertNotificationService.resolveAlertsForTrain(clean);
@@ -565,10 +585,17 @@ export const localFleetStore = {
     return { success: true, message: `Train ${clean} deleted successfully.`, trainId: clean };
   },
 
-  handleCentralSync(remote: any): boolean {
+  handleCentralSync(remote: any, opts?: { authoritative?: boolean }): boolean {
     if (!remote || typeof remote !== 'object') return false;
     const remoteTrains = remote.trains;
     if (!remoteTrains || typeof remoteTrains !== 'object') return false;
+
+    // Once central SQLite DB sync is active, never allow stale public MQTT retained messages to clobber DB state
+    if (opts?.authoritative) {
+      hasAuthoritativeBackendSync = true;
+    } else if (hasAuthoritativeBackendSync) {
+      return false;
+    }
 
     const remoteUpdatedAt = typeof remote.updatedAt === 'number' ? remote.updatedAt : 0;
     const remoteVersion = typeof remote.version === 'number' ? remote.version : 0;
@@ -581,42 +608,43 @@ export const localFleetStore = {
     const localUpdatedAt = typeof localState.updatedAt === 'number' ? localState.updatedAt : 0;
     const localVersion = typeof localState.version === 'number' ? localState.version : 0;
 
-    // If local state is newer from a different mutation, do not overwrite with older remote
-    if (localUpdatedAt > remoteUpdatedAt && remote.mutationId !== localState.mutationId) {
-      console.info('[LocalFleetStore] Local state is newer than received remote snapshot. Retaining local.');
+    // Ignore exact duplicate mutation already applied locally
+    if (remote.mutationId && remote.mutationId === localState.mutationId && remoteVersion <= localVersion) {
       return false;
     }
 
-    const mergedDeleted: Record<string, number> = {
-      ...(localState.deletedTrainNumbers || {}),
-      ...remoteDeleted,
-    };
+    // Authoritative central SQLite DB snapshots ALWAYS win over stale local browser defaults;
+    // for peer MQTT snapshots, reject only if local has a strictly newer version AND timestamp
+    if (!opts?.authoritative) {
+      if (localVersion > remoteVersion && localUpdatedAt > remoteUpdatedAt) {
+        return false;
+      }
+    }
+
+    // Use remote's authoritative tombstone map (never let stale local tombstones kill re-created trains!)
+    const resolvedDeleted: Record<string, number> = { ...remoteDeleted };
+    // Only keep a local tombstone if that train is NOT present in the newer remote snapshot
+    for (const [delNum, delTs] of Object.entries(localState.deletedTrainNumbers || {})) {
+      if (!remoteTrains[delNum] && !resolvedDeleted[delNum]) {
+        resolvedDeleted[delNum] = delTs;
+      }
+    }
 
     const cleanTrains: Record<string, StoredTrainRecord> = {};
     for (const [trainNum, rec] of Object.entries(remoteTrains as Record<string, StoredTrainRecord>)) {
       const cleanNum = trainNum.trim();
       if (!cleanNum || !rec || !rec.train) continue;
-      if (mergedDeleted[cleanNum]) continue;
+      if (resolvedDeleted[cleanNum]) continue;
       cleanTrains[cleanNum] = rec;
-    }
-
-    // Preserve any locally added trains that aren't deleted and weren't in remote (if local is newer)
-    if (localState.trains) {
-      for (const [num, rec] of Object.entries(localState.trains)) {
-        const cleanNum = num.trim();
-        if (!cleanNum || mergedDeleted[cleanNum]) continue;
-        if (!cleanTrains[cleanNum] && localUpdatedAt > remoteUpdatedAt) {
-          cleanTrains[cleanNum] = rec;
-        }
-      }
     }
 
     const newState: StaticFleetState = {
       version: Math.max(localVersion, remoteVersion),
-      updatedAt: Math.max(localUpdatedAt, remoteUpdatedAt, Date.now()),
+      // Preserve authoritative remoteUpdatedAt instead of inflating with Date.now() (prevents clock-skew lockout!)
+      updatedAt: remoteUpdatedAt > 0 ? remoteUpdatedAt : Math.max(localUpdatedAt, 1700000000000),
       mutationId: remote.mutationId || localState.mutationId || 'remote-sync',
       trains: cleanTrains,
-      deletedTrainNumbers: mergedDeleted,
+      deletedTrainNumbers: resolvedDeleted,
     };
 
     writeState(newState, { skipPublish: true });
@@ -819,7 +847,7 @@ export const localFleetStore = {
       deviceRegistry.assignDevice(devUid, num, cNum);
     }
 
-    writeState(state, options);
+    writeState(state, { ...options, eventType: 'COACH_CREATED', entityId: `${num}:${cNum}` });
     return { success: true, coach: newCoach };
   },
 
@@ -887,7 +915,7 @@ export const localFleetStore = {
       }
     }
 
-    writeState(state, options);
+    writeState(state, { ...options, eventType: 'COACH_UPDATED', entityId: `${num}:${cNum}` });
     return { success: true, coach };
   },
 
@@ -966,7 +994,7 @@ export const localFleetStore = {
       alertNotificationService.resolveAlertsForCoach(num, cNum);
     } catch {}
 
-    writeState(state, options);
+    writeState(state, { ...options, eventType: 'COACH_DELETED', entityId: `${num}:${cNum}` });
     return { success: true, message: `Coach ${cNum} deleted successfully from Train ${num}.`, coachNumber: cNum };
   },
 
@@ -1035,7 +1063,7 @@ export const localFleetStore = {
       }
     }
     if (matched) {
-      writeState(state, options);
+      writeState(state, { ...options, eventType: 'TANK_UPDATED', entityId: tankId || `${trainNum}:${coachNum}` });
     }
     return matched;
   },
@@ -1148,6 +1176,10 @@ export const localFleetStore = {
 };
 
 if (typeof window !== 'undefined') {
+  centralStateSync.onRemoteUpdate('fleet', (data, meta) => {
+    localFleetStore.handleCentralSync(data, { authoritative: meta.authoritative });
+  });
+
   mqttService.onCentralFleetSync((data) => {
     localFleetStore.handleCentralSync(data);
   });

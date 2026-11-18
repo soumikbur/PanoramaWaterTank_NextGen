@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from backend import config
-from backend.routes import health, system, telemetry
+from backend.routes import health, sync, system, telemetry
 
 app = FastAPI(
     title=config.APP_TITLE,
@@ -63,6 +63,7 @@ if _STATIC_DIR.exists():
 app.include_router(health.router)
 app.include_router(telemetry.router)
 app.include_router(system.router)
+app.include_router(sync.router)
 
 
 @app.exception_handler(Exception)

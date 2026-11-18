@@ -1372,4 +1372,135 @@ html, body, #root, .app-layout {
   }
 }
 
+/* ==========================================================================
+   Train Management Responsive Table & Mobile Card Layout (Part 2)
+   ========================================================================== */
+.train-mgmt-table-inner {
+  width: 100%;
+  min-width: 600px;
+}
+
+.train-mgmt-grid-row {
+  display: grid;
+  grid-template-columns:
+    minmax(68px, 88px)
+    minmax(160px, 1fr)
+    minmax(56px, 70px)
+    minmax(52px, 66px)
+    minmax(74px, 88px)
+    154px;
+  column-gap: 10px;
+  padding: 12px 14px;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.train-mgmt-grid-header {
+  background-color: #F8FAFC;
+  border-bottom: 1px solid #E2E8F0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748B;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+.train-mgmt-grid-item {
+  border-bottom: 1px solid #F1F5F9;
+  font-size: 12px;
+  min-height: 54px;
+}
+
+.train-mgmt-grid-item:hover {
+  background-color: #F8FAFC;
+}
+
+.train-mgmt-num {
+  font-weight: 700;
+  color: #0F172A;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: nowrap;
+}
+
+.train-mgmt-name-cell {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.train-mgmt-name-title {
+  font-weight: 600;
+  color: #1E293B;
+  line-height: 1.35;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.train-mgmt-name-meta {
+  font-size: 11px;
+  color: #64748B;
+  line-height: 1.3;
+  overflow-wrap: break-word;
+}
+
+.train-mgmt-actions-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.train-mgmt-table-desktop {
+  display: block;
+}
+
+.train-mgmt-cards-mobile {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.train-mgmt-card {
+  background-color: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  min-width: 0;
+}
+
+.train-mgmt-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #F1F5F9;
+}
+
+@media (max-width: 767px) {
+  .train-mgmt-table-desktop {
+    display: none !important;
+  }
+
+  .train-mgmt-cards-mobile {
+    display: flex !important;
+  }
+}
+
+/* Prevent modal dialogs from clipping on narrow mobile viewports (320px-430px) */
+@media (max-width: 600px) {
+  .app-layout [role="dialog"],
+  .app-layout .scada-modal-card {
+    max-width: calc(100vw - 20px) !important;
+    max-height: calc(100vh - 24px) !important;
+    overflow-y: auto !important;
+  }
+}
+
 

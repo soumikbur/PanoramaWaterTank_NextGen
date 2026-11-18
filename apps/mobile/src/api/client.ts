@@ -30,6 +30,7 @@ import {
   CENTRAL_USERS_TOPIC,
   CENTRAL_DELTA_SYNC_TOPIC,
 } from '../services/mqttService';
+import { centralStateSync } from '../services/centralStateSync';
 import { Logger } from '../services/logger';
 import {
   resolveApiBaseUrl,
@@ -112,7 +113,9 @@ function writeLocalUsers(users: UserProfile[], skipPublish = false): void {
     window.localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
     window.dispatchEvent(new CustomEvent('panorama:users-updated'));
     if (!skipPublish) {
-      mqttService.publish(CENTRAL_USERS_TOPIC, { users, registrations: readLocalRegistrations() }, true);
+      const bundle = { users, registrations: readLocalRegistrations() };
+      centralStateSync.pushNamespace('users', bundle, 'USER_UPDATED');
+      mqttService.publish(CENTRAL_USERS_TOPIC, bundle, true);
       mqttService.publish(CENTRAL_DELTA_SYNC_TOPIC, { type: 'USERS_UPDATE' });
     }
   } catch {}
@@ -136,7 +139,9 @@ function writeLocalRegistrations(regs: UserProfile[], skipPublish = false): void
     window.localStorage.setItem(REGISTRATIONS_STORAGE_KEY, JSON.stringify(regs));
     window.dispatchEvent(new CustomEvent('panorama:users-updated'));
     if (!skipPublish) {
-      mqttService.publish(CENTRAL_USERS_TOPIC, { users: readLocalUsers(), registrations: regs }, true);
+      const bundle = { users: readLocalUsers(), registrations: regs };
+      centralStateSync.pushNamespace('users', bundle, 'USER_UPDATED');
+      mqttService.publish(CENTRAL_USERS_TOPIC, bundle, true);
       mqttService.publish(CENTRAL_DELTA_SYNC_TOPIC, { type: 'USERS_UPDATE' });
     }
   } catch {}
@@ -2194,6 +2199,7 @@ export class ApiClient {
       window.dispatchEvent(new CustomEvent('panorama:settings-updated', { detail: config }));
     }
     try {
+      centralStateSync.pushNamespace('settings', config, 'SETTINGS_UPDATED');
       mqttService.publish(CENTRAL_SETTINGS_TOPIC, config, true);
       mqttService.publish(CENTRAL_DELTA_SYNC_TOPIC, { type: 'SETTINGS_UPDATE' });
     } catch {}

@@ -456,7 +456,7 @@ export const DevicesScreen: React.FC = () => {
         </BaseCard>
 
         {/* 3. Device Overview Metric Cards (4 Tiles) */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: metrics.space12, width: '100%' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 155px), 1fr))', gap: metrics.space12, width: '100%' }}>
           {/* Total Devices */}
           <BaseCard style={{ height: '100px', padding: '14px', boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
@@ -542,6 +542,9 @@ export const DevicesScreen: React.FC = () => {
 
             <div style={{ width: '100%', height: '1px', backgroundColor: '#E2E8F0' }} />
 
+            {/* Scrollable table container prevents column collision on narrow viewports */}
+            <div className="scada-table-scroll-container" style={{ border: 'none' }}>
+            <div style={{ minWidth: '940px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {/* Table Column Headers */}
             <div
               style={{
@@ -781,6 +784,8 @@ export const DevicesScreen: React.FC = () => {
                 );
               })
             )}
+            </div>
+            </div>
           </div>
         </BaseCard>
       </div>
