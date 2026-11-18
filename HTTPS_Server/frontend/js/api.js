@@ -149,11 +149,15 @@
 
       let data = null;
       const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        data = await response.json();
+      const rawText = await response.text();
+      if (contentType.includes('application/json') && rawText) {
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          data = { text: rawText };
+        }
       } else {
-        const text = await response.text();
-        data = { text };
+        data = { text: rawText };
       }
 
       // Dispatch to communication monitor (tokens omitted)

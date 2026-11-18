@@ -27,6 +27,8 @@
   ];
 
   let _latestTelemetryRecord = null;
+  let _lastVarTableSig = '';
+  let _lastHistorySig = '';
   let _historicalRecords = [];
   let _filterSearchText = '';
   let _sortColumn = 'name';
@@ -82,10 +84,10 @@
     el.telemetryContentSection = document.getElementById('telemetry-content-section');
     el.authRequiredBanner = document.getElementById('auth-required-banner');
 
-    // Modal
+    // Modal (match IDs in index.html: #record-modal-close and #record-modal-body)
     el.modalOverlay = document.getElementById('record-modal-overlay');
-    el.modalCloseBtn = document.getElementById('record-modal-close-btn');
-    el.modalJsonContent = document.getElementById('record-modal-json');
+    el.modalCloseBtn = document.getElementById('record-modal-close') || document.getElementById('record-modal-close-btn');
+    el.modalJsonContent = document.getElementById('record-modal-body') || document.getElementById('record-modal-json');
     el.modalTitle = document.getElementById('record-modal-title');
   }
 
@@ -296,7 +298,6 @@
    */
   function renderVariableTable(vars) {
     if (!el.varTableBody) return;
-    el.varTableBody.innerHTML = '';
 
     // Filter by search text
     const filtered = vars.filter((v) => {
@@ -315,6 +316,12 @@
       if (valA > valB) return _sortAsc ? 1 : -1;
       return 0;
     });
+
+    // Skip destructive DOM rebuild if rendered rows/order/filter are unchanged (preserves open <details>)
+    const sig = JSON.stringify([_filterSearchText, _sortColumn, _sortAsc, filtered]);
+    if (sig === _lastVarTableSig) return;
+    _lastVarTableSig = sig;
+    el.varTableBody.innerHTML = '';
 
     if (el.varTableCount) {
       el.varTableCount.textContent = `${filtered.length} of ${vars.length} variables`;
@@ -369,10 +376,11 @@
       copyBtn.title = 'Copy value';
       copyBtn.textContent = 'Copy';
       copyBtn.addEventListener('click', () => {
+        if (!navigator.clipboard || !navigator.clipboard.writeText) return;
         navigator.clipboard.writeText(formatted).then(() => {
           copyBtn.textContent = 'Copied!';
           setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
-        });
+        }).catch(() => {});
       });
       tdValue.appendChild(copyBtn);
 
@@ -445,6 +453,10 @@
    */
   function renderHistoryTable(records) {
     if (!el.historyTableBody) return;
+
+    const sig = JSON.stringify((records || []).map((r) => [r.device_id, r.received_at, r.sequence_id]));
+    if (sig === _lastHistorySig && el.historyTableBody.childElementCount > 0) return;
+    _lastHistorySig = sig;
     el.historyTableBody.innerHTML = '';
 
     if (!records || records.length === 0) {
@@ -525,14 +537,14 @@
   }
 
   function copyRawJson() {
-    if (!_latestTelemetryRecord) return;
+    if (!_latestTelemetryRecord || !navigator.clipboard || !navigator.clipboard.writeText) return;
     const jsonStr = JSON.stringify(_latestTelemetryRecord, null, 2);
     navigator.clipboard.writeText(jsonStr).then(() => {
       if (el.rawJsonCopyBtn) {
         el.rawJsonCopyBtn.textContent = 'Copied!';
         setTimeout(() => { el.rawJsonCopyBtn.textContent = 'Copy JSON'; }, 1500);
       }
-    });
+    }).catch(() => {});
   }
 
   function downloadRawJson() {

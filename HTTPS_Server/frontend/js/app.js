@@ -99,16 +99,36 @@
     el.commLogCount = document.getElementById('comm-monitor-count');
   }
 
-  // Live Clock
+  // Live Clock (pauses when tab is hidden and cleans up on unload)
+  let _clockTimer = null;
   function startClock() {
     function updateClock() {
-      if (el.liveClock) {
-        const now = new Date();
-        el.liveClock.textContent = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
-      }
+      if (document.hidden || !el.liveClock) return;
+      const now = new Date();
+      el.liveClock.textContent = `${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
     }
     updateClock();
-    setInterval(updateClock, 1000);
+    _clockTimer = setInterval(updateClock, 1000);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) updateClock();
+    });
+    window.addEventListener('beforeunload', () => {
+      if (_clockTimer) {
+        clearInterval(_clockTimer);
+        _clockTimer = null;
+      }
+    });
+  }
+
+  function updateFooterDocLinks() {
+    if (!window.LabApi) return;
+    const base = window.LabApi.getBaseUrl();
+    if (!base) return;
+    document.querySelectorAll('.footer-links a').forEach((a) => {
+      const href = a.getAttribute('href') || '';
+      if (href.endsWith('/docs')) a.setAttribute('href', `${base}/docs`);
+      else if (href.endsWith('/openapi.json')) a.setAttribute('href', `${base}/openapi.json`);
+    });
   }
 
   // API Endpoint Controls
@@ -124,6 +144,7 @@
           window.LabApi.setBaseUrl(newUrl);
           el.endpointInput.value = window.LabApi.getBaseUrl();
           updateEndpointBadge();
+          updateFooterDocLinks();
           if (window.LabDashboard && typeof window.LabDashboard.reconnect === 'function') {
             window.LabDashboard.reconnect();
           }
@@ -311,7 +332,11 @@
       el.postJsonEditor.value = JSON.stringify(SAMPLE_TELEMETRY, null, 2);
       validateEditorJson(false);
 
-      el.postJsonEditor.addEventListener('input', () => validateEditorJson(false));
+      let _highlightTimer = null;
+      el.postJsonEditor.addEventListener('input', () => {
+        if (_highlightTimer) clearTimeout(_highlightTimer);
+        _highlightTimer = setTimeout(() => validateEditorJson(false), 60);
+      });
       el.postJsonEditor.addEventListener('scroll', syncJsonEditorScroll);
 
       // Tab (2-space indent) and Enter (preserve indent, +2 after { or [)
@@ -631,6 +656,7 @@
     setupZoomControls();
     startClock();
     setupEndpointControls();
+    updateFooterDocLinks();
     setupAuthControls();
     setupManualPost();
     setupFileUpload();
@@ -638,15 +664,15 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
-    // 1. Initialize Telemetry Subsystem
+    // 1. Initialize Coordinator FIRST so Communication Monitor captures initial startup requests
+    init();
+    // 2. Initialize Telemetry Subsystem
     if (window.LabTelemetry && typeof window.LabTelemetry.init === 'function') {
       window.LabTelemetry.init();
     }
-    // 2. Initialize Dashboard Controller
+    // 3. Initialize Dashboard Controller (begins health/telemetry polling)
     if (window.LabDashboard && typeof window.LabDashboard.init === 'function') {
       window.LabDashboard.init();
     }
-    // 3. Initialize Coordinator
-    init();
   });
 })(window);
