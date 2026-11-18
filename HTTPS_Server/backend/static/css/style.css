@@ -379,6 +379,15 @@ code, pre {
   align-items: stretch;
 }
 
+/* Weighted Lower Workbench: 30% Raw JSON | 45% Manual JSON POST | 25% File Upload */
+.workbench-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 30fr) minmax(0, 45fr) minmax(0, 25fr);
+  gap: var(--gap-section);
+  align-items: stretch;
+}
+
 .card {
   background-color: var(--surface);
   border: 1px solid var(--border);
@@ -890,14 +899,161 @@ code, pre {
 }
 
 /* --------------------------------------------------------------------------
+   Expanded Syntax-Highlighted JSON Editor & Workbench Controls
+   -------------------------------------------------------------------------- */
+.manual-post-card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.raw-json-card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.json-editor-shell {
+  display: flex;
+  width: 100%;
+  min-height: 420px;
+  height: 460px;
+  max-height: 75vh;
+  resize: vertical;
+  overflow: hidden;
+  border: 1px solid #334155;
+  border-radius: var(--radius-sm);
+  background-color: #0f172a;
+}
+
+.json-editor-shell:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.22);
+}
+
+.json-editor-shell.is-invalid {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px rgba(185, 28, 28, 0.18);
+}
+
+.json-editor-gutter {
+  flex: 0 0 3.1rem;
+  padding: 0.7rem 0.5rem 0.7rem 0.35rem;
+  background-color: #1e293b;
+  border-right: 1px solid #334155;
+  color: #64748b;
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  text-align: right;
+  white-space: pre;
+  overflow: hidden;
+  user-select: none;
+}
+
+.json-editor-stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.json-editor-highlight,
+.json-editor-textarea {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  letter-spacing: 0;
+  tab-size: 2;
+  white-space: pre;
+  overflow: auto;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.json-editor-highlight {
+  pointer-events: none;
+  color: #e2e8f0;
+  background: transparent;
+  overflow: hidden;
+}
+
+.json-editor-textarea {
+  background: transparent;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: #f8fafc;
+  resize: none;
+  outline: none;
+}
+
+.json-editor-textarea::selection {
+  background: rgba(56, 189, 248, 0.32);
+}
+
+.json-tok-key { color: #7dd3fc; }
+.json-tok-str { color: #86efac; }
+.json-tok-num { color: #fde047; }
+.json-tok-bool { color: #d8b4fe; }
+.json-tok-null { color: #94a3b8; font-style: italic; }
+
+.editor-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--border);
+}
+
+.editor-actions {
+  margin-top: 0;
+}
+
+.editor-validation-msg {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+  border-radius: var(--radius-sm);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  flex: 1 1 200px;
+}
+
+.editor-validation-msg.is-valid {
+  background-color: var(--success-bg);
+  color: var(--success);
+  border: 1px solid var(--success-border);
+}
+
+.editor-validation-msg.is-invalid {
+  background-color: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
+}
+
+/* --------------------------------------------------------------------------
    Raw JSON Viewer, Empty States & File Upload
    -------------------------------------------------------------------------- */
 .raw-json-wrapper {
-  max-height: 19rem;
+  flex: 1;
+  min-height: 26rem;
+  max-height: 44rem;
   overflow: auto;
+  background-color: #0f172a;
 }
 
 .raw-json-wrapper.collapsed {
+  min-height: 4.5rem;
   max-height: 4.5rem;
 }
 
@@ -906,9 +1062,9 @@ code, pre {
   color: #e2e8f0;
   padding: 0.75rem 0.9rem;
   font-size: 0.84rem;
-  line-height: 1.45;
+  line-height: 1.48;
   white-space: pre;
-  min-height: 10rem;
+  min-height: 100%;
 }
 
 .inline-json-pre {
@@ -927,11 +1083,12 @@ code, pre {
   font-family: var(--font-mono);
   font-size: 0.8rem;
   background-color: var(--surface-alt);
-  padding: 0.45rem 0.6rem;
+  padding: 0.5rem 0.65rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  max-height: 6.5rem;
-  overflow-y: auto;
+  min-height: 10rem;
+  max-height: 18rem;
+  overflow: auto;
   color: var(--text-muted);
 }
 
@@ -1110,6 +1267,13 @@ code, pre {
   .split-row-3 > :first-child {
     grid-column: 1 / -1;
   }
+  /* Two-row workbench: Row 1 Raw JSON (38%) + Manual JSON POST (62%), Row 2 File Upload full-width */
+  .workbench-grid {
+    grid-template-columns: minmax(0, 38fr) minmax(0, 62fr);
+  }
+  .workbench-grid .panel-upload {
+    grid-column: 1 / -1;
+  }
 }
 
 /* Tablet (<= 900px) */
@@ -1121,11 +1285,21 @@ code, pre {
     grid-column: 1 / -1;
   }
   .split-row-2,
-  .split-row-3 {
+  .split-row-3,
+  .workbench-grid {
     grid-template-columns: 1fr;
   }
-  .split-row-3 > :first-child {
+  .split-row-3 > :first-child,
+  .workbench-grid .panel-upload {
     grid-column: auto;
+  }
+  /* Give Manual JSON POST priority on tablet & mobile */
+  .workbench-grid .panel-manual-post {
+    order: -1;
+  }
+  .raw-json-wrapper {
+    min-height: 14rem;
+    max-height: 22rem;
   }
   .table-search-box {
     width: 100%;
@@ -1175,6 +1349,30 @@ code, pre {
   }
   .table-controls .input-text {
     flex: 1 1 120px;
+  }
+  .json-editor-shell {
+    min-height: 300px;
+    height: 340px;
+  }
+  .json-editor-gutter {
+    flex: 0 0 2.5rem;
+    padding: 0.55rem 0.35rem 0.55rem 0.25rem;
+    font-size: 0.82rem;
+  }
+  .json-editor-highlight,
+  .json-editor-textarea {
+    padding: 0.55rem 0.65rem;
+    font-size: 0.82rem;
+  }
+  .editor-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .editor-validation-msg {
+    flex: none;
+  }
+  .editor-actions {
+    justify-content: flex-start;
   }
   .footer {
     flex-direction: column;

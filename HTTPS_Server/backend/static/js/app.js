@@ -30,8 +30,10 @@
   const MAX_LOG_ENTRIES = 50;
   const _commLogs = [];
 
-  // Application-level Display Zoom Configuration (70% - 150%, step 10%)
+  // Application-level Display Zoom Configuration (70% - 150%, step 10%, default 100%)
   const ZOOM_STORAGE_KEY = 'wli_https_lab_zoom';
+  const ZOOM_VERSION_KEY = 'wli_https_lab_zoom_ver';
+  const ZOOM_VERSION = '2';
   const ZOOM_MIN = 70;
   const ZOOM_MAX = 150;
   const ZOOM_STEP = 10;
@@ -66,7 +68,12 @@
     el.authRequiredBanner = document.getElementById('auth-required-banner');
 
     // Manual JSON POST Testing
+    el.postEditorShell = document.getElementById('manual-post-editor-shell');
+    el.postLineNumbers = document.getElementById('manual-post-line-numbers');
+    el.postHighlight = document.getElementById('manual-post-highlight');
     el.postJsonEditor = document.getElementById('manual-post-json-editor');
+    el.postValidationBadge = document.getElementById('manual-post-validation-badge');
+    el.postValidationMsg = document.getElementById('manual-post-validation-msg');
     el.postFormatBtn = document.getElementById('manual-post-format-btn') || document.getElementById('manual-post-validate-btn');
     el.postSampleBtn = document.getElementById('manual-post-sample-btn');
     el.postResetBtn = document.getElementById('manual-post-reset-btn');
@@ -206,20 +213,145 @@
     }
   }
 
+  function highlightJson(text) {
+    const escaped = escapeHtml(text);
+    const highlighted = escaped.replace(
+      /(&quot;(?:\\&quot;|\\.|[^&]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false)\b|\b(null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,
+      (match, str, colon, boolVal, nullVal, numVal) => {
+        if (str !== undefined) {
+          if (colon) return `<span class="json-tok-key">${str}</span>${colon}`;
+          return `<span class="json-tok-str">${str}</span>`;
+        }
+        if (boolVal !== undefined) return `<span class="json-tok-bool">${boolVal}</span>`;
+        if (nullVal !== undefined) return `<span class="json-tok-null">${nullVal}</span>`;
+        if (numVal !== undefined) return `<span class="json-tok-num">${numVal}</span>`;
+        return match;
+      }
+    );
+    return text.endsWith('\n') ? `${highlighted}\n` : highlighted;
+  }
+
+  function syncJsonEditorScroll() {
+    if (!el.postJsonEditor) return;
+    if (el.postHighlight) {
+      el.postHighlight.scrollTop = el.postJsonEditor.scrollTop;
+      el.postHighlight.scrollLeft = el.postJsonEditor.scrollLeft;
+    }
+    if (el.postLineNumbers) {
+      el.postLineNumbers.scrollTop = el.postJsonEditor.scrollTop;
+    }
+  }
+
+  function validateEditorJson(formatIfValid = false) {
+    if (!el.postJsonEditor) return { valid: false, error: 'Editor unavailable' };
+    let text = el.postJsonEditor.value;
+    let parsed = null;
+    let valid = false;
+    let errorMsg = '';
+
+    try {
+      parsed = JSON.parse(text);
+      valid = true;
+      if (formatIfValid) {
+        text = JSON.stringify(parsed, null, 2);
+        el.postJsonEditor.value = text;
+      }
+    } catch (err) {
+      errorMsg = err && err.message ? err.message : 'Invalid JSON syntax';
+    }
+
+    const lines = text.split('\n').length;
+
+    if (el.postLineNumbers) {
+      const nums = [];
+      for (let i = 1; i <= lines; i++) nums.push(i);
+      el.postLineNumbers.textContent = nums.join('\n');
+    }
+
+    if (el.postHighlight) {
+      el.postHighlight.innerHTML = highlightJson(text);
+    }
+
+    syncJsonEditorScroll();
+
+    if (el.postEditorShell) {
+      el.postEditorShell.classList.toggle('is-invalid', !valid);
+    }
+
+    if (valid) {
+      const fieldInfo = (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+        ? `${Object.keys(parsed).length} fields`
+        : Array.isArray(parsed)
+          ? `Array (${parsed.length} items)`
+          : typeof parsed;
+
+      if (el.postValidationBadge) {
+        el.postValidationBadge.textContent = `Valid JSON • ${lines} lines`;
+        el.postValidationBadge.className = 'status-tag status-success';
+      }
+      if (el.postValidationMsg) {
+        el.postValidationMsg.textContent = formatIfValid
+          ? `Formatted & valid JSON (${fieldInfo}, ${lines} lines)`
+          : `Valid JSON (${fieldInfo}, ${lines} lines)`;
+        el.postValidationMsg.className = 'editor-validation-msg is-valid';
+      }
+      return { valid: true, parsed };
+    }
+
+    if (el.postValidationBadge) {
+      el.postValidationBadge.textContent = 'Invalid JSON';
+      el.postValidationBadge.className = 'status-tag status-danger';
+    }
+    if (el.postValidationMsg) {
+      el.postValidationMsg.textContent = `JSON Syntax Error: ${errorMsg}`;
+      el.postValidationMsg.className = 'editor-validation-msg is-invalid';
+    }
+    return { valid: false, error: errorMsg };
+  }
+
   // Manual JSON POST Testing
   function setupManualPost() {
     if (el.postJsonEditor) {
       el.postJsonEditor.value = JSON.stringify(SAMPLE_TELEMETRY, null, 2);
+      validateEditorJson(false);
+
+      el.postJsonEditor.addEventListener('input', () => validateEditorJson(false));
+      el.postJsonEditor.addEventListener('scroll', syncJsonEditorScroll);
+
+      // Tab (2-space indent) and Enter (preserve indent, +2 after { or [)
+      el.postJsonEditor.addEventListener('keydown', (e) => {
+        const ta = el.postJsonEditor;
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          const start = ta.selectionStart;
+          const end = ta.selectionEnd;
+          ta.value = ta.value.substring(0, start) + '  ' + ta.value.substring(end);
+          ta.selectionStart = ta.selectionEnd = start + 2;
+          validateEditorJson(false);
+        } else if (e.key === 'Enter') {
+          const start = ta.selectionStart;
+          const end = ta.selectionEnd;
+          const before = ta.value.substring(0, start);
+          const lineStart = before.lastIndexOf('\n') + 1;
+          const currentLine = before.substring(lineStart);
+          const indentMatch = currentLine.match(/^[\t ]*/);
+          let indent = indentMatch ? indentMatch[0] : '';
+          const trimmed = currentLine.trim();
+          if (trimmed.endsWith('{') || trimmed.endsWith('[')) {
+            indent += '  ';
+          }
+          e.preventDefault();
+          const insertion = '\n' + indent;
+          ta.value = before + insertion + ta.value.substring(end);
+          ta.selectionStart = ta.selectionEnd = start + insertion.length;
+          validateEditorJson(false);
+        }
+      });
     }
 
     if (el.postFormatBtn && el.postJsonEditor) {
       el.postFormatBtn.addEventListener('click', () => {
-        try {
-          const parsed = JSON.parse(el.postJsonEditor.value);
-          el.postJsonEditor.value = JSON.stringify(parsed, null, 2);
-        } catch (err) {
-          alert(`Invalid JSON: ${err.message}`);
-        }
+        validateEditorJson(true);
       });
     }
 
@@ -232,23 +364,26 @@
           water_level_percentage: parseFloat((Math.random() * 95 + 5).toFixed(1)),
         });
         el.postJsonEditor.value = JSON.stringify(sample, null, 2);
+        validateEditorJson(false);
       });
     }
 
     if (el.postResetBtn && el.postJsonEditor) {
       el.postResetBtn.addEventListener('click', () => {
-        el.postJsonEditor.value = JSON.stringify(SAMPLE_TELEMETRY, null, 2);
+        const freshSample = Object.assign({}, SAMPLE_TELEMETRY, {
+          timestamp: Math.floor(Date.now() / 1000),
+        });
+        el.postJsonEditor.value = JSON.stringify(freshSample, null, 2);
+        validateEditorJson(false);
         if (el.postResultContainer) el.postResultContainer.style.display = 'none';
       });
     }
 
     if (el.postSendBtn && el.postJsonEditor) {
       el.postSendBtn.addEventListener('click', async () => {
-        let payload;
-        try {
-          payload = JSON.parse(el.postJsonEditor.value);
-        } catch (err) {
-          alert(`Cannot send invalid JSON: ${err.message}`);
+        const check = validateEditorJson(false);
+        if (!check.valid) {
+          el.postJsonEditor.focus();
           return;
         }
 
@@ -256,7 +391,7 @@
         el.postSendBtn.textContent = 'Sending...';
 
         try {
-          const result = await window.LabApi.sendTelemetryJson(payload);
+          const result = await window.LabApi.sendTelemetryJson(check.parsed);
           renderPostResult(true, result.status, result.data, result.durationMs);
 
           // Refresh live telemetry views
@@ -268,7 +403,7 @@
           renderPostResult(false, err.status || 0, err.data || { error: err.message }, err.durationMs || 0);
         } finally {
           el.postSendBtn.disabled = false;
-          el.postSendBtn.textContent = 'Send JSON Telemetry';
+          el.postSendBtn.textContent = 'Send POST';
         }
       });
     }
@@ -452,9 +587,15 @@
   function setupZoomControls() {
     let saved = ZOOM_DEFAULT;
     try {
-      const raw = parseInt(localStorage.getItem(ZOOM_STORAGE_KEY), 10);
-      if (!isNaN(raw) && raw >= ZOOM_MIN && raw <= ZOOM_MAX) {
-        saved = raw;
+      // One-time migration: ignore stale pre-v2 zoom preferences (e.g. 130%) and initialize at 100%
+      if (localStorage.getItem(ZOOM_VERSION_KEY) !== ZOOM_VERSION) {
+        localStorage.removeItem(ZOOM_STORAGE_KEY);
+        localStorage.setItem(ZOOM_VERSION_KEY, ZOOM_VERSION);
+      } else {
+        const raw = parseInt(localStorage.getItem(ZOOM_STORAGE_KEY), 10);
+        if (!isNaN(raw) && raw >= ZOOM_MIN && raw <= ZOOM_MAX) {
+          saved = raw;
+        }
       }
     } catch (e) {}
 

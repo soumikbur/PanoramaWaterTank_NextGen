@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Panorama WLI — HTTPS Laboratory</title>
   <script>
-    (function(){try{var z=parseInt(localStorage.getItem('wli_https_lab_zoom'),10);if(z>=70&&z<=150){document.documentElement.style.setProperty('--ui-scale',(z/100).toFixed(2));}}catch(e){}})();
+    (function(){try{var vk='wli_https_lab_zoom_ver',zk='wli_https_lab_zoom';if(localStorage.getItem(vk)!=='2'){localStorage.removeItem(zk);localStorage.setItem(vk,'2');}var z=parseInt(localStorage.getItem(zk),10);if(z>=70&&z<=150){document.documentElement.style.setProperty('--ui-scale',(z/100).toFixed(2));}else{document.documentElement.style.setProperty('--ui-scale','1.00');}}catch(e){}})();
   </script>
   <link rel="stylesheet" href="./css/style.css">
 </head>
@@ -345,10 +345,10 @@
         </section>
       </div>
 
-      <!-- Row 4: Balanced Three-Column Lab Workbench (Raw JSON | Manual POST | File Upload) -->
-      <div class="split-row-3">
+      <!-- Row 4: Weighted Workbench (30% Raw JSON | 45% Manual JSON POST | 25% File Upload) -->
+      <div class="workbench-grid">
         <!-- Panel 7: Raw JSON Viewer -->
-        <section class="card">
+        <section class="card panel-raw-json">
           <div class="card-header">
             <h2>Raw JSON Telemetry Viewer</h2>
             <div class="btn-group">
@@ -357,7 +357,7 @@
               <button type="button" class="btn btn-tiny btn-outline" id="raw-json-toggle-btn">Collapse</button>
             </div>
           </div>
-          <div class="card-body no-padding">
+          <div class="card-body no-padding raw-json-card-body">
             <div class="raw-json-wrapper" id="raw-json-wrapper">
               <pre class="raw-json-pre" id="raw-json-content">{
   "status": "waiting_for_data"
@@ -366,21 +366,37 @@
           </div>
         </section>
 
-        <!-- Panel 8: Manual JSON POST Testing -->
-        <section class="card">
+        <!-- Panel 8: Manual JSON POST Testing (Primary Expanded Workbench) -->
+        <section class="card panel-manual-post">
           <div class="card-header">
-            <h2>Manual JSON POST Testing</h2>
-            <span class="card-header-note">POST /api/telemetry</span>
+            <div class="header-group">
+              <h2>Manual JSON POST Testing</h2>
+              <span class="card-header-note">POST /api/telemetry</span>
+            </div>
+            <span id="manual-post-validation-badge" class="status-tag status-success">Valid JSON</span>
           </div>
-          <div class="card-body">
+          <div class="card-body manual-post-card-body">
             <p class="card-instruction">
-              Send authenticated JSON payload directly to the HTTPS telemetry endpoint.
+              Edit and transmit authenticated JSON telemetry payloads directly to <code>POST /api/telemetry</code>. Supports Tab indentation, line numbers, and live syntax validation.
             </p>
-            <textarea id="manual-post-json-editor" class="code-textarea" rows="8" spellcheck="false"></textarea>
-            <div class="form-actions">
-              <button type="button" class="btn btn-small btn-outline" id="manual-post-validate-btn">Validate JSON</button>
-              <button type="button" class="btn btn-small btn-outline" id="manual-post-reset-btn">Reset Sample</button>
-              <button type="button" class="btn btn-small btn-primary" id="manual-post-send-btn">Send POST</button>
+
+            <div class="json-editor-shell" id="manual-post-editor-shell">
+              <div class="json-editor-gutter" id="manual-post-line-numbers" aria-hidden="true">1</div>
+              <div class="json-editor-stage">
+                <pre class="json-editor-highlight" id="manual-post-highlight" aria-hidden="true"></pre>
+                <textarea id="manual-post-json-editor" class="json-editor-textarea" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" aria-label="Manual JSON POST Telemetry Payload"></textarea>
+              </div>
+            </div>
+
+            <div class="editor-toolbar">
+              <div id="manual-post-validation-msg" class="editor-validation-msg is-valid" role="status" aria-live="polite">
+                Valid JSON ready to transmit
+              </div>
+              <div class="form-actions editor-actions">
+                <button type="button" class="btn btn-small btn-outline" id="manual-post-validate-btn">Validate JSON</button>
+                <button type="button" class="btn btn-small btn-outline" id="manual-post-reset-btn">Reset Sample</button>
+                <button type="button" class="btn btn-small btn-primary" id="manual-post-send-btn">Send POST</button>
+              </div>
             </div>
 
             <div id="manual-post-result-container" class="test-result-box" style="display: none;">
@@ -395,7 +411,7 @@
         </section>
 
         <!-- Panel 9: Multipart File Upload Testing -->
-        <section class="card">
+        <section class="card panel-upload">
           <div class="card-header">
             <h2>JSON File Upload Testing</h2>
             <span class="card-header-note">POST /api/telemetry/upload</span>
