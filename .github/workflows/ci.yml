@@ -72,6 +72,8 @@ jobs:
       - name: Execute HTTPS_Server Pytest Suite
         working-directory: HTTPS_Server
         run: |
+          mkdir -p docs/deployment
+          python scripts/generate_certificate.py
           pytest tests/ -v
 
   backend-verification:

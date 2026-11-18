@@ -356,6 +356,7 @@ async def register_employee(
     )
 
     db.add(new_employee)
+    await db.flush()  # Ensure parent User row exists before AuditEvent FK insert
     client_ip = request.client.host if request.client else "unknown"
     db.add(AuditEvent(
         user_id=emp_uuid,

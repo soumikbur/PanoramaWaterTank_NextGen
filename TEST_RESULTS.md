@@ -24,8 +24,8 @@ Command: `HTTPS_Server\.venv\Scripts\python.exe -m pytest HTTPS_Server\tests -v`
 | `test_tls_security.py` | 9 | **PASS** | TLS handshake, untrusted/expired/hostname-mismatch cert rejection, private key `.gitignore` check |
 | **TOTAL (`HTTPS_Server`)** | **73** | **73 PASSED / 0 FAILED** | Executed in `6.10 s` |
 
-### Root Backend (`backend/app/`) Syntax & CI Check
-- Local `python -m py_compile` across all 11 modified `backend/app/*.py` files: **PASS** (local `backend/.venv` pointed to another machine's Python 3.12 path; full 58-test `backend/tests/` suite is executed automatically by GitHub Actions on Python 3.11 upon push to `main`).
+### Root Backend (`backend/tests/`) Pytest Suite
+- Command: `pytest tests/ -q` (with `PRAGMA foreign_keys=ON` active): **88 PASSED / 0 FAILED** in `29.30 s` (including exposing and fixing a latent FK flush-order bug in `POST /api/v1/auth/register` where `AuditEvent` flushed before parent `User`).
 
 ---
 
