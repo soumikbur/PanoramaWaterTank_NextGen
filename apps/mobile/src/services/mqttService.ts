@@ -99,6 +99,35 @@ export function formatMqttMessageBlock(frame: RawMqttFrame): string {
 export type TelemetryCallback = (payload: LiveTelemetryPayload) => void;
 export type MqttStatusCallback = (status: MqttConnectionStatus) => void;
 
+export interface MqttBrokerDiagnostics {
+  brokerName: string;
+  host: string;
+  port: number;
+  path: string;
+  useSSL: boolean;
+  protocol: string;
+  mqttVersion: string;
+  transportSecurity: string;
+  authMode: string;
+  certValidation: string;
+  status: MqttConnectionStatus;
+  websocketConnected: boolean;
+  mqttSessionConnected: boolean;
+  brokerReachable: 'REACHABLE' | 'UNREACHABLE' | 'UNKNOWN';
+  confirmedTopics: string[];
+  connectedAt: number | null;
+  disconnectedAt: number | null;
+  lastError: string | null;
+  connectionLatencyMs: number | null;
+  reconnectAttempts: number;
+  autoReconnect: boolean;
+  totalBrokerMessages: number;
+  lastBrokerMessageAt: number | null;
+  keepAliveSeconds: number;
+  cleanSession: boolean;
+  clientId: string | null;
+}
+
 export class MqttService {
   private static instance: MqttService;
   private client: any = null;
@@ -130,6 +159,19 @@ export class MqttService {
   private lastMessageReceivedTime = 0;
   private historyBuffer: LiveTelemetryPayload[] = [];
   private isDestroyed = false;
+
+  // Live broker connection & session diagnostics (populated solely by actual Paho events)
+  private mqttSessionConnected = false;
+  private brokerReachable: 'REACHABLE' | 'UNREACHABLE' | 'UNKNOWN' = 'UNKNOWN';
+  private confirmedSubscriptions: Set<string> = new Set();
+  private connectAttemptStartedAt: number | null = null;
+  private connectedAt: number | null = null;
+  private disconnectedAt: number | null = null;
+  private lastError: string | null = null;
+  private connectionLatencyMs: number | null = null;
+  private totalBrokerMessages = 0;
+  private lastBrokerMessageAt: number | null = null;
+  private activeClientId: string | null = null;
 
   private brokerHost: string = 'broker.hivemq.com';
   private brokerPort: number = 8884;
@@ -178,13 +220,18 @@ export class MqttService {
 
     this.isDestroyed = false;
     this.setStatus('CONNECTING');
+    this.connectAttemptStartedAt = Date.now();
 
     const clientId = `panorama-web-${Math.random().toString(16).substring(2, 10)}`;
+    this.activeClientId = clientId;
 
     try {
       const ClientConstructor = (Paho && (Paho.Client || (Paho as any).default?.Client)) || (window as any).Paho?.MQTT?.Client;
       if (!ClientConstructor) {
         console.warn('[MQTT] Paho.Client constructor not available in runtime.');
+        this.lastError = 'Paho MQTT client runtime unavailable';
+        this.brokerReachable = 'UNREACHABLE';
+        this.mqttSessionConnected = false;
         this.setStatus('DISCONNECTED');
         this.scheduleReconnect();
         return;
@@ -200,7 +247,12 @@ export class MqttService {
       this.client.onConnectionLost = (responseObject: any) => {
         const errorMsg = responseObject?.errorMessage || 'Connection lost';
         console.warn('[MQTT] Connection lost:', errorMsg);
+        this.mqttSessionConnected = false;
         this.topicSubscribed = false;
+        this.confirmedSubscriptions.clear();
+        this.disconnectedAt = Date.now();
+        this.lastError = errorMsg;
+        this.brokerReachable = 'UNREACHABLE';
         this.clearStaleTimer();
         this.setStatus('DISCONNECTED');
         this.scheduleReconnect();
@@ -208,6 +260,8 @@ export class MqttService {
 
       this.client.onMessageArrived = (message: any) => {
         try {
+          this.totalBrokerMessages += 1;
+          this.lastBrokerMessageAt = Date.now();
           const destination = message.destinationName || message.topic || '';
           const payloadStr = typeof message.payloadString === 'string' ? message.payloadString : String(message.payloadBytes || '');
           const qos = typeof message.qos === 'number' ? message.qos : 0;
@@ -322,50 +376,70 @@ export class MqttService {
         keepAliveInterval: 45,
         cleanSession: true,
         onSuccess: () => {
+          const nowTs = Date.now();
           this.reconnectAttempts = 0;
+          this.mqttSessionConnected = true;
+          this.brokerReachable = 'REACHABLE';
+          this.connectedAt = nowTs;
+          this.lastError = null;
+          if (this.connectAttemptStartedAt) {
+            this.connectionLatencyMs = Math.max(1, nowTs - this.connectAttemptStartedAt);
+          }
           this.setStatus('CONNECTED');
           console.info(`[MQTT] Connected to ${this.brokerHost}:${this.brokerPort}. Subscribing to topics...`);
           try {
+            const subWithAck = (t: string, qos: number) => {
+              this.client.subscribe(t, {
+                qos,
+                onSuccess: () => {
+                  this.confirmedSubscriptions.add(t);
+                },
+                onFailure: (subErr: any) => {
+                  this.confirmedSubscriptions.delete(t);
+                  this.lastError = `Subscribe failed (${t}): ${subErr?.errorMessage || subErr}`;
+                },
+              });
+            };
             // Subscribe to primary synchronization bus (events and wildcard)
-            this.client.subscribe(SYNC_EVENTS_TOPIC, { qos: 1 });
-            this.client.subscribe(SYNC_WILDCARD_TOPIC, { qos: 1 });
+            subWithAck(SYNC_EVENTS_TOPIC, 1);
+            subWithAck(SYNC_WILDCARD_TOPIC, 1);
 
             // Subscribe to primary configuration topic and telemetry stream (/s)
-            this.client.subscribe(this.topic, { qos: 1 });
-            this.client.subscribe(`${this.topic}/s`, { qos: 1 });
-            this.client.subscribe(`${this.topic}/#`, { qos: 1 });
+            subWithAck(this.topic, 1);
+            subWithAck(`${this.topic}/s`, 1);
+            subWithAck(`${this.topic}/#`, 1);
             if (this.topic !== DEFAULT_MQTT_TOPIC) {
-              this.client.subscribe(DEFAULT_MQTT_TOPIC, { qos: 1 });
-              this.client.subscribe(`${DEFAULT_MQTT_TOPIC}/s`, { qos: 1 });
-              this.client.subscribe(`${DEFAULT_MQTT_TOPIC}/#`, { qos: 1 });
+              subWithAck(DEFAULT_MQTT_TOPIC, 1);
+              subWithAck(`${DEFAULT_MQTT_TOPIC}/s`, 1);
+              subWithAck(`${DEFAULT_MQTT_TOPIC}/#`, 1);
             }
             // Target hardware device telemetry topics (Physical UID verified from MQTT.fx)
-            this.client.subscribe('002F00654B42501320353332', { qos: 0 });
-            this.client.subscribe('002F00654B42501320353332/s', { qos: 0 });
-            this.client.subscribe('002F00654B42501320353332/#', { qos: 0 });
-            this.client.subscribe('panorama/telemetry/002F00654B42501320353332', { qos: 0 });
+            subWithAck('002F00654B42501320353332', 0);
+            subWithAck('002F00654B42501320353332/s', 0);
+            subWithAck('002F00654B42501320353332/#', 0);
+            subWithAck('panorama/telemetry/002F00654B42501320353332', 0);
             // Legacy / alternate variants for backward compatibility
-            this.client.subscribe('002F00654B42501203203533332', { qos: 1 });
-            this.client.subscribe('002F00654B42501203203533332/s', { qos: 1 });
-            this.client.subscribe('002F00654B42501203203533332/#', { qos: 1 });
-            this.client.subscribe('002F00654B425012032053332', { qos: 1 });
-            this.client.subscribe('002F00654B425012032053332/s', { qos: 1 });
-            this.client.subscribe('002F00654B425012032053332/#', { qos: 1 });
-            this.client.subscribe('0023004D4B42501120353332', { qos: 1 });
-            this.client.subscribe('panorama/telemetry/#', { qos: 1 });
+            subWithAck('002F00654B42501203203533332', 1);
+            subWithAck('002F00654B42501203203533332/s', 1);
+            subWithAck('002F00654B42501203203533332/#', 1);
+            subWithAck('002F00654B425012032053332', 1);
+            subWithAck('002F00654B425012032053332/s', 1);
+            subWithAck('002F00654B425012032053332/#', 1);
+            subWithAck('0023004D4B42501120353332', 1);
+            subWithAck('panorama/telemetry/#', 1);
 
-            this.client.subscribe(CENTRAL_FLEET_TOPIC, { qos: 1 });
-            this.client.subscribe(CENTRAL_DEVICES_TOPIC, { qos: 1 });
-            this.client.subscribe(CENTRAL_SETTINGS_TOPIC, { qos: 1 });
-            this.client.subscribe(CENTRAL_USERS_TOPIC, { qos: 1 });
-            this.client.subscribe(CENTRAL_DELTA_SYNC_TOPIC, { qos: 1 });
-            this.client.subscribe('panorama/fleet/sync', { qos: 1 });
-            this.client.subscribe('panorama/devices/sync', { qos: 1 });
+            subWithAck(CENTRAL_FLEET_TOPIC, 1);
+            subWithAck(CENTRAL_DEVICES_TOPIC, 1);
+            subWithAck(CENTRAL_SETTINGS_TOPIC, 1);
+            subWithAck(CENTRAL_USERS_TOPIC, 1);
+            subWithAck(CENTRAL_DELTA_SYNC_TOPIC, 1);
+            subWithAck('panorama/fleet/sync', 1);
+            subWithAck('panorama/devices/sync', 1);
 
             // Re-subscribe to all dynamic topic subscriptions
             this.dynamicSubscriptions.forEach((qos, top) => {
               try {
-                this.client.subscribe(top, { qos });
+                subWithAck(top, qos);
                 console.info(`[MQTT] Re-subscribed to dynamic topic: ${top} (QoS ${qos})`);
               } catch (dynErr) {
                 console.warn(`[MQTT] Failed to resubscribe to dynamic topic ${top}:`, dynErr);
@@ -373,13 +447,19 @@ export class MqttService {
             });
 
             this.topicSubscribed = true;
-          } catch (subErr) {
+          } catch (subErr: any) {
             this.topicSubscribed = false;
+            this.lastError = subErr?.message || String(subErr);
             console.error('[MQTT] Failed to subscribe:', subErr);
           }
         },
         onFailure: (err: any) => {
+          this.mqttSessionConnected = false;
           this.topicSubscribed = false;
+          this.confirmedSubscriptions.clear();
+          this.disconnectedAt = Date.now();
+          this.brokerReachable = 'UNREACHABLE';
+          this.lastError = err?.errorMessage || (typeof err === 'string' ? err : 'Broker connection failed');
           console.warn('[MQTT] Connection failed:', err?.errorMessage || err);
           this.setStatus('DISCONNECTED');
           this.scheduleReconnect();
@@ -1009,21 +1089,32 @@ export class MqttService {
     this.dynamicSubscriptions.set(cleanTopic, qos);
     if (this.client && this.client.isConnected && this.client.isConnected()) {
       try {
-        this.client.subscribe(cleanTopic, { qos });
+        this.client.subscribe(cleanTopic, {
+          qos,
+          onSuccess: () => {
+            this.confirmedSubscriptions.add(cleanTopic);
+          },
+          onFailure: (err: any) => {
+            this.confirmedSubscriptions.delete(cleanTopic);
+            this.lastError = `Subscribe failed (${cleanTopic}): ${err?.errorMessage || err}`;
+          },
+        });
         console.info(`[MQTT] Subscribed to topic: ${cleanTopic} (QoS ${qos})`);
         return true;
-      } catch (err) {
+      } catch (err: any) {
+        this.lastError = err?.message || String(err);
         console.error(`[MQTT] Failed to subscribe to ${cleanTopic}:`, err);
         return false;
       }
     }
-    return true;
+    return false;
   }
 
   public unsubscribeTopic(topic: string): boolean {
     const cleanTopic = topic.trim();
     if (!cleanTopic) return false;
     this.dynamicSubscriptions.delete(cleanTopic);
+    this.confirmedSubscriptions.delete(cleanTopic);
     if (this.client && this.client.isConnected && this.client.isConnected()) {
       try {
         this.client.unsubscribe(cleanTopic);
@@ -1035,6 +1126,12 @@ export class MqttService {
       }
     }
     return true;
+  }
+
+  public isTopicConfirmedSubscribed(topic: string): boolean {
+    const clean = topic.trim();
+    if (!clean || !this.mqttSessionConnected) return false;
+    return this.confirmedSubscriptions.has(clean);
   }
 
   public getSubscribedTopics(): string[] {
@@ -1140,6 +1237,40 @@ export class MqttService {
     };
   }
 
+  public getDiagnostics(): MqttBrokerDiagnostics {
+    const wsConnected = Boolean(this.client && typeof this.client.isConnected === 'function' && this.client.isConnected());
+    const hostLower = (this.brokerHost || '').toLowerCase();
+    const brokerName = hostLower.includes('hivemq.com') ? 'HiveMQ' : 'Custom MQTT Broker';
+    return {
+      brokerName,
+      host: this.brokerHost,
+      port: this.brokerPort,
+      path: this.brokerPath,
+      useSSL: this.useSSL,
+      protocol: this.useSSL ? 'MQTT over WebSocket Secure (WSS)' : 'MQTT over WebSocket (WS)',
+      mqttVersion: '3.1.1 (Paho JS Default)',
+      transportSecurity: this.useSSL ? 'TLS / WSS' : 'Unencrypted WS',
+      authMode: 'Anonymous (No Credentials Configured)',
+      certValidation: this.useSSL ? 'Browser-Managed TLS Verification' : 'Not Applicable (Plain WS)',
+      status: this.status,
+      websocketConnected: wsConnected,
+      mqttSessionConnected: this.mqttSessionConnected && wsConnected,
+      brokerReachable: wsConnected ? 'REACHABLE' : this.brokerReachable,
+      confirmedTopics: Array.from(this.confirmedSubscriptions),
+      connectedAt: this.connectedAt,
+      disconnectedAt: this.disconnectedAt,
+      lastError: this.lastError,
+      connectionLatencyMs: this.connectionLatencyMs,
+      reconnectAttempts: this.reconnectAttempts,
+      autoReconnect: !this.isDestroyed,
+      totalBrokerMessages: this.totalBrokerMessages,
+      lastBrokerMessageAt: this.lastBrokerMessageAt,
+      keepAliveSeconds: 45,
+      cleanSession: true,
+      clientId: this.activeClientId,
+    };
+  }
+
   public reconfigureBroker(host: string, port: number, path: string = '/mqtt', useSSL: boolean = true): void {
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.setItem('panorama_mqtt_host', host);
@@ -1158,7 +1289,10 @@ export class MqttService {
 
   disconnect(): void {
     this.isDestroyed = true;
+    this.mqttSessionConnected = false;
     this.topicSubscribed = false;
+    this.confirmedSubscriptions.clear();
+    this.disconnectedAt = Date.now();
     clearTimeout(this.reconnectTimer);
     this.clearStaleTimer();
     if (this.client && this.client.isConnected && this.client.isConnected()) {

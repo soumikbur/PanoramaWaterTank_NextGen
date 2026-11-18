@@ -1,14 +1,23 @@
 """Devices API Router."""
-from typing import List, Optional
+import json
+from typing import List, Optional, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.repositories.device_repo import DeviceRepository
 from app.repositories.telemetry_repo import TelemetryRepository
-from app.schemas.device import DeviceOut, DeviceDiagnostics, DeviceCreate, DeviceUpdate
+from app.schemas.device import (
+    DeviceOut,
+    DeviceDiagnostics,
+    DeviceCreate,
+    DeviceUpdate,
+    DeviceMetadataPayload,
+    DeviceMetadataOut,
+)
 from app.api.v1.auth import get_current_admin_user, get_current_user, get_current_user_optional
 from app.models.train import Train
+from app.models.base import utc_now
 from app.services.train_lookup_service import TRAIN_NUMBER_RE
 from app.models.user import User
 from app.websocket.manager import ws_manager
@@ -88,6 +97,97 @@ async def get_device_diagnostics(
         sensor1Valid=latest.sensor_valid if latest else None,
         sensor2Valid=None,
         lastPayloadAt=latest.timestamp if latest else device.last_seen_at
+    )
+
+
+_FORBIDDEN_METADATA_KEYS = {"password", "passwd", "secret", "token", "api_key", "apikey", "private_key", "credentials"}
+
+
+def _sanitize_metadata(obj: Any) -> Any:
+    """Strip any credential-like keys before persisting or returning device metadata."""
+    if isinstance(obj, dict):
+        return {
+            k: _sanitize_metadata(v)
+            for k, v in obj.items()
+            if str(k).lower() not in _FORBIDDEN_METADATA_KEYS
+        }
+    if isinstance(obj, list):
+        return [_sanitize_metadata(v) for v in obj]
+    return obj
+
+
+@router.get("/{device_id}/metadata", response_model=DeviceMetadataOut)
+async def get_device_metadata(
+    device_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Retrieve static hardware, firmware, and broker metadata associated with a device."""
+    repo = DeviceRepository(db)
+    device = await repo.get_by_id(device_id) or await repo.get_by_uid(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    stored = {}
+    if getattr(device, "hardware_metadata", None):
+        try:
+            stored = json.loads(device.hardware_metadata) or {}
+        except Exception:
+            stored = {}
+
+    return DeviceMetadataOut(
+        uid=device.uid,
+        deviceName=stored.get("deviceName") or device.name,
+        deviceType=stored.get("deviceType") or device.device_type,
+        hardwareModel=stored.get("hardwareModel") or device.hardware_version,
+        hardware=_sanitize_metadata(stored.get("hardware") or {}),
+        firmware=_sanitize_metadata(stored.get("firmware") or {
+            "version": device.firmware_version or "Not Configured",
+            "buildDate": "Not Configured",
+        }),
+        broker=_sanitize_metadata(stored.get("broker") or {
+            "topic": device.mqtt_topic or device.uid,
+        }),
+        updatedAt=device.updated_at,
+    )
+
+
+@router.put("/{device_id}/metadata", response_model=DeviceMetadataOut)
+async def update_device_metadata(
+    device_id: str,
+    payload: DeviceMetadataPayload,
+    admin: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Associate static hardware & firmware metadata with an existing device (Admin Only)."""
+    repo = DeviceRepository(db)
+    device = await repo.get_by_id(device_id) or await repo.get_by_uid(device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    sanitized = _sanitize_metadata(payload.model_dump())
+    device.hardware_metadata = json.dumps(sanitized)
+    if payload.deviceName:
+        device.name = payload.deviceName.strip()
+    if payload.deviceType:
+        device.device_type = payload.deviceType.strip()
+    if payload.hardwareModel:
+        device.hardware_version = payload.hardwareModel.strip()
+    fw_ver = (sanitized.get("firmware") or {}).get("version")
+    if isinstance(fw_ver, str) and fw_ver.strip() and fw_ver.strip() != "Not Configured":
+        device.firmware_version = fw_ver.strip()[:32]
+
+    await db.commit()
+    await db.refresh(device)
+
+    return DeviceMetadataOut(
+        uid=device.uid,
+        deviceName=sanitized.get("deviceName") or device.name,
+        deviceType=sanitized.get("deviceType") or device.device_type,
+        hardwareModel=sanitized.get("hardwareModel") or device.hardware_version,
+        hardware=sanitized.get("hardware") or {},
+        firmware=sanitized.get("firmware") or {},
+        broker=sanitized.get("broker") or {},
+        updatedAt=device.updated_at,
     )
 
 

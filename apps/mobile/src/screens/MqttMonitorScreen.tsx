@@ -4,9 +4,31 @@ import { useApp } from '../state/AppContext';
 import {
   mqttService,
   RawMqttFrame,
-  formatMqttTimestamp,
+  MqttBrokerDiagnostics,
 } from '../services/mqttService';
 import { deviceRegistry, ManagedDevice } from '../services/deviceRegistry';
+import {
+  buildDeviceMetadata,
+  loadLocalHardwareOverrides,
+  saveLocalHardwareOverrides,
+  fetchBackendDeviceMetadata,
+  persistBackendDeviceMetadata,
+  DeviceHardwareOverrides,
+} from '../services/deviceMetadata';
+import {
+  DeviceHealthSummaryBar,
+  DeviceIdentityCard,
+  HardwareAndCommsRow,
+  SensorsAndFirmwareRow,
+  DeviceMetadataModal,
+  extractLiveTelemetryMetrics,
+  StatusPill,
+  SpecRow,
+} from '../components/diagnostics/HardwareDiagnosticsPanels';
+import {
+  MqttBrokerDetailsRow,
+  CommunicationArchitecturePanel,
+} from '../components/diagnostics/BrokerAndArchitecturePanels';
 import {
   Terminal,
   Play,
@@ -16,17 +38,17 @@ import {
   Check,
   Radio,
   Clock,
-  Cpu,
   ChevronDown,
   ChevronUp,
-  X,
   Code2,
-  AlertTriangle,
-  Wifi,
   WifiOff,
-  Filter,
   ArrowDown,
   AlignLeft,
+  Search,
+  Download,
+  Table2,
+  Activity,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 export const DEFAULT_HARDWARE_UID = '002F00654B42501320353332';
@@ -34,8 +56,8 @@ export const TARGET_MQTT_TOPIC = DEFAULT_HARDWARE_UID;
 const MAX_MESSAGE_BUFFER = 500;
 
 /**
- * Strict 15 telemetry fields permitted in the Raw Data console.
- * Strictly in canonical order per the industrial specification.
+ * Canonical 15 telemetry fields for legacy SCADA parity.
+ * Unknown/extra fields are preserved in rawParsedJson so Raw JSON view shows exact broker payloads.
  */
 export const ALLOWED_TELEMETRY_FIELDS = [
   'uid',
@@ -80,19 +102,18 @@ export interface CleanTelemetryFrame {
   seq: number;
   topic: string;
   receivedAt: number;
-  receivedAtFormatted: string; // Broker reception timestamp (e.g. 2026-11-16 12:20:23.444)
-  deviceTimestamp: string | null; // Device internal time (e.g. "12:20:14")
+  receivedAtFormatted: string;
+  deviceTimestamp: string | null;
   payload: CleanDeviceTelemetry;
-  rawJsonString: string;
-  rawPayloadString: string;
+  rawParsedJson: Record<string, any>; // Exact incoming JSON object with ALL fields preserved
+  rawJsonString: string;              // Formatted exact incoming JSON
+  rawPayloadString: string;           // Verbatim raw payload string from broker
   qos: number;
   payloadSize: number;
 }
 
 /**
- * Filter an incoming MQTT payload strictly to the 15 telemetry fields.
- * Discards fleet synchronization, configuration JSON, train metadata,
- * deleted train records, and unrelated device messages.
+ * Validate incoming MQTT payload is a device telemetry object (rejecting fleet sync / config packets).
  */
 export function filterDeviceTelemetry(
   raw: any,
@@ -118,42 +139,49 @@ export function filterDeviceTelemetry(
     return null;
   }
 
-  // Extract UID
-  const rawUid = raw.uid !== undefined ? String(raw.uid).trim() : (raw.deviceId !== undefined ? String(raw.deviceId).trim() : null);
+  const rawUid =
+    raw.uid !== undefined
+      ? String(raw.uid).trim()
+      : raw.device_uid !== undefined
+      ? String(raw.device_uid).trim()
+      : raw.deviceId !== undefined
+      ? String(raw.deviceId).trim()
+      : raw.device_id !== undefined
+      ? String(raw.device_id).trim()
+      : null;
+
   if (!rawUid) {
     return null;
   }
 
-  // Strict UID validation against selected device
   if (expectedUid && rawUid !== expectedUid.trim()) {
     return null;
   }
 
-  // Construct projected object with strictly allowed fields in canonical order
-  const result: CleanDeviceTelemetry = {
+  const toNum = (v: any): number | null =>
+    v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null;
+
+  return {
     uid: rawUid,
-    lat: raw.lat !== undefined ? (typeof raw.lat === 'number' ? raw.lat : (Number.isFinite(Number(raw.lat)) ? Number(raw.lat) : null)) : null,
-    long: raw.long !== undefined ? (typeof raw.long === 'number' ? raw.long : (Number.isFinite(Number(raw.long)) ? Number(raw.long) : null)) : (raw.lon !== undefined ? (typeof raw.lon === 'number' ? raw.lon : (Number.isFinite(Number(raw.lon)) ? Number(raw.lon) : null)) : null),
-    speed: raw.speed !== undefined ? (typeof raw.speed === 'number' ? raw.speed : (Number.isFinite(Number(raw.speed)) ? Number(raw.speed) : null)) : null,
-    time: raw.time !== undefined && raw.time !== null ? String(raw.time) : null,
-    cm1: raw.cm1 !== undefined ? (typeof raw.cm1 === 'number' ? raw.cm1 : (Number.isFinite(Number(raw.cm1)) ? Number(raw.cm1) : null)) : null,
-    cm2: raw.cm2 !== undefined ? (typeof raw.cm2 === 'number' ? raw.cm2 : (Number.isFinite(Number(raw.cm2)) ? Number(raw.cm2) : null)) : null,
-    wlp1: raw.wlp1 !== undefined ? (typeof raw.wlp1 === 'number' ? raw.wlp1 : (Number.isFinite(Number(raw.wlp1)) ? Number(raw.wlp1) : null)) : null,
-    wlp2: raw.wlp2 !== undefined ? (typeof raw.wlp2 === 'number' ? raw.wlp2 : (Number.isFinite(Number(raw.wlp2)) ? Number(raw.wlp2) : null)) : null,
-    wlv1: raw.wlv1 !== undefined ? (typeof raw.wlv1 === 'boolean' ? raw.wlv1 : Boolean(raw.wlv1)) : (raw.wlvl !== undefined ? (typeof raw.wlvl === 'boolean' ? raw.wlvl : Boolean(raw.wlvl)) : null),
-    wlv2: raw.wlv2 !== undefined ? (typeof raw.wlv2 === 'boolean' ? raw.wlv2 : Boolean(raw.wlv2)) : null,
-    bat: raw.bat !== undefined ? (typeof raw.bat === 'number' ? raw.bat : (Number.isFinite(Number(raw.bat)) ? Number(raw.bat) : null)) : null,
-    temp: raw.temp !== undefined ? (typeof raw.temp === 'number' ? raw.temp : (Number.isFinite(Number(raw.temp)) ? Number(raw.temp) : null)) : null,
+    lat: toNum(raw.lat ?? raw.latitude),
+    long: toNum(raw.long ?? raw.lon ?? raw.longitude),
+    speed: toNum(raw.speed ?? raw.speed_kmh),
+    time: raw.time !== undefined && raw.time !== null ? String(raw.time) : (raw.timestamp !== undefined && raw.timestamp !== null ? String(raw.timestamp) : null),
+    cm1: toNum(raw.cm1 ?? raw.water_level_cm),
+    cm2: toNum(raw.cm2),
+    wlp1: toNum(raw.wlp1 ?? raw.water_level_percentage),
+    wlp2: toNum(raw.wlp2),
+    wlv1: raw.wlv1 !== undefined ? Boolean(raw.wlv1) : raw.wlvl !== undefined ? Boolean(raw.wlvl) : null,
+    wlv2: raw.wlv2 !== undefined ? Boolean(raw.wlv2) : null,
+    bat: toNum(raw.bat ?? raw.battery_voltage ?? raw.battery_v),
+    temp: toNum(raw.temp ?? raw.temperature ?? raw.temperature_c),
     chno: raw.chno !== undefined && raw.chno !== null ? String(raw.chno) : null,
     trno: raw.trno !== undefined && raw.trno !== null ? String(raw.trno) : null,
   };
-
-  return result;
 }
 
 /**
- * Format telemetry to clean JSON string with exact 2-space indentation,
- * canonical field ordering, and float precision formatting for 0.0 parity with MQTT.fx.
+ * Format canonical telemetry object with 2-space indentation.
  */
 export function formatTelemetryJson(t: CleanDeviceTelemetry): string {
   const lines: string[] = ['{'];
@@ -165,9 +193,10 @@ export function formatTelemetryJson(t: CleanDeviceTelemetry): string {
     if (typeof val === 'string') {
       renderedVal = `"${val}"`;
     } else if (typeof val === 'number') {
-      renderedVal = (['cm1', 'cm2', 'wlp1', 'wlp2', 'bat', 'temp', 'speed'].includes(k) && val % 1 === 0)
-        ? val.toFixed(1)
-        : String(val);
+      renderedVal =
+        ['cm1', 'cm2', 'wlp1', 'wlp2', 'bat', 'temp', 'speed'].includes(k) && val % 1 === 0
+          ? val.toFixed(1)
+          : String(val);
     } else if (typeof val === 'boolean') {
       renderedVal = String(val);
     } else {
@@ -179,19 +208,60 @@ export function formatTelemetryJson(t: CleanDeviceTelemetry): string {
   return lines.join('\n');
 }
 
+/** Metadata descriptors for Parsed Telemetry view (only rendered when key is actually present). */
+const PARSED_FIELD_META: Record<string, { label: string; unit?: string }> = {
+  uid: { label: 'Device UID' },
+  device_uid: { label: 'Device UID' },
+  device_id: { label: 'Device ID' },
+  cm1: { label: 'Water Level (Tank 1)', unit: 'cm' },
+  cm2: { label: 'Water Level (Tank 2)', unit: 'cm' },
+  water_level_cm: { label: 'Water Level', unit: 'cm' },
+  wlp1: { label: 'Fill Percentage (Tank 1)', unit: '%' },
+  wlp2: { label: 'Fill Percentage (Tank 2)', unit: '%' },
+  water_level_percentage: { label: 'Fill Percentage', unit: '%' },
+  wlv1: { label: 'Valve 1 State' },
+  wlv2: { label: 'Valve 2 State' },
+  rawVoltage: { label: 'Raw Voltage', unit: 'V' },
+  raw_voltage: { label: 'Raw Voltage', unit: 'V' },
+  v1: { label: 'Sensor Voltage', unit: 'V' },
+  adcRaw: { label: 'ADC Raw Value' },
+  adc_raw: { label: 'ADC Raw Value' },
+  pressure_bar: { label: 'Water Pressure', unit: 'bar' },
+  waterPressure: { label: 'Water Pressure', unit: 'bar' },
+  temp: { label: 'Temperature', unit: '°C' },
+  temperature: { label: 'Temperature', unit: '°C' },
+  bmePressure: { label: 'Atmospheric Pressure', unit: 'hPa' },
+  bme_pressure: { label: 'Atmospheric Pressure', unit: 'hPa' },
+  humidity: { label: 'Humidity', unit: '%' },
+  sensorStatus: { label: 'Sensor Status' },
+  sensor_status: { label: 'Sensor Status' },
+  bat: { label: 'Battery', unit: '% / V' },
+  battery_voltage: { label: 'Battery Voltage', unit: 'V' },
+  csq: { label: 'Signal Strength (CSQ)' },
+  signal_csq: { label: 'Signal Strength (CSQ)' },
+  rssi: { label: 'RSSI', unit: 'dBm' },
+  lat: { label: 'Latitude', unit: '°' },
+  long: { label: 'Longitude', unit: '°' },
+  lon: { label: 'Longitude', unit: '°' },
+  speed: { label: 'Speed', unit: 'km/h' },
+  time: { label: 'Device Timestamp' },
+  timestamp: { label: 'Device Timestamp' },
+  trno: { label: 'Train Number' },
+  chno: { label: 'Coach Number' },
+};
+
 interface JsonSyntaxViewerProps {
-  data: CleanDeviceTelemetry;
+  data: Record<string, any>;
   onCopyValue?: (key: string, val: any) => void;
 }
 
-/**
- * Syntax-highlighted JSON viewer matching MQTT.fx Plain Text / JSON Decoder.
- * Renders keys in blue, numbers in orange, strings in green, booleans in coral, and null in gray.
- */
+/** Syntax-highlighted JSON viewer preserving ALL keys received from the broker. */
 const JsonSyntaxViewer: React.FC<JsonSyntaxViewerProps> = ({ data, onCopyValue }) => {
   if (!data || typeof data !== 'object') {
     return <span style={{ color: '#8B949E' }}>null</span>;
   }
+
+  const keys = Object.keys(data);
 
   const renderValue = (val: any, keyName: string): React.ReactNode => {
     if (typeof val === 'string') {
@@ -206,9 +276,10 @@ const JsonSyntaxViewer: React.FC<JsonSyntaxViewerProps> = ({ data, onCopyValue }
       );
     }
     if (typeof val === 'number') {
-      const formattedNum = (['cm1', 'cm2', 'wlp1', 'wlp2', 'bat', 'temp', 'speed'].includes(keyName) && val % 1 === 0)
-        ? val.toFixed(1)
-        : String(val);
+      const formattedNum =
+        ['cm1', 'cm2', 'wlp1', 'wlp2', 'bat', 'temp', 'speed'].includes(keyName) && val % 1 === 0
+          ? val.toFixed(1)
+          : String(val);
       return (
         <span
           title={`Click to copy ${keyName}`}
@@ -230,20 +301,19 @@ const JsonSyntaxViewer: React.FC<JsonSyntaxViewerProps> = ({ data, onCopyValue }
         </span>
       );
     }
-    if (val === null) {
+    if (val === null || val === undefined) {
       return (
-        <span
-          title={`${keyName} is missing/null`}
-          style={{ color: '#8B949E', fontStyle: 'italic' }}
-        >
+        <span title={`${keyName} is null`} style={{ color: '#8B949E', fontStyle: 'italic' }}>
           null
         </span>
       );
     }
-    return <span>{String(val)}</span>;
+    return (
+      <span style={{ color: '#D2A8FF' }}>
+        {JSON.stringify(val)}
+      </span>
+    );
   };
-
-  const keys = ALLOWED_TELEMETRY_FIELDS;
 
   return (
     <pre
@@ -258,7 +328,7 @@ const JsonSyntaxViewer: React.FC<JsonSyntaxViewerProps> = ({ data, onCopyValue }
     >
       {'{'}{'\n'}
       {keys.map((k, idx) => {
-        const val = (data as any)[k];
+        const val = data[k];
         const isLast = idx === keys.length - 1;
         return (
           <div key={k} style={{ paddingLeft: '20px' }}>
@@ -280,13 +350,81 @@ const JsonSyntaxViewer: React.FC<JsonSyntaxViewerProps> = ({ data, onCopyValue }
   );
 };
 
+/** Mode B: Parsed Telemetry renderer showing ONLY fields actually present in the message. */
+const ParsedTelemetryView: React.FC<{
+  data: Record<string, any>;
+  onCopyValue?: (key: string, val: any) => void;
+}> = ({ data, onCopyValue }) => {
+  const entries = Object.entries(data || {}).filter(([, v]) => v !== undefined);
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', gap: '6px' }}>
+      {entries.map(([key, value]) => {
+        const meta = PARSED_FIELD_META[key];
+        const displayVal =
+          value === null
+            ? 'null'
+            : typeof value === 'boolean'
+            ? value ? 'TRUE' : 'FALSE'
+            : typeof value === 'object'
+            ? JSON.stringify(value)
+            : `${value}${meta?.unit ? ` ${meta.unit}` : ''}`;
+
+        return (
+          <div
+            key={key}
+            onClick={() => onCopyValue?.(key, value)}
+            title={`Field "${key}" — click to copy`}
+            style={{
+              padding: '6px 8px',
+              backgroundColor: '#161B22',
+              border: '1px solid #30363D',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '2px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '4px' }}>
+              <span style={{ fontSize: '10px', color: '#8B949E', fontWeight: 600 }}>
+                {meta ? meta.label : key}
+              </span>
+              <span style={{ fontSize: '9px', fontFamily: 'monospace', color: '#58A6FF' }}>{key}</span>
+            </div>
+            <div
+              style={{
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                fontWeight: 700,
+                color:
+                  value === null
+                    ? '#8B949E'
+                    : typeof value === 'boolean'
+                    ? value ? '#3FB950' : '#F85149'
+                    : typeof value === 'number'
+                    ? '#FFA657'
+                    : '#7EE787',
+                wordBreak: 'break-all',
+              }}
+            >
+              {displayVal}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 export const MqttMonitorScreen: React.FC = () => {
   const { mqttBrokerStatus, devices } = useApp();
 
-  // Active topic & input state
+  // Active topic & input state (preserves existing localStorage keys)
   const [topicInput, setTopicInput] = useState<string>(() => {
     if (typeof window === 'undefined') return DEFAULT_HARDWARE_UID;
-    const saved = localStorage.getItem('panorama_mqtt_selected_device') || localStorage.getItem('panorama_mqtt_target_topic');
+    const saved =
+      localStorage.getItem('panorama_mqtt_selected_device') ||
+      localStorage.getItem('panorama_mqtt_target_topic');
     if (saved && !saved.includes('33332') && !saved.includes('0023004D') && !saved.startsWith('panorama/')) {
       return saved.split('/')[0].trim();
     }
@@ -295,7 +433,9 @@ export const MqttMonitorScreen: React.FC = () => {
 
   const [activeTopic, setActiveTopic] = useState<string>(() => {
     if (typeof window === 'undefined') return DEFAULT_HARDWARE_UID;
-    const saved = localStorage.getItem('panorama_mqtt_selected_device') || localStorage.getItem('panorama_mqtt_target_topic');
+    const saved =
+      localStorage.getItem('panorama_mqtt_selected_device') ||
+      localStorage.getItem('panorama_mqtt_target_topic');
     if (saved && !saved.includes('33332') && !saved.includes('0023004D') && !saved.startsWith('panorama/')) {
       return saved.split('/')[0].trim();
     }
@@ -304,78 +444,128 @@ export const MqttMonitorScreen: React.FC = () => {
 
   const [qosInput, setQosInput] = useState<number>(0);
   const [isSubscribed, setIsSubscribed] = useState<boolean>(true);
-
   const activeTopicRef = useRef<string>(activeTopic);
   activeTopicRef.current = activeTopic;
+
+  // Live MQTT diagnostics ticker (updates connection duration & confirmed sub status every 1s)
+  const [nowTick, setNowTick] = useState<number>(() => Date.now());
+  const [brokerDiag, setBrokerDiag] = useState<MqttBrokerDiagnostics>(() => mqttService.getDiagnostics());
+
+  useEffect(() => {
+    const refreshDiag = () => {
+      setNowTick(Date.now());
+      setBrokerDiag(mqttService.getDiagnostics());
+    };
+    const timer = setInterval(refreshDiag, 1000);
+    const unsubStatus = mqttService.onStatusChange(() => refreshDiag());
+    return () => {
+      clearInterval(timer);
+      unsubStatus();
+    };
+  }, []);
+
+  // Static hardware metadata overrides per UID (separate from live telemetry)
+  const [metadataOverrides, setMetadataOverrides] = useState<DeviceHardwareOverrides>(() =>
+    loadLocalHardwareOverrides(activeTopic)
+  );
+  const [showMetadataModal, setShowMetadataModal] = useState<boolean>(false);
+
+  // Fetch static hardware metadata only when selected device UID changes (never per MQTT message!)
+  useEffect(() => {
+    let cancelled = false;
+    const local = loadLocalHardwareOverrides(activeTopic);
+    setMetadataOverrides(local);
+    fetchBackendDeviceMetadata(activeTopic).then((remote) => {
+      if (!cancelled && remote) {
+        const merged = { ...local, ...remote };
+        setMetadataOverrides(merged);
+        saveLocalHardwareOverrides(activeTopic, merged);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTopic]);
 
   // Raw telemetry message buffer
   const [messages, setMessages] = useState<CleanTelemetryFrame[]>([]);
   const [seqCounter, setSeqCounter] = useState<number>(0);
   const [isPaused, setIsPaused] = useState<boolean>(false);
-  const [autoScroll, setAutoScroll] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    return localStorage.getItem('panorama_mqtt_autoscroll') !== 'false';
-  });
-  const [showTimestamps, setShowTimestamps] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    return localStorage.getItem('panorama_mqtt_show_timestamps') !== 'false';
-  });
-  const [formatMode, setFormatMode] = useState<'pretty' | 'raw'>(() => {
-    if (typeof window === 'undefined') return 'pretty';
-    return (localStorage.getItem('panorama_mqtt_format_mode') as 'pretty' | 'raw') || 'pretty';
-  });
-
-  // Expand / collapse state for individual cards (empty set = all expanded by default)
+  const [autoScroll, setAutoScroll] = useState<boolean>(() =>
+    typeof window === 'undefined' ? true : localStorage.getItem('panorama_mqtt_autoscroll') !== 'false'
+  );
+  const [showTimestamps, setShowTimestamps] = useState<boolean>(() =>
+    typeof window === 'undefined' ? true : localStorage.getItem('panorama_mqtt_show_timestamps') !== 'false'
+  );
+  const [inspectorMode, setInspectorMode] = useState<'raw' | 'parsed'>('raw');
+  const [formatMode, setFormatMode] = useState<'pretty' | 'raw'>(() =>
+    typeof window === 'undefined'
+      ? 'pretty'
+      : ((localStorage.getItem('panorama_mqtt_format_mode') as 'pretty' | 'raw') || 'pretty')
+  );
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
-
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [totalMessagesCount, setTotalMessagesCount] = useState<number>(0);
   const [lastReceivedTimestamp, setLastReceivedTimestamp] = useState<string | null>(null);
+  const [lastReceivedAtMs, setLastReceivedAtMs] = useState<number | null>(null);
+  const [latestRawPayload, setLatestRawPayload] = useState<Record<string, any> | null>(null);
 
   const terminalStreamRef = useRef<HTMLDivElement | null>(null);
   const isPausedRef = useRef<boolean>(isPaused);
   isPausedRef.current = isPaused;
-  const autoScrollRef = useRef<boolean>(autoScroll);
-  autoScrollRef.current = autoScroll;
 
-  const brokerInfo = mqttService.getBrokerInfo();
-  const isBrokerConnected = mqttBrokerStatus === 'CONNECTED' || brokerInfo.status === 'CONNECTED';
+  // Resolve registered device record from existing AppContext & deviceRegistry
+  const managedDevice: ManagedDevice | null = useMemo(() => {
+    const reg = deviceRegistry.getDevices();
+    return reg.find((d) => d.uid === activeTopic.trim()) || null;
+  }, [activeTopic, devices]);
 
-  // Compute available devices list for quick selection
+  const apiDevice: any | null = useMemo(() => {
+    return (devices || []).find((d: any) => d?.uid === activeTopic.trim()) || null;
+  }, [devices, activeTopic]);
+
   const availableDevices = useMemo(() => {
     const list: Array<{ uid: string; label: string }> = [];
     const seenUids = new Set<string>();
 
-    // Always put default hardware device at the top
     list.push({
       uid: DEFAULT_HARDWARE_UID,
       label: `${DEFAULT_HARDWARE_UID} (Hardware Node)`,
     });
     seenUids.add(DEFAULT_HARDWARE_UID);
 
-    // Merge from app context & device registry
-    const registryDevices = deviceRegistry.getDevices();
-    const all = [...(devices || []), ...registryDevices];
-
-    all.forEach((d) => {
-      if (!d || !d.uid || seenUids.has(d.uid) || d.uid.startsWith('PANORAMA-')) return;
+    const all = [...(devices || []), ...deviceRegistry.getDevices()];
+    all.forEach((d: any) => {
+      if (!d || !d.uid || seenUids.has(d.uid) || String(d.uid).startsWith('PANORAMA-')) return;
       seenUids.add(d.uid);
       const assignment = d.trainNumber && d.coachNumber ? ` (${d.trainNumber}/${d.coachNumber})` : '';
-      list.push({
-        uid: d.uid,
-        label: `${d.uid}${assignment}`,
-      });
+      list.push({ uid: d.uid, label: `${d.uid}${assignment}` });
     });
 
     return list;
   }, [devices]);
 
-  // Ensure default target topic is subscribed upon mounting
+  const deviceMetadata = useMemo(
+    () => buildDeviceMetadata(activeTopic, managedDevice, apiDevice, metadataOverrides, brokerDiag, activeTopic),
+    [activeTopic, managedDevice, apiDevice, metadataOverrides, brokerDiag]
+  );
+
+  const liveMetrics = useMemo(
+    () => extractLiveTelemetryMetrics(latestRawPayload, lastReceivedAtMs, lastReceivedTimestamp),
+    [latestRawPayload, lastReceivedAtMs, lastReceivedTimestamp]
+  );
+
+  const isTopicConfirmed = useMemo(() => {
+    if (!isSubscribed) return false;
+    return mqttService.isTopicConfirmedSubscribed(activeTopic);
+  }, [isSubscribed, activeTopic, brokerDiag]);
+
+  // Subscribe on mount (preserving existing behavior)
   useEffect(() => {
     const topic = activeTopicRef.current;
     mqttService.subscribeTopic(topic, qosInput);
     setIsSubscribed(true);
-    // Explicitly clean up any previous wildcard subscriptions
     mqttService.unsubscribeTopic(`${topic}/#`);
     mqttService.unsubscribeTopic(`${DEFAULT_HARDWARE_UID}/#`);
   }, []);
@@ -383,7 +573,6 @@ export const MqttMonitorScreen: React.FC = () => {
   // Listen directly to incoming MQTT message frames from Paho client
   useEffect(() => {
     const unsubscribe = mqttService.onRawMessage((frame: RawMqttFrame) => {
-      // 1. Drop any messages from fleet, central, or sync topics
       if (
         frame.topic.startsWith('panorama/') ||
         frame.topic.includes('fleet') ||
@@ -398,17 +587,14 @@ export const MqttMonitorScreen: React.FC = () => {
       const currentTopic = activeTopicRef.current.trim();
       const topicBase = frame.topic.split('/')[0].trim();
 
-      // 2. Reject messages from unrelated device topics
       if (frame.topic !== currentTopic && topicBase !== currentTopic) {
         return;
       }
 
-      // 3. Must be valid JSON object
       if (!frame.isJson || !frame.parsedJson) {
         return;
       }
 
-      // 4. Validate UID and filter strictly to the 15 telemetry fields
       const filtered = filterDeviceTelemetry(frame.parsedJson, currentTopic);
       if (!filtered) {
         return;
@@ -416,6 +602,8 @@ export const MqttMonitorScreen: React.FC = () => {
 
       setTotalMessagesCount((prev) => prev + 1);
       setLastReceivedTimestamp(frame.receivedAtFormatted);
+      setLastReceivedAtMs(frame.receivedAt);
+      setLatestRawPayload(frame.parsedJson);
 
       if (isPausedRef.current) {
         return;
@@ -431,7 +619,8 @@ export const MqttMonitorScreen: React.FC = () => {
           receivedAtFormatted: frame.receivedAtFormatted,
           deviceTimestamp: filtered.time,
           payload: filtered,
-          rawJsonString: formatTelemetryJson(filtered),
+          rawParsedJson: frame.parsedJson!,
+          rawJsonString: JSON.stringify(frame.parsedJson, null, 2),
           rawPayloadString: frame.payloadString || JSON.stringify(frame.parsedJson),
           qos: frame.qos,
           payloadSize: frame.payloadSize || frame.payloadString?.length || 0,
@@ -439,88 +628,89 @@ export const MqttMonitorScreen: React.FC = () => {
 
         setMessages((prev) => {
           const next = [...prev, cleanFrame];
-          if (next.length > MAX_MESSAGE_BUFFER) {
-            return next.slice(next.length - MAX_MESSAGE_BUFFER);
-          }
-          return next;
+          return next.length > MAX_MESSAGE_BUFFER ? next.slice(next.length - MAX_MESSAGE_BUFFER) : next;
         });
 
         return nextSeq;
       });
     });
 
-    return () => {
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
-  // Auto-scroll stream to bottom whenever new messages arrive
+  // Auto-scroll stream to bottom
   useEffect(() => {
     if (autoScroll && !isPaused && terminalStreamRef.current) {
       terminalStreamRef.current.scrollTop = terminalStreamRef.current.scrollHeight;
     }
   }, [messages, autoScroll, isPaused]);
 
-  // Handle explicit Subscribe action
-  const handleSubscribe = useCallback((overrideTopic?: string) => {
-    const target = (overrideTopic || topicInput).trim();
-    if (!target) return;
+  const showToast = useCallback((msg: string) => {
+    setCopyFeedback(msg);
+    setTimeout(() => setCopyFeedback(null), 2000);
+  }, []);
 
-    if (activeTopic && activeTopic !== target) {
-      mqttService.unsubscribeTopic(activeTopic);
-      mqttService.unsubscribeTopic(`${activeTopic}/#`);
-      setMessages([]);
-    }
+  const handleSubscribe = useCallback(
+    (overrideTopic?: string) => {
+      const target = (overrideTopic || topicInput).trim();
+      if (!target) return;
 
-    mqttService.subscribeTopic(target, qosInput);
-    setActiveTopic(target);
-    activeTopicRef.current = target;
-    setIsSubscribed(true);
+      if (activeTopic && activeTopic !== target) {
+        mqttService.unsubscribeTopic(activeTopic);
+        mqttService.unsubscribeTopic(`${activeTopic}/#`);
+        setMessages([]);
+        setLatestRawPayload(null);
+        setLastReceivedTimestamp(null);
+        setLastReceivedAtMs(null);
+        setTotalMessagesCount(0);
+      }
 
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('panorama_mqtt_selected_device', target);
-      localStorage.setItem('panorama_mqtt_target_topic', target);
-    }
+      mqttService.subscribeTopic(target, qosInput);
+      setActiveTopic(target);
+      activeTopicRef.current = target;
+      setIsSubscribed(true);
+      setBrokerDiag(mqttService.getDiagnostics());
 
-    setCopyFeedback(`Subscribed: ${target}`);
-    setTimeout(() => setCopyFeedback(null), 1800);
-  }, [topicInput, qosInput, activeTopic]);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('panorama_mqtt_selected_device', target);
+        localStorage.setItem('panorama_mqtt_target_topic', target);
+      }
 
-  // Handle explicit Unsubscribe action
+      showToast(`Subscribed: ${target}`);
+    },
+    [topicInput, qosInput, activeTopic, showToast]
+  );
+
   const handleUnsubscribe = useCallback(() => {
     if (!activeTopic) return;
     mqttService.unsubscribeTopic(activeTopic);
     mqttService.unsubscribeTopic(`${activeTopic}/#`);
     setIsSubscribed(false);
-    setCopyFeedback(`Unsubscribed: ${activeTopic}`);
-    setTimeout(() => setCopyFeedback(null), 1800);
-  }, [activeTopic]);
+    setBrokerDiag(mqttService.getDiagnostics());
+    showToast(`Unsubscribed: ${activeTopic}`);
+  }, [activeTopic, showToast]);
 
-  // Handle Quick Select change
-  const handleQuickSelectChange = useCallback((newUid: string) => {
-    const cleanUid = newUid.trim();
-    if (!cleanUid) return;
-    setTopicInput(cleanUid);
-    handleSubscribe(cleanUid);
-  }, [handleSubscribe]);
+  const handleQuickSelectChange = useCallback(
+    (newUid: string) => {
+      const cleanUid = newUid.trim();
+      if (!cleanUid) return;
+      setTopicInput(cleanUid);
+      handleSubscribe(cleanUid);
+    },
+    [handleSubscribe]
+  );
 
-  // Terminal Controls
   const handleClearConsole = useCallback(() => {
     setMessages([]);
-    setCopyFeedback('Console cleared');
-    setTimeout(() => setCopyFeedback(null), 1500);
-  }, []);
+    showToast('Console cleared');
+  }, [showToast]);
 
-  const handleTogglePause = useCallback(() => {
-    setIsPaused((prev) => !prev);
-  }, []);
+  const handleTogglePause = useCallback(() => setIsPaused((prev) => !prev), []);
 
   const handleToggleAutoScroll = useCallback(() => {
     setAutoScroll((prev) => {
       const next = !prev;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('panorama_mqtt_autoscroll', String(next));
-      }
+      if (typeof window !== 'undefined') localStorage.setItem('panorama_mqtt_autoscroll', String(next));
       return next;
     });
   }, []);
@@ -528,9 +718,7 @@ export const MqttMonitorScreen: React.FC = () => {
   const handleToggleTimestamps = useCallback(() => {
     setShowTimestamps((prev) => {
       const next = !prev;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('panorama_mqtt_show_timestamps', String(next));
-      }
+      if (typeof window !== 'undefined') localStorage.setItem('panorama_mqtt_show_timestamps', String(next));
       return next;
     });
   }, []);
@@ -538,74 +726,119 @@ export const MqttMonitorScreen: React.FC = () => {
   const handleToggleFormatMode = useCallback(() => {
     setFormatMode((prev) => {
       const next = prev === 'pretty' ? 'raw' : 'pretty';
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('panorama_mqtt_format_mode', next);
-      }
+      if (typeof window !== 'undefined') localStorage.setItem('panorama_mqtt_format_mode', next);
       return next;
     });
   }, []);
 
-  // Card Expand / Collapse Toggle
   const toggleCollapse = useCallback((id: string) => {
     setCollapsedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }, []);
 
-  // Copy helpers
-  const handleCopy = useCallback((text: string, label: string) => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(() => {
-        setCopyFeedback(label);
-        setTimeout(() => setCopyFeedback(null), 1800);
-      });
-    }
-  }, []);
+  const handleCopy = useCallback(
+    (text: string, label: string) => {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(() => showToast(label));
+      }
+    },
+    [showToast]
+  );
+
+  const handleDownloadLogs = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const exportObj = {
+      exportedAt: new Date().toISOString(),
+      deviceUid: activeTopic,
+      broker: {
+        host: brokerDiag.host,
+        port: brokerDiag.port,
+        protocol: brokerDiag.protocol,
+        mqttVersion: brokerDiag.mqttVersion,
+      },
+      messageCount: messages.length,
+      messages: messages.map((m) => ({
+        seq: m.seq,
+        topic: m.topic,
+        receivedAt: m.receivedAtFormatted,
+        qos: m.qos,
+        payloadBytes: m.payloadSize,
+        payload: m.rawParsedJson,
+      })),
+    };
+    const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `panorama-raw-telemetry-${activeTopic}-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`Exported ${messages.length} frame(s)`);
+  }, [activeTopic, brokerDiag, messages, showToast]);
+
+  const handleSaveMetadata = useCallback(
+    async (overrides: DeviceHardwareOverrides) => {
+      const saved = saveLocalHardwareOverrides(activeTopic, overrides);
+      setMetadataOverrides(saved);
+      setShowMetadataModal(false);
+      const synced = await persistBackendDeviceMetadata(activeTopic, saved, brokerDiag, activeTopic);
+      showToast(synced ? 'Metadata saved & synced to backend' : 'Metadata saved locally');
+    },
+    [activeTopic, brokerDiag, showToast]
+  );
+
+  // Filter displayed messages by search query (non-destructive)
+  const filteredMessages = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return messages;
+    return messages.filter(
+      (m) =>
+        m.rawJsonString.toLowerCase().includes(q) ||
+        m.topic.toLowerCase().includes(q) ||
+        m.receivedAtFormatted.toLowerCase().includes(q) ||
+        String(m.seq).includes(q)
+    );
+  }, [messages, searchQuery]);
+
+  const isBrokerConnected = brokerDiag.mqttSessionConnected || mqttBrokerStatus === 'CONNECTED';
 
   return (
     <div
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
+        gap: '10px',
         width: '100%',
         maxWidth: '100%',
-        height: 'calc(100vh - 146px)',
-        maxHeight: 'calc(100vh - 146px)',
-        minHeight: '520px',
         fontFamily: typography.fontFamily,
         boxSizing: 'border-box',
-        overflow: 'hidden',
+        paddingBottom: '16px',
       }}
     >
-      {/* 1. COMPACT MQTT CONNECTION STATUS SECTION */}
+      {/* TOP SCADA CONSOLE HEADER */}
       <div
         style={{
           backgroundColor: '#FFFFFF',
           borderRadius: '6px',
           border: '1px solid #E2E8F0',
-          padding: '8px 14px',
+          padding: '10px 14px',
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '8px',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-          flexShrink: 0,
+          gap: '10px',
+          boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
         }}
       >
-        {/* Title & Broker */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
             style={{
-              width: '28px',
-              height: '28px',
+              width: '32px',
+              height: '32px',
               borderRadius: '6px',
               backgroundColor: '#0F172A',
               color: '#38BDF8',
@@ -615,423 +848,52 @@ export const MqttMonitorScreen: React.FC = () => {
               flexShrink: 0,
             }}
           >
-            <Terminal size={16} />
+            <Terminal size={17} />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <h1 style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.2px', margin: 0 }}>
-                RAW MQTT DATA MONITOR
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <h1 style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A', letterSpacing: '0.2px', margin: 0 }}>
+                PANORAMA HARDWARE &amp; COMMUNICATION DIAGNOSTICS CONSOLE
               </h1>
-              <span
-                style={{
-                  fontSize: '9px',
-                  fontWeight: 700,
-                  padding: '1px 6px',
-                  borderRadius: '10px',
-                  backgroundColor: '#F1F5F9',
-                  color: '#475569',
-                  border: '1px solid #CBD5E1',
-                }}
-              >
-                MQTT.fx Parity
-              </span>
+              <StatusPill label="SCADA Diagnostics" tone="info" />
             </div>
             <div style={{ fontSize: '11px', color: '#64748B' }}>
-              Broker: <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#334155' }}>broker.hivemq.com:8884</span> (WSS)
+              Broker:{' '}
+              <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#334155' }}>
+                {brokerDiag.host}:{brokerDiag.port}
+              </span>{' '}
+              ({brokerDiag.useSSL ? 'WSS / TLS' : 'WS'}) &bull; Topic:{' '}
+              <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#0284C7' }}>{activeTopic}</span>
             </div>
           </div>
         </div>
 
-        {/* Status Metrics Badges */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
-          {/* Connection Status */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              backgroundColor: isBrokerConnected ? '#F0FDF4' : '#FEF2F2',
-              border: `1px solid ${isBrokerConnected ? '#BBF7D0' : '#FECACA'}`,
-            }}
-          >
-            <span
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                backgroundColor: isBrokerConnected ? '#16A34A' : '#DC2626',
-                boxShadow: isBrokerConnected ? '0 0 0 2px rgba(22, 163, 74, 0.2)' : 'none',
-              }}
-            />
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                color: isBrokerConnected ? '#15803D' : '#B91C1C',
-              }}
-            >
-              {isBrokerConnected ? 'CONNECTED' : 'DISCONNECTED'}
-            </span>
-          </div>
-
-          {/* Active Topic */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              backgroundColor: isSubscribed ? '#EFF6FF' : '#F8FAFC',
-              border: `1px solid ${isSubscribed ? '#BFDBFE' : '#CBD5E1'}`,
-            }}
-          >
-            <Cpu size={12} color={isSubscribed ? '#2563EB' : '#64748B'} />
-            <span style={{ fontSize: '11px', color: '#475569', fontWeight: 600 }}>Topic:</span>
-            <span
-              style={{
-                fontSize: '11px',
-                fontFamily: 'monospace',
-                fontWeight: 700,
-                color: isSubscribed ? '#1D4ED8' : '#64748B',
-              }}
-            >
-              {activeTopic}
-            </span>
-          </div>
-
-          {/* Stream Status */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              backgroundColor: isPaused ? '#FFFBEB' : '#F0FDF4',
-              border: `1px solid ${isPaused ? '#FDE68A' : '#BBF7D0'}`,
-            }}
-          >
-            <span
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                backgroundColor: isPaused ? '#D97706' : '#16A34A',
-              }}
-            />
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                color: isPaused ? '#B45309' : '#15803D',
-              }}
-            >
-              {isPaused ? 'PAUSED' : 'LIVE'}
-            </span>
-          </div>
-
-          {/* Total Messages Count */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              backgroundColor: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-            }}
-          >
-            <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>Total Msgs:</span>
-            <span style={{ fontSize: '11px', fontWeight: 800, color: '#2563EB' }}>
-              {totalMessagesCount}
-            </span>
-          </div>
-
-          {/* Last Received Timestamp */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              backgroundColor: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-            }}
-          >
-            <Clock size={11} color="#64748B" />
-            <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 600 }}>Last:</span>
-            <span style={{ fontSize: '11px', fontFamily: 'monospace', fontWeight: 700, color: '#0F172A' }}>
-              {lastReceivedTimestamp ? lastReceivedTimestamp.split(' ')[1] || lastReceivedTimestamp : 'Waiting...'}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. COMPACT, PROPERLY ALIGNED MQTT CONTROL TOOLBAR */}
-      <div
-        style={{
-          backgroundColor: '#FFFFFF',
-          borderRadius: '6px',
-          border: '1px solid #E2E8F0',
-          padding: '6px 12px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '8px',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-          flexShrink: 0,
-        }}
-      >
-        {/* Left side: Topic Input, Presets, QoS Selector, Subscribe & Unsubscribe */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', flex: '1 1 auto' }}>
-          {/* Topic Input */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: '#475569' }}>Topic:</span>
-            <input
-              type="text"
-              value={topicInput}
-              onChange={(e) => setTopicInput(e.target.value)}
-              placeholder="MQTT Topic..."
-              style={{
-                width: '180px',
-                padding: '5px 8px',
-                fontFamily: 'monospace',
-                fontSize: '11px',
-                fontWeight: 700,
-                color: '#0F172A',
-                backgroundColor: '#F8FAFC',
-                border: '1px solid #CBD5E1',
-                borderRadius: '4px',
-                outline: 'none',
-              }}
-            />
-          </div>
-
-          {/* Quick Select Preset Dropdown */}
-          <select
-            value={availableDevices.some((d) => d.uid === topicInput) ? topicInput : ''}
-            onChange={(e) => {
-              if (e.target.value) handleQuickSelectChange(e.target.value);
-            }}
-            title="Quick-select registered device"
-            style={{
-              padding: '5px 6px',
-              fontSize: '11px',
-              color: '#475569',
-              backgroundColor: '#F1F5F9',
-              border: '1px solid #CBD5E1',
-              borderRadius: '4px',
-              outline: 'none',
-              cursor: 'pointer',
-              maxWidth: '150px',
-            }}
-          >
-            <option value="" disabled>Device Presets...</option>
-            {availableDevices.map((d) => (
-              <option key={d.uid} value={d.uid}>
-                {d.label}
-              </option>
-            ))}
-          </select>
-
-          {/* QoS Selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: '#475569' }}>QoS:</span>
-            <select
-              value={qosInput}
-              onChange={(e) => setQosInput(Number(e.target.value))}
-              style={{
-                padding: '5px 6px',
-                fontSize: '11px',
-                fontWeight: 700,
-                color: '#0F172A',
-                backgroundColor: '#F8FAFC',
-                border: '1px solid #CBD5E1',
-                borderRadius: '4px',
-                outline: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              <option value={0}>QoS 0</option>
-              <option value={1}>QoS 1</option>
-              <option value={2}>QoS 2</option>
-            </select>
-          </div>
-
-          {/* Subscribe Button */}
-          <button
-            onClick={() => handleSubscribe()}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '5px 10px',
-              backgroundColor: isSubscribed && activeTopic === topicInput.trim() ? '#15803D' : '#2563EB',
-              color: '#FFFFFF',
-              border: 'none',
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            <Radio size={12} />
-            {isSubscribed && activeTopic === topicInput.trim() ? 'Subscribed' : 'Subscribe'}
-          </button>
-
-          {/* Unsubscribe Button */}
-          <button
-            onClick={handleUnsubscribe}
-            disabled={!isSubscribed}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '5px 10px',
-              backgroundColor: '#FFFFFF',
-              color: isSubscribed ? '#DC2626' : '#94A3B8',
-              border: `1px solid ${isSubscribed ? '#FECACA' : '#E2E8F0'}`,
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 600,
-              cursor: isSubscribed ? 'pointer' : 'not-allowed',
-            }}
-          >
-            <WifiOff size={12} />
-            Unsubscribe
-          </button>
-        </div>
-
-        {/* Right side: Stream Controls, Toggles, and Formatter */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
-          {/* Pause / Resume Button */}
-          <button
-            onClick={handleTogglePause}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '5px 9px',
-              backgroundColor: isPaused ? '#ECFDF5' : '#FFFBEB',
-              color: isPaused ? '#059669' : '#D97706',
-              border: `1px solid ${isPaused ? '#A7F3D0' : '#FDE68A'}`,
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            {isPaused ? <Play size={11} /> : <Pause size={11} />}
-            {isPaused ? 'Resume' : 'Pause'}
-          </button>
-
-          {/* Clear Console Button */}
-          <button
-            onClick={handleClearConsole}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '5px 9px',
-              backgroundColor: '#FFFFFF',
-              color: '#64748B',
-              border: '1px solid #CBD5E1',
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            <Trash2 size={11} />
-            Clear Console
-          </button>
-
-          {/* Show Timestamps Toggle */}
-          <button
-            onClick={handleToggleTimestamps}
-            title={showTimestamps ? 'Hide reception timestamps' : 'Show reception timestamps'}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '5px 9px',
-              backgroundColor: showTimestamps ? '#EFF6FF' : '#F8FAFC',
-              color: showTimestamps ? '#1D4ED8' : '#64748B',
-              border: `1px solid ${showTimestamps ? '#BFDBFE' : '#CBD5E1'}`,
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            <Clock size={11} />
-            {showTimestamps ? 'Hide Timestamps' : 'Show Timestamps'}
-          </button>
-
-          {/* Auto Scroll Toggle */}
-          <button
-            onClick={handleToggleAutoScroll}
-            title={autoScroll ? 'Disable auto-scroll' : 'Enable auto-scroll'}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '5px 9px',
-              backgroundColor: autoScroll ? '#EFF6FF' : '#F8FAFC',
-              color: autoScroll ? '#1D4ED8' : '#64748B',
-              border: `1px solid ${autoScroll ? '#BFDBFE' : '#CBD5E1'}`,
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            <ArrowDown size={11} />
-            {autoScroll ? 'Auto Scroll' : 'Manual Scroll'}
-          </button>
-
-          {/* Pretty JSON / Raw String Toggle */}
-          <button
-            onClick={handleToggleFormatMode}
-            title="Switch between syntax-highlighted JSON and raw string"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '5px 9px',
-              backgroundColor: formatMode === 'pretty' ? '#F0FDF4' : '#F8FAFC',
-              color: formatMode === 'pretty' ? '#15803D' : '#475569',
-              border: `1px solid ${formatMode === 'pretty' ? '#BBF7D0' : '#CBD5E1'}`,
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            {formatMode === 'pretty' ? <Code2 size={11} /> : <AlignLeft size={11} />}
-            {formatMode === 'pretty' ? 'Pretty JSON' : 'Raw String'}
-          </button>
-
-          {/* Toast / Feedback Banner */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <StatusPill
+            label={isBrokerConnected ? 'MQTT CONNECTED' : 'MQTT DISCONNECTED'}
+            tone={isBrokerConnected ? 'success' : 'danger'}
+          />
+          <StatusPill
+            label={isTopicConfirmed ? 'SUBSCRIBED' : 'UNSUBSCRIBED'}
+            tone={isTopicConfirmed ? 'info' : 'warning'}
+          />
+          <StatusPill
+            label={isPaused ? 'STREAM PAUSED' : 'STREAM LIVE'}
+            tone={isPaused ? 'warning' : 'success'}
+          />
           {copyFeedback && (
             <span
               style={{
                 fontSize: '10px',
                 fontWeight: 700,
-                color: '#16A34A',
+                color: '#15803D',
                 backgroundColor: '#DCFCE7',
                 padding: '3px 8px',
                 borderRadius: '4px',
                 border: '1px solid #86EFAC',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '3px',
+                gap: '4px',
               }}
             >
               <Check size={11} /> {copyFeedback}
@@ -1040,71 +902,518 @@ export const MqttMonitorScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. PRIMARY TERMINAL CONTAINER */}
+      {/* SECTION 9: DEVICE HEALTH SUMMARY STRIP */}
+      <DeviceHealthSummaryBar
+        brokerDiag={brokerDiag}
+        isTopicConfirmed={isTopicConfirmed}
+        liveMetrics={liveMetrics}
+        deviceOnline={managedDevice ? managedDevice.isOnline : apiDevice ? Boolean(apiDevice.isOnline) : null}
+      />
+
+      {/* ROW 1: DEVICE IDENTITY | MQTT CONNECTION & SUBSCRIPTION CONTROLS | LIVE TELEMETRY STATUS */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: '10px' }}>
+        <DeviceIdentityCard
+          metadata={deviceMetadata}
+          managedDevice={managedDevice}
+          apiDevice={apiDevice}
+          liveMetrics={liveMetrics}
+          activeTopic={activeTopic}
+          onCopyUid={() => handleCopy(activeTopic, `UID copied: ${activeTopic}`)}
+          onEditMetadata={() => setShowMetadataModal(true)}
+        />
+
+        {/* MQTT Subscription & Topic Controls Card */}
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: '6px',
+            padding: '10px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            boxShadow: '0 1px 2px rgba(15,23,42,0.03)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <SlidersHorizontal size={14} color="#0284C7" />
+              <span style={{ fontSize: '12px', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase' }}>
+                MQTT Subscription Control
+              </span>
+            </div>
+            <StatusPill
+              label={brokerDiag.websocketConnected ? 'WS UP' : 'WS DOWN'}
+              tone={brokerDiag.websocketConnected ? 'success' : 'danger'}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
+                Select Registered Device / UID
+              </label>
+              <select
+                value={availableDevices.some((d) => d.uid === topicInput) ? topicInput : ''}
+                onChange={(e) => {
+                  if (e.target.value) handleQuickSelectChange(e.target.value);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  fontSize: '11px',
+                  color: '#0F172A',
+                  backgroundColor: '#F8FAFC',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="" disabled>
+                  Select device preset...
+                </option>
+                {availableDevices.map((d) => (
+                  <option key={d.uid} value={d.uid}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 160px' }}>
+                <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
+                  MQTT Topic
+                </label>
+                <input
+                  type="text"
+                  value={topicInput}
+                  onChange={(e) => setTopicInput(e.target.value)}
+                  placeholder="Device UID / Topic..."
+                  style={{
+                    width: '100%',
+                    padding: '6px 8px',
+                    fontFamily: 'monospace',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    color: '#0F172A',
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '4px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              <div style={{ width: '82px' }}>
+                <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
+                  QoS
+                </label>
+                <select
+                  value={qosInput}
+                  onChange={(e) => setQosInput(Number(e.target.value))}
+                  style={{
+                    width: '100%',
+                    padding: '6px 6px',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    color: '#0F172A',
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '4px',
+                  }}
+                >
+                  <option value={0}>QoS 0</option>
+                  <option value={1}>QoS 1</option>
+                  <option value={2}>QoS 2</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
+              <button
+                type="button"
+                onClick={() => handleSubscribe()}
+                style={{
+                  flex: 1,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '5px',
+                  padding: '6px 10px',
+                  backgroundColor: isSubscribed && activeTopic === topicInput.trim() ? '#15803D' : '#2563EB',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                <Radio size={12} />
+                {isSubscribed && activeTopic === topicInput.trim() ? 'Subscribed' : 'Subscribe'}
+              </button>
+              <button
+                type="button"
+                onClick={handleUnsubscribe}
+                disabled={!isSubscribed}
+                style={{
+                  flex: 1,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '5px',
+                  padding: '6px 10px',
+                  backgroundColor: '#FFFFFF',
+                  color: isSubscribed ? '#DC2626' : '#94A3B8',
+                  border: `1px solid ${isSubscribed ? '#FECACA' : '#E2E8F0'}`,
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  cursor: isSubscribed ? 'pointer' : 'not-allowed',
+                }}
+              >
+                <WifiOff size={12} />
+                Unsubscribe
+              </button>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 'auto', paddingTop: '4px' }}>
+            <SpecRow label="Active Broker" value={`${brokerDiag.host}:${brokerDiag.port}`} mono />
+            <SpecRow label="Protocol / Security" value={brokerDiag.transportSecurity} />
+            <SpecRow
+              label="Latency"
+              value={brokerDiag.connectionLatencyMs !== null ? `${brokerDiag.connectionLatencyMs} ms` : 'Not Measured'}
+              mono
+            />
+          </div>
+        </div>
+
+        {/* Live Telemetry Summary Card */}
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: '6px',
+            padding: '10px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px',
+            boxShadow: '0 1px 2px rgba(15,23,42,0.03)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Activity size={14} color="#0284C7" />
+              <span style={{ fontSize: '12px', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase' }}>
+                Telemetry Status
+              </span>
+            </div>
+            <StatusPill
+              label={liveMetrics.hasData ? 'RECEIVING' : 'NO DATA'}
+              tone={liveMetrics.hasData ? 'success' : 'neutral'}
+            />
+          </div>
+
+          <SpecRow label="Topic Messages Received" value={String(totalMessagesCount)} mono />
+          <SpecRow label="Buffered Frames" value={`${messages.length} / ${MAX_MESSAGE_BUFFER}`} mono />
+          <SpecRow label="Last Message Time" value={lastReceivedTimestamp || 'Waiting...'} mono />
+          <SpecRow label="Device Timestamp" value={liveMetrics.deviceTimestamp || 'No Data'} mono />
+          <SpecRow
+            label="Tank 1 Level"
+            value={
+              liveMetrics.waterLevelCm !== null
+                ? `${liveMetrics.waterLevelCm.toFixed(1)} cm (${liveMetrics.waterLevelPercent !== null ? liveMetrics.waterLevelPercent.toFixed(1) + '%' : '—'})`
+                : 'No Data'
+            }
+            mono
+          />
+          <SpecRow
+            label="Battery"
+            value={liveMetrics.battery !== null ? `${liveMetrics.battery.toFixed(1)}` : 'No Data'}
+            mono
+          />
+          <SpecRow
+            label="Temperature"
+            value={liveMetrics.temperature !== null ? `${liveMetrics.temperature.toFixed(1)} °C` : 'No Data'}
+            mono
+          />
+          <SpecRow
+            label="Payload Fields Count"
+            value={liveMetrics.rawPayload ? `${Object.keys(liveMetrics.rawPayload).length} keys` : '0'}
+            mono
+          />
+        </div>
+      </div>
+
+      {/* ROW 2: HARDWARE OVERVIEW & PERIPHERALS | COMMUNICATION INTERFACES */}
+      <HardwareAndCommsRow metadata={deviceMetadata} liveMetrics={liveMetrics} />
+
+      {/* ROW 3: SENSOR DIAGNOSTICS | FIRMWARE CONFIGURATION */}
+      <SensorsAndFirmwareRow metadata={deviceMetadata} liveMetrics={liveMetrics} />
+
+      {/* ROW 4: MQTT BROKER DETAILS | CONNECTION DIAGNOSTICS */}
+      <MqttBrokerDetailsRow
+        brokerDiag={brokerDiag}
+        activeTopic={activeTopic}
+        activeQos={qosInput}
+        isTopicConfirmed={isTopicConfirmed}
+        topicMessagesCount={totalMessagesCount}
+        lastReceivedFormatted={lastReceivedTimestamp}
+        nowTick={nowTick}
+      />
+
+      {/* ROW 5: COMMUNICATION ARCHITECTURE */}
+      <CommunicationArchitecturePanel brokerDiag={brokerDiag} activeTopic={activeTopic} />
+
+      {/* ROW 6: LIVE TELEMETRY INSPECTOR (SECTION 6) */}
       <div
         style={{
-          flex: 1,
-          minHeight: 0,
           backgroundColor: '#0D1117',
           borderRadius: '6px',
           border: '1px solid #30363D',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
+          minHeight: '440px',
+          maxHeight: '640px',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.16)',
         }}
       >
-        {/* Terminal Header Bar */}
+        {/* Terminal Header & Mode/Action Toolbar */}
         <div
           style={{
             backgroundColor: '#161B22',
             borderBottom: '1px solid #30363D',
-            padding: '7px 12px',
+            padding: '8px 12px',
             display: 'flex',
+            flexWrap: 'wrap',
             alignItems: 'center',
             justifyContent: 'space-between',
-            fontFamily: 'monospace',
-            fontSize: '11px',
-            color: '#8B949E',
+            gap: '8px',
             flexShrink: 0,
           }}
         >
-          {/* Traffic light dots and prompt */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+          {/* Left: Prompt + Mode Toggle (Raw JSON vs Parsed Telemetry) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', gap: '5px', flexShrink: 0 }}>
               <span style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#FF5F56', display: 'inline-block' }} />
               <span style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#FFBD2E', display: 'inline-block' }} />
               <span style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#27C93F', display: 'inline-block' }} />
             </div>
-            <span
-              style={{
-                color: '#C9D1D9',
-                fontWeight: 600,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              scada@panorama: mqtt sub -h broker.hivemq.com -p 8884 -t {activeTopic}
+            <span style={{ fontFamily: 'monospace', fontSize: '11px', color: '#C9D1D9', fontWeight: 700 }}>
+              LIVE TELEMETRY INSPECTOR &bull; {activeTopic}
             </span>
+
+            {/* Mode A / Mode B Switcher */}
+            <div style={{ display: 'inline-flex', borderRadius: '4px', overflow: 'hidden', border: '1px solid #30363D' }}>
+              <button
+                type="button"
+                onClick={() => setInspectorMode('raw')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '3px 8px',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: inspectorMode === 'raw' ? '#2563EB' : '#21262D',
+                  color: inspectorMode === 'raw' ? '#FFFFFF' : '#8B949E',
+                }}
+              >
+                <Code2 size={11} />
+                Raw JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => setInspectorMode('parsed')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '3px 8px',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: inspectorMode === 'parsed' ? '#2563EB' : '#21262D',
+                  color: inspectorMode === 'parsed' ? '#FFFFFF' : '#8B949E',
+                }}
+              >
+                <Table2 size={11} />
+                Parsed Telemetry
+              </button>
+            </div>
           </div>
 
-          {/* Buffer, Mode & Live Indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-            <span style={{ color: '#58A6FF', fontWeight: 600 }}>{formatMode.toUpperCase()}</span>
-            <span>Buffer: {messages.length}/{MAX_MESSAGE_BUFFER}</span>
-            <span style={{ color: isPaused ? '#D97706' : '#27C93F', fontWeight: 700 }}>
-              {isPaused ? '⏸ PAUSED' : '● LIVE'}
+          {/* Right: Search + Controls */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
+            {/* Search within messages */}
+            <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+              <Search size={11} color="#8B949E" style={{ position: 'absolute', left: '7px', pointerEvents: 'none' }} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search messages..."
+                style={{
+                  padding: '3px 8px 3px 23px',
+                  fontSize: '10px',
+                  fontFamily: 'monospace',
+                  backgroundColor: '#0D1117',
+                  color: '#C9D1D9',
+                  border: '1px solid #30363D',
+                  borderRadius: '4px',
+                  width: '145px',
+                  outline: 'none',
+                }}
+              />
+            </div>
+
+            {/* Pretty / Compact Format Toggle (for Raw JSON mode) */}
+            {inspectorMode === 'raw' && (
+              <button
+                type="button"
+                onClick={handleToggleFormatMode}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '3px 8px',
+                  backgroundColor: '#21262D',
+                  color: formatMode === 'pretty' ? '#7EE787' : '#C9D1D9',
+                  border: '1px solid #30363D',
+                  borderRadius: '4px',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                {formatMode === 'pretty' ? <Code2 size={11} /> : <AlignLeft size={11} />}
+                {formatMode === 'pretty' ? 'Pretty' : 'Compact'}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleTogglePause}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 8px',
+                backgroundColor: isPaused ? '#064E3B' : '#451A03',
+                color: isPaused ? '#6EE7B7' : '#FCD34D',
+                border: `1px solid ${isPaused ? '#059669' : '#B45309'}`,
+                borderRadius: '4px',
+                fontSize: '10px',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              {isPaused ? <Play size={10} /> : <Pause size={10} />}
+              {isPaused ? 'Resume' : 'Pause'}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleToggleAutoScroll}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 8px',
+                backgroundColor: autoScroll ? '#1E3A5F' : '#21262D',
+                color: autoScroll ? '#79C0FF' : '#8B949E',
+                border: '1px solid #30363D',
+                borderRadius: '4px',
+                fontSize: '10px',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              <ArrowDown size={10} />
+              {autoScroll ? 'Auto Scroll' : 'Manual'}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleToggleTimestamps}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 8px',
+                backgroundColor: showTimestamps ? '#1E3A5F' : '#21262D',
+                color: showTimestamps ? '#79C0FF' : '#8B949E',
+                border: '1px solid #30363D',
+                borderRadius: '4px',
+                fontSize: '10px',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              <Clock size={10} />
+              Timestamps
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDownloadLogs}
+              disabled={messages.length === 0}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 8px',
+                backgroundColor: '#21262D',
+                color: messages.length > 0 ? '#C9D1D9' : '#484F58',
+                border: '1px solid #30363D',
+                borderRadius: '4px',
+                fontSize: '10px',
+                fontWeight: 700,
+                cursor: messages.length > 0 ? 'pointer' : 'not-allowed',
+              }}
+            >
+              <Download size={10} />
+              Download
+            </button>
+
+            <button
+              type="button"
+              onClick={handleClearConsole}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 8px',
+                backgroundColor: '#21262D',
+                color: '#F85149',
+                border: '1px solid #30363D',
+                borderRadius: '4px',
+                fontSize: '10px',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              <Trash2 size={10} />
+              Clear
+            </button>
+
+            <span style={{ fontFamily: 'monospace', fontSize: '10px', color: '#8B949E' }}>
+              {filteredMessages.length}/{messages.length}
             </span>
           </div>
         </div>
 
-        {/* Terminal Message Stream Scroll Area */}
+        {/* Stream Body */}
         <div
           ref={terminalStreamRef}
           style={{
             flex: 1,
-            minHeight: 0,
+            minHeight: '360px',
             overflowY: 'auto',
             padding: '10px 14px',
             display: 'flex',
@@ -1113,7 +1422,7 @@ export const MqttMonitorScreen: React.FC = () => {
             backgroundColor: '#0D1117',
           }}
         >
-          {messages.length === 0 ? (
+          {filteredMessages.length === 0 ? (
             <div
               style={{
                 display: 'flex',
@@ -1121,7 +1430,7 @@ export const MqttMonitorScreen: React.FC = () => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 height: '100%',
-                minHeight: '260px',
+                minHeight: '320px',
                 gap: '10px',
                 color: '#8B949E',
                 textAlign: 'center',
@@ -1142,14 +1451,18 @@ export const MqttMonitorScreen: React.FC = () => {
                 <Radio size={20} />
               </div>
               <div style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: 700, color: '#C9D1D9' }}>
-                Waiting for live MQTT telemetry on topic: {activeTopic}
+                {messages.length > 0 && searchQuery
+                  ? `No frames match search "${searchQuery}"`
+                  : `Waiting for live MQTT telemetry on topic: ${activeTopic}`}
               </div>
-              <div style={{ fontSize: '11px', maxWidth: '480px', lineHeight: 1.5, color: '#8B949E' }}>
-                Directly connected to HiveMQ broker over WebSocket TLS. When device {activeTopic} broadcasts its hardware telemetry packet, the exact 15-field JSON payload will stream here instantaneously.
+              <div style={{ fontSize: '11px', maxWidth: '520px', lineHeight: 1.5, color: '#8B949E' }}>
+                {isBrokerConnected
+                  ? `MQTT session active on ${brokerDiag.host}:${brokerDiag.port}. Incoming JSON frames published to topic "${activeTopic}" will appear here verbatim in Raw JSON and Parsed Telemetry views.`
+                  : `MQTT broker is currently disconnected. Automatic reconnection is active; live telemetry will stream once connected.`}
               </div>
             </div>
           ) : (
-            messages.map((frame, index) => {
+            filteredMessages.map((frame) => {
               const isCollapsed = collapsedIds.has(frame.id);
 
               return (
@@ -1162,10 +1475,9 @@ export const MqttMonitorScreen: React.FC = () => {
                     overflow: 'hidden',
                     display: 'flex',
                     flexDirection: 'column',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
                   }}
                 >
-                  {/* Unified Message Header Bar */}
+                  {/* Frame Header */}
                   <div
                     style={{
                       display: 'flex',
@@ -1180,106 +1492,37 @@ export const MqttMonitorScreen: React.FC = () => {
                       gap: '6px',
                     }}
                   >
-                    {/* Left: Sequence, Topic, QoS, Payload Size & Optional Timestamp */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
-                      <span
-                        style={{
-                          backgroundColor: '#1F2937',
-                          color: '#58A6FF',
-                          padding: '1px 6px',
-                          borderRadius: '3px',
-                          fontWeight: 800,
-                          fontSize: '10px',
-                          border: '1px solid #374151',
-                        }}
-                      >
+                      <span style={{ backgroundColor: '#1F2937', color: '#58A6FF', padding: '1px 6px', borderRadius: '3px', fontWeight: 800, fontSize: '10px', border: '1px solid #374151' }}>
                         #{frame.seq}
                       </span>
-                      <span
-                        style={{
-                          backgroundColor: '#0F172A',
-                          color: '#79C0FF',
-                          padding: '1px 7px',
-                          borderRadius: '3px',
-                          border: '1px solid #1E293B',
-                          fontWeight: 700,
-                          fontSize: '10px',
-                        }}
-                      >
+                      <span style={{ backgroundColor: '#0F172A', color: '#79C0FF', padding: '1px 7px', borderRadius: '3px', border: '1px solid #1E293B', fontWeight: 700, fontSize: '10px' }}>
                         {frame.topic}
                       </span>
-                      <span
-                        style={{
-                          color: '#8B949E',
-                          fontSize: '10px',
-                          backgroundColor: '#21262D',
-                          padding: '1px 5px',
-                          borderRadius: '3px',
-                        }}
-                      >
+                      <span style={{ color: '#8B949E', fontSize: '10px', backgroundColor: '#21262D', padding: '1px 5px', borderRadius: '3px' }}>
                         QoS {frame.qos}
                       </span>
-                      <span
-                        style={{
-                          color: '#8B949E',
-                          fontSize: '10px',
-                          backgroundColor: '#21262D',
-                          padding: '1px 5px',
-                          borderRadius: '3px',
-                        }}
-                      >
+                      <span style={{ color: '#8B949E', fontSize: '10px', backgroundColor: '#21262D', padding: '1px 5px', borderRadius: '3px' }}>
                         {frame.payloadSize} B
                       </span>
-
-                      {/* Reception Timestamp (when Timestamps enabled) */}
                       {showTimestamps && (
-                        <span
-                          style={{
-                            color: '#58A6FF',
-                            fontWeight: 700,
-                            fontSize: '10px',
-                            backgroundColor: '#1E293B',
-                            padding: '1px 6px',
-                            borderRadius: '3px',
-                            border: '1px solid #334155',
-                          }}
-                        >
-                          [{frame.receivedAtFormatted}] MQTT MESSAGE RECEIVED
+                        <span style={{ color: '#58A6FF', fontWeight: 700, fontSize: '10px', backgroundColor: '#1E293B', padding: '1px 6px', borderRadius: '3px', border: '1px solid #334155' }}>
+                          [{frame.receivedAtFormatted}]
                         </span>
                       )}
-
-                      {/* Device Internal Time */}
                       {frame.deviceTimestamp && (
                         <span style={{ color: '#8B949E', fontSize: '10px' }}>
                           Dev Time: &quot;{frame.deviceTimestamp}&quot;
                         </span>
                       )}
-
-                      {/* Collapsed state badge */}
-                      {isCollapsed && (
-                        <span
-                          style={{
-                            color: '#F59E0B',
-                            fontSize: '9px',
-                            fontWeight: 700,
-                            backgroundColor: '#2D2006',
-                            padding: '1px 5px',
-                            borderRadius: '3px',
-                          }}
-                        >
-                          [Collapsed]
-                        </span>
-                      )}
                     </div>
 
-                    {/* Right: Copy JSON, Copy Raw, and Expand/Collapse Chevron */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      {/* Copy Formatted JSON */}
                       <button
+                        type="button"
                         onClick={() => handleCopy(frame.rawJsonString, `JSON #${frame.seq} copied`)}
-                        title="Copy formatted 15-field JSON"
                         style={{
-                          display: 'flex',
+                          display: 'inline-flex',
                           alignItems: 'center',
                           gap: '3px',
                           padding: '2px 7px',
@@ -1295,13 +1538,11 @@ export const MqttMonitorScreen: React.FC = () => {
                         <Copy size={10} />
                         Copy JSON
                       </button>
-
-                      {/* Copy Raw Payload String */}
                       <button
+                        type="button"
                         onClick={() => handleCopy(frame.rawPayloadString, `Raw #${frame.seq} copied`)}
-                        title="Copy raw MQTT payload string"
                         style={{
-                          display: 'flex',
+                          display: 'inline-flex',
                           alignItems: 'center',
                           gap: '3px',
                           padding: '2px 7px',
@@ -1317,13 +1558,11 @@ export const MqttMonitorScreen: React.FC = () => {
                         <Copy size={10} />
                         Copy Raw
                       </button>
-
-                      {/* Expand / Collapse Chevron */}
                       <button
+                        type="button"
                         onClick={() => toggleCollapse(frame.id)}
-                        title={isCollapsed ? 'Expand payload' : 'Collapse payload'}
                         style={{
-                          display: 'flex',
+                          display: 'inline-flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           width: '20px',
@@ -1341,25 +1580,24 @@ export const MqttMonitorScreen: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Message Body (When NOT collapsed) */}
+                  {/* Frame Body */}
                   {!isCollapsed && (
-                    <div
-                      style={{
-                        padding: '10px 14px',
-                        overflowX: 'auto',
-                        backgroundColor: '#0D1117',
-                      }}
-                    >
-                      {formatMode === 'pretty' ? (
+                    <div style={{ padding: '10px 14px', overflowX: 'auto', backgroundColor: '#0D1117' }}>
+                      {inspectorMode === 'parsed' ? (
+                        <ParsedTelemetryView
+                          data={frame.rawParsedJson}
+                          onCopyValue={(key, val) => handleCopy(String(val), `Copied ${key}`)}
+                        />
+                      ) : formatMode === 'pretty' ? (
                         <JsonSyntaxViewer
-                          data={frame.payload}
+                          data={frame.rawParsedJson}
                           onCopyValue={(key, val) => handleCopy(String(val), `Copied ${key}`)}
                         />
                       ) : (
                         <pre
                           style={{
                             margin: 0,
-                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
                             fontSize: '11px',
                             lineHeight: '17px',
                             color: '#7EE787',
@@ -1378,6 +1616,17 @@ export const MqttMonitorScreen: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* ADMIN HARDWARE METADATA MODAL */}
+      {showMetadataModal && (
+        <DeviceMetadataModal
+          uid={activeTopic}
+          initial={metadataOverrides}
+          deviceName={deviceMetadata.deviceName}
+          onSave={handleSaveMetadata}
+          onClose={() => setShowMetadataModal(false)}
+        />
+      )}
     </div>
   );
 };

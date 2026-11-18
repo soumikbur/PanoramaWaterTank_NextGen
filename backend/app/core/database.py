@@ -122,6 +122,7 @@ def _sync_schema_migration(sync_conn) -> None:
                 ("mqtt_topic", "VARCHAR(128)"),
                 ("tank_assignment", "VARCHAR(32) DEFAULT 'BOTH'"),
                 ("description", "VARCHAR(255)"),
+                ("hardware_metadata", "TEXT"),
                 ("status", "VARCHAR(32) DEFAULT 'AVAILABLE'"),
                 ("train_id", "VARCHAR(36)"),
                 ("is_deleted", "BOOLEAN DEFAULT 0"),

@@ -1,5 +1,5 @@
 """Device model representing an edge monitoring node on a railway coach."""
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship, foreign
 from app.core.database import Base
 from app.models.base import generate_uuid, utc_now
@@ -22,6 +22,7 @@ class Device(Base):
     mqtt_topic = Column(String(128), nullable=True)
     tank_assignment = Column(String(32), default="BOTH")
     description = Column(String(255), nullable=True)
+    hardware_metadata = Column(Text, nullable=True)
     status = Column(String(32), default="AVAILABLE")
     is_online = Column(Boolean, nullable=False, default=False, index=True)
     last_seen_at = Column(DateTime(timezone=True), nullable=True)
