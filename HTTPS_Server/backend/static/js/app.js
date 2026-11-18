@@ -30,12 +30,26 @@
   const MAX_LOG_ENTRIES = 50;
   const _commLogs = [];
 
+  // Application-level Display Zoom Configuration (70% - 150%, step 10%)
+  const ZOOM_STORAGE_KEY = 'wli_https_lab_zoom';
+  const ZOOM_MIN = 70;
+  const ZOOM_MAX = 150;
+  const ZOOM_STEP = 10;
+  const ZOOM_DEFAULT = 100;
+  let _currentZoom = ZOOM_DEFAULT;
+
   // DOM Elements Cache
   const el = {};
 
   function initElements() {
     // Clock
     el.liveClock = document.getElementById('header-live-clock');
+
+    // Display Zoom Controls
+    el.zoomOutBtn = document.getElementById('zoom-out-btn');
+    el.zoomInBtn = document.getElementById('zoom-in-btn');
+    el.zoomResetBtn = document.getElementById('zoom-reset-btn');
+    el.zoomDisplay = document.getElementById('zoom-level-display');
 
     // API Endpoint Controls
     el.endpointInput = document.getElementById('api-endpoint-input');
@@ -53,7 +67,7 @@
 
     // Manual JSON POST Testing
     el.postJsonEditor = document.getElementById('manual-post-json-editor');
-    el.postFormatBtn = document.getElementById('manual-post-format-btn');
+    el.postFormatBtn = document.getElementById('manual-post-format-btn') || document.getElementById('manual-post-validate-btn');
     el.postSampleBtn = document.getElementById('manual-post-sample-btn');
     el.postResetBtn = document.getElementById('manual-post-reset-btn');
     el.postSendBtn = document.getElementById('manual-post-send-btn');
@@ -415,8 +429,69 @@
       .replace(/'/g, '&#039;');
   }
 
+  // Application-level Display Zoom Controller (70% - 150%, CSS root scale)
+  function applyZoom(zoomPercent, persist = true) {
+    const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoomPercent / ZOOM_STEP) * ZOOM_STEP));
+    _currentZoom = clamped;
+    document.documentElement.style.setProperty('--ui-scale', (clamped / 100).toFixed(2));
+
+    if (el.zoomDisplay) el.zoomDisplay.textContent = `${clamped}%`;
+    if (el.zoomOutBtn) el.zoomOutBtn.disabled = clamped <= ZOOM_MIN;
+    if (el.zoomInBtn) el.zoomInBtn.disabled = clamped >= ZOOM_MAX;
+    if (el.zoomResetBtn) el.zoomResetBtn.disabled = clamped === ZOOM_DEFAULT;
+
+    if (persist) {
+      try {
+        localStorage.setItem(ZOOM_STORAGE_KEY, String(clamped));
+      } catch (e) {
+        // Ignore storage restrictions
+      }
+    }
+  }
+
+  function setupZoomControls() {
+    let saved = ZOOM_DEFAULT;
+    try {
+      const raw = parseInt(localStorage.getItem(ZOOM_STORAGE_KEY), 10);
+      if (!isNaN(raw) && raw >= ZOOM_MIN && raw <= ZOOM_MAX) {
+        saved = raw;
+      }
+    } catch (e) {}
+
+    applyZoom(saved, false);
+
+    if (el.zoomOutBtn) {
+      el.zoomOutBtn.addEventListener('click', () => applyZoom(_currentZoom - ZOOM_STEP));
+    }
+    if (el.zoomInBtn) {
+      el.zoomInBtn.addEventListener('click', () => applyZoom(_currentZoom + ZOOM_STEP));
+    }
+    if (el.zoomResetBtn) {
+      el.zoomResetBtn.addEventListener('click', () => applyZoom(ZOOM_DEFAULT));
+    }
+
+    // Keyboard shortcuts: Ctrl + Plus / Minus / 0 (only when not editing text inputs)
+    document.addEventListener('keydown', (e) => {
+      if (!e.ctrlKey || e.altKey || e.metaKey) return;
+      const tag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        applyZoom(_currentZoom + ZOOM_STEP);
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        applyZoom(_currentZoom - ZOOM_STEP);
+      } else if (e.key === '0') {
+        e.preventDefault();
+        applyZoom(ZOOM_DEFAULT);
+      }
+    });
+  }
+
   function init() {
     initElements();
+    setupZoomControls();
     startClock();
     setupEndpointControls();
     setupAuthControls();
