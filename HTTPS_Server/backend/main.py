@@ -65,6 +65,15 @@ app.include_router(telemetry.router)
 app.include_router(system.router)
 
 
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Ensure 500 JSON responses pass through CORSMiddleware with Access-Control-Allow-Origin."""
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"status": "error", "message": "Internal server error"},
+    )
+
+
 @app.get("/", tags=["Dashboard"])
 async def read_root():
     """Serve the laboratory testing dashboard."""

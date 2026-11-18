@@ -119,3 +119,29 @@ async def test_telemetry_upload_endpoint_alias(async_client: AsyncClient, auth_h
     assert res.status_code == 200
     assert res.headers.get("access-control-allow-origin") == "https://soumikbur.github.io"
     assert res.json()["device_id"] == "UPLOAD_ALIAS_01"
+
+
+@pytest.mark.asyncio
+async def test_cors_headers_on_401_404_and_413_error_responses(async_client: AsyncClient, monkeypatch):
+    """Verify 401, 404, and 413 error responses all retain explicit Access-Control-Allow-Origin."""
+    gh_origin = "https://soumikbur.github.io"
+
+    # 401 Unauthorized
+    r401 = await async_client.get("/api/telemetry/latest", headers={"Origin": gh_origin})
+    assert r401.status_code == 401
+    assert r401.headers.get("access-control-allow-origin") == gh_origin
+
+    # 404 Not Found
+    r404 = await async_client.get("/api/nonexistent-route", headers={"Origin": gh_origin})
+    assert r404.status_code == 404
+    assert r404.headers.get("access-control-allow-origin") == gh_origin
+
+    # 413 Payload Too Large (gateway middleware)
+    monkeypatch.setattr(config, "MAX_UPLOAD_SIZE", 100)
+    r413 = await async_client.post(
+        "/api/telemetry",
+        content='{"device_id":"BIG","pad":"' + ("x" * 200) + '"}',
+        headers={"Origin": gh_origin, "Content-Type": "application/json", "Content-Length": "250"},
+    )
+    assert r413.status_code == 413
+    assert r413.headers.get("access-control-allow-origin") == gh_origin
