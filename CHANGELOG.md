@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [2.3.0] - 2026-11-18
+
+### Added
+- **Comprehensive Audit & Optimization Documentation:** Published `REPOSITORY_AUDIT.md`, `OPTIMIZATION_REPORT.md`, `SECURITY_AUDIT.md`, `PERFORMANCE_REPORT.md`, `TEST_RESULTS.md`, and updated `DEPLOYMENT_GUIDE.md`.
+- **SQLite Persistence & Optimistic Concurrency (`HTTPS_Server`):** Added persistent WAL-mode SQLite write-through for telemetry (`panorama_telemetry.db`) and shared multi-user fleet state (`panorama_shared_state.db`) with optional `expected_version` (`409 Conflict`) checks.
+- **Postman Collection & Environment:** Added zero-secret importable collection and environment under `HTTPS_Server/docs/postman/`.
+- **CI Coverage Expansion:** Added `HTTPS_Server/tests` (73 tests) and a production sourcemap-leak check to `.github/workflows/ci.yml`.
+
+### Fixed
+- **Backend ORM OOM & Startup Overwrites (`backend/app/`):** Changed `Device.telemetry_readings` from `lazy="selectin"` to `lazy="select"`, prevented startup from overwriting existing `@admin`/`@employee` passwords or custom SCADA settings, added composite telemetry indexes, enabled SQLite `PRAGMA foreign_keys=ON`, fixed `NameError: utc_now` in `devices.py` and `TypeError` in `outbox_repo.py`, converted `GET /settings/config` from 30 queries to 1, offloaded blocking TCP probes to `asyncio.to_thread`, and fixed WebSocket broadcast concurrency races.
+- **Authentication Hardening (`HTTPS_Server`):** Hardened case-insensitive `Authorization: Bearer` and `X-Device-Token` validation, exposed both schemes in OpenAPI `/docs`, rejected reserved header names sent as token values, and enforced WebSocket `Origin` allowlist + payload size caps.
+- **HTTPS Laboratory Frontend:** Repaired broken record-inspection modal IDs (`#record-modal-close`, `#record-modal-body`), fixed Communication Monitor startup race, skipped redundant 3 s/10 s DOM rebuilds, debounced JSON syntax highlighting, paused hidden-tab clocks, and resolved `/docs` & `/openapi.json` links dynamically for GitHub Pages.
+- **Main SCADA Frontend & Build Pipeline:** Eliminated 5.32 MB of leaked dev sourcemaps and 100 MB of recursive Capacitor APK duplication, restored missing `@keyframes spin`/`.animate-spin`, fixed `1024px`/`768px` CSS breakpoint collisions, fixed timer/listener leaks in `centralStateSync.ts`, `AppContext.tsx`, and `InstallAppModal.tsx`, and gated `window.panoramaNavigate`.
+
+### Security
+- Scrubbed hardcoded live-format Ubidots API token (`BBUS-*`) from `src/configuration/SettingsManager.cpp` and sample token from `backend/app/api/v1/settings.py`.
+- Removed permissive wildcard `*.vercel.app` CORS regex from `backend/app/main.py`.
+- Added `token_version` revocation checks to `get_current_user_optional` and `current_password` verification to `change-password`.
+
+### Performance & Cleanup
+- Cut `HTTPS_Server` SQLite write latency by **55–58%** (`POST /api/telemetry`: 13.67 ms → 5.69 ms; `PUT /api/sync/state/fleet`: 15.56 ms → 7.00 ms) via persistent WAL connections and amortized pruning.
+- Removed 257 tracked stale debug logs, gitignored screenshots, dev sourcemaps, and redundant cache files (~58+ MB) and unused dependencies (`passlib[bcrypt]`, `python-multipart`) from `backend/requirements.txt`.
+
+---
+
 ## [2.2.0] - 2026-11-17
 
 ### Added
