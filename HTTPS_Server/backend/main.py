@@ -1,5 +1,6 @@
 """Panorama Water Tank — HTTPS Receiver Main Application Entrypoint."""
-from pathlib import Path
+from contextlib import asynccontextmanager
+import logging
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -8,6 +9,23 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from backend import config
 from backend.routes import health, sync, system, telemetry
+from backend.services.shared_state_service import shared_state_service
+from backend.services.storage_service import storage_service
+
+logging.basicConfig(
+    level=getattr(logging, config.LOG_LEVEL, logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("panorama.https_receiver")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Manage graceful SQLite connection teardown on server shutdown."""
+    yield
+    storage_service.close()
+    shared_state_service.close()
+
 
 app = FastAPI(
     title=config.APP_TITLE,
@@ -16,6 +34,7 @@ app = FastAPI(
     docs_url="/docs" if config.ENABLE_DOCS else None,
     redoc_url="/redoc" if config.ENABLE_DOCS else None,
     openapi_url="/openapi.json" if config.ENABLE_DOCS else None,
+    lifespan=lifespan,
 )
 
 # Reverse proxy support: Handle X-Forwarded-Proto and X-Forwarded-For from Cloudflare/Render
@@ -68,10 +87,18 @@ app.include_router(sync.router)
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    """Ensure 500 JSON responses pass through CORSMiddleware with Access-Control-Allow-Origin."""
+    """Log unhandled errors server-side and attach explicit CORS header if Origin is allowed."""
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    headers = {}
+    origin = (request.headers.get("origin") or "").rstrip("/")
+    if origin and origin in config.CORS_ORIGINS:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Vary"] = "Origin"
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"status": "error", "message": "Internal server error"},
+        headers=headers,
     )
 
 

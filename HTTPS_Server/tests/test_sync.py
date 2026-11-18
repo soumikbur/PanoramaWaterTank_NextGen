@@ -131,3 +131,25 @@ def test_broadcast_stalled_socket_does_not_block_healthy_clients():
         assert mgr.active_count == 1  # Hung socket pruned
 
     asyncio.run(_run())
+
+
+def test_sync_optimistic_version_conflict_and_ws_origin_guard(tmp_path, monkeypatch):
+    """Verify expected_version returns 409 on stale write and unauthorized WS Origin is rejected."""
+    isolated = SharedStateService(db_path=tmp_path / "sync_guard.db")
+    monkeypatch.setattr(sync_routes, "shared_state_service", isolated)
+
+    client = TestClient(app)
+    r1 = client.put("/api/sync/state/fleet", json={"expected_version": 0, "data": {"trains": {"1": {}}}})
+    assert r1.status_code == 200
+    assert r1.json()["version"] == 1
+
+    # Stale write with outdated expected_version must fail with 409 Conflict
+    r_conflict = client.put("/api/sync/state/fleet", json={"expected_version": 0, "data": {"trains": {"2": {}}}})
+    assert r_conflict.status_code == 409
+
+    # Disallowed browser Origin must be rejected on WebSocket
+    with pytest.raises(Exception):
+        with client.websocket_connect("/api/sync/ws", headers={"Origin": "https://evil.example.com"}) as ws:
+            ws.receive_text()
+
+    isolated.close()

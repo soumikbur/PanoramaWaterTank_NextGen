@@ -62,9 +62,11 @@ class TelemetryService:
             )
 
         stored_record = TelemetryService.process_raw_dict(parsed)
-        # Variable count is total keys stored minus device_id and received_at
-        var_count = len(stored_record) - 2
-        return stored_record, max(0, var_count)
+        var_count = sum(
+            1 for k, v in stored_record.items()
+            if k not in ("device_id", "received_at", "is_duplicate") and v is not None
+        )
+        return stored_record, var_count
 
 
 telemetry_service = TelemetryService()

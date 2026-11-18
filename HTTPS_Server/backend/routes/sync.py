@@ -12,7 +12,12 @@ from typing import Any, Dict, Optional, Set
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel, Field
 
-from backend.services.shared_state_service import VALID_NAMESPACES, shared_state_service
+from backend import config
+from backend.services.shared_state_service import (
+    VALID_NAMESPACES,
+    VersionConflictError,
+    shared_state_service,
+)
 
 router = APIRouter(prefix="/api/sync", tags=["Synchronization"])
 
@@ -21,6 +26,7 @@ class SyncStateUpsertRequest(BaseModel):
     event_type: str = Field(default="STATE_UPDATED", max_length=64)
     mutation_id: Optional[str] = Field(default=None, max_length=128)
     entity_id: Optional[str] = Field(default=None, max_length=128)
+    expected_version: Optional[int] = Field(default=None, ge=0)
     data: Dict[str, Any]
 
 
@@ -120,13 +126,28 @@ async def put_namespace_state(namespace: str, body: SyncStateUpsertRequest):
             detail=f"Invalid namespace '{namespace}'. Expected one of: {', '.join(VALID_NAMESPACES)}",
         )
 
+    # Enforce payload size cap even for chunked transfer encoding
+    serialized_len = len(json.dumps(body.data, separators=(",", ":")).encode("utf-8"))
+    if serialized_len > config.MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"State payload exceeds maximum size of {config.MAX_UPLOAD_SIZE} bytes.",
+        )
+
     # 1. Persist atomically to SQLite FIRST (never broadcast before DB commit succeeds)
-    committed = shared_state_service.upsert_namespace(
-        namespace=ns,
-        payload=body.data,
-        event_type=body.event_type,
-        mutation_id=body.mutation_id,
-    )
+    try:
+        committed = shared_state_service.upsert_namespace(
+            namespace=ns,
+            payload=body.data,
+            event_type=body.event_type,
+            mutation_id=body.mutation_id,
+            expected_version=body.expected_version,
+        )
+    except VersionConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        )
 
     # 2. Broadcast committed event + authoritative snapshot to all WebSocket clients
     envelope = {
@@ -152,6 +173,11 @@ async def put_namespace_state(namespace: str, body: SyncStateUpsertRequest):
 @router.websocket("/ws")
 async def sync_websocket_endpoint(websocket: WebSocket):
     """Real-time bidirectional WebSocket channel for multi-browser state synchronization."""
+    origin = (websocket.headers.get("origin") or "").rstrip("/")
+    if origin and origin not in config.CORS_ORIGINS:
+        await websocket.close(code=1008, reason="Origin not allowed")
+        return
+
     await sync_ws_manager.connect(websocket)
     try:
         # Push initial authoritative state snapshot immediately upon connect/reconnect

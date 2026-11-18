@@ -29,8 +29,11 @@ async def receive_telemetry_json(
 ):
     """Receive and store telemetry via standard HTTP POST JSON body."""
     stored_record = telemetry_service.process_payload(payload)
-    # Total dynamic variables count is all attributes except device_id and received_at
-    var_count = len(stored_record) - 2
+    # Count non-None telemetry attributes excluding server metadata and device_id
+    var_count = sum(
+        1 for k, v in stored_record.items()
+        if k not in ("device_id", "received_at", "is_duplicate") and v is not None
+    )
 
     return TelemetryIngestResponse(
         status="success",
