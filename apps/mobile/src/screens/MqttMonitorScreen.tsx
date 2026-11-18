@@ -1,34 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { typography } from '../theme';
 import { useApp } from '../state/AppContext';
-import {
-  mqttService,
-  RawMqttFrame,
-  MqttBrokerDiagnostics,
-} from '../services/mqttService';
-import { deviceRegistry, ManagedDevice } from '../services/deviceRegistry';
-import {
-  buildDeviceMetadata,
-  loadLocalHardwareOverrides,
-  saveLocalHardwareOverrides,
-  fetchBackendDeviceMetadata,
-  persistBackendDeviceMetadata,
-  DeviceHardwareOverrides,
-} from '../services/deviceMetadata';
-import {
-  DeviceHealthSummaryBar,
-  DeviceIdentityCard,
-  HardwareAndCommsRow,
-  SensorsAndFirmwareRow,
-  DeviceMetadataModal,
-  extractLiveTelemetryMetrics,
-  StatusPill,
-  SpecRow,
-} from '../components/diagnostics/HardwareDiagnosticsPanels';
-import {
-  MqttBrokerDetailsRow,
-  CommunicationArchitecturePanel,
-} from '../components/diagnostics/BrokerAndArchitecturePanels';
+import { mqttService, RawMqttFrame } from '../services/mqttService';
+import { deviceRegistry } from '../services/deviceRegistry';
 import {
   Terminal,
   Play,
@@ -38,27 +12,18 @@ import {
   Check,
   Radio,
   Clock,
-  ChevronDown,
-  ChevronUp,
-  Code2,
   WifiOff,
   ArrowDown,
+  Code2,
   AlignLeft,
-  Search,
   Download,
-  Table2,
-  Activity,
-  SlidersHorizontal,
 } from 'lucide-react';
 
 export const DEFAULT_HARDWARE_UID = '002F00654B42501320353332';
 export const TARGET_MQTT_TOPIC = DEFAULT_HARDWARE_UID;
-const MAX_MESSAGE_BUFFER = 500;
+const DEFAULT_MAX_BUFFER = 500;
+const BUFFER_OPTIONS = [100, 250, 500, 1000] as const;
 
-/**
- * Canonical 15 telemetry fields for legacy SCADA parity.
- * Unknown/extra fields are preserved in rawParsedJson so Raw JSON view shows exact broker payloads.
- */
 export const ALLOWED_TELEMETRY_FIELDS = [
   'uid',
   'lat',
@@ -97,329 +62,240 @@ export interface CleanDeviceTelemetry {
   trno: string | null;
 }
 
-export interface CleanTelemetryFrame {
-  id: string;
-  seq: number;
-  topic: string;
-  receivedAt: number;
-  receivedAtFormatted: string;
-  deviceTimestamp: string | null;
-  payload: CleanDeviceTelemetry;
-  rawParsedJson: Record<string, any>; // Exact incoming JSON object with ALL fields preserved
-  rawJsonString: string;              // Formatted exact incoming JSON
-  rawPayloadString: string;           // Verbatim raw payload string from broker
-  qos: number;
-  payloadSize: number;
-}
-
-/**
- * Validate incoming MQTT payload is a device telemetry object (rejecting fleet sync / config packets).
- */
-export function filterDeviceTelemetry(
-  raw: any,
-  expectedUid: string
-): CleanDeviceTelemetry | null {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return null;
-  }
-
-  // Reject fleet-wide configuration, train metadata, or synchronization packets
-  if (
-    'trains' in raw ||
-    'devices' in raw ||
-    'consist' in raw ||
-    'settings' in raw ||
-    'action' in raw ||
-    'fleet' in raw ||
-    'delta' in raw ||
-    'event' in raw ||
-    'eventType' in raw ||
-    'sync_type' in raw
-  ) {
-    return null;
-  }
-
-  const rawUid =
-    raw.uid !== undefined
-      ? String(raw.uid).trim()
-      : raw.device_uid !== undefined
-      ? String(raw.device_uid).trim()
-      : raw.deviceId !== undefined
-      ? String(raw.deviceId).trim()
-      : raw.device_id !== undefined
-      ? String(raw.device_id).trim()
-      : null;
-
-  if (!rawUid) {
-    return null;
-  }
-
-  if (expectedUid && rawUid !== expectedUid.trim()) {
-    return null;
-  }
-
+/** Retained for compatibility with any existing imports/tests. */
+export function filterDeviceTelemetry(raw: any, expectedUid: string): CleanDeviceTelemetry | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const rawUid = raw.uid ?? raw.device_uid ?? raw.deviceId ?? raw.device_id;
+  if (!rawUid) return null;
+  const uid = String(rawUid).trim();
+  if (expectedUid && uid !== expectedUid.trim()) return null;
   const toNum = (v: any): number | null =>
     v !== undefined && v !== null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null;
-
   return {
-    uid: rawUid,
+    uid,
     lat: toNum(raw.lat ?? raw.latitude),
     long: toNum(raw.long ?? raw.lon ?? raw.longitude),
     speed: toNum(raw.speed ?? raw.speed_kmh),
-    time: raw.time !== undefined && raw.time !== null ? String(raw.time) : (raw.timestamp !== undefined && raw.timestamp !== null ? String(raw.timestamp) : null),
+    time: raw.time != null ? String(raw.time) : raw.timestamp != null ? String(raw.timestamp) : null,
     cm1: toNum(raw.cm1 ?? raw.water_level_cm),
     cm2: toNum(raw.cm2),
     wlp1: toNum(raw.wlp1 ?? raw.water_level_percentage),
     wlp2: toNum(raw.wlp2),
     wlv1: raw.wlv1 !== undefined ? Boolean(raw.wlv1) : raw.wlvl !== undefined ? Boolean(raw.wlvl) : null,
     wlv2: raw.wlv2 !== undefined ? Boolean(raw.wlv2) : null,
-    bat: toNum(raw.bat ?? raw.battery_voltage ?? raw.battery_v),
-    temp: toNum(raw.temp ?? raw.temperature ?? raw.temperature_c),
-    chno: raw.chno !== undefined && raw.chno !== null ? String(raw.chno) : null,
-    trno: raw.trno !== undefined && raw.trno !== null ? String(raw.trno) : null,
+    bat: toNum(raw.bat ?? raw.battery_voltage),
+    temp: toNum(raw.temp ?? raw.temperature),
+    chno: raw.chno != null ? String(raw.chno) : null,
+    trno: raw.trno != null ? String(raw.trno) : null,
   };
 }
 
-/**
- * Format canonical telemetry object with 2-space indentation.
- */
+/** Retained for compatibility with any existing imports/tests. */
 export function formatTelemetryJson(t: CleanDeviceTelemetry): string {
-  const lines: string[] = ['{'];
-  const keys = ALLOWED_TELEMETRY_FIELDS;
-  keys.forEach((k, idx) => {
-    const val = (t as any)[k];
-    const isLast = idx === keys.length - 1;
-    let renderedVal: string;
-    if (typeof val === 'string') {
-      renderedVal = `"${val}"`;
-    } else if (typeof val === 'number') {
-      renderedVal =
-        ['cm1', 'cm2', 'wlp1', 'wlp2', 'bat', 'temp', 'speed'].includes(k) && val % 1 === 0
-          ? val.toFixed(1)
-          : String(val);
-    } else if (typeof val === 'boolean') {
-      renderedVal = String(val);
-    } else {
-      renderedVal = 'null';
-    }
-    lines.push(`  "${k}": ${renderedVal}${isLast ? '' : ','}`);
-  });
-  lines.push('}');
-  return lines.join('\n');
+  return JSON.stringify(t, null, 2);
 }
 
-/** Metadata descriptors for Parsed Telemetry view (only rendered when key is actually present). */
-const PARSED_FIELD_META: Record<string, { label: string; unit?: string }> = {
-  uid: { label: 'Device UID' },
-  device_uid: { label: 'Device UID' },
-  device_id: { label: 'Device ID' },
-  cm1: { label: 'Water Level (Tank 1)', unit: 'cm' },
-  cm2: { label: 'Water Level (Tank 2)', unit: 'cm' },
-  water_level_cm: { label: 'Water Level', unit: 'cm' },
-  wlp1: { label: 'Fill Percentage (Tank 1)', unit: '%' },
-  wlp2: { label: 'Fill Percentage (Tank 2)', unit: '%' },
-  water_level_percentage: { label: 'Fill Percentage', unit: '%' },
-  wlv1: { label: 'Valve 1 State' },
-  wlv2: { label: 'Valve 2 State' },
-  rawVoltage: { label: 'Raw Voltage', unit: 'V' },
-  raw_voltage: { label: 'Raw Voltage', unit: 'V' },
-  v1: { label: 'Sensor Voltage', unit: 'V' },
-  adcRaw: { label: 'ADC Raw Value' },
-  adc_raw: { label: 'ADC Raw Value' },
-  pressure_bar: { label: 'Water Pressure', unit: 'bar' },
-  waterPressure: { label: 'Water Pressure', unit: 'bar' },
-  temp: { label: 'Temperature', unit: '°C' },
-  temperature: { label: 'Temperature', unit: '°C' },
-  bmePressure: { label: 'Atmospheric Pressure', unit: 'hPa' },
-  bme_pressure: { label: 'Atmospheric Pressure', unit: 'hPa' },
-  humidity: { label: 'Humidity', unit: '%' },
-  sensorStatus: { label: 'Sensor Status' },
-  sensor_status: { label: 'Sensor Status' },
-  bat: { label: 'Battery', unit: '% / V' },
-  battery_voltage: { label: 'Battery Voltage', unit: 'V' },
-  csq: { label: 'Signal Strength (CSQ)' },
-  signal_csq: { label: 'Signal Strength (CSQ)' },
-  rssi: { label: 'RSSI', unit: 'dBm' },
-  lat: { label: 'Latitude', unit: '°' },
-  long: { label: 'Longitude', unit: '°' },
-  lon: { label: 'Longitude', unit: '°' },
-  speed: { label: 'Speed', unit: 'km/h' },
-  time: { label: 'Device Timestamp' },
-  timestamp: { label: 'Device Timestamp' },
-  trno: { label: 'Train Number' },
-  chno: { label: 'Coach Number' },
-};
-
-interface JsonSyntaxViewerProps {
-  data: Record<string, any>;
-  onCopyValue?: (key: string, val: any) => void;
+interface SerialMessage {
+  id: string;
+  seq: number;
+  topic: string;
+  qos: number;
+  payloadSize: number;
+  receivedAt: number;
+  receivedTimeShort: string;     // HH:mm:ss.SSS (local reception time)
+  receivedAtFormatted: string;   // YYYY-MM-DD HH:mm:ss.SSS
+  deviceTimestamp: string | null; // Extracted from payload if present
+  rawPayload: string;            // Verbatim original MQTT payload
+  isJson: boolean;
+  parsedJson: any;
+  formattedJson: string | null;  // Pretty-printed JSON if valid
 }
 
-/** Syntax-highlighted JSON viewer preserving ALL keys received from the broker. */
-const JsonSyntaxViewer: React.FC<JsonSyntaxViewerProps> = ({ data, onCopyValue }) => {
-  if (!data || typeof data !== 'object') {
-    return <span style={{ color: '#8B949E' }}>null</span>;
+/** Standard MQTT wildcard matcher (+ and #) so subscribing to any topic works reliably. */
+function mqttTopicMatches(subscription: string, incomingTopic: string): boolean {
+  const sub = subscription.trim();
+  const inc = incomingTopic.trim();
+  if (!sub || !inc) return false;
+  if (sub === inc) return true;
+  const subParts = sub.split('/');
+  const incParts = inc.split('/');
+  for (let i = 0; i < subParts.length; i++) {
+    if (subParts[i] === '#') return true;
+    if (i >= incParts.length) return false;
+    if (subParts[i] !== '+' && subParts[i] !== incParts[i]) return false;
   }
+  return subParts.length === incParts.length;
+}
 
-  const keys = Object.keys(data);
+function formatLocalTimeMs(date: Date): string {
+  const pad = (n: number, z = 2) => String(n).padStart(z, '0');
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`;
+}
 
-  const renderValue = (val: any, keyName: string): React.ReactNode => {
-    if (typeof val === 'string') {
-      return (
-        <span
-          title={`Click to copy ${keyName}`}
-          onClick={() => onCopyValue?.(keyName, val)}
-          style={{ color: '#7EE787', cursor: 'pointer' }}
-        >
-          &quot;{val}&quot;
+/** Lightweight syntax-highlighted JSON renderer preserving exact original structure & nesting. */
+const HighlightedJson: React.FC<{ text: string }> = React.memo(({ text }) => {
+  const tokens = useMemo(() => {
+    const regex = /("(?:\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(?:\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g;
+    const parts: React.ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let key = 0;
+
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+      const token = match[0];
+      let color = '#FFA657'; // number
+      if (/^"/.test(token)) {
+        if (/:$/.test(token)) {
+          color = '#79C0FF'; // JSON key
+        } else {
+          color = '#7EE787'; // string value
+        }
+      } else if (/^(true|false)$/.test(token)) {
+        color = '#FF7B72'; // boolean
+      } else if (token === 'null') {
+        color = '#8B949E'; // null
+      }
+      parts.push(
+        <span key={key++} style={{ color }}>
+          {token}
         </span>
       );
+      lastIndex = regex.lastIndex;
     }
-    if (typeof val === 'number') {
-      const formattedNum =
-        ['cm1', 'cm2', 'wlp1', 'wlp2', 'bat', 'temp', 'speed'].includes(keyName) && val % 1 === 0
-          ? val.toFixed(1)
-          : String(val);
-      return (
-        <span
-          title={`Click to copy ${keyName}`}
-          onClick={() => onCopyValue?.(keyName, val)}
-          style={{ color: '#FFA657', cursor: 'pointer', fontWeight: 600 }}
-        >
-          {formattedNum}
-        </span>
-      );
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
     }
-    if (typeof val === 'boolean') {
-      return (
-        <span
-          title={`Click to copy ${keyName}`}
-          onClick={() => onCopyValue?.(keyName, val)}
-          style={{ color: '#FF7B72', cursor: 'pointer', fontWeight: 700 }}
-        >
-          {String(val)}
-        </span>
-      );
-    }
-    if (val === null || val === undefined) {
-      return (
-        <span title={`${keyName} is null`} style={{ color: '#8B949E', fontStyle: 'italic' }}>
-          null
-        </span>
-      );
-    }
-    return (
-      <span style={{ color: '#D2A8FF' }}>
-        {JSON.stringify(val)}
-      </span>
-    );
-  };
+    return parts;
+  }, [text]);
 
   return (
     <pre
       style={{
         margin: 0,
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-        fontSize: '12px',
+        fontSize: '12.5px',
         lineHeight: '19px',
         color: '#C9D1D9',
         whiteSpace: 'pre',
       }}
     >
-      {'{'}{'\n'}
-      {keys.map((k, idx) => {
-        const val = data[k];
-        const isLast = idx === keys.length - 1;
-        return (
-          <div key={k} style={{ paddingLeft: '20px' }}>
-            <span
-              title={`Click to copy "${k}"`}
-              onClick={() => onCopyValue?.(k, k)}
-              style={{ color: '#79C0FF', cursor: 'pointer' }}
-            >
-              &quot;{k}&quot;
-            </span>
-            <span style={{ color: '#C9D1D9' }}>: </span>
-            {renderValue(val, k)}
-            {!isLast ? <span style={{ color: '#8B949E' }}>,</span> : ''}
-          </div>
-        );
-      })}
-      {'}'}
+      {tokens}
     </pre>
   );
-};
+});
 
-/** Mode B: Parsed Telemetry renderer showing ONLY fields actually present in the message. */
-const ParsedTelemetryView: React.FC<{
-  data: Record<string, any>;
-  onCopyValue?: (key: string, val: any) => void;
-}> = ({ data, onCopyValue }) => {
-  const entries = Object.entries(data || {}).filter(([, v]) => v !== undefined);
+/** Single memoized terminal entry to prevent unnecessary re-renders during continuous streams. */
+const SerialLogEntry: React.FC<{
+  entry: SerialMessage;
+  viewMode: 'json' | 'raw';
+  showTimestamps: boolean;
+  isSelected: boolean;
+  isFirst: boolean;
+  onSelect: (id: string) => void;
+  onCopy: (entry: SerialMessage) => void;
+}> = React.memo(({ entry, viewMode, showTimestamps, isSelected, isFirst, onSelect, onCopy }) => {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', gap: '6px' }}>
-      {entries.map(([key, value]) => {
-        const meta = PARSED_FIELD_META[key];
-        const displayVal =
-          value === null
-            ? 'null'
-            : typeof value === 'boolean'
-            ? value ? 'TRUE' : 'FALSE'
-            : typeof value === 'object'
-            ? JSON.stringify(value)
-            : `${value}${meta?.unit ? ` ${meta.unit}` : ''}`;
+    <div
+      onClick={() => onSelect(entry.id)}
+      style={{
+        padding: '8px 10px',
+        borderRadius: '4px',
+        backgroundColor: isSelected ? '#161B22' : 'transparent',
+        border: isSelected ? '1px solid #30363D' : '1px solid transparent',
+        borderTop: !isFirst && !isSelected ? '1px dashed #21262D' : isSelected ? '1px solid #30363D' : '1px solid transparent',
+        cursor: 'pointer',
+      }}
+    >
+      {/* Entry header line */}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px',
+          marginBottom: '6px',
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+          fontSize: '11px',
+        }}
+      >
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
+          <span style={{ color: '#58A6FF', fontWeight: 700 }}>
+            {showTimestamps ? `[${entry.receivedTimeShort}] ` : ''}MQTT MESSAGE RECEIVED
+          </span>
+          <span style={{ color: '#8B949E' }}>#{entry.seq}</span>
+          <span style={{ color: '#79C0FF', backgroundColor: '#161B22', padding: '1px 6px', borderRadius: '3px', border: '1px solid #21262D' }}>
+            {entry.topic}
+          </span>
+          <span style={{ color: '#8B949E' }}>QoS {entry.qos}</span>
+          <span style={{ color: '#8B949E' }}>{entry.payloadSize} B</span>
+          {!entry.isJson && (
+            <span style={{ color: '#F59E0B', backgroundColor: '#2D2006', padding: '1px 5px', borderRadius: '3px', fontSize: '10px', fontWeight: 700 }}>
+              PLAIN TEXT
+            </span>
+          )}
+          {entry.deviceTimestamp && (
+            <span style={{ color: '#A5D6FF' }}>Device Time: &quot;{entry.deviceTimestamp}&quot;</span>
+          )}
+        </div>
 
-        return (
-          <div
-            key={key}
-            onClick={() => onCopyValue?.(key, value)}
-            title={`Field "${key}" — click to copy`}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCopy(entry);
+          }}
+          title="Copy message"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '2px 7px',
+            backgroundColor: '#21262D',
+            color: '#C9D1D9',
+            border: '1px solid #30363D',
+            borderRadius: '3px',
+            fontSize: '10px',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          <Copy size={10} />
+          Copy
+        </button>
+      </div>
+
+      {/* Entry body: Formatted JSON or verbatim Raw payload */}
+      <div style={{ overflowX: 'auto', paddingLeft: '2px' }}>
+        {viewMode === 'json' && entry.isJson && entry.formattedJson !== null ? (
+          <HighlightedJson text={entry.formattedJson} />
+        ) : (
+          <pre
             style={{
-              padding: '6px 8px',
-              backgroundColor: '#161B22',
-              border: '1px solid #30363D',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '2px',
+              margin: 0,
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+              fontSize: '12px',
+              lineHeight: '18px',
+              color: entry.isJson ? '#7EE787' : '#E6EDF3',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '4px' }}>
-              <span style={{ fontSize: '10px', color: '#8B949E', fontWeight: 600 }}>
-                {meta ? meta.label : key}
-              </span>
-              <span style={{ fontSize: '9px', fontFamily: 'monospace', color: '#58A6FF' }}>{key}</span>
-            </div>
-            <div
-              style={{
-                fontFamily: 'monospace',
-                fontSize: '12px',
-                fontWeight: 700,
-                color:
-                  value === null
-                    ? '#8B949E'
-                    : typeof value === 'boolean'
-                    ? value ? '#3FB950' : '#F85149'
-                    : typeof value === 'number'
-                    ? '#FFA657'
-                    : '#7EE787',
-                wordBreak: 'break-all',
-              }}
-            >
-              {displayVal}
-            </div>
-          </div>
-        );
-      })}
+            {entry.rawPayload}
+          </pre>
+        )}
+      </div>
     </div>
   );
-};
+});
 
 export const MqttMonitorScreen: React.FC = () => {
   const { mqttBrokerStatus, devices } = useApp();
 
-  // Active topic & input state (preserves existing localStorage keys)
+  // Preserve existing topic selection & localStorage keys
   const [topicInput, setTopicInput] = useState<string>(() => {
     if (typeof window === 'undefined') return DEFAULT_HARDWARE_UID;
     const saved =
@@ -444,52 +320,12 @@ export const MqttMonitorScreen: React.FC = () => {
 
   const [qosInput, setQosInput] = useState<number>(0);
   const [isSubscribed, setIsSubscribed] = useState<boolean>(true);
-  const activeTopicRef = useRef<string>(activeTopic);
-  activeTopicRef.current = activeTopic;
 
-  // Live MQTT diagnostics ticker (updates connection duration & confirmed sub status every 1s)
-  const [nowTick, setNowTick] = useState<number>(() => Date.now());
-  const [brokerDiag, setBrokerDiag] = useState<MqttBrokerDiagnostics>(() => mqttService.getDiagnostics());
+  const [messages, setMessages] = useState<SerialMessage[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [totalMessagesCount, setTotalMessagesCount] = useState<number>(0);
+  const [queuedWhilePaused, setQueuedWhilePaused] = useState<number>(0);
 
-  useEffect(() => {
-    const refreshDiag = () => {
-      setNowTick(Date.now());
-      setBrokerDiag(mqttService.getDiagnostics());
-    };
-    const timer = setInterval(refreshDiag, 1000);
-    const unsubStatus = mqttService.onStatusChange(() => refreshDiag());
-    return () => {
-      clearInterval(timer);
-      unsubStatus();
-    };
-  }, []);
-
-  // Static hardware metadata overrides per UID (separate from live telemetry)
-  const [metadataOverrides, setMetadataOverrides] = useState<DeviceHardwareOverrides>(() =>
-    loadLocalHardwareOverrides(activeTopic)
-  );
-  const [showMetadataModal, setShowMetadataModal] = useState<boolean>(false);
-
-  // Fetch static hardware metadata only when selected device UID changes (never per MQTT message!)
-  useEffect(() => {
-    let cancelled = false;
-    const local = loadLocalHardwareOverrides(activeTopic);
-    setMetadataOverrides(local);
-    fetchBackendDeviceMetadata(activeTopic).then((remote) => {
-      if (!cancelled && remote) {
-        const merged = { ...local, ...remote };
-        setMetadataOverrides(merged);
-        saveLocalHardwareOverrides(activeTopic, merged);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTopic]);
-
-  // Raw telemetry message buffer
-  const [messages, setMessages] = useState<CleanTelemetryFrame[]>([]);
-  const [seqCounter, setSeqCounter] = useState<number>(0);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [autoScroll, setAutoScroll] = useState<boolean>(() =>
     typeof window === 'undefined' ? true : localStorage.getItem('panorama_mqtt_autoscroll') !== 'false'
@@ -497,215 +333,229 @@ export const MqttMonitorScreen: React.FC = () => {
   const [showTimestamps, setShowTimestamps] = useState<boolean>(() =>
     typeof window === 'undefined' ? true : localStorage.getItem('panorama_mqtt_show_timestamps') !== 'false'
   );
-  const [inspectorMode, setInspectorMode] = useState<'raw' | 'parsed'>('raw');
-  const [formatMode, setFormatMode] = useState<'pretty' | 'raw'>(() =>
-    typeof window === 'undefined'
-      ? 'pretty'
-      : ((localStorage.getItem('panorama_mqtt_format_mode') as 'pretty' | 'raw') || 'pretty')
-  );
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
-  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
-  const [totalMessagesCount, setTotalMessagesCount] = useState<number>(0);
-  const [lastReceivedTimestamp, setLastReceivedTimestamp] = useState<string | null>(null);
-  const [lastReceivedAtMs, setLastReceivedAtMs] = useState<number | null>(null);
-  const [latestRawPayload, setLatestRawPayload] = useState<Record<string, any> | null>(null);
+  const [viewMode, setViewMode] = useState<'json' | 'raw'>(() => {
+    if (typeof window === 'undefined') return 'json';
+    const saved = localStorage.getItem('panorama_mqtt_view_mode');
+    return saved === 'raw' ? 'raw' : 'json';
+  });
+  const [maxBuffer, setMaxBuffer] = useState<number>(DEFAULT_MAX_BUFFER);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [liveStatus, setLiveStatus] = useState<string>(() => mqttService.getStatus());
 
-  const terminalStreamRef = useRef<HTMLDivElement | null>(null);
+  // Refs to avoid re-subscribing or recreating MQTT listeners on UI toggles
+  const activeTopicRef = useRef<string>(activeTopic);
+  activeTopicRef.current = activeTopic;
+  const isSubscribedRef = useRef<boolean>(isSubscribed);
+  isSubscribedRef.current = isSubscribed;
   const isPausedRef = useRef<boolean>(isPaused);
   isPausedRef.current = isPaused;
+  const maxBufferRef = useRef<number>(maxBuffer);
+  maxBufferRef.current = maxBuffer;
+  const seqRef = useRef<number>(0);
+  const pendingBufferRef = useRef<SerialMessage[]>([]);
+  const terminalRef = useRef<HTMLDivElement | null>(null);
 
-  // Resolve registered device record from existing AppContext & deviceRegistry
-  const managedDevice: ManagedDevice | null = useMemo(() => {
-    const reg = deviceRegistry.getDevices();
-    return reg.find((d) => d.uid === activeTopic.trim()) || null;
-  }, [activeTopic, devices]);
+  const showToast = useCallback((msg: string) => {
+    setFeedback(msg);
+    setTimeout(() => setFeedback(null), 1800);
+  }, []);
 
-  const apiDevice: any | null = useMemo(() => {
-    return (devices || []).find((d: any) => d?.uid === activeTopic.trim()) || null;
-  }, [devices, activeTopic]);
+  // Track real MQTT connection status from existing singleton
+  useEffect(() => {
+    const unsub = mqttService.onStatusChange((st) => setLiveStatus(st));
+    return () => unsub();
+  }, []);
 
+  const isBrokerConnected =
+    mqttBrokerStatus === 'CONNECTED' ||
+    liveStatus === 'CONNECTED' ||
+    mqttService.getBrokerInfo().status === 'CONNECTED';
+
+  // Existing registered device presets dropdown
   const availableDevices = useMemo(() => {
     const list: Array<{ uid: string; label: string }> = [];
-    const seenUids = new Set<string>();
-
-    list.push({
-      uid: DEFAULT_HARDWARE_UID,
-      label: `${DEFAULT_HARDWARE_UID} (Hardware Node)`,
-    });
-    seenUids.add(DEFAULT_HARDWARE_UID);
+    const seen = new Set<string>();
+    list.push({ uid: DEFAULT_HARDWARE_UID, label: `${DEFAULT_HARDWARE_UID} (Default)` });
+    seen.add(DEFAULT_HARDWARE_UID);
 
     const all = [...(devices || []), ...deviceRegistry.getDevices()];
     all.forEach((d: any) => {
-      if (!d || !d.uid || seenUids.has(d.uid) || String(d.uid).startsWith('PANORAMA-')) return;
-      seenUids.add(d.uid);
-      const assignment = d.trainNumber && d.coachNumber ? ` (${d.trainNumber}/${d.coachNumber})` : '';
-      list.push({ uid: d.uid, label: `${d.uid}${assignment}` });
+      if (!d || !d.uid || seen.has(d.uid) || String(d.uid).startsWith('PANORAMA-')) return;
+      seen.add(d.uid);
+      const tag = d.trainNumber && d.coachNumber ? ` (${d.trainNumber}/${d.coachNumber})` : '';
+      list.push({ uid: d.uid, label: `${d.uid}${tag}` });
     });
-
     return list;
   }, [devices]);
 
-  const deviceMetadata = useMemo(
-    () => buildDeviceMetadata(activeTopic, managedDevice, apiDevice, metadataOverrides, brokerDiag, activeTopic),
-    [activeTopic, managedDevice, apiDevice, metadataOverrides, brokerDiag]
-  );
-
-  const liveMetrics = useMemo(
-    () => extractLiveTelemetryMetrics(latestRawPayload, lastReceivedAtMs, lastReceivedTimestamp),
-    [latestRawPayload, lastReceivedAtMs, lastReceivedTimestamp]
-  );
-
-  const isTopicConfirmed = useMemo(() => {
-    if (!isSubscribed) return false;
-    return mqttService.isTopicConfirmedSubscribed(activeTopic);
-  }, [isSubscribed, activeTopic, brokerDiag]);
-
-  // Subscribe on mount (preserving existing behavior)
+  // Subscribe once on mount without creating duplicate overlapping wildcard subscriptions
   useEffect(() => {
-    const topic = activeTopicRef.current;
-    mqttService.subscribeTopic(topic, qosInput);
-    setIsSubscribed(true);
-    mqttService.unsubscribeTopic(`${topic}/#`);
-    mqttService.unsubscribeTopic(`${DEFAULT_HARDWARE_UID}/#`);
+    const topic = activeTopicRef.current.trim();
+    if (topic) {
+      if (!topic.endsWith('/#')) {
+        mqttService.unsubscribeTopic(`${topic}/#`);
+      }
+      mqttService.subscribeTopic(topic, qosInput);
+      setIsSubscribed(true);
+    }
   }, []);
 
-  // Listen directly to incoming MQTT message frames from Paho client
+  // Listen directly to existing MQTT client message event
   useEffect(() => {
     const unsubscribe = mqttService.onRawMessage((frame: RawMqttFrame) => {
-      if (
-        frame.topic.startsWith('panorama/') ||
-        frame.topic.includes('fleet') ||
-        frame.topic.includes('sync') ||
-        frame.topic.includes('central') ||
-        frame.topic.includes('settings') ||
-        frame.topic.includes('users')
-      ) {
+      if (!isSubscribedRef.current) return;
+
+      const subscribedTopic = activeTopicRef.current.trim();
+      if (!subscribedTopic) return;
+
+      // Ignore unrelated topics and internal fleet sync traffic unless explicitly subscribed
+      if (!mqttTopicMatches(subscribedTopic, frame.topic)) {
         return;
       }
 
-      const currentTopic = activeTopicRef.current.trim();
-      const topicBase = frame.topic.split('/')[0].trim();
+      const rawPayload = frame.payloadString ?? '';
+      const receivedDate = new Date(frame.receivedAt || Date.now());
 
-      if (frame.topic !== currentTopic && topicBase !== currentTopic) {
-        return;
+      // Never discard invalid JSON — parse safely and fall back to plain text
+      let isJson = false;
+      let parsedJson: any = null;
+      let formattedJson: string | null = null;
+      let deviceTimestamp: string | null = null;
+
+      try {
+        const parsed = JSON.parse(rawPayload);
+        if (parsed !== null && typeof parsed === 'object') {
+          isJson = true;
+          parsedJson = parsed;
+          formattedJson = JSON.stringify(parsed, null, 2);
+          if (parsed.time !== undefined && parsed.time !== null) {
+            deviceTimestamp = String(parsed.time);
+          } else if (parsed.timestamp !== undefined && parsed.timestamp !== null) {
+            deviceTimestamp = String(parsed.timestamp);
+          }
+        }
+      } catch {
+        isJson = false;
       }
 
-      if (!frame.isJson || !frame.parsedJson) {
-        return;
-      }
-
-      const filtered = filterDeviceTelemetry(frame.parsedJson, currentTopic);
-      if (!filtered) {
-        return;
-      }
+      seqRef.current += 1;
+      const entry: SerialMessage = {
+        id: frame.id || `serial-${receivedDate.getTime()}-${seqRef.current}`,
+        seq: seqRef.current,
+        topic: frame.topic,
+        qos: frame.qos ?? 0,
+        payloadSize: frame.payloadSize || rawPayload.length,
+        receivedAt: receivedDate.getTime(),
+        receivedTimeShort: formatLocalTimeMs(receivedDate),
+        receivedAtFormatted: frame.receivedAtFormatted || receivedDate.toISOString(),
+        deviceTimestamp,
+        rawPayload,
+        isJson,
+        parsedJson,
+        formattedJson,
+      };
 
       setTotalMessagesCount((prev) => prev + 1);
-      setLastReceivedTimestamp(frame.receivedAtFormatted);
-      setLastReceivedAtMs(frame.receivedAt);
-      setLatestRawPayload(frame.parsedJson);
 
+      // Pause stops rendering ONLY — keep receiving & buffering in background!
       if (isPausedRef.current) {
+        pendingBufferRef.current.push(entry);
+        if (pendingBufferRef.current.length > maxBufferRef.current) {
+          pendingBufferRef.current = pendingBufferRef.current.slice(-maxBufferRef.current);
+        }
+        setQueuedWhilePaused(pendingBufferRef.current.length);
         return;
       }
 
-      setSeqCounter((prevSeq) => {
-        const nextSeq = prevSeq + 1;
-        const cleanFrame: CleanTelemetryFrame = {
-          id: frame.id || `msg-${Date.now()}-${nextSeq}`,
-          seq: nextSeq,
-          topic: frame.topic,
-          receivedAt: frame.receivedAt,
-          receivedAtFormatted: frame.receivedAtFormatted,
-          deviceTimestamp: filtered.time,
-          payload: filtered,
-          rawParsedJson: frame.parsedJson!,
-          rawJsonString: JSON.stringify(frame.parsedJson, null, 2),
-          rawPayloadString: frame.payloadString || JSON.stringify(frame.parsedJson),
-          qos: frame.qos,
-          payloadSize: frame.payloadSize || frame.payloadString?.length || 0,
-        };
-
-        setMessages((prev) => {
-          const next = [...prev, cleanFrame];
-          return next.length > MAX_MESSAGE_BUFFER ? next.slice(next.length - MAX_MESSAGE_BUFFER) : next;
-        });
-
-        return nextSeq;
+      setMessages((prev) => {
+        const limit = maxBufferRef.current;
+        const next = [...prev, entry];
+        return next.length > limit ? next.slice(next.length - limit) : next;
       });
     });
 
     return () => unsubscribe();
   }, []);
 
-  // Auto-scroll stream to bottom
+  // Auto-scroll smoothly to latest entry
   useEffect(() => {
-    if (autoScroll && !isPaused && terminalStreamRef.current) {
-      terminalStreamRef.current.scrollTop = terminalStreamRef.current.scrollHeight;
+    if (autoScroll && !isPaused && terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
   }, [messages, autoScroll, isPaused]);
 
-  const showToast = useCallback((msg: string) => {
-    setCopyFeedback(msg);
-    setTimeout(() => setCopyFeedback(null), 2000);
-  }, []);
+  // Trim displayed messages if buffer limit is reduced
+  useEffect(() => {
+    setMessages((prev) => (prev.length > maxBuffer ? prev.slice(prev.length - maxBuffer) : prev));
+  }, [maxBuffer]);
 
   const handleSubscribe = useCallback(
     (overrideTopic?: string) => {
-      const target = (overrideTopic || topicInput).trim();
+      const target = (overrideTopic ?? topicInput).trim();
       if (!target) return;
 
-      if (activeTopic && activeTopic !== target) {
-        mqttService.unsubscribeTopic(activeTopic);
-        mqttService.unsubscribeTopic(`${activeTopic}/#`);
+      const previous = activeTopicRef.current.trim();
+      if (previous && previous !== target) {
+        mqttService.unsubscribeTopic(previous);
         setMessages([]);
-        setLatestRawPayload(null);
-        setLastReceivedTimestamp(null);
-        setLastReceivedAtMs(null);
-        setTotalMessagesCount(0);
+        pendingBufferRef.current = [];
+        setQueuedWhilePaused(0);
+        setSelectedId(null);
       }
 
+      if (!target.endsWith('/#')) {
+        mqttService.unsubscribeTopic(`${target}/#`);
+      }
       mqttService.subscribeTopic(target, qosInput);
       setActiveTopic(target);
       activeTopicRef.current = target;
       setIsSubscribed(true);
-      setBrokerDiag(mqttService.getDiagnostics());
+      isSubscribedRef.current = true;
 
       if (typeof window !== 'undefined') {
         localStorage.setItem('panorama_mqtt_selected_device', target);
         localStorage.setItem('panorama_mqtt_target_topic', target);
       }
-
-      showToast(`Subscribed: ${target}`);
+      showToast(`Subscribed: ${target} (QoS ${qosInput})`);
     },
-    [topicInput, qosInput, activeTopic, showToast]
+    [topicInput, qosInput, showToast]
   );
 
   const handleUnsubscribe = useCallback(() => {
-    if (!activeTopic) return;
-    mqttService.unsubscribeTopic(activeTopic);
-    mqttService.unsubscribeTopic(`${activeTopic}/#`);
+    const current = activeTopicRef.current.trim();
+    if (!current) return;
+    mqttService.unsubscribeTopic(current);
     setIsSubscribed(false);
-    setBrokerDiag(mqttService.getDiagnostics());
-    showToast(`Unsubscribed: ${activeTopic}`);
-  }, [activeTopic, showToast]);
-
-  const handleQuickSelectChange = useCallback(
-    (newUid: string) => {
-      const cleanUid = newUid.trim();
-      if (!cleanUid) return;
-      setTopicInput(cleanUid);
-      handleSubscribe(cleanUid);
-    },
-    [handleSubscribe]
-  );
-
-  const handleClearConsole = useCallback(() => {
-    setMessages([]);
-    showToast('Console cleared');
+    isSubscribedRef.current = false;
+    showToast(`Unsubscribed: ${current}`);
   }, [showToast]);
 
-  const handleTogglePause = useCallback(() => setIsPaused((prev) => !prev), []);
+  const handleTogglePause = useCallback(() => {
+    setIsPaused((prev) => {
+      const nextPaused = !prev;
+      isPausedRef.current = nextPaused;
+      if (!nextPaused && pendingBufferRef.current.length > 0) {
+        const flushed = pendingBufferRef.current;
+        pendingBufferRef.current = [];
+        setQueuedWhilePaused(0);
+        setMessages((existing) => {
+          const combined = [...existing, ...flushed];
+          const limit = maxBufferRef.current;
+          return combined.length > limit ? combined.slice(combined.length - limit) : combined;
+        });
+      }
+      return nextPaused;
+    });
+  }, []);
+
+  // Clear console does NOT unsubscribe or disconnect MQTT
+  const handleClearConsole = useCallback(() => {
+    setMessages([]);
+    pendingBufferRef.current = [];
+    setQueuedWhilePaused(0);
+    setSelectedId(null);
+    showToast('Console cleared');
+  }, [showToast]);
 
   const handleToggleAutoScroll = useCallback(() => {
     setAutoScroll((prev) => {
@@ -723,123 +573,97 @@ export const MqttMonitorScreen: React.FC = () => {
     });
   }, []);
 
-  const handleToggleFormatMode = useCallback(() => {
-    setFormatMode((prev) => {
-      const next = prev === 'pretty' ? 'raw' : 'pretty';
-      if (typeof window !== 'undefined') localStorage.setItem('panorama_mqtt_format_mode', next);
-      return next;
-    });
+  const handleSetViewMode = useCallback((mode: 'json' | 'raw') => {
+    setViewMode(mode);
+    if (typeof window !== 'undefined') localStorage.setItem('panorama_mqtt_view_mode', mode);
   }, []);
 
-  const toggleCollapse = useCallback((id: string) => {
-    setCollapsedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const handleCopy = useCallback(
-    (text: string, label: string) => {
+  const copyEntryText = useCallback(
+    (entry: SerialMessage) => {
+      const text = viewMode === 'json' && entry.formattedJson ? entry.formattedJson : entry.rawPayload;
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        navigator.clipboard.writeText(text).then(() => showToast(label));
+        navigator.clipboard.writeText(text).then(() => showToast(`Copied #${entry.seq}`));
       }
     },
-    [showToast]
+    [viewMode, showToast]
   );
 
+  const handleToolbarCopy = useCallback(() => {
+    if (messages.length === 0) return;
+    const target = (selectedId && messages.find((m) => m.id === selectedId)) || messages[messages.length - 1];
+    copyEntryText(target);
+  }, [messages, selectedId, copyEntryText]);
+
   const handleDownloadLogs = useCallback(() => {
-    if (typeof window === 'undefined') return;
-    const exportObj = {
+    if (typeof window === 'undefined' || messages.length === 0) return;
+    const payload = {
       exportedAt: new Date().toISOString(),
-      deviceUid: activeTopic,
-      broker: {
-        host: brokerDiag.host,
-        port: brokerDiag.port,
-        protocol: brokerDiag.protocol,
-        mqttVersion: brokerDiag.mqttVersion,
-      },
-      messageCount: messages.length,
+      topic: activeTopic,
+      totalReceived: totalMessagesCount,
+      exportedCount: messages.length,
       messages: messages.map((m) => ({
         seq: m.seq,
         topic: m.topic,
-        receivedAt: m.receivedAtFormatted,
         qos: m.qos,
-        payloadBytes: m.payloadSize,
-        payload: m.rawParsedJson,
+        receivedAt: m.receivedAtFormatted,
+        deviceTimestamp: m.deviceTimestamp,
+        isJson: m.isJson,
+        payload: m.isJson ? m.parsedJson : m.rawPayload,
       })),
     };
-    const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `panorama-raw-telemetry-${activeTopic}-${Date.now()}.json`;
+    a.download = `mqtt-serial-log-${activeTopic.replace(/[^a-zA-Z0-9_-]/g, '_')}-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    showToast(`Exported ${messages.length} frame(s)`);
-  }, [activeTopic, brokerDiag, messages, showToast]);
-
-  const handleSaveMetadata = useCallback(
-    async (overrides: DeviceHardwareOverrides) => {
-      const saved = saveLocalHardwareOverrides(activeTopic, overrides);
-      setMetadataOverrides(saved);
-      setShowMetadataModal(false);
-      const synced = await persistBackendDeviceMetadata(activeTopic, saved, brokerDiag, activeTopic);
-      showToast(synced ? 'Metadata saved & synced to backend' : 'Metadata saved locally');
-    },
-    [activeTopic, brokerDiag, showToast]
-  );
-
-  // Filter displayed messages by search query (non-destructive)
-  const filteredMessages = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return messages;
-    return messages.filter(
-      (m) =>
-        m.rawJsonString.toLowerCase().includes(q) ||
-        m.topic.toLowerCase().includes(q) ||
-        m.receivedAtFormatted.toLowerCase().includes(q) ||
-        String(m.seq).includes(q)
-    );
-  }, [messages, searchQuery]);
-
-  const isBrokerConnected = brokerDiag.mqttSessionConnected || mqttBrokerStatus === 'CONNECTED';
+    showToast(`Downloaded ${messages.length} log(s)`);
+  }, [activeTopic, messages, totalMessagesCount, showToast]);
 
   return (
     <div
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '10px',
+        gap: '6px',
         width: '100%',
-        maxWidth: '100%',
+        height: 'calc(100vh - 134px)',
+        minHeight: '540px',
         fontFamily: typography.fontFamily,
         boxSizing: 'border-box',
-        paddingBottom: '16px',
+        overflow: 'hidden',
       }}
     >
-      {/* TOP SCADA CONSOLE HEADER */}
+      {/* Clean dark terminal scrollbar styling */}
+      <style>{`
+        .mqtt-serial-stream::-webkit-scrollbar { width: 8px; height: 8px; }
+        .mqtt-serial-stream::-webkit-scrollbar-track { background: #0D1117; }
+        .mqtt-serial-stream::-webkit-scrollbar-thumb { background: #30363D; border-radius: 4px; }
+        .mqtt-serial-stream::-webkit-scrollbar-thumb:hover { background: #484F58; }
+      `}</style>
+
+      {/* A. COMPACT MQTT HEADER */}
       <div
         style={{
           backgroundColor: '#FFFFFF',
-          borderRadius: '6px',
           border: '1px solid #E2E8F0',
-          padding: '10px 14px',
+          borderRadius: '6px',
+          padding: '8px 12px',
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '10px',
-          boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+          gap: '8px',
+          flexShrink: 0,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div
             style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '6px',
+              width: '26px',
+              height: '26px',
+              borderRadius: '5px',
               backgroundColor: '#0F172A',
               color: '#38BDF8',
               display: 'flex',
@@ -848,785 +672,581 @@ export const MqttMonitorScreen: React.FC = () => {
               flexShrink: 0,
             }}
           >
-            <Terminal size={17} />
+            <Terminal size={15} />
           </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <h1 style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A', letterSpacing: '0.2px', margin: 0 }}>
-                PANORAMA HARDWARE &amp; COMMUNICATION DIAGNOSTICS CONSOLE
-              </h1>
-              <StatusPill label="SCADA Diagnostics" tone="info" />
-            </div>
-            <div style={{ fontSize: '11px', color: '#64748B' }}>
-              Broker:{' '}
-              <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#334155' }}>
-                {brokerDiag.host}:{brokerDiag.port}
-              </span>{' '}
-              ({brokerDiag.useSSL ? 'WSS / TLS' : 'WS'}) &bull; Topic:{' '}
-              <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#0284C7' }}>{activeTopic}</span>
-            </div>
-          </div>
+          <h1 style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '0.2px' }}>
+            RAW MQTT SERIAL MONITOR
+          </h1>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-          <StatusPill
-            label={isBrokerConnected ? 'MQTT CONNECTED' : 'MQTT DISCONNECTED'}
-            tone={isBrokerConnected ? 'success' : 'danger'}
-          />
-          <StatusPill
-            label={isTopicConfirmed ? 'SUBSCRIBED' : 'UNSUBSCRIBED'}
-            tone={isTopicConfirmed ? 'info' : 'warning'}
-          />
-          <StatusPill
-            label={isPaused ? 'STREAM PAUSED' : 'STREAM LIVE'}
-            tone={isPaused ? 'warning' : 'success'}
-          />
-          {copyFeedback && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
+          {/* Connection Status */}
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '3px 8px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 700,
+              backgroundColor: isBrokerConnected ? '#F0FDF4' : '#FEF2F2',
+              border: `1px solid ${isBrokerConnected ? '#BBF7D0' : '#FECACA'}`,
+              color: isBrokerConnected ? '#15803D' : '#B91C1C',
+            }}
+          >
             <span
               style={{
-                fontSize: '10px',
-                fontWeight: 700,
-                color: '#15803D',
-                backgroundColor: '#DCFCE7',
-                padding: '3px 8px',
-                borderRadius: '4px',
-                border: '1px solid #86EFAC',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                backgroundColor: isBrokerConnected ? '#16A34A' : '#DC2626',
               }}
-            >
-              <Check size={11} /> {copyFeedback}
-            </span>
-          )}
+            />
+            {isBrokerConnected ? 'CONNECTED' : 'DISCONNECTED'}
+          </span>
+
+          {/* Live / Paused Indicator */}
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px',
+              padding: '3px 8px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 700,
+              backgroundColor: isPaused ? '#FFFBEB' : '#F0FDF4',
+              border: `1px solid ${isPaused ? '#FDE68A' : '#BBF7D0'}`,
+              color: isPaused ? '#B45309' : '#15803D',
+            }}
+          >
+            <span
+              style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                backgroundColor: isPaused ? '#D97706' : '#16A34A',
+              }}
+            />
+            {isPaused ? `PAUSED${queuedWhilePaused > 0 ? ` (+${queuedWhilePaused})` : ''}` : 'LIVE'}
+          </span>
+
+          {/* Selected Topic */}
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '3px 8px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              backgroundColor: '#F8FAFC',
+              border: '1px solid #E2E8F0',
+              color: '#475569',
+            }}
+          >
+            Topic: <strong style={{ fontFamily: 'monospace', color: '#0F172A' }}>{activeTopic}</strong>
+          </span>
+
+          {/* Subscription Status */}
+          <span
+            style={{
+              padding: '3px 8px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 700,
+              backgroundColor: isSubscribed ? '#EFF6FF' : '#F8FAFC',
+              border: `1px solid ${isSubscribed ? '#BFDBFE' : '#CBD5E1'}`,
+              color: isSubscribed ? '#1D4ED8' : '#64748B',
+            }}
+          >
+            {isSubscribed ? 'SUBSCRIBED' : 'UNSUBSCRIBED'}
+          </span>
+
+          {/* Total Messages Received */}
+          <span
+            style={{
+              padding: '3px 8px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 700,
+              backgroundColor: '#F8FAFC',
+              border: '1px solid #E2E8F0',
+              color: '#0F172A',
+            }}
+          >
+            Messages: <span style={{ fontFamily: 'monospace', color: '#2563EB' }}>{totalMessagesCount}</span>
+          </span>
         </div>
       </div>
 
-      {/* SECTION 9: DEVICE HEALTH SUMMARY STRIP */}
-      <DeviceHealthSummaryBar
-        brokerDiag={brokerDiag}
-        isTopicConfirmed={isTopicConfirmed}
-        liveMetrics={liveMetrics}
-        deviceOnline={managedDevice ? managedDevice.isOnline : apiDevice ? Boolean(apiDevice.isOnline) : null}
-      />
-
-      {/* ROW 1: DEVICE IDENTITY | MQTT CONNECTION & SUBSCRIPTION CONTROLS | LIVE TELEMETRY STATUS */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))', gap: '10px' }}>
-        <DeviceIdentityCard
-          metadata={deviceMetadata}
-          managedDevice={managedDevice}
-          apiDevice={apiDevice}
-          liveMetrics={liveMetrics}
-          activeTopic={activeTopic}
-          onCopyUid={() => handleCopy(activeTopic, `UID copied: ${activeTopic}`)}
-          onEditMetadata={() => setShowMetadataModal(true)}
-        />
-
-        {/* MQTT Subscription & Topic Controls Card */}
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            border: '1px solid #E2E8F0',
-            borderRadius: '6px',
-            padding: '10px 12px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-            boxShadow: '0 1px 2px rgba(15,23,42,0.03)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <SlidersHorizontal size={14} color="#0284C7" />
-              <span style={{ fontSize: '12px', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase' }}>
-                MQTT Subscription Control
-              </span>
-            </div>
-            <StatusPill
-              label={brokerDiag.websocketConnected ? 'WS UP' : 'WS DOWN'}
-              tone={brokerDiag.websocketConnected ? 'success' : 'danger'}
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
-                Select Registered Device / UID
-              </label>
-              <select
-                value={availableDevices.some((d) => d.uid === topicInput) ? topicInput : ''}
-                onChange={(e) => {
-                  if (e.target.value) handleQuickSelectChange(e.target.value);
-                }}
-                style={{
-                  width: '100%',
-                  padding: '6px 8px',
-                  fontSize: '11px',
-                  color: '#0F172A',
-                  backgroundColor: '#F8FAFC',
-                  border: '1px solid #CBD5E1',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-              >
-                <option value="" disabled>
-                  Select device preset...
-                </option>
-                {availableDevices.map((d) => (
-                  <option key={d.uid} value={d.uid}>
-                    {d.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              <div style={{ flex: '1 1 160px' }}>
-                <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
-                  MQTT Topic
-                </label>
-                <input
-                  type="text"
-                  value={topicInput}
-                  onChange={(e) => setTopicInput(e.target.value)}
-                  placeholder="Device UID / Topic..."
-                  style={{
-                    width: '100%',
-                    padding: '6px 8px',
-                    fontFamily: 'monospace',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: '#0F172A',
-                    backgroundColor: '#F8FAFC',
-                    border: '1px solid #CBD5E1',
-                    borderRadius: '4px',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-              <div style={{ width: '82px' }}>
-                <label style={{ display: 'block', fontSize: '10px', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>
-                  QoS
-                </label>
-                <select
-                  value={qosInput}
-                  onChange={(e) => setQosInput(Number(e.target.value))}
-                  style={{
-                    width: '100%',
-                    padding: '6px 6px',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: '#0F172A',
-                    backgroundColor: '#F8FAFC',
-                    border: '1px solid #CBD5E1',
-                    borderRadius: '4px',
-                  }}
-                >
-                  <option value={0}>QoS 0</option>
-                  <option value={1}>QoS 1</option>
-                  <option value={2}>QoS 2</option>
-                </select>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
-              <button
-                type="button"
-                onClick={() => handleSubscribe()}
-                style={{
-                  flex: 1,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '5px',
-                  padding: '6px 10px',
-                  backgroundColor: isSubscribed && activeTopic === topicInput.trim() ? '#15803D' : '#2563EB',
-                  color: '#FFFFFF',
-                  border: 'none',
-                  borderRadius: '4px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                <Radio size={12} />
-                {isSubscribed && activeTopic === topicInput.trim() ? 'Subscribed' : 'Subscribe'}
-              </button>
-              <button
-                type="button"
-                onClick={handleUnsubscribe}
-                disabled={!isSubscribed}
-                style={{
-                  flex: 1,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '5px',
-                  padding: '6px 10px',
-                  backgroundColor: '#FFFFFF',
-                  color: isSubscribed ? '#DC2626' : '#94A3B8',
-                  border: `1px solid ${isSubscribed ? '#FECACA' : '#E2E8F0'}`,
-                  borderRadius: '4px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  cursor: isSubscribed ? 'pointer' : 'not-allowed',
-                }}
-              >
-                <WifiOff size={12} />
-                Unsubscribe
-              </button>
-            </div>
-          </div>
-
-          <div style={{ marginTop: 'auto', paddingTop: '4px' }}>
-            <SpecRow label="Active Broker" value={`${brokerDiag.host}:${brokerDiag.port}`} mono />
-            <SpecRow label="Protocol / Security" value={brokerDiag.transportSecurity} />
-            <SpecRow
-              label="Latency"
-              value={brokerDiag.connectionLatencyMs !== null ? `${brokerDiag.connectionLatencyMs} ms` : 'Not Measured'}
-              mono
-            />
-          </div>
-        </div>
-
-        {/* Live Telemetry Summary Card */}
-        <div
-          style={{
-            backgroundColor: '#FFFFFF',
-            border: '1px solid #E2E8F0',
-            borderRadius: '6px',
-            padding: '10px 12px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '6px',
-            boxShadow: '0 1px 2px rgba(15,23,42,0.03)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Activity size={14} color="#0284C7" />
-              <span style={{ fontSize: '12px', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase' }}>
-                Telemetry Status
-              </span>
-            </div>
-            <StatusPill
-              label={liveMetrics.hasData ? 'RECEIVING' : 'NO DATA'}
-              tone={liveMetrics.hasData ? 'success' : 'neutral'}
-            />
-          </div>
-
-          <SpecRow label="Topic Messages Received" value={String(totalMessagesCount)} mono />
-          <SpecRow label="Buffered Frames" value={`${messages.length} / ${MAX_MESSAGE_BUFFER}`} mono />
-          <SpecRow label="Last Message Time" value={lastReceivedTimestamp || 'Waiting...'} mono />
-          <SpecRow label="Device Timestamp" value={liveMetrics.deviceTimestamp || 'No Data'} mono />
-          <SpecRow
-            label="Tank 1 Level"
-            value={
-              liveMetrics.waterLevelCm !== null
-                ? `${liveMetrics.waterLevelCm.toFixed(1)} cm (${liveMetrics.waterLevelPercent !== null ? liveMetrics.waterLevelPercent.toFixed(1) + '%' : '—'})`
-                : 'No Data'
-            }
-            mono
-          />
-          <SpecRow
-            label="Battery"
-            value={liveMetrics.battery !== null ? `${liveMetrics.battery.toFixed(1)}` : 'No Data'}
-            mono
-          />
-          <SpecRow
-            label="Temperature"
-            value={liveMetrics.temperature !== null ? `${liveMetrics.temperature.toFixed(1)} °C` : 'No Data'}
-            mono
-          />
-          <SpecRow
-            label="Payload Fields Count"
-            value={liveMetrics.rawPayload ? `${Object.keys(liveMetrics.rawPayload).length} keys` : '0'}
-            mono
-          />
-        </div>
-      </div>
-
-      {/* ROW 2: HARDWARE OVERVIEW & PERIPHERALS | COMMUNICATION INTERFACES */}
-      <HardwareAndCommsRow metadata={deviceMetadata} liveMetrics={liveMetrics} />
-
-      {/* ROW 3: SENSOR DIAGNOSTICS | FIRMWARE CONFIGURATION */}
-      <SensorsAndFirmwareRow metadata={deviceMetadata} liveMetrics={liveMetrics} />
-
-      {/* ROW 4: MQTT BROKER DETAILS | CONNECTION DIAGNOSTICS */}
-      <MqttBrokerDetailsRow
-        brokerDiag={brokerDiag}
-        activeTopic={activeTopic}
-        activeQos={qosInput}
-        isTopicConfirmed={isTopicConfirmed}
-        topicMessagesCount={totalMessagesCount}
-        lastReceivedFormatted={lastReceivedTimestamp}
-        nowTick={nowTick}
-      />
-
-      {/* ROW 5: COMMUNICATION ARCHITECTURE */}
-      <CommunicationArchitecturePanel brokerDiag={brokerDiag} activeTopic={activeTopic} />
-
-      {/* ROW 6: LIVE TELEMETRY INSPECTOR (SECTION 6) */}
+      {/* B. MQTT TOPIC CONTROLS */}
       <div
         style={{
-          backgroundColor: '#0D1117',
+          backgroundColor: '#FFFFFF',
+          border: '1px solid #E2E8F0',
           borderRadius: '6px',
-          border: '1px solid #30363D',
-          overflow: 'hidden',
+          padding: '6px 12px',
           display: 'flex',
-          flexDirection: 'column',
-          minHeight: '440px',
-          maxHeight: '640px',
-          boxShadow: '0 4px 14px rgba(0,0,0,0.16)',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: '6px',
+          flexShrink: 0,
         }}
       >
-        {/* Terminal Header & Mode/Action Toolbar */}
+        <span style={{ fontSize: '11px', fontWeight: 700, color: '#475569' }}>Topic:</span>
+        <input
+          type="text"
+          value={topicInput}
+          onChange={(e) => setTopicInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleSubscribe();
+          }}
+          placeholder="Enter MQTT topic..."
+          style={{
+            width: '230px',
+            maxWidth: '100%',
+            padding: '5px 8px',
+            fontFamily: 'monospace',
+            fontSize: '11.5px',
+            fontWeight: 700,
+            color: '#0F172A',
+            backgroundColor: '#F8FAFC',
+            border: '1px solid #CBD5E1',
+            borderRadius: '4px',
+            outline: 'none',
+          }}
+        />
+
+        <select
+          value={availableDevices.some((d) => d.uid === topicInput) ? topicInput : ''}
+          onChange={(e) => {
+            if (e.target.value) {
+              setTopicInput(e.target.value);
+              handleSubscribe(e.target.value);
+            }
+          }}
+          title="Select registered device topic"
+          style={{
+            padding: '5px 7px',
+            fontSize: '11px',
+            color: '#334155',
+            backgroundColor: '#F1F5F9',
+            border: '1px solid #CBD5E1',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            maxWidth: '210px',
+          }}
+        >
+          <option value="" disabled>
+            Saved Topics...
+          </option>
+          {availableDevices.map((d) => (
+            <option key={d.uid} value={d.uid}>
+              {d.label}
+            </option>
+          ))}
+        </select>
+
+        <span style={{ fontSize: '11px', fontWeight: 700, color: '#475569', marginLeft: '4px' }}>QoS:</span>
+        <select
+          value={qosInput}
+          onChange={(e) => setQosInput(Number(e.target.value))}
+          style={{
+            padding: '5px 7px',
+            fontSize: '11px',
+            fontWeight: 700,
+            color: '#0F172A',
+            backgroundColor: '#F8FAFC',
+            border: '1px solid #CBD5E1',
+            borderRadius: '4px',
+            cursor: 'pointer',
+          }}
+        >
+          <option value={0}>0</option>
+          <option value={1}>1</option>
+          <option value={2}>2</option>
+        </select>
+
+        <button
+          type="button"
+          onClick={() => handleSubscribe()}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '5px 11px',
+            backgroundColor: isSubscribed && activeTopic === topicInput.trim() ? '#15803D' : '#2563EB',
+            color: '#FFFFFF',
+            border: 'none',
+            borderRadius: '4px',
+            fontSize: '11px',
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+        >
+          <Radio size={12} />
+          SUBSCRIBE
+        </button>
+
+        <button
+          type="button"
+          onClick={handleUnsubscribe}
+          disabled={!isSubscribed}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '5px 11px',
+            backgroundColor: '#FFFFFF',
+            color: isSubscribed ? '#DC2626' : '#94A3B8',
+            border: `1px solid ${isSubscribed ? '#FECACA' : '#E2E8F0'}`,
+            borderRadius: '4px',
+            fontSize: '11px',
+            fontWeight: 700,
+            cursor: isSubscribed ? 'pointer' : 'not-allowed',
+          }}
+        >
+          <WifiOff size={12} />
+          UNSUBSCRIBE
+        </button>
+
+        {feedback && (
+          <span
+            style={{
+              marginLeft: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '3px 8px',
+              borderRadius: '4px',
+              fontSize: '10px',
+              fontWeight: 700,
+              color: '#15803D',
+              backgroundColor: '#DCFCE7',
+              border: '1px solid #86EFAC',
+            }}
+          >
+            <Check size={11} /> {feedback}
+          </span>
+        )}
+      </div>
+
+      {/* C. TERMINAL CONTROLS TOOLBAR */}
+      <div
+        style={{
+          backgroundColor: '#FFFFFF',
+          border: '1px solid #E2E8F0',
+          borderRadius: '6px',
+          padding: '6px 12px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '6px',
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '5px' }}>
+          <button
+            type="button"
+            onClick={handleTogglePause}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 9px',
+              backgroundColor: isPaused ? '#ECFDF5' : '#FFFBEB',
+              color: isPaused ? '#059669' : '#B45309',
+              border: `1px solid ${isPaused ? '#A7F3D0' : '#FDE68A'}`,
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            {isPaused ? <Play size={11} /> : <Pause size={11} />}
+            {isPaused ? 'Resume' : 'Pause'}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleClearConsole}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 9px',
+              backgroundColor: '#FFFFFF',
+              color: '#475569',
+              border: '1px solid #CBD5E1',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <Trash2 size={11} />
+            Clear Console
+          </button>
+
+          <button
+            type="button"
+            onClick={handleToggleAutoScroll}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 9px',
+              backgroundColor: autoScroll ? '#EFF6FF' : '#F8FAFC',
+              color: autoScroll ? '#1D4ED8' : '#64748B',
+              border: `1px solid ${autoScroll ? '#BFDBFE' : '#CBD5E1'}`,
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <ArrowDown size={11} />
+            Auto Scroll
+          </button>
+
+          <button
+            type="button"
+            onClick={handleToggleTimestamps}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 9px',
+              backgroundColor: showTimestamps ? '#EFF6FF' : '#F8FAFC',
+              color: showTimestamps ? '#1D4ED8' : '#64748B',
+              border: `1px solid ${showTimestamps ? '#BFDBFE' : '#CBD5E1'}`,
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <Clock size={11} />
+            Timestamps
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSetViewMode('json')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 9px',
+              backgroundColor: viewMode === 'json' ? '#0F172A' : '#F8FAFC',
+              color: viewMode === 'json' ? '#FFFFFF' : '#475569',
+              border: `1px solid ${viewMode === 'json' ? '#0F172A' : '#CBD5E1'}`,
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            <Code2 size={11} />
+            JSON View
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSetViewMode('raw')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 9px',
+              backgroundColor: viewMode === 'raw' ? '#0F172A' : '#F8FAFC',
+              color: viewMode === 'raw' ? '#FFFFFF' : '#475569',
+              border: `1px solid ${viewMode === 'raw' ? '#0F172A' : '#CBD5E1'}`,
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            <AlignLeft size={11} />
+            Raw View
+          </button>
+
+          <button
+            type="button"
+            onClick={handleToolbarCopy}
+            disabled={messages.length === 0}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 9px',
+              backgroundColor: '#FFFFFF',
+              color: messages.length > 0 ? '#334155' : '#94A3B8',
+              border: '1px solid #CBD5E1',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: messages.length > 0 ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <Copy size={11} />
+            Copy
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDownloadLogs}
+            disabled={messages.length === 0}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '4px 9px',
+              backgroundColor: '#FFFFFF',
+              color: messages.length > 0 ? '#1D4ED8' : '#94A3B8',
+              border: `1px solid ${messages.length > 0 ? '#BFDBFE' : '#E2E8F0'}`,
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 700,
+              cursor: messages.length > 0 ? 'pointer' : 'not-allowed',
+            }}
+          >
+            <Download size={11} />
+            Download Logs
+          </button>
+        </div>
+
+        {/* Buffer limit selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#64748B' }}>
+          <span>Buffer:</span>
+          <select
+            value={maxBuffer}
+            onChange={(e) => setMaxBuffer(Number(e.target.value))}
+            title="Maximum displayed messages"
+            style={{
+              padding: '3px 6px',
+              fontSize: '11px',
+              fontFamily: 'monospace',
+              fontWeight: 700,
+              color: '#0F172A',
+              backgroundColor: '#F8FAFC',
+              border: '1px solid #CBD5E1',
+              borderRadius: '4px',
+            }}
+          >
+            {BUFFER_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+          <span style={{ fontFamily: 'monospace', color: '#475569' }}>
+            ({messages.length}/{maxBuffer})
+          </span>
+        </div>
+      </div>
+
+      {/* D. MAIN SERIAL MONITOR TERMINAL (75–85% OF PAGE HEIGHT) */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          backgroundColor: '#0D1117',
+          border: '1px solid #30363D',
+          borderRadius: '6px',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          boxShadow: '0 4px 12px rgba(15, 23, 42, 0.14)',
+        }}
+      >
+        {/* Minimal Terminal Status Bar */}
         <div
           style={{
             backgroundColor: '#161B22',
             borderBottom: '1px solid #30363D',
-            padding: '8px 12px',
+            padding: '5px 12px',
             display: 'flex',
-            flexWrap: 'wrap',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '8px',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+            fontSize: '11px',
+            color: '#8B949E',
             flexShrink: 0,
           }}
         >
-          {/* Left: Prompt + Mode Toggle (Raw JSON vs Parsed Telemetry) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: '5px', flexShrink: 0 }}>
-              <span style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#FF5F56', display: 'inline-block' }} />
-              <span style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#FFBD2E', display: 'inline-block' }} />
-              <span style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#27C93F', display: 'inline-block' }} />
-            </div>
-            <span style={{ fontFamily: 'monospace', fontSize: '11px', color: '#C9D1D9', fontWeight: 700 }}>
-              LIVE TELEMETRY INSPECTOR &bull; {activeTopic}
-            </span>
-
-            {/* Mode A / Mode B Switcher */}
-            <div style={{ display: 'inline-flex', borderRadius: '4px', overflow: 'hidden', border: '1px solid #30363D' }}>
-              <button
-                type="button"
-                onClick={() => setInspectorMode('raw')}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  padding: '3px 8px',
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  border: 'none',
-                  cursor: 'pointer',
-                  backgroundColor: inspectorMode === 'raw' ? '#2563EB' : '#21262D',
-                  color: inspectorMode === 'raw' ? '#FFFFFF' : '#8B949E',
-                }}
-              >
-                <Code2 size={11} />
-                Raw JSON
-              </button>
-              <button
-                type="button"
-                onClick={() => setInspectorMode('parsed')}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  padding: '3px 8px',
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  border: 'none',
-                  cursor: 'pointer',
-                  backgroundColor: inspectorMode === 'parsed' ? '#2563EB' : '#21262D',
-                  color: inspectorMode === 'parsed' ? '#FFFFFF' : '#8B949E',
-                }}
-              >
-                <Table2 size={11} />
-                Parsed Telemetry
-              </button>
-            </div>
-          </div>
-
-          {/* Right: Search + Controls */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
-            {/* Search within messages */}
-            <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-              <Search size={11} color="#8B949E" style={{ position: 'absolute', left: '7px', pointerEvents: 'none' }} />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search messages..."
-                style={{
-                  padding: '3px 8px 3px 23px',
-                  fontSize: '10px',
-                  fontFamily: 'monospace',
-                  backgroundColor: '#0D1117',
-                  color: '#C9D1D9',
-                  border: '1px solid #30363D',
-                  borderRadius: '4px',
-                  width: '145px',
-                  outline: 'none',
-                }}
-              />
-            </div>
-
-            {/* Pretty / Compact Format Toggle (for Raw JSON mode) */}
-            {inspectorMode === 'raw' && (
-              <button
-                type="button"
-                onClick={handleToggleFormatMode}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  padding: '3px 8px',
-                  backgroundColor: '#21262D',
-                  color: formatMode === 'pretty' ? '#7EE787' : '#C9D1D9',
-                  border: '1px solid #30363D',
-                  borderRadius: '4px',
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                {formatMode === 'pretty' ? <Code2 size={11} /> : <AlignLeft size={11} />}
-                {formatMode === 'pretty' ? 'Pretty' : 'Compact'}
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={handleTogglePause}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '3px 8px',
-                backgroundColor: isPaused ? '#064E3B' : '#451A03',
-                color: isPaused ? '#6EE7B7' : '#FCD34D',
-                border: `1px solid ${isPaused ? '#059669' : '#B45309'}`,
-                borderRadius: '4px',
-                fontSize: '10px',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              {isPaused ? <Play size={10} /> : <Pause size={10} />}
-              {isPaused ? 'Resume' : 'Pause'}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleToggleAutoScroll}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '3px 8px',
-                backgroundColor: autoScroll ? '#1E3A5F' : '#21262D',
-                color: autoScroll ? '#79C0FF' : '#8B949E',
-                border: '1px solid #30363D',
-                borderRadius: '4px',
-                fontSize: '10px',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              <ArrowDown size={10} />
-              {autoScroll ? 'Auto Scroll' : 'Manual'}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleToggleTimestamps}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '3px 8px',
-                backgroundColor: showTimestamps ? '#1E3A5F' : '#21262D',
-                color: showTimestamps ? '#79C0FF' : '#8B949E',
-                border: '1px solid #30363D',
-                borderRadius: '4px',
-                fontSize: '10px',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              <Clock size={10} />
-              Timestamps
-            </button>
-
-            <button
-              type="button"
-              onClick={handleDownloadLogs}
-              disabled={messages.length === 0}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '3px 8px',
-                backgroundColor: '#21262D',
-                color: messages.length > 0 ? '#C9D1D9' : '#484F58',
-                border: '1px solid #30363D',
-                borderRadius: '4px',
-                fontSize: '10px',
-                fontWeight: 700,
-                cursor: messages.length > 0 ? 'pointer' : 'not-allowed',
-              }}
-            >
-              <Download size={10} />
-              Download
-            </button>
-
-            <button
-              type="button"
-              onClick={handleClearConsole}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                padding: '3px 8px',
-                backgroundColor: '#21262D',
-                color: '#F85149',
-                border: '1px solid #30363D',
-                borderRadius: '4px',
-                fontSize: '10px',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              <Trash2 size={10} />
-              Clear
-            </button>
-
-            <span style={{ fontFamily: 'monospace', fontSize: '10px', color: '#8B949E' }}>
-              {filteredMessages.length}/{messages.length}
+          <span style={{ color: '#C9D1D9', fontWeight: 600 }}>
+            LIVE MQTT TERMINAL &mdash; {activeTopic}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ color: '#58A6FF' }}>{viewMode === 'json' ? 'JSON VIEW' : 'RAW VIEW'}</span>
+            <span style={{ color: isPaused ? '#F59E0B' : '#3FB950', fontWeight: 700 }}>
+              {isPaused ? 'PAUSED' : '● STREAMING'}
             </span>
           </div>
         </div>
 
-        {/* Stream Body */}
+        {/* Scrollable Terminal Stream */}
         <div
-          ref={terminalStreamRef}
+          ref={terminalRef}
+          className="mqtt-serial-stream"
           style={{
             flex: 1,
-            minHeight: '360px',
+            minHeight: 0,
             overflowY: 'auto',
+            overflowX: 'auto',
             padding: '10px 14px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px',
-            backgroundColor: '#0D1117',
+            gap: '4px',
           }}
         >
-          {filteredMessages.length === 0 ? (
+          {messages.length === 0 ? (
             <div
               style={{
+                flex: 1,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                height: '100%',
-                minHeight: '320px',
-                gap: '10px',
                 color: '#8B949E',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                fontSize: '12px',
+                gap: '6px',
                 textAlign: 'center',
               }}
             >
-              <div
-                style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: '50%',
-                  border: '2px dashed #30363D',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#58A6FF',
-                }}
-              >
-                <Radio size={20} />
+              <div style={{ color: '#C9D1D9', fontWeight: 700 }}>
+                {isSubscribed
+                  ? `Listening on MQTT topic: ${activeTopic}`
+                  : `Unsubscribed from topic: ${activeTopic}`}
               </div>
-              <div style={{ fontFamily: 'monospace', fontSize: '13px', fontWeight: 700, color: '#C9D1D9' }}>
-                {messages.length > 0 && searchQuery
-                  ? `No frames match search "${searchQuery}"`
-                  : `Waiting for live MQTT telemetry on topic: ${activeTopic}`}
-              </div>
-              <div style={{ fontSize: '11px', maxWidth: '520px', lineHeight: 1.5, color: '#8B949E' }}>
+              <div>
                 {isBrokerConnected
-                  ? `MQTT session active on ${brokerDiag.host}:${brokerDiag.port}. Incoming JSON frames published to topic "${activeTopic}" will appear here verbatim in Raw JSON and Parsed Telemetry views.`
-                  : `MQTT broker is currently disconnected. Automatic reconnection is active; live telemetry will stream once connected.`}
+                  ? 'Waiting for incoming MQTT messages...'
+                  : 'Connecting to MQTT broker...'}
               </div>
             </div>
           ) : (
-            filteredMessages.map((frame) => {
-              const isCollapsed = collapsedIds.has(frame.id);
-
-              return (
-                <div
-                  key={frame.id}
-                  style={{
-                    backgroundColor: '#161B22',
-                    border: '1px solid #30363D',
-                    borderRadius: '5px',
-                    overflow: 'hidden',
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                >
-                  {/* Frame Header */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '6px 10px',
-                      backgroundColor: '#1C2128',
-                      borderBottom: isCollapsed ? 'none' : '1px solid #30363D',
-                      fontFamily: 'monospace',
-                      fontSize: '11px',
-                      gap: '6px',
-                    }}
-                  >
-                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ backgroundColor: '#1F2937', color: '#58A6FF', padding: '1px 6px', borderRadius: '3px', fontWeight: 800, fontSize: '10px', border: '1px solid #374151' }}>
-                        #{frame.seq}
-                      </span>
-                      <span style={{ backgroundColor: '#0F172A', color: '#79C0FF', padding: '1px 7px', borderRadius: '3px', border: '1px solid #1E293B', fontWeight: 700, fontSize: '10px' }}>
-                        {frame.topic}
-                      </span>
-                      <span style={{ color: '#8B949E', fontSize: '10px', backgroundColor: '#21262D', padding: '1px 5px', borderRadius: '3px' }}>
-                        QoS {frame.qos}
-                      </span>
-                      <span style={{ color: '#8B949E', fontSize: '10px', backgroundColor: '#21262D', padding: '1px 5px', borderRadius: '3px' }}>
-                        {frame.payloadSize} B
-                      </span>
-                      {showTimestamps && (
-                        <span style={{ color: '#58A6FF', fontWeight: 700, fontSize: '10px', backgroundColor: '#1E293B', padding: '1px 6px', borderRadius: '3px', border: '1px solid #334155' }}>
-                          [{frame.receivedAtFormatted}]
-                        </span>
-                      )}
-                      {frame.deviceTimestamp && (
-                        <span style={{ color: '#8B949E', fontSize: '10px' }}>
-                          Dev Time: &quot;{frame.deviceTimestamp}&quot;
-                        </span>
-                      )}
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(frame.rawJsonString, `JSON #${frame.seq} copied`)}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '3px',
-                          padding: '2px 7px',
-                          backgroundColor: '#21262D',
-                          color: '#C9D1D9',
-                          border: '1px solid #30363D',
-                          borderRadius: '3px',
-                          fontSize: '10px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Copy size={10} />
-                        Copy JSON
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(frame.rawPayloadString, `Raw #${frame.seq} copied`)}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '3px',
-                          padding: '2px 7px',
-                          backgroundColor: '#21262D',
-                          color: '#C9D1D9',
-                          border: '1px solid #30363D',
-                          borderRadius: '3px',
-                          fontSize: '10px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Copy size={10} />
-                        Copy Raw
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleCollapse(frame.id)}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '20px',
-                          height: '20px',
-                          backgroundColor: '#21262D',
-                          color: '#8B949E',
-                          border: '1px solid #30363D',
-                          borderRadius: '3px',
-                          cursor: 'pointer',
-                          padding: 0,
-                        }}
-                      >
-                        {isCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Frame Body */}
-                  {!isCollapsed && (
-                    <div style={{ padding: '10px 14px', overflowX: 'auto', backgroundColor: '#0D1117' }}>
-                      {inspectorMode === 'parsed' ? (
-                        <ParsedTelemetryView
-                          data={frame.rawParsedJson}
-                          onCopyValue={(key, val) => handleCopy(String(val), `Copied ${key}`)}
-                        />
-                      ) : formatMode === 'pretty' ? (
-                        <JsonSyntaxViewer
-                          data={frame.rawParsedJson}
-                          onCopyValue={(key, val) => handleCopy(String(val), `Copied ${key}`)}
-                        />
-                      ) : (
-                        <pre
-                          style={{
-                            margin: 0,
-                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-                            fontSize: '11px',
-                            lineHeight: '17px',
-                            color: '#7EE787',
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-all',
-                          }}
-                        >
-                          {frame.rawPayloadString}
-                        </pre>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })
+            messages.map((entry, idx) => (
+              <SerialLogEntry
+                key={entry.id}
+                entry={entry}
+                viewMode={viewMode}
+                showTimestamps={showTimestamps}
+                isSelected={entry.id === selectedId}
+                isFirst={idx === 0}
+                onSelect={setSelectedId}
+                onCopy={copyEntryText}
+              />
+            ))
           )}
         </div>
       </div>
-
-      {/* ADMIN HARDWARE METADATA MODAL */}
-      {showMetadataModal && (
-        <DeviceMetadataModal
-          uid={activeTopic}
-          initial={metadataOverrides}
-          deviceName={deviceMetadata.deviceName}
-          onSave={handleSaveMetadata}
-          onClose={() => setShowMetadataModal(false)}
-        />
-      )}
     </div>
   );
 };
