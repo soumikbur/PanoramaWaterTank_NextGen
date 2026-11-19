@@ -32,6 +32,9 @@ def run_https_server():
         sys.path.insert(0, str(PROJECT_ROOT))
     os.environ["API_TOKEN"] = TEST_TOKEN
     os.environ["ENVIRONMENT"] = "testing"
+    from backend import config as backend_config
+    backend_config.API_TOKEN = TEST_TOKEN
+    backend_config.ENVIRONMENT = "testing"
 
     modern_ciphers = "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384"
     uvicorn.run(

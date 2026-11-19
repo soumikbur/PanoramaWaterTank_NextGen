@@ -1,4 +1,5 @@
 """Security and authentication utilities for HTTPS Receiver."""
+import os
 import secrets
 from typing import Optional
 from fastapi import HTTPException, Request, Security, status
