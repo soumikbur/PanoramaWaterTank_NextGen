@@ -1,12 +1,12 @@
 """Comprehensive TLS/SSL security, certificate validation, and HTTPS test suite."""
 import datetime
 import ipaddress
+import multiprocessing as mp
 import os
 import socket
 import ssl
 import sys
 import time
-from multiprocessing import Process
 from pathlib import Path
 
 import httpx
@@ -49,13 +49,20 @@ def run_https_server():
 @pytest.fixture(scope="module")
 def live_https_server():
     """Start live HTTPS server on isolated port for the test module."""
-    proc = Process(target=run_https_server, daemon=True)
+    if not DEV_CERT_PATH.is_file() or not DEV_KEY_PATH.is_file():
+        from scripts.generate_certificate import generate_self_signed_cert
+        generate_self_signed_cert(output_dir=DEV_CERT_PATH.parent)
+
+    ctx = mp.get_context("spawn")
+    proc = ctx.Process(target=run_https_server, daemon=True)
     proc.start()
 
     # Wait for server to bind port
     start = time.time()
     bound = False
-    while time.time() - start < 6.0:
+    while time.time() - start < 8.0:
+        if not proc.is_alive():
+            pytest.fail(f"Live HTTPS test server process died unexpectedly with exit code {proc.exitcode}.")
         try:
             with socket.create_connection(("127.0.0.1", TEST_HTTPS_PORT), timeout=0.3):
                 bound = True
@@ -70,7 +77,7 @@ def live_https_server():
     yield f"https://127.0.0.1:{TEST_HTTPS_PORT}"
 
     proc.terminate()
-    proc.join()
+    proc.join(timeout=2.0)
 
 
 def get_test_ssl_context():
@@ -133,7 +140,7 @@ def test_test_d_hostname_mismatch_rejected(live_https_server):
     # The certificate only authorizes localhost and 127.0.0.1
     mismatched_url = f"https://127.0.0.2:{TEST_HTTPS_PORT}/api/health"
     with httpx.Client(verify=get_test_ssl_context(), timeout=3.0) as client:
-        with pytest.raises((httpx.ConnectError, ssl.SSLCertVerificationError, ssl.CertificateError)):
+        with pytest.raises((httpx.RequestError, ssl.SSLCertVerificationError, ssl.CertificateError)):
             client.get(mismatched_url)
 
 

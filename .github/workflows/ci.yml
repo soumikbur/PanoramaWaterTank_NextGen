@@ -74,7 +74,7 @@ jobs:
         run: |
           mkdir -p docs/deployment
           python scripts/generate_certificate.py
-          pytest tests/ -v
+          pytest tests/ -v --tb=short
 
   backend-verification:
     name: Backend Test Suite & Schema Audit
