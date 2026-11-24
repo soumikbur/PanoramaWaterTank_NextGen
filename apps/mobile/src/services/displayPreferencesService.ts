@@ -5,18 +5,23 @@
  * Enforces pure Light SCADA theme globally with user-level persistence.
  */
 
+import { deviceProfileService, PerformanceProfileMode } from './deviceProfileService';
+
 export type ThemeMode = 'light';
-export type ZoomLevel = string; // '80%' to '125%'
+export type ZoomLevel = string; // '90%' to '150%'
 export type FontSize = 'small' | 'medium' | 'large';
-export type ScalePreset = string;
+export type ScalePreset = '90%' | '100%' | '110%' | '120%' | '130%' | '150%' | string;
+export type ContrastMode = 'STANDARD' | 'HIGH_CONTRAST';
+export type LayoutDensity = 'COMFORTABLE' | 'COMPACT';
 
 export interface DisplayPreferences {
   version: 3;
   theme: 'light';
   zoom: string; // e.g. '100%'
   fontSize: FontSize; // 'small' | 'medium' | 'large'
-  // Legacy compatibility fields to prevent breaks on existing callers
-  density?: 'comfortable';
+  performanceProfile: PerformanceProfileMode; // 'auto' | 'high' | 'balanced' | 'low'
+  // Compatibility fields
+  density?: 'comfortable' | 'compact';
   sidebarMode?: 'expanded' | 'collapsed' | 'iconOnly';
   dashboard?: {
     showSummaryCards: boolean;
@@ -24,12 +29,12 @@ export interface DisplayPreferences {
     layout: 'standard' | 'compact' | 'expanded';
   };
   scale?: string;
-  layoutDensity?: 'comfortable';
-  contrastMode?: 'STANDARD';
+  layoutDensity?: LayoutDensity;
+  contrastMode?: ContrastMode;
 }
 
 export const ZOOM_MIN = 80;
-export const ZOOM_MAX = 125;
+export const ZOOM_MAX = 150;
 export const ZOOM_STEP = 5;
 export const ZOOM_DEFAULT = 100;
 
@@ -44,6 +49,7 @@ export const DEFAULT_DISPLAY_PREFERENCES: DisplayPreferences = {
   theme: 'light',
   zoom: '100%',
   fontSize: 'medium',
+  performanceProfile: 'auto',
   density: 'comfortable',
   sidebarMode: 'expanded',
   dashboard: {
@@ -52,7 +58,7 @@ export const DEFAULT_DISPLAY_PREFERENCES: DisplayPreferences = {
     layout: 'standard',
   },
   scale: '100%',
-  layoutDensity: 'comfortable',
+  layoutDensity: 'COMFORTABLE',
   contrastMode: 'STANDARD',
 };
 
@@ -120,8 +126,14 @@ export class DisplayPreferencesService {
     document.documentElement.setAttribute('data-theme', 'light');
     document.documentElement.setAttribute('data-font-size', prefs.fontSize);
     
-    const zoomPercent = this.parseZoomPercent(prefs.zoom);
+    const zoomPercent = this.parseZoomPercent(prefs.scale || prefs.zoom);
     document.documentElement.setAttribute('data-zoom', String(zoomPercent));
+
+    const density = prefs.layoutDensity || 'COMFORTABLE';
+    document.documentElement.setAttribute('data-density', density.toLowerCase());
+
+    const contrast = prefs.contrastMode || 'STANDARD';
+    document.documentElement.setAttribute('data-contrast', contrast.toLowerCase());
 
     const zoomFactor = zoomPercent / 100.0;
     const fontFactor = this.getFontSizeFactor(prefs.fontSize);
@@ -129,7 +141,10 @@ export class DisplayPreferencesService {
 
     document.documentElement.style.setProperty('--app-scale', String(zoomFactor));
     document.documentElement.style.setProperty('--font-scale', String(combinedFontScale));
-    document.documentElement.style.setProperty('--space-scale', String(zoomFactor));
+    document.documentElement.style.setProperty(
+      '--space-scale',
+      density === 'COMPACT' ? String(zoomFactor * 0.82) : String(zoomFactor)
+    );
 
     // Clear any conflicting body/html zoom
     document.documentElement.style.zoom = '';
@@ -190,6 +205,10 @@ export class DisplayPreferencesService {
       localStorage.setItem(STORAGE_KEY_V1, json);
       localStorage.setItem(STORAGE_KEY_LEGACY, sanitized.zoom);
 
+      if (sanitized.performanceProfile) {
+        deviceProfileService.setMode(sanitized.performanceProfile);
+      }
+
       this.applyToDOM(sanitized);
     } catch (e) {
       console.error('[DisplayPreferencesService] Error saving preferences:', e);
@@ -229,12 +248,31 @@ export class DisplayPreferencesService {
       fontSize = 'medium';
     }
 
+    // Performance profile: 'auto' | 'high' | 'balanced' | 'low'
+    let perfProfile: PerformanceProfileMode = 'auto';
+    if (['auto', 'high', 'balanced', 'low'].includes(raw.performanceProfile)) {
+      perfProfile = raw.performanceProfile;
+    }
+
+    // Layout Density
+    let layoutDensity: LayoutDensity = 'COMFORTABLE';
+    if (raw.layoutDensity === 'COMPACT' || raw.layoutDensity === 'compact' || raw.density === 'compact') {
+      layoutDensity = 'COMPACT';
+    }
+
+    // Contrast Mode
+    let contrastMode: ContrastMode = 'STANDARD';
+    if (raw.contrastMode === 'HIGH_CONTRAST' || raw.contrastMode === 'high_contrast') {
+      contrastMode = 'HIGH_CONTRAST';
+    }
+
     return {
       version: 3,
       theme: 'light',
       zoom: `${zoomVal}%`,
       fontSize,
-      density: 'comfortable',
+      performanceProfile: perfProfile,
+      density: layoutDensity === 'COMPACT' ? 'compact' : 'comfortable',
       sidebarMode: 'expanded',
       dashboard: {
         showSummaryCards: true,
@@ -242,8 +280,8 @@ export class DisplayPreferencesService {
         layout: 'standard',
       },
       scale: `${zoomVal}%`,
-      layoutDensity: 'comfortable',
-      contrastMode: 'STANDARD',
+      layoutDensity,
+      contrastMode,
     };
   }
 }

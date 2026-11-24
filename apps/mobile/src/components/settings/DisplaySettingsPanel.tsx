@@ -1,36 +1,40 @@
-import React, { useState } from 'react';
-import { colors, typography, metrics } from '../../theme';
-import { useApp } from '../../state/AppContext';
+import React, { useState, useEffect } from 'react';
 import { useDisplayPreferences } from '../../context/DisplayPreferencesContext';
-import { FontSize, ZOOM_MIN, ZOOM_MAX, ZOOM_DEFAULT } from '../../services/displayPreferencesService';
-import {
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
-  Type,
-  Check,
-  Sliders,
-  CheckCircle2,
-} from 'lucide-react';
+import { ContrastMode, LayoutDensity, ScalePreset } from '../../services/displayPreferencesService';
+import { RotateCcw, Check } from 'lucide-react';
 
 interface DisplaySettingsPanelProps {
   isAdminView?: boolean;
 }
 
-export const DisplaySettingsPanel: React.FC<DisplaySettingsPanelProps> = ({ isAdminView = false }) => {
-  const { currentUser } = useApp();
+export const SCALE_PRESETS = [
+  { label: 'Compact', value: '90%', numeric: 90 },
+  { label: 'Small', value: '100%', numeric: 100, isDefault: true },
+  { label: 'Normal', value: '110%', numeric: 110 },
+  { label: 'Large', value: '120%', numeric: 120 },
+  { label: 'Extra Large', value: '130%', numeric: 130 },
+  { label: 'Maximum', value: '150%', numeric: 150 },
+] as const;
+
+export const DisplaySettingsPanel: React.FC<DisplaySettingsPanelProps> = () => {
   const {
-    zoom,
-    zoomPercent,
-    fontSize,
-    zoomIn,
-    zoomOut,
-    resetZoom,
-    setFontSize,
+    displayScale,
+    setDisplayScale,
+    layoutDensity,
+    setLayoutDensity,
+    contrastMode,
+    setContrastMode,
     resetDisplayPreferences,
   } = useDisplayPreferences();
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : true));
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -39,18 +43,38 @@ export const DisplaySettingsPanel: React.FC<DisplaySettingsPanelProps> = ({ isAd
 
   const handleResetAll = () => {
     resetDisplayPreferences();
-    showToast('Display settings reset to 100% Zoom and Medium Font Size.');
+    setDisplayScale('100%');
+    setContrastMode('STANDARD');
+    setLayoutDensity('COMFORTABLE');
+    showToast('Display settings reset to 100% (Small · Default)');
   };
 
-  const fontSizeOptions: { label: string; value: FontSize; subtitle: string; previewPx: string }[] = [
-    { label: 'Small', value: 'small', subtitle: 'Compact overview', previewPx: '12px' },
-    { label: 'Medium', value: 'medium', subtitle: 'Recommended baseline (Default)', previewPx: '14px' },
-    { label: 'Large', value: 'large', subtitle: 'High readability', previewPx: '16px' },
-  ];
+  const activeScale = displayScale || '100%';
+  const currentIndex = SCALE_PRESETS.findIndex((p) => p.value === activeScale);
+  const sliderIndex = currentIndex >= 0 ? currentIndex : 1;
+
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const idx = parseInt(e.target.value, 10);
+    if (SCALE_PRESETS[idx]) {
+      setDisplayScale(SCALE_PRESETS[idx].value);
+    }
+  };
+
+  const handleSelectPreset = (value: string) => {
+    setDisplayScale(value as ScalePreset);
+  };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '880px', margin: '0 auto' }}>
-      {/* Toast Notification */}
+    <div
+      style={{
+        padding: isMobile ? '12px' : '20px',
+        maxWidth: '820px',
+        margin: '0 auto',
+        width: '100%',
+        boxSizing: 'border-box',
+      }}
+    >
+      {/* Toast Feedback */}
       {toastMessage && (
         <div
           style={{
@@ -75,348 +99,335 @@ export const DisplaySettingsPanel: React.FC<DisplaySettingsPanelProps> = ({ isAd
         </div>
       )}
 
-      {/* Header Banner */}
+      {/* Main Settings Card */}
       <div
-        className="interactive-card"
+        id="appearance-display-settings-card"
         style={{
-          padding: '18px 24px',
-          borderRadius: `${metrics.radiusLarge}px`,
-          border: '1px solid var(--color-border, #E2E8F0)',
-          backgroundColor: 'var(--color-surface, #FFFFFF)',
+          backgroundColor: '#FFFFFF',
+          borderRadius: '12px',
+          border: '1px solid #E2E8F0',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+          padding: isMobile ? '16px' : '20px',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '12px',
-          boxShadow: 'var(--shadow-card, 0 1px 3px rgba(0,0,0,0.05))',
+          flexDirection: 'column',
+          gap: '20px',
+          boxSizing: 'border-box',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        {/* Header Heading & Subtitle */}
+        <div>
+          <h2
+            style={{
+              margin: 0,
+              fontSize: '16px',
+              fontWeight: 700,
+              color: '#0F172A',
+              letterSpacing: '-0.01em',
+            }}
+          >
+            2. Appearance & Display Settings
+          </h2>
+          <p
+            style={{
+              margin: '4px 0 0 0',
+              fontSize: '11.5px',
+              color: '#64748B',
+              lineHeight: 1.4,
+            }}
+          >
+            Adjust application typography, visual zoom scale, layout density, and contrast across the entire system.
+          </p>
+        </div>
+
+        {/* Global Display Size & Scaling Inner Card */}
+        <div
+          id="global-display-scaling-card"
+          style={{
+            backgroundColor: '#F8FAFC',
+            borderRadius: '10px',
+            border: '1px solid #E2E8F0',
+            padding: '16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            boxSizing: 'border-box',
+          }}
+        >
+          {/* Header Row */}
           <div
             style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '8px',
-              backgroundColor: 'var(--color-primary-surface, #EFF6FF)',
-              border: '1px solid var(--color-primary-border, #BFDBFE)',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--color-primary, #2563EB)',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '10px',
             }}
           >
-            <Sliders size={20} />
-          </div>
-          <div>
-            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: 'var(--color-text-primary, #0F172A)' }}>
-              Display Settings
-            </h2>
-            <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--color-text-muted, #64748B)' }}>
-              Configure your personal interface scaling and typography preferences
-            </p>
-          </div>
-        </div>
-
-        {/* Global Reset Button */}
-        <button
-          onClick={handleResetAll}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 14px',
-            borderRadius: '6px',
-            border: '1px solid var(--color-border-strong, #CBD5E1)',
-            backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
-            color: 'var(--color-text-secondary, #475569)',
-            fontSize: '12px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            transition: 'all 0.15s ease',
-          }}
-          title="Reset Zoom to 100% and Font Size to Medium"
-        >
-          <RotateCcw size={14} />
-          <span>Reset to Defaults</span>
-        </button>
-      </div>
-
-      {/* =========================================================================
-          SETTING 1: DISPLAY ZOOM (80% - 125%, 5% steps)
-          ========================================================================= */}
-      <div
-        className="interactive-card"
-        style={{
-          padding: '20px 24px',
-          borderRadius: `${metrics.radiusLarge}px`,
-          border: '1px solid var(--color-border, #E2E8F0)',
-          backgroundColor: 'var(--color-surface, #FFFFFF)',
-          boxShadow: 'var(--shadow-card, 0 1px 3px rgba(0,0,0,0.05))',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '6px',
-                backgroundColor: 'var(--color-primary-surface, #EFF6FF)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--color-primary, #2563EB)',
-              }}
-            >
-              <ZoomIn size={16} />
-            </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary, #0F172A)' }}>
-                Display Zoom
-              </h3>
-              <span style={{ fontSize: '11px', color: 'var(--color-text-muted, #64748B)' }}>
-                Scale application cards, tables, maps, and telemetry monitors (Range: 80% &ndash; 125%)
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
+                Global Display Size & Scaling
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748B', marginTop: '2px' }}>
+                Scales Header, Sidebar, titles, cards, tables, buttons, inputs, dialogs, and map controls globally.
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span
+                id="current-scale-badge"
+                style={{
+                  backgroundColor: '#EFF6FF',
+                  border: '1px solid #BFDBFE',
+                  color: '#1D4ED8',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Current {activeScale}
               </span>
+
+              <button
+                id="btn-reset-display-scale"
+                type="button"
+                onClick={handleResetAll}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  backgroundColor: '#FFFFFF',
+                  border: '1px solid #CBD5E1',
+                  color: '#0F172A',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'background-color 0.15s ease',
+                }}
+                title="Reset to 100% default scale"
+              >
+                <RotateCcw size={12} />
+                <span>Reset to Default</span>
+              </button>
             </div>
           </div>
 
-          {/* Current Zoom Percentage Badge */}
+          {/* Preset Grid (2 columns) */}
           <div
+            id="display-scale-preset-grid"
             style={{
-              padding: '4px 14px',
-              borderRadius: '20px',
-              backgroundColor: 'var(--color-primary-surface, #EFF6FF)',
-              border: '1px solid var(--color-primary-border, #BFDBFE)',
-              color: 'var(--color-primary, #2563EB)',
-              fontSize: '14px',
-              fontWeight: 800,
-              letterSpacing: '0.3px',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '10px',
             }}
           >
-            {zoomPercent}%
-          </div>
-        </div>
-
-        {/* Zoom Controls Row */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
-            padding: '14px 18px',
-            borderRadius: '8px',
-            border: '1px solid var(--color-border, #E2E8F0)',
-            flexWrap: 'wrap',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {/* Zoom Out Button */}
-            <button
-              id="zoom-out-btn"
-              onClick={zoomOut}
-              disabled={zoomPercent <= ZOOM_MIN}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                borderRadius: '6px',
-                border: '1px solid var(--color-border-strong, #CBD5E1)',
-                backgroundColor: zoomPercent <= ZOOM_MIN ? 'var(--color-surface-alt, #F1F5F9)' : 'var(--color-surface, #FFFFFF)',
-                color: zoomPercent <= ZOOM_MIN ? 'var(--color-text-placeholder, #94A3B8)' : 'var(--color-text-primary, #0F172A)',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: zoomPercent <= ZOOM_MIN ? 'not-allowed' : 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <ZoomOut size={15} />
-              <span>Zoom Out (-5%)</span>
-            </button>
-
-            {/* Reset to 100% Button */}
-            <button
-              id="zoom-reset-btn"
-              onClick={resetZoom}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                borderRadius: '6px',
-                border: '1px solid var(--color-border-strong, #CBD5E1)',
-                backgroundColor: zoomPercent === ZOOM_DEFAULT ? 'var(--color-primary-surface, #EFF6FF)' : 'var(--color-surface, #FFFFFF)',
-                color: zoomPercent === ZOOM_DEFAULT ? 'var(--color-primary, #2563EB)' : 'var(--color-text-secondary, #475569)',
-                fontSize: '12px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <RotateCcw size={13} />
-              <span>Reset 100%</span>
-            </button>
-
-            {/* Zoom In Button */}
-            <button
-              id="zoom-in-btn"
-              onClick={zoomIn}
-              disabled={zoomPercent >= ZOOM_MAX}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                borderRadius: '6px',
-                border: '1px solid var(--color-border-strong, #CBD5E1)',
-                backgroundColor: zoomPercent >= ZOOM_MAX ? 'var(--color-surface-alt, #F1F5F9)' : 'var(--color-surface, #FFFFFF)',
-                color: zoomPercent >= ZOOM_MAX ? 'var(--color-text-placeholder, #94A3B8)' : 'var(--color-text-primary, #0F172A)',
-                fontSize: '12px',
-                fontWeight: 600,
-                cursor: zoomPercent >= ZOOM_MAX ? 'not-allowed' : 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <ZoomIn size={15} />
-              <span>Zoom In (+5%)</span>
-            </button>
-          </div>
-
-          {/* Stepper Level Indicators */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            {[80, 85, 90, 95, 100, 105, 110, 115, 120, 125].map((level) => {
-              const isCurrent = level === zoomPercent;
+            {SCALE_PRESETS.map((preset) => {
+              const isSelected = activeScale === preset.value;
               return (
-                <div
-                  key={level}
-                  title={`${level}%`}
+                <button
+                  key={preset.value}
+                  id={`btn-scale-preset-${preset.value.replace('%', '')}`}
+                  type="button"
+                  onClick={() => handleSelectPreset(preset.value)}
                   style={{
-                    width: '16px',
-                    height: '14px',
-                    borderRadius: '2px',
-                    backgroundColor: isCurrent
-                      ? 'var(--color-primary, #2563EB)'
-                      : level < zoomPercent
-                      ? 'var(--color-primary-border, #BFDBFE)'
-                      : 'var(--color-border, #E2E8F0)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '12px 8px',
+                    borderRadius: '8px',
+                    border: isSelected ? '2px solid #2563EB' : '1px solid #CBD5E1',
+                    backgroundColor: isSelected ? '#EFF6FF' : '#FFFFFF',
+                    color: isSelected ? '#1D4ED8' : '#0F172A',
+                    cursor: 'pointer',
                     transition: 'all 0.15s ease',
+                    boxShadow: isSelected ? '0 2px 8px rgba(37, 99, 235, 0.15)' : 'none',
+                    boxSizing: 'border-box',
                   }}
-                />
+                >
+                  <span style={{ fontSize: '13px', fontWeight: 700 }}>{preset.label}</span>
+                  <span style={{ fontSize: '15px', fontWeight: 800, marginTop: '2px' }}>{preset.value}</span>
+                  {preset.isDefault && (
+                    <span
+                      style={{
+                        marginTop: '4px',
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        backgroundColor: isSelected ? '#2563EB' : '#E2E8F0',
+                        color: isSelected ? '#FFFFFF' : '#475569',
+                        padding: '1px 5px',
+                        borderRadius: '3px',
+                        letterSpacing: '0.02em',
+                      }}
+                    >
+                      DEFAULT
+                    </span>
+                  )}
+                </button>
               );
             })}
           </div>
-        </div>
-      </div>
 
-      {/* =========================================================================
-          SETTING 2: FONT SIZE (Small, Medium, Large)
-          ========================================================================= */}
-      <div
-        className="interactive-card"
-        style={{
-          padding: '20px 24px',
-          borderRadius: `${metrics.radiusLarge}px`,
-          border: '1px solid var(--color-border, #E2E8F0)',
-          backgroundColor: 'var(--color-surface, #FFFFFF)',
-          boxShadow: 'var(--shadow-card, 0 1px 3px rgba(0,0,0,0.05))',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-          <div
-            style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '6px',
-              backgroundColor: 'var(--color-primary-surface, #EFF6FF)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--color-primary, #2563EB)',
-            }}
-          >
-            <Type size={16} />
-          </div>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--color-text-primary, #0F172A)' }}>
-              Font Size
-            </h3>
-            <span style={{ fontSize: '11px', color: 'var(--color-text-muted, #64748B)' }}>
-              Applies proportionally across headings, tables, telemetry readouts, cards, and navigation
-            </span>
+          {/* Interactive Scale Slider */}
+          <div style={{ marginTop: '4px' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '11px',
+                color: '#64748B',
+                marginBottom: '6px',
+                padding: '0 2px',
+                flexWrap: 'wrap',
+                gap: '2px',
+              }}
+            >
+              <span>90% (Compact)</span>
+              <span style={{ fontWeight: 700, color: activeScale === '100%' ? '#2563EB' : '#64748B' }}>
+                100% (Small · Default)
+              </span>
+              <span>110% (Normal)</span>
+              <span>120% (Large)</span>
+              <span>130% (Extra Large)</span>
+              <span>150% (Maximum)</span>
+            </div>
+
+            <input
+              id="display-scale-slider"
+              type="range"
+              min="0"
+              max="5"
+              step="1"
+              value={sliderIndex}
+              onChange={handleSliderChange}
+              style={{
+                width: '100%',
+                cursor: 'pointer',
+                accentColor: '#2563EB',
+                height: '6px',
+                background: `linear-gradient(to right, #2563EB 0%, #2563EB ${(sliderIndex / 5) * 100}%, #E2E8F0 ${(sliderIndex / 5) * 100}%, #E2E8F0 100%)`,
+                borderRadius: '3px',
+                outline: 'none',
+              }}
+            />
           </div>
         </div>
 
-        {/* 3 Options: Small, Medium, Large */}
+        {/* Contrast & Density Section */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: '12px',
-            marginBottom: '16px',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+            gap: '16px',
           }}
         >
-          {fontSizeOptions.map((opt) => {
-            const isSelected = fontSize === opt.value;
-            return (
-              <div
-                key={opt.value}
-                data-font-option={opt.value}
-                onClick={() => setFontSize(opt.value)}
-                style={{
-                  padding: '14px 16px',
-                  borderRadius: '8px',
-                  border: isSelected
-                    ? '2px solid var(--color-primary, #2563EB)'
-                    : '1px solid var(--color-border, #CBD5E1)',
-                  backgroundColor: isSelected
-                    ? 'var(--color-primary-surface, #EFF6FF)'
-                    : 'var(--color-surface-alt, #F8FAFC)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '4px',
-                  transition: 'all 0.15s ease',
-                  position: 'relative',
-                  boxShadow: isSelected ? '0 0 0 1px rgba(37,99,235,0.2)' : 'none',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span
+          {/* Visual Contrast Mode */}
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#475569',
+                marginBottom: '6px',
+              }}
+            >
+              Visual Contrast Mode
+            </label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {[
+                { id: 'STANDARD', label: 'Standard Industrial' },
+                { id: 'HIGH_CONTRAST', label: 'High Contrast (Darker Lines)' },
+              ].map((c) => {
+                const isSel = contrastMode === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    id={`btn-contrast-${c.id.toLowerCase()}`}
+                    type="button"
+                    onClick={() => setContrastMode(c.id as ContrastMode)}
                     style={{
-                      fontSize: '14px',
-                      fontWeight: 800,
-                      color: isSelected ? 'var(--color-primary, #2563EB)' : 'var(--color-text-primary, #0F172A)',
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: `1px solid ${isSel ? '#2563EB' : '#CBD5E1'}`,
+                      backgroundColor: isSel ? '#EFF6FF' : '#FFFFFF',
+                      color: isSel ? '#1D4ED8' : '#0F172A',
+                      fontWeight: isSel ? 700 : 500,
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      transition: 'all 0.15s ease',
                     }}
                   >
-                    {opt.label}
-                  </span>
-                  {isSelected && <Check size={16} color="var(--color-primary, #2563EB)" />}
-                </div>
-                <span style={{ fontSize: '11px', color: 'var(--color-text-muted, #64748B)' }}>
-                  {opt.subtitle} &bull; {opt.previewPx}
-                </span>
-              </div>
-            );
-          })}
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Layout Density */}
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#475569',
+                marginBottom: '6px',
+              }}
+            >
+              Layout Density
+            </label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {[
+                { id: 'COMFORTABLE', label: 'Comfortable' },
+                { id: 'COMPACT', label: 'Compact SCADA' },
+              ].map((d) => {
+                const isSel = layoutDensity === d.id;
+                return (
+                  <button
+                    key={d.id}
+                    id={`btn-density-${d.id.toLowerCase()}`}
+                    type="button"
+                    onClick={() => setLayoutDensity(d.id as LayoutDensity)}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: `1px solid ${isSel ? '#2563EB' : '#CBD5E1'}`,
+                      backgroundColor: isSel ? '#EFF6FF' : '#FFFFFF',
+                      color: isSel ? '#1D4ED8' : '#0F172A',
+                      fontWeight: isSel ? 700 : 500,
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {d.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
-        {/* Live Font Scaling Preview Box */}
+        {/* Footer */}
         <div
           style={{
-            padding: '12px 16px',
-            borderRadius: '6px',
-            backgroundColor: 'var(--color-surface-alt, #F8FAFC)',
-            border: '1px solid var(--color-border, #E2E8F0)',
+            textAlign: 'center',
+            fontSize: '11px',
+            color: '#64748B',
+            marginTop: '16px',
+            borderTop: '1px solid #F1F5F9',
+            paddingTop: '12px',
           }}
         >
-          <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--color-text-muted, #64748B)', marginBottom: '4px', textTransform: 'uppercase' }}>
-            Live Preview
-          </div>
-          <div style={{ fontSize: 'var(--font-base, 14px)', color: 'var(--color-text-primary, #0F172A)', fontWeight: 600 }}>
-            WLI SCADA System &mdash; Train 225256 Special Express &bull; Coach CR123456 Arrival Tank: 80.5% (120.8 cm)
-          </div>
+          © 2026 Panorama Water Tank Monitoring System
         </div>
       </div>
     </div>

@@ -15,7 +15,15 @@ import {
   ZOOM_MAX,
   ZOOM_STEP,
   ZOOM_DEFAULT,
+  ContrastMode,
+  LayoutDensity,
+  ScalePreset,
 } from '../services/displayPreferencesService';
+import {
+  deviceProfileService,
+  PerformanceProfileMode,
+  PerformanceProfileConfig,
+} from '../services/deviceProfileService';
 
 export interface DisplayPreferencesContextType {
   preferences: DisplayPreferences;
@@ -24,6 +32,9 @@ export interface DisplayPreferencesContextType {
   fontSize: FontSize; // 'small' | 'medium' | 'large'
   zoomFactor: number;
   fontSizeFactor: number;
+  performanceProfile: PerformanceProfileMode;
+  activePerformanceConfig: PerformanceProfileConfig;
+  setPerformanceProfile: (mode: PerformanceProfileMode) => void;
 
   // Zoom controls
   zoomIn: () => void;
@@ -45,7 +56,7 @@ export interface DisplayPreferencesContextType {
 
   // Legacy compatibility helpers
   density: 'comfortable';
-  sidebarMode: 'expanded';
+  sidebarMode: 'expanded' | 'collapsed' | 'iconOnly';
   dashboard: {
     showSummaryCards: boolean;
     showSecondaryInfo: boolean;
@@ -53,16 +64,16 @@ export interface DisplayPreferencesContextType {
   };
   displayScale: string;
   displayScaleFactor: number;
-  layoutDensity: 'comfortable';
-  contrastMode: 'STANDARD';
+  layoutDensity: LayoutDensity;
+  contrastMode: ContrastMode;
   setDensity: (density: any) => void;
   setSidebarMode: (mode: any) => void;
   updateDashboardPreferences: (updates: any) => void;
   updatePreferences: (updates: Partial<DisplayPreferences>) => void;
   applyPreferencesForUser: (username: string | null) => void;
   setDisplayScale: (scale: string) => void;
-  setLayoutDensity: (density: any) => void;
-  setContrastMode: (mode: any) => void;
+  setLayoutDensity: (density: LayoutDensity) => void;
+  setContrastMode: (mode: ContrastMode) => void;
 }
 
 const DisplayPreferencesContext = createContext<DisplayPreferencesContextType | undefined>(undefined);
@@ -86,6 +97,25 @@ export const DisplayPreferencesProvider: React.FC<{
   useEffect(() => {
     DisplayPreferencesService.applyToDOM(preferences);
   }, [preferences]);
+
+  const [perfConfig, setPerfConfig] = useState<PerformanceProfileConfig>(() =>
+    deviceProfileService.getActiveProfile()
+  );
+
+  useEffect(() => {
+    return deviceProfileService.subscribe((cfg) => {
+      setPerfConfig(cfg);
+    });
+  }, []);
+
+  const setPerformanceProfile = useCallback((mode: PerformanceProfileMode) => {
+    deviceProfileService.setMode(mode);
+    setPreferences((prev) => {
+      const updated: DisplayPreferences = { ...prev, performanceProfile: mode };
+      DisplayPreferencesService.savePreferences(updated, activeUsername);
+      return updated;
+    });
+  }, [activeUsername]);
 
   const zoomPercent = DisplayPreferencesService.parseZoomPercent(preferences.zoom);
   const zoomFactor = zoomPercent / 100.0;
@@ -127,6 +157,26 @@ export const DisplayPreferencesProvider: React.FC<{
     setPreferences(defaults);
   }, [activeUsername]);
 
+  const setLayoutDensity = useCallback((density: LayoutDensity) => {
+    setPreferences((prev) => {
+      const updated: DisplayPreferences = {
+        ...prev,
+        layoutDensity: density,
+        density: density === 'COMPACT' ? 'compact' : 'comfortable',
+      };
+      DisplayPreferencesService.savePreferences(updated, activeUsername);
+      return updated;
+    });
+  }, [activeUsername]);
+
+  const setContrastMode = useCallback((mode: ContrastMode) => {
+    setPreferences((prev) => {
+      const updated: DisplayPreferences = { ...prev, contrastMode: mode };
+      DisplayPreferencesService.savePreferences(updated, activeUsername);
+      return updated;
+    });
+  }, [activeUsername]);
+
   const updatePreferences = useCallback((updates: Partial<DisplayPreferences>) => {
     setPreferences((prev) => {
       const updated: DisplayPreferences = { ...prev, ...updates };
@@ -150,6 +200,9 @@ export const DisplayPreferencesProvider: React.FC<{
         fontSize: preferences.fontSize,
         zoomFactor,
         fontSizeFactor,
+        performanceProfile: preferences.performanceProfile || 'auto',
+        activePerformanceConfig: perfConfig,
+        setPerformanceProfile,
 
         zoomIn,
         zoomOut,
@@ -163,25 +216,25 @@ export const DisplayPreferencesProvider: React.FC<{
         isDark: false,
         setTheme: () => {},
 
-        density: 'comfortable',
+        density: (preferences.layoutDensity === 'COMPACT' ? 'compact' : 'comfortable') as any,
         sidebarMode: 'expanded',
         dashboard: {
           showSummaryCards: true,
           showSecondaryInfo: true,
           layout: 'standard',
         },
-        displayScale: preferences.zoom,
+        displayScale: preferences.scale || preferences.zoom,
         displayScaleFactor: zoomFactor,
-        layoutDensity: 'comfortable',
-        contrastMode: 'STANDARD',
-        setDensity: () => {},
+        layoutDensity: preferences.layoutDensity || 'COMFORTABLE',
+        contrastMode: preferences.contrastMode || 'STANDARD',
+        setDensity: (d: any) => setLayoutDensity(d === 'compact' ? 'COMPACT' : 'COMFORTABLE'),
         setSidebarMode: () => {},
         updateDashboardPreferences: () => {},
         updatePreferences,
         applyPreferencesForUser,
         setDisplayScale: setZoom,
-        setLayoutDensity: () => {},
-        setContrastMode: () => {},
+        setLayoutDensity,
+        setContrastMode,
       }}
     >
       {children}
