@@ -8,6 +8,7 @@ import { filterConsistCoaches } from '../services/tankStatusService';
 import { normalizeRegionCode } from '../services/localFleetStore';
 import { useDisplayPreferences } from '../context/DisplayPreferencesContext';
 import { AddTrainModal } from '../components/train/AddTrainModal';
+import { WaterTankStatusCard } from '../components/dashboard/WaterTankStatusCard';
 import {
   Train,
   Plus,
@@ -328,6 +329,10 @@ export const EmployeeDashboard: React.FC = () => {
       hasTelemetry: false,
     };
   }, [coaches24, activeCoachNum]);
+
+  const selectedConsistCoach = useMemo(() => {
+    return consistCoaches.find((c) => c.coachNumber === activeCoachNum) || consistCoaches[0];
+  }, [consistCoaches, activeCoachNum]);
 
   // Clean up mini Leaflet map on component unmount only
   useEffect(() => {
@@ -669,7 +674,7 @@ export const EmployeeDashboard: React.FC = () => {
             boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
             <span style={{ fontSize: '11px', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
               System Status & Connectivity
             </span>
@@ -699,25 +704,25 @@ export const EmployeeDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="system-status-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '11px' }}>
-            <div style={{ padding: '8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
-              <div style={{ color: '#64748B', fontSize: '10px', fontWeight: 600 }}>Active Fleet Train</div>
+          <div className="system-status-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px 8px', fontSize: '11px' }}>
+            <div style={{ padding: '6px 8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+              <div style={{ color: '#64748B', fontSize: '10.5px', fontWeight: 600 }}>Active Fleet Train</div>
               <strong style={{ color: hasConfiguredFleet ? '#2563EB' : '#64748B', fontSize: '13px' }}>
                 {hasConfiguredFleet ? currentTrain.trainNumber : 'None'}
               </strong>
             </div>
-            <div style={{ padding: '8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
-              <div style={{ color: '#64748B', fontSize: '10px', fontWeight: 600 }}>Active Alarms</div>
+            <div style={{ padding: '6px 8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+              <div style={{ color: '#64748B', fontSize: '10.5px', fontWeight: 600 }}>Active Alarms</div>
               <strong style={{ color: activeAlarms.length > 0 ? '#DC2626' : '#16A34A', fontSize: '13px' }}>
                 {activeAlarms.length} Active
               </strong>
             </div>
-            <div style={{ padding: '8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
-              <div style={{ color: '#64748B', fontSize: '10px', fontWeight: 600 }}>Cloud Telemetry</div>
+            <div style={{ padding: '6px 8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+              <div style={{ color: '#64748B', fontSize: '10.5px', fontWeight: 600 }}>Cloud Telemetry</div>
               <strong style={{ color: '#0F172A', fontSize: '12px' }}>Ubidots Synced</strong>
             </div>
-            <div style={{ padding: '8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
-              <div style={{ color: '#64748B', fontSize: '10px', fontWeight: 600 }}>Last Stream Sync</div>
+            <div style={{ padding: '6px 8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
+              <div style={{ color: '#64748B', fontSize: '10.5px', fontWeight: 600 }}>Last Stream Sync</div>
               <strong style={{ color: '#0F172A', fontSize: '12px' }}>{currentTrain.lastUpdate}</strong>
             </div>
           </div>
@@ -736,43 +741,43 @@ export const EmployeeDashboard: React.FC = () => {
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
             Train Summary
           </div>
-          <div className="system-status-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '11px' }}>
+          <div className="system-status-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px 8px', fontSize: '11px' }}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B' }}>Selected Train</span>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Selected Train</span>
               <strong style={{ color: '#2563EB', fontSize: '12px' }}>{currentTrain.trainNumber} ({currentTrain.name})</strong>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B' }}>Operating Region</span>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Operating Region</span>
               <strong style={{ color: '#0F172A', fontSize: '12px' }}>{currentTrain.region}</strong>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B' }}>Total Coaches</span>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Total Coaches</span>
               <strong style={{ color: '#0F172A', fontSize: '12px' }}>{consistMetrics.totalCoaches} Coaches</strong>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B' }}>Total Reservoirs</span>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Total Reservoirs</span>
               <strong style={{ color: '#0F172A', fontSize: '12px' }}>{consistMetrics.totalTanks} Tanks</strong>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B' }}>Online Tanks</span>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Online Tanks</span>
               <strong style={{ color: consistMetrics.onlineTanks > 0 ? '#16A34A' : '#64748B', fontSize: '12px' }}>
                 {consistMetrics.onlineTanks} Online
               </strong>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B' }}>Offline Tanks</span>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Offline Tanks</span>
               <strong style={{ color: consistMetrics.offlineTanks > 0 ? '#DC2626' : '#64748B', fontSize: '12px' }}>
                 {consistMetrics.offlineTanks} Offline
               </strong>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B' }}>Active Alerts</span>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Active Alerts</span>
               <strong style={{ color: activeAlarms.length > 0 ? '#DC2626' : '#16A34A', fontSize: '12px' }}>
                 {activeAlarms.length} Alerts
               </strong>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B' }}>Telemetry Timeout</span>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Telemetry Timeout</span>
               <strong style={{ color: '#2563EB', fontSize: '12px' }}>
                 {consistMetrics.timeoutSeconds}s
               </strong>
@@ -793,41 +798,41 @@ export const EmployeeDashboard: React.FC = () => {
           <div style={{ fontSize: '11px', fontWeight: 800, color: '#0F172A', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
             Active Train Telemetry Info
           </div>
-          <div className="system-status-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '11px' }}>
+          <div className="system-status-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px 8px', fontSize: '11px' }}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B' }}>Train No.</span>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Train No.</span>
               <strong style={{ color: '#0F172A', fontSize: '12px' }}>{currentTrain.trainNumber}</strong>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B' }}>Selected Coach</span>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Selected Coach</span>
               <strong style={{ color: '#0F172A', fontSize: '12px' }}>{selectedCoach.coachNumber}</strong>
             </div>
             <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B' }}>Hardware Sensor UID</span>
-              <code style={{ fontSize: '10px', color: '#475569', backgroundColor: '#F1F5F9', padding: '3px 6px', borderRadius: '4px', wordBreak: 'break-all' }}>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Hardware Sensor UID</span>
+              <code style={{ fontSize: '10px', color: '#475569', backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', wordBreak: 'break-all' }}>
                 {selectedCoach.deviceId}
               </code>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B' }}>Tank 1 (Arrival)</span>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Tank 1 (Arrival)</span>
               <strong style={{ color: selectedCoach.arrivalLevel != null && selectedCoach.arrivalLevel < 20 ? '#DC2626' : '#2563EB', fontSize: '12px' }}>
                 {selectedCoach.arrivalLevel != null ? `${selectedCoach.arrivalLevel.toFixed(1)}% (${selectedCoach.arrivalHeightCm?.toFixed(1)} cm)` : '—'}
               </strong>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B' }}>Tank 2 (Departure)</span>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Tank 2 (Departure)</span>
               <strong style={{ color: selectedCoach.departureLevel != null && selectedCoach.departureLevel < 20 ? '#DC2626' : '#2563EB', fontSize: '12px' }}>
                 {selectedCoach.departureLevel != null ? `${selectedCoach.departureLevel.toFixed(1)}% (${selectedCoach.departureHeightCm?.toFixed(1)} cm)` : '—'}
               </strong>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B' }}>Telemetry Battery</span>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Telemetry Battery</span>
               <strong style={{ color: selectedCoach.batteryPercent != null && selectedCoach.batteryPercent < 30 ? '#DC2626' : '#16A34A', fontSize: '12px' }}>
                 {selectedCoach.batteryPercent != null ? `${selectedCoach.batteryPercent.toFixed(1)}%` : '—'}
               </strong>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B' }}>MQTT Broker State</span>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>MQTT Broker State</span>
               <strong style={{ color: mqttConnectionStatus === 'CONNECTED' ? '#16A34A' : '#DC2626', fontSize: '12px' }}>
                 {mqttConnectionStatus}
               </strong>
@@ -1331,8 +1336,9 @@ export const EmployeeDashboard: React.FC = () => {
                 }}
                 style={{
                   width: '100%',
-                  minHeight: '44px',
-                  marginTop: '10px',
+                  minHeight: '42px',
+                  height: '42px',
+                  marginTop: '8px',
                   backgroundColor: currentTrain.trainNumber === liveTelemetry.trno ? '#2563EB' : '#EFF6FF',
                   color: currentTrain.trainNumber === liveTelemetry.trno ? '#FFFFFF' : '#2563EB',
                   border: `1px solid ${currentTrain.trainNumber === liveTelemetry.trno ? '#1D4ED8' : '#BFDBFE'}`,
@@ -1486,8 +1492,9 @@ export const EmployeeDashboard: React.FC = () => {
                   }}
                   style={{
                     width: '100%',
-                    minHeight: '44px',
-                    marginTop: '10px',
+                    minHeight: '42px',
+                    height: '42px',
+                    marginTop: '8px',
                     backgroundColor: isSelected ? '#2563EB' : '#EFF6FF',
                     color: isSelected ? '#FFFFFF' : '#2563EB',
                     border: `1px solid ${isSelected ? '#1D4ED8' : '#BFDBFE'}`,
@@ -2147,348 +2154,23 @@ export const EmployeeDashboard: React.FC = () => {
         </div>
 
         {/* ==================== COLUMN 2: DUAL TANK MONITORING (Span 5) ==================== */}
-        <div
-          className="interactive-card scada-col-tanks"
-          style={{
-            backgroundColor: 'var(--color-surface, #FFFFFF)',
-            borderRadius: '8px',
-            border: '1px solid var(--color-border, #E2E8F0)',
-            padding: '16px 20px',
-            boxShadow: 'var(--shadow-card, 0 1px 3px rgba(0,0,0,0.05))',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          <h3
-            style={{
-              margin: '0 0 14px 0',
-              fontSize: '15px',
-              fontWeight: 800,
-              color: 'var(--color-text-primary, #0F172A)',
-              textAlign: 'center',
-            }}
-          >
-            Water Tank Status (Coach {selectedCoach.coachNumber})
-          </h3>
-
-          <div
-            className="mobile-dual-tank-grid"
-            style={{
-              flex: 1,
-              alignItems: 'center',
-            }}
-          >
-            {/* TANK 1: ARRIVAL SIDE (ISA-101 Flat Engineering P&ID) */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              {/* Badge Pill */}
-              <div
-                style={{
-                  backgroundColor: 'var(--color-primary, #2563EB)',
-                  color: '#FFFFFF',
-                  padding: '3px 8px',
-                  borderRadius: '12px',
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  marginBottom: '8px',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                Arrival Side (Tank 1)
-              </div>
-
-              {/* Flat Engineering P&ID Vessel with Calibration Scale */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <svg width="84" height="130" viewBox="0 0 84 130">
-                  {/* Calibrated Tick Marks & Scale on Left (0, 50, 100, 150 cm) */}
-                  <g fontSize="8" fill="#64748B" fontFamily="monospace" textAnchor="end">
-                    <line x1="28" y1="14" x2="36" y2="14" stroke="#94A3B8" strokeWidth="1" />
-                    <text x="26" y="17">150</text>
-
-                    <line x1="30" y1="44" x2="36" y2="44" stroke="#CBD5E1" strokeWidth="1" />
-                    <text x="26" y="47">100</text>
-
-                    <line x1="30" y1="74" x2="36" y2="74" stroke="#CBD5E1" strokeWidth="1" />
-                    <text x="26" y="77">50</text>
-
-                    <line x1="28" y1="104" x2="36" y2="104" stroke="#94A3B8" strokeWidth="1" />
-                    <text x="26" y="107">0</text>
-                  </g>
-
-                  {/* Main Rectangular P&ID Vessel Body */}
-                  <rect x="36" y="14" width="42" height="90" rx="3" fill="#F8FAFC" stroke="#64748B" strokeWidth="1.5" />
-
-                  {/* Liquid Column Fill */}
-                  {(() => {
-                    const maxH = 88;
-                    const level = selectedCoach.arrivalLevel ?? 0;
-                    const fillH = selectedCoach.arrivalLevel != null ? (Math.max(0, Math.min(100, level)) / 100) * maxH : 0;
-                    const fillY = 15 + (maxH - fillH);
-                    const color =
-                      level < 10
-                        ? '#DC2626'
-                        : level < 20
-                        ? '#D97706'
-                        : '#2563EB';
-                    return (
-                      <g>
-                        {selectedCoach.arrivalLevel != null && fillH > 0 && (
-                          <>
-                            <rect x="37" y={fillY} width="40" height={fillH} fill={color} />
-                            <line x1="37" y1={fillY} x2="77" y2={fillY} stroke="#93C5FD" strokeWidth="1.5" />
-                          </>
-                        )}
-                      </g>
-                    );
-                  })()}
-
-                  {/* Top Flange / Inlet Line */}
-                  <line x1="57" y1="6" x2="57" y2="14" stroke="#64748B" strokeWidth="2" />
-                  <rect x="52" y="4" width="10" height="3" fill="#475569" />
-
-                  {/* Bottom Drain Flange */}
-                  <line x1="57" y1="104" x2="57" y2="114" stroke="#64748B" strokeWidth="2" />
-                  <rect x="52" y="113" width="10" height="3" fill="#475569" />
-                </svg>
-
-                {/* Direct High-Contrast Tabular Readout */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <div style={{ fontSize: '20px', fontWeight: 900, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
-                    {selectedCoach.arrivalLevel != null ? `${selectedCoach.arrivalLevel.toFixed(0)}%` : '—'}
-                  </div>
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#475569', fontVariantNumeric: 'tabular-nums' }}>
-                    {selectedCoach.arrivalHeightCm != null ? `${selectedCoach.arrivalHeightCm.toFixed(1)} cm` : '— cm'}
-                  </div>
-                  <div style={{ fontSize: '10px', fontWeight: 600, color: '#64748B' }}>
-                    {selectedCoach.arrivalLevel != null ? `${((selectedCoach.arrivalLevel / 100) * 500).toFixed(0)} L / 500 L` : '— / 500 L'}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '9px',
-                      fontWeight: 700,
-                      marginTop: '4px',
-                      padding: '2px 5px',
-                      borderRadius: '3px',
-                      display: 'inline-block',
-                      backgroundColor:
-                        selectedCoach.arrivalLevel == null
-                          ? '#F1F5F9'
-                          : selectedCoach.arrivalLevel < 10
-                          ? '#FEE2E2'
-                          : selectedCoach.arrivalLevel < 20
-                          ? '#FEF3C7'
-                          : '#EFF6FF',
-                      color:
-                        selectedCoach.arrivalLevel == null
-                          ? '#64748B'
-                          : selectedCoach.arrivalLevel < 10
-                          ? '#DC2626'
-                          : selectedCoach.arrivalLevel < 20
-                          ? '#B45309'
-                          : '#1D4ED8',
-                    }}
-                  >
-                    {selectedCoach.arrivalLevel == null
-                      ? 'AWAITING TELEMETRY'
-                      : selectedCoach.arrivalLevel < 10
-                      ? 'CRITICAL LOW'
-                      : selectedCoach.arrivalLevel < 20
-                      ? 'LOW WARNING'
-                      : 'NOMINAL'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Valve / Sensor Status Indicator */}
-              <div
-                style={{
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  color: selectedCoach.hasTelemetry && liveTelemetry
-                    ? liveTelemetry.wlv1
-                      ? '#15803D'
-                      : '#DC2626'
-                    : '#64748B',
-                  backgroundColor: selectedCoach.hasTelemetry && liveTelemetry
-                    ? liveTelemetry.wlv1
-                      ? '#DCFCE7'
-                      : '#FEE2E2'
-                    : '#F1F5F9',
-                  border: `1px solid ${
-                    selectedCoach.hasTelemetry && liveTelemetry
-                      ? liveTelemetry.wlv1
-                        ? '#86EFAC'
-                        : '#FCA5A5'
-                      : '#CBD5E1'
-                  }`,
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  marginTop: '8px',
-                }}
-              >
-                {selectedCoach.hasTelemetry && liveTelemetry
-                  ? liveTelemetry.wlv1
-                    ? '✓ SENSOR 1 VALID'
-                    : '⚠ SENSOR 1 FAULT'
-                  : 'AWAITING LINK'}
-              </div>
-            </div>
-
-            {/* TANK 2: DEPARTURE SIDE (ISA-101 Flat Engineering P&ID) */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              {/* Badge Pill */}
-              <div
-                style={{
-                  backgroundColor: 'var(--color-primary, #2563EB)',
-                  color: '#FFFFFF',
-                  padding: '3px 8px',
-                  borderRadius: '12px',
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  marginBottom: '8px',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                Departure Side (Tank 2)
-              </div>
-
-              {/* Flat Engineering P&ID Vessel with Calibration Scale */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <svg width="84" height="130" viewBox="0 0 84 130">
-                  {/* Calibrated Tick Marks & Scale on Left (0, 50, 100, 150 cm) */}
-                  <g fontSize="8" fill="#64748B" fontFamily="monospace" textAnchor="end">
-                    <line x1="28" y1="14" x2="36" y2="14" stroke="#94A3B8" strokeWidth="1" />
-                    <text x="26" y="17">150</text>
-
-                    <line x1="30" y1="44" x2="36" y2="44" stroke="#CBD5E1" strokeWidth="1" />
-                    <text x="26" y="47">100</text>
-
-                    <line x1="30" y1="74" x2="36" y2="74" stroke="#CBD5E1" strokeWidth="1" />
-                    <text x="26" y="77">50</text>
-
-                    <line x1="28" y1="104" x2="36" y2="104" stroke="#94A3B8" strokeWidth="1" />
-                    <text x="26" y="107">0</text>
-                  </g>
-
-                  {/* Main Rectangular P&ID Vessel Body */}
-                  <rect x="36" y="14" width="42" height="90" rx="3" fill="#F8FAFC" stroke="#64748B" strokeWidth="1.5" />
-
-                  {/* Liquid Column Fill */}
-                  {(() => {
-                    const maxH = 88;
-                    const level = selectedCoach.departureLevel ?? 0;
-                    const fillH = selectedCoach.departureLevel != null ? (Math.max(0, Math.min(100, level)) / 100) * maxH : 0;
-                    const fillY = 15 + (maxH - fillH);
-                    const color =
-                      level < 10
-                        ? '#DC2626'
-                        : level < 20
-                        ? '#D97706'
-                        : '#2563EB';
-                    return (
-                      <g>
-                        {selectedCoach.departureLevel != null && fillH > 0 && (
-                          <>
-                            <rect x="37" y={fillY} width="40" height={fillH} fill={color} />
-                            <line x1="37" y1={fillY} x2="77" y2={fillY} stroke="#93C5FD" strokeWidth="1.5" />
-                          </>
-                        )}
-                      </g>
-                    );
-                  })()}
-
-                  {/* Top Flange / Inlet Line */}
-                  <line x1="57" y1="6" x2="57" y2="14" stroke="#64748B" strokeWidth="2" />
-                  <rect x="52" y="4" width="10" height="3" fill="#475569" />
-
-                  {/* Bottom Drain Flange */}
-                  <line x1="57" y1="104" x2="57" y2="114" stroke="#64748B" strokeWidth="2" />
-                  <rect x="52" y="113" width="10" height="3" fill="#475569" />
-                </svg>
-
-                {/* Direct High-Contrast Tabular Readout */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <div style={{ fontSize: '20px', fontWeight: 900, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
-                    {selectedCoach.departureLevel != null ? `${selectedCoach.departureLevel.toFixed(0)}%` : '—'}
-                  </div>
-                  <div style={{ fontSize: '11px', fontWeight: 700, color: '#475569', fontVariantNumeric: 'tabular-nums' }}>
-                    {selectedCoach.departureHeightCm != null ? `${selectedCoach.departureHeightCm.toFixed(1)} cm` : '— cm'}
-                  </div>
-                  <div style={{ fontSize: '10px', fontWeight: 600, color: '#64748B' }}>
-                    {selectedCoach.departureLevel != null ? `${((selectedCoach.departureLevel / 100) * 500).toFixed(0)} L / 500 L` : '— / 500 L'}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '9px',
-                      fontWeight: 700,
-                      marginTop: '4px',
-                      padding: '2px 5px',
-                      borderRadius: '3px',
-                      display: 'inline-block',
-                      backgroundColor:
-                        selectedCoach.departureLevel == null
-                          ? '#F1F5F9'
-                          : selectedCoach.departureLevel < 10
-                          ? '#FEE2E2'
-                          : selectedCoach.departureLevel < 20
-                          ? '#FEF3C7'
-                          : '#EFF6FF',
-                      color:
-                        selectedCoach.departureLevel == null
-                          ? '#64748B'
-                          : selectedCoach.departureLevel < 10
-                          ? '#DC2626'
-                          : selectedCoach.departureLevel < 20
-                          ? '#B45309'
-                          : '#1D4ED8',
-                    }}
-                  >
-                    {selectedCoach.departureLevel == null
-                      ? 'AWAITING TELEMETRY'
-                      : selectedCoach.departureLevel < 10
-                      ? 'CRITICAL LOW'
-                      : selectedCoach.departureLevel < 20
-                      ? 'LOW WARNING'
-                      : 'NOMINAL'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Valve / Sensor Status Indicator */}
-              <div
-                style={{
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  color: selectedCoach.hasTelemetry && liveTelemetry
-                    ? liveTelemetry.wlv2
-                      ? '#15803D'
-                      : '#DC2626'
-                    : '#64748B',
-                  backgroundColor: selectedCoach.hasTelemetry && liveTelemetry
-                    ? liveTelemetry.wlv2
-                      ? '#DCFCE7'
-                      : '#FEE2E2'
-                    : '#F1F5F9',
-                  border: `1px solid ${
-                    selectedCoach.hasTelemetry && liveTelemetry
-                      ? liveTelemetry.wlv2
-                        ? '#86EFAC'
-                        : '#FCA5A5'
-                      : '#CBD5E1'
-                  }`,
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  marginTop: '8px',
-                }}
-              >
-                {selectedCoach.hasTelemetry && liveTelemetry
-                  ? liveTelemetry.wlv2
-                    ? '✓ SENSOR 2 VALID'
-                    : '⚠ SENSOR 2 FAULT / VALVE CLOSED'
-                  : 'AWAITING LINK'}
-              </div>
-            </div>
-          </div>
-        </div>
+        <WaterTankStatusCard
+          coachNumber={selectedCoach.coachNumber && selectedCoach.coachNumber !== '—' ? selectedCoach.coachNumber : 'SLRD'}
+          coachType={selectedCoach.coachType}
+          deviceId={selectedCoach.deviceId}
+          deviceStatus={selectedCoach.deviceStatus}
+          batteryPercent={selectedCoach.batteryPercent}
+          hasTelemetry={selectedCoach.hasTelemetry}
+          isOnline={selectedCoach.deviceStatus === 'Online'}
+          lastSeenTimeStr={selectedConsistCoach?.lastSeenTimeStr}
+          lastSeenTimestamp={selectedConsistCoach?.lastSeenTimestamp}
+          tank1Obj={selectedConsistCoach?.tanks?.[0]}
+          tank2Obj={selectedConsistCoach?.tanks?.[1]}
+          arrivalLevel={selectedCoach.arrivalLevel}
+          arrivalHeightCm={selectedCoach.arrivalHeightCm}
+          departureLevel={selectedCoach.departureLevel}
+          departureHeightCm={selectedCoach.departureHeightCm}
+        />
 
         {/* ==================== COLUMN 3: TRAIN LOCATION & MAP (Span 4) ==================== */}
         <div
