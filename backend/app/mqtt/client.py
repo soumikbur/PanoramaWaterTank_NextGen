@@ -20,6 +20,7 @@ from app.repositories.device_repo import DeviceRepository
 from app.repositories.tank_repo import TankRepository
 from app.repositories.telemetry_repo import TelemetryRepository
 from app.repositories.alarm_repo import AlarmRepository
+from app.core.device_identity import is_genuine_hardware_uid, get_canonical_uid
 from app.services.calculator import VolumeCalculator
 from app.services.alarm_service import AlarmService
 from sqlalchemy import select
@@ -87,14 +88,33 @@ class MqttService:
             logger.info("MQTT Client stopped.")
 
     def publish(self, topic: str, payload: Any, qos: int = 1, retain: bool = False) -> bool:
-        """Publish payload (dict or str) to concrete MQTT topic."""
+        """Publish payload (dict or str) to concrete MQTT topic and retain in backend."""
         if not self.client:
             logger.warning("MQTT client not available for publish.")
             return False
         try:
-            body = json.dumps(payload, default=str) if not isinstance(payload, (str, bytes)) else payload
+            body = (
+                json.dumps(payload, default=str)
+                if not isinstance(payload, (str, bytes))
+                else (payload.decode("utf-8", errors="replace") if isinstance(payload, bytes) else payload)
+            )
             res = self.client.publish(topic, body, qos=qos, retain=retain)
-            return res.rc == mqtt.MQTT_ERR_SUCCESS
+            success = res.rc == mqtt.MQTT_ERR_SUCCESS
+
+            # Retain outgoing message in backend registry if published successfully
+            if success and self._loop and self._loop.is_running():
+                asyncio.run_coroutine_threadsafe(
+                    self.persist_topic_message(
+                        topic=topic,
+                        raw_payload=body,
+                        qos=qos,
+                        retained=retain,
+                        received_at=datetime.now(timezone.utc),
+                    ),
+                    self._loop,
+                )
+
+            return success
         except Exception as e:
             logger.error(f"Error publishing to {topic}: {e}")
             return False
@@ -118,20 +138,72 @@ class MqttService:
         logger.warning("Disconnected from MQTT Broker. Auto-reconnect active.")
 
     def _on_message(self, client: mqtt.Client, userdata: Any, msg: mqtt.MQTTMessage) -> None:
-        """Handle incoming telemetry message."""
+        """Handle incoming telemetry message and persist latest topic message."""
         try:
-            logger.debug(f"Received MQTT message on topic: {msg.topic}")
-            payload = TelemetryParser.parse_payload(msg.payload)
-            if not payload:
-                return
+            raw_payload_str = (
+                msg.payload.decode("utf-8", errors="replace")
+                if isinstance(msg.payload, (bytes, bytearray))
+                else str(msg.payload)
+            )
+            retained_flag = getattr(msg, "retain", False) or False
 
+            # 1. Authoritative persistence: Always retain latest message for every distinct MQTT topic
             if self._loop and self._loop.is_running():
                 asyncio.run_coroutine_threadsafe(
+                    self.persist_topic_message(
+                        topic=msg.topic,
+                        raw_payload=raw_payload_str,
+                        qos=msg.qos,
+                        retained=retained_flag,
+                        received_at=datetime.now(timezone.utc),
+                    ),
+                    self._loop,
+                )
+
+            # 2. Domain telemetry processing: check if payload matches water tank telemetry schema
+            payload = TelemetryParser.parse_payload(msg.payload)
+            if payload and self._loop and self._loop.is_running():
+                asyncio.run_coroutine_threadsafe(
                     self.process_telemetry(payload, msg.topic),
-                    self._loop
+                    self._loop,
                 )
         except Exception as e:
             logger.error(f"Error handling MQTT message: {e}")
+
+    async def persist_topic_message(
+        self,
+        topic: str,
+        raw_payload: str,
+        qos: int = 0,
+        retained: bool = False,
+        received_at: Optional[datetime] = None,
+    ) -> Optional[dict]:
+        """Persist latest valid payload for topic in database and broadcast to WebSockets."""
+        async with AsyncSessionLocal() as session:
+            try:
+                from app.repositories.mqtt_latest_repo import MqttLatestRepository
+                repo = MqttLatestRepository(session)
+                record = await repo.upsert(
+                    topic=topic,
+                    payload=raw_payload,
+                    qos=qos,
+                    retained=retained,
+                    received_at=received_at or datetime.now(timezone.utc),
+                )
+                await session.commit()
+                msg_dict = record.to_dict()
+
+                # Broadcast live update across all connected clients via WebSocket
+                try:
+                    await ws_manager.broadcast("MQTT_TOPIC_UPDATE", msg_dict)
+                except Exception as ws_err:
+                    logger.debug(f"WS broadcast warning: {ws_err}")
+
+                return msg_dict
+            except Exception as e:
+                await session.rollback()
+                logger.error(f"Error persisting latest MQTT topic record for '{topic}': {e}")
+                return None
 
     async def process_telemetry(self, payload: MqttTelemetryPayload, topic: str) -> None:
         """Asynchronously process validated telemetry into database and WebSockets."""
@@ -175,12 +247,15 @@ class MqttService:
                     # Ingest and keep device ONLINE as DISCOVERED / AVAILABLE without creating phantom trains
                     device = await device_repo.get_by_uid(payload.uid)
                     if not device:
+                        if not is_genuine_hardware_uid(payload.uid):
+                            logger.warning("Ignoring unverified or non-hardware UID '%s' from MQTT telemetry.", payload.uid)
+                            return
                         device = await device_repo.create_or_update(
                             uid=payload.uid,
                             train_number="UNASSIGNED",
                             coach_number="UNASSIGNED",
                             name=f"WLI Node ({payload.uid[-6:]})",
-                            status="DISCOVERED"
+                            status="AVAILABLE"
                         )
                         logger.info(f"Discovered new edge hardware node '{payload.uid}' via MQTT.")
                     else:

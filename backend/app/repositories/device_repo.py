@@ -1,10 +1,11 @@
 """Device repository for database access."""
 from typing import Optional, List
 from datetime import datetime, timezone
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func, not_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.device import Device
 from app.models.tank import Tank
+from app.core.device_identity import is_genuine_hardware_uid, get_canonical_uid
 
 
 class DeviceRepository:
@@ -19,16 +20,39 @@ class DeviceRepository:
         return result.scalar_one_or_none()
 
     async def get_by_uid(self, uid: str) -> Optional[Device]:
-        stmt = select(Device).where(Device.uid == uid)
+        canonical = get_canonical_uid(uid)
+        stmt = select(Device).where(
+            or_(Device.uid == uid, Device.uid == canonical),
+            Device.is_deleted == False,
+        )
         result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+        devs = list(result.scalars().all())
+        if not devs:
+            return None
+        for d in devs:
+            if d.uid == canonical:
+                return d
+        return devs[0]
 
     async def list_all(
         self,
         search: Optional[str] = None,
         is_online: Optional[bool] = None
     ) -> List[Device]:
-        stmt = select(Device)
+        # Filter strictly for genuine registered physical devices
+        stmt = select(Device).where(
+            Device.is_deleted == False,
+            Device.status.in_(["AVAILABLE", "ENGAGED", "REGISTERED"]),
+            func.length(Device.uid) == 24,
+            not_(Device.uid.ilike("%TEST%")),
+            not_(Device.uid.ilike("%AUDIT%")),
+            not_(Device.uid.ilike("%DUMMY%")),
+            not_(Device.uid.ilike("%DEMO%")),
+            not_(Device.uid.ilike("%SEED%")),
+            not_(Device.uid.ilike("%PLACEHOLDER%")),
+            not_(Device.uid.ilike("%ROGUE%")),
+            not_(Device.uid.ilike("%MOCK%")),
+        )
         if search:
             search_pattern = f"%{search}%"
             stmt = stmt.where(
@@ -44,7 +68,21 @@ class DeviceRepository:
 
         stmt = stmt.order_by(Device.train_number, Device.coach_number)
         result = await self.session.execute(stmt)
-        return list(result.scalars().all())
+        raw_list = list(result.scalars().all())
+
+        # Deduplicate multiple entries representing the same physical node
+        seen_canonical = set()
+        deduped = []
+        for d in raw_list:
+            if not is_genuine_hardware_uid(d.uid):
+                continue
+            canonical = get_canonical_uid(d.uid)
+            if canonical in seen_canonical:
+                continue
+            seen_canonical.add(canonical)
+            deduped.append(d)
+
+        return deduped
 
     async def create_or_update(
         self,

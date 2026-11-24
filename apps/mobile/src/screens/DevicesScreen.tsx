@@ -5,6 +5,7 @@ import { ApiClient } from '../api/client';
 import { BaseCard } from '../components/common/BaseCard';
 import { InfoRow } from '../components/common/InfoRow';
 import { TelemetryTableRow, TelemetryTableFilterParams } from '../types';
+import { isGenuineHardwareUid, getCanonicalUid } from '../services/deviceRegistry';
 import {
   RefreshCw,
   X,
@@ -141,14 +142,18 @@ export const DevicesScreen: React.FC = () => {
   const [editStatus, setEditStatus] = useState('AVAILABLE');
   const [editFirmwareVersion, setEditFirmwareVersion] = useState('2.0.0');
 
-  // List of unique device IDs for filter dropdown
+  // List of unique device IDs for filter dropdown - strictly genuine hardware identities
   const uniqueDeviceIds = useMemo(() => {
     const set = new Set<string>();
     devices.forEach((d) => {
-      if (d.uid) set.add(d.uid);
+      if (d.uid && isGenuineHardwareUid(d.uid)) {
+        set.add(getCanonicalUid(d.uid));
+      }
     });
     telemetryRecords.forEach((r) => {
-      if (r.deviceId) set.add(r.deviceId);
+      if (r.deviceId && isGenuineHardwareUid(r.deviceId)) {
+        set.add(getCanonicalUid(r.deviceId));
+      }
     });
     return Array.from(set).sort();
   }, [devices, telemetryRecords]);
@@ -324,54 +329,64 @@ export const DevicesScreen: React.FC = () => {
 
   // Live devices mapped strictly from registered backend database devices (for Fleet tab)
   const allDevices: DeviceTelemetry[] = useMemo(() => {
-    return devices.map((d, index) => {
-      const isPrimary = index === 0;
-      const liveLevel = isPrimary ? (liveTank?.levelPercent ?? d.primaryLevel ?? null) : (d.primaryLevel ?? null);
-      const liveHeight = isPrimary ? (liveTank?.heightCm ?? null) : null;
-      const liveMaxHeight = isPrimary ? (liveTank?.maxHeightCm ?? 50.0) : 50.0;
-      const liveVol = isPrimary ? (liveTank?.volumeLiters ?? null) : null;
-      const liveCap = isPrimary ? (liveTank?.capacityLiters ?? 20.0) : 20.0;
-      const status: 'Online' | 'Offline' | 'Warning' = !d.isOnline
-        ? 'Offline'
-        : d.hasActiveAlarm || (liveLevel != null && (liveLevel < 20.0 || liveLevel >= 100.0))
-        ? 'Warning'
-        : 'Online';
+    const seen = new Set<string>();
+    return devices
+      .filter((d) => d.uid && isGenuineHardwareUid(d.uid))
+      .filter((d) => {
+        const canonical = getCanonicalUid(d.uid);
+        if (seen.has(canonical)) return false;
+        seen.add(canonical);
+        return true;
+      })
+      .map((d, index) => {
+        const isPrimary = index === 0;
+        const liveLevel = isPrimary ? (liveTank?.levelPercent ?? d.primaryLevel ?? null) : (d.primaryLevel ?? null);
+        const liveHeight = isPrimary ? (liveTank?.heightCm ?? null) : null;
+        const liveMaxHeight = isPrimary ? (liveTank?.maxHeightCm ?? 50.0) : 50.0;
+        const liveVol = isPrimary ? (liveTank?.volumeLiters ?? null) : null;
+        const liveCap = isPrimary ? (liveTank?.capacityLiters ?? 20.0) : 20.0;
+        const status: 'Online' | 'Offline' | 'Warning' = !d.isOnline
+          ? 'Offline'
+          : d.hasActiveAlarm || (liveLevel != null && (liveLevel < 20.0 || liveLevel >= 100.0))
+          ? 'Warning'
+          : 'Online';
 
-      return {
-        dbId: d.id,
-        name: d.name || `Water Monitor (${d.trainNumber}/${d.coachNumber})`,
-        id: d.uid,
-        trainNumber: d.trainNumber || 'UNASSIGNED',
-        coachNumber: d.coachNumber || 'UNASSIGNED',
-        serialNumber: d.uid,
-        location: `Coach ${d.coachNumber} (Train ${d.trainNumber})`,
-        status,
-        connectionType: 'Cellular / MQTT',
-        modemModel: 'Wireless Link / MQTT',
-        signalQuality: d.isOnline ? 'Active Link' : 'No Signal',
-        ipAddress: 'MQTT / Cellular',
-        waterLevel: liveLevel,
-        waterHeightCm: liveHeight,
-        tankHeightCm: liveMaxHeight,
-        volumeLiters: liveVol,
-        capacityLiters: liveCap,
-        sensorStatus: d.isOnline ? 'Operational' : 'Offline',
-        sensorType: 'Hydrostatic Pressure (4-20mA)',
-        gain: 'Standard Operating Range',
-        temperature: liveTank?.temperature ?? null,
-        pressure: liveTank?.pressure ?? null,
-        humidity: null,
-        firmwareVersion: d.firmwareVersion || '2.0.0',
-        runtime: 'FreeRTOS / CMSIS',
-        calibrationStatus: 'Calibrated',
-        airBaseline: 0,
-        deadband: '0.5 cm',
-        alarmState: d.hasActiveAlarm ? 'ALERT_ACTIVE' : 'NORMAL',
-        lastUpdate: d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleTimeString() : 'Awaiting Data',
-        uploadInterval: '3 seconds',
-        isPrimary,
-      };
-    });
+        const canonicalUid = getCanonicalUid(d.uid);
+        return {
+          dbId: d.id,
+          name: d.name || `Water Monitor (${d.trainNumber}/${d.coachNumber})`,
+          id: canonicalUid,
+          trainNumber: d.trainNumber || 'UNASSIGNED',
+          coachNumber: d.coachNumber || 'UNASSIGNED',
+          serialNumber: canonicalUid,
+          location: `Coach ${d.coachNumber} (Train ${d.trainNumber})`,
+          status,
+          connectionType: 'Cellular / MQTT',
+          modemModel: 'Wireless Link / MQTT',
+          signalQuality: d.isOnline ? 'Active Link' : 'No Signal',
+          ipAddress: 'MQTT / Cellular',
+          waterLevel: liveLevel,
+          waterHeightCm: liveHeight,
+          tankHeightCm: liveMaxHeight,
+          volumeLiters: liveVol,
+          capacityLiters: liveCap,
+          sensorStatus: d.isOnline ? 'Operational' : 'Offline',
+          sensorType: 'Hydrostatic Pressure (4-20mA)',
+          gain: 'Standard Operating Range',
+          temperature: liveTank?.temperature ?? null,
+          pressure: liveTank?.pressure ?? null,
+          humidity: null,
+          firmwareVersion: d.firmwareVersion || '2.0.0',
+          runtime: 'FreeRTOS / CMSIS',
+          calibrationStatus: 'Calibrated',
+          airBaseline: 0,
+          deadband: '0.5 cm',
+          alarmState: d.hasActiveAlarm ? 'ALERT_ACTIVE' : 'NORMAL',
+          lastUpdate: d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleTimeString() : 'Awaiting Data',
+          uploadInterval: '3 seconds',
+          isPrimary,
+        };
+      });
   }, [devices, liveTank, connectionStatus]);
 
   useEffect(() => {
@@ -386,8 +401,9 @@ export const DevicesScreen: React.FC = () => {
   }, [selectedDeviceId, allDevices]);
 
   const handleOpenAddModal = (presetTrain?: string, presetCoach?: string) => {
-    const randomHex = Math.random().toString(16).substring(2, 8).toUpperCase();
-    const newUid = `DEV-WLI-${randomHex}`;
+    const hexChars = '0123456789ABCDEF';
+    const randomHex = Array.from({ length: 20 }, () => hexChars[Math.floor(Math.random() * 16)]).join('');
+    const newUid = `0026${randomHex}`;
     const tr = presetTrain || selectedTrainNumber || '';
     const ch = presetCoach || selectedCoachNumber || '';
     setAddUid(newUid);

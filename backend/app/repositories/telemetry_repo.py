@@ -2,11 +2,12 @@
 import json
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime, timezone
-from sqlalchemy import select, desc, asc, func, or_, and_
+from sqlalchemy import select, desc, asc, func, or_, and_, not_
 from sqlalchemy.sql.functions import coalesce
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.telemetry import TelemetryReading
 from app.models.device import Device
+from app.core.device_identity import get_canonical_uid, is_genuine_hardware_uid
 
 
 def format_telemetry_table_row(r: TelemetryReading, d_uid: Optional[str] = None) -> Dict[str, Any]:
@@ -18,8 +19,9 @@ def format_telemetry_table_row(r: TelemetryReading, d_uid: Optional[str] = None)
         except Exception:
             pass
 
-    # 1. Device ID
-    dev_id = str(r.device_uid or d_uid or r.device_id)
+    # 1. Device ID - consolidated to canonical UID
+    raw_uid = str(d_uid or r.device_uid or r.device_id)
+    dev_id = get_canonical_uid(raw_uid)
 
     # 2. Recorded At (DD-MM-YYYY HH:mm:ss)
     rec_at_fmt = r.timestamp.strftime("%d-%m-%Y %H:%M:%S") if r.timestamp else "--"
@@ -194,24 +196,43 @@ class TelemetryRepository:
         gps_valid: Optional[str] = None,
         altitude_valid: Optional[str] = None,
     ) -> List[Any]:
-        conditions = []
+        conditions = [
+            # Strict genuine registered device cross-reference (source of truth)
+            Device.id.isnot(None),
+            Device.is_deleted == False,
+            Device.status.in_(["AVAILABLE", "ENGAGED", "REGISTERED"]),
+            func.length(Device.uid) == 24,
+            not_(Device.uid.ilike("%TEST%")),
+            not_(Device.uid.ilike("%AUDIT%")),
+            not_(Device.uid.ilike("%DUMMY%")),
+            not_(Device.uid.ilike("%DEMO%")),
+            not_(Device.uid.ilike("%SEED%")),
+            not_(Device.uid.ilike("%PLACEHOLDER%")),
+            not_(Device.uid.ilike("%ROGUE%")),
+            not_(Device.uid.ilike("%MOCK%")),
+        ]
 
         if search and search.strip():
             term = f"%{search.strip()}%"
+            canonical_term = get_canonical_uid(search.strip())
             conditions.append(
                 or_(
                     TelemetryReading.device_uid.ilike(term),
                     Device.uid.ilike(term),
+                    Device.uid == canonical_term,
                     TelemetryReading.device_id.ilike(term),
                 )
             )
 
         if device_id and device_id.strip() and device_id.strip().upper() != "ALL":
             did = device_id.strip()
+            canonical_did = get_canonical_uid(did)
             conditions.append(
                 or_(
                     TelemetryReading.device_uid == did,
+                    TelemetryReading.device_uid == canonical_did,
                     Device.uid == did,
+                    Device.uid == canonical_did,
                     TelemetryReading.device_id == did,
                 )
             )
@@ -290,7 +311,7 @@ class TelemetryRepository:
         )
 
         # Count total matching rows
-        count_stmt = select(func.count(TelemetryReading.id)).outerjoin(
+        count_stmt = select(func.count(TelemetryReading.id)).join(
             Device, TelemetryReading.device_id == Device.id
         )
         if conditions:
@@ -304,8 +325,8 @@ class TelemetryRepository:
         page = max(1, min(page, totalPages))
         offset = (page - 1) * limit
 
-        # Base query with outerjoin to resolve device UID if device_uid is null
-        stmt = select(TelemetryReading, Device.uid.label("d_uid")).outerjoin(
+        # Base query with inner join to enforce registered hardware devices
+        stmt = select(TelemetryReading, Device.uid.label("d_uid")).join(
             Device, TelemetryReading.device_id == Device.id
         )
         if conditions:
@@ -316,7 +337,7 @@ class TelemetryRepository:
         if sort_by == "recordedAt":
             order_col = TelemetryReading.timestamp
         elif sort_by == "deviceId":
-            order_col = coalesce(TelemetryReading.device_uid, Device.uid, TelemetryReading.device_id)
+            order_col = coalesce(Device.uid, TelemetryReading.device_uid, TelemetryReading.device_id)
         elif sort_by in ("ai1Ma", "level1Percent"):
             order_col = TelemetryReading.level_percent
         elif sort_by in ("batteryV", "batteryPercent"):
@@ -360,7 +381,7 @@ class TelemetryRepository:
             altitude_valid=altitude_valid,
         )
 
-        stmt = select(TelemetryReading, Device.uid.label("d_uid")).outerjoin(
+        stmt = select(TelemetryReading, Device.uid.label("d_uid")).join(
             Device, TelemetryReading.device_id == Device.id
         )
         if conditions:
@@ -370,7 +391,7 @@ class TelemetryRepository:
         if sort_by == "recordedAt":
             order_col = TelemetryReading.timestamp
         elif sort_by == "deviceId":
-            order_col = coalesce(TelemetryReading.device_uid, Device.uid, TelemetryReading.device_id)
+            order_col = coalesce(Device.uid, TelemetryReading.device_uid, TelemetryReading.device_id)
         elif sort_by in ("ai1Ma", "level1Percent"):
             order_col = TelemetryReading.level_percent
         elif sort_by in ("batteryV", "batteryPercent"):

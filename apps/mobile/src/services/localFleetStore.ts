@@ -14,7 +14,7 @@ import {
   TrainLocation,
 } from '../types';
 import { DEFAULT_CORRIDORS } from '../config/defaultCorridors';
-import { deviceRegistry } from './deviceRegistry';
+import { deviceRegistry, isGenuineHardwareUid, getCanonicalUid } from './deviceRegistry';
 import { alertNotificationService } from './alertNotificationService';
 import {
   mqttService,
@@ -178,6 +178,8 @@ const DEFAULT_INITIAL_STATE: StaticFleetState = {
   trains: {
     '11043': buildDefaultTrainRecord('11043', 'Ballia Express', 'WEST', 'Dadar', 'DR', 'Ballia', 'BUI', ['SLRD', 'S1', 'S2', 'B1', 'B2', 'A1'], 'CR', 'Express'),
     '12249': buildDefaultTrainRecord('12249', 'Swarn Nagari Express', 'NORTH', 'Shakurbasti', 'SSB', 'Jaisalmer', 'JSM', ['SLRD', 'D1', 'D2', 'C1', 'C2', 'B1'], 'NR', 'Superfast Express'),
+    '12626': buildDefaultTrainRecord('12626', 'Kerala Express', 'SOUTH', 'New Delhi', 'NDLS', 'Trivandrum Central', 'TVC', ['SLRD', 'S1', 'S2', 'B1', 'B2', 'A1'], 'SR', 'Superfast Express'),
+    '12301': buildDefaultTrainRecord('12301', 'Howrah Rajdhani Express', 'EAST', 'Howrah Junction', 'HWH', 'New Delhi', 'NDLS', ['B1', 'B2', 'B3', 'A1', 'A2', 'H1'], 'ER', 'Rajdhani Express'),
     '98765': buildDefaultTrainRecord('98765', 'Delete Target Express', 'EAST', 'Howrah Junction', 'HWH', 'Asansol Junction', 'ASN', ['A1', 'B1'], 'ER', 'Express'),
     '98766': buildDefaultTrainRecord('98766', 'Preserve Express', 'EAST', 'Howrah Junction', 'HWH', 'Asansol Junction', 'ASN', ['A1', 'B1'], 'ER', 'Express'),
   },
@@ -218,8 +220,10 @@ function readState(): StaticFleetState {
     for (const tr of Object.values(trains as Record<string, StoredTrainRecord>)) {
       if (tr?.consist?.coaches) {
         for (const coach of tr.consist.coaches) {
-          if (coach.device_uid && coach.device_uid.startsWith('PANORAMA-')) {
+          if (coach.device_uid && (!isGenuineHardwareUid(coach.device_uid) || coach.device_uid.startsWith('PANORAMA-'))) {
             coach.device_uid = '';
+          } else if (coach.device_uid) {
+            coach.device_uid = getCanonicalUid(coach.device_uid);
           }
         }
       }
@@ -661,7 +665,7 @@ export const localFleetStore = {
     const clean = (trainNumber || '').trim();
     const state = readState();
     if (state.trains[clean] && state.trains[clean].consist) {
-      delete state.trains[clean].consist;
+      delete (state.trains[clean] as any).consist;
       writeState(state, { skipPublish: true });
     }
   },
@@ -1133,8 +1137,8 @@ export const localFleetStore = {
 
       const r = Array.isArray(train.route) && train.route.length >= 2
         ? train.route
-        : Array.isArray(consist?.route) && consist.route.length >= 2
-        ? consist.route
+        : Array.isArray((consist as any)?.route) && (consist as any).route.length >= 2
+        ? (consist as any).route
         : DEFAULT_CORRIDORS[train.train_number] || [];
       const hasRoute = r.length >= 2;
 
