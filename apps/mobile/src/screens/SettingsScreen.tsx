@@ -446,14 +446,13 @@ const AdminSystemSettings: React.FC = () => {
   };
 
   const sections = [
-    { id: 'all', title: 'All 7 Sections', icon: Sliders },
+    { id: 'all', title: 'All 6 Sections', icon: Sliders },
     { id: 'general', title: '1. General Settings', icon: Globe },
     { id: 'appearance', title: '2. Appearance & Display', icon: Monitor },
     { id: 'device', title: '3. Device Configuration', icon: Cpu },
-    { id: 'network', title: '4. Network & Cloud Telemetry', icon: Radio },
-    { id: 'map', title: '5. Map & Location Settings', icon: MapPin },
-    { id: 'notifications', title: '6. Notifications & Alerts', icon: Bell },
-    { id: 'user', title: '7. User Preferences', icon: User },
+    { id: 'map', title: '4. Map & Location Settings', icon: MapPin },
+    { id: 'notifications', title: '5. Notifications & Alerts', icon: Bell },
+    { id: 'user', title: '6. User Preferences', icon: User },
   ];
 
   return (
@@ -634,7 +633,7 @@ const AdminSystemSettings: React.FC = () => {
         </div>
       )}
 
-      {/* 2. Navigation Tabs for the 7 Sections */}
+      {/* 2. Navigation Tabs for the 6 Sections */}
       <div
         className="settings-section-pills"
         style={{
@@ -1166,308 +1165,11 @@ const AdminSystemSettings: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* SECTION 4: Network & Cloud Telemetry */}
-      {/* ========================================================================= */}
-      {(selectedSectionTab === 'all' || selectedSectionTab === 'network') && (
-        <div
-          id="section-4-network"
-          style={{
-            backgroundColor: colors.surface,
-            border: `1px solid ${colors.border}`,
-            borderRadius: `${metrics.cardRadius}px`,
-            padding: `${metrics.cardPadding}px`,
-            boxShadow: colors.shadowSubtle,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '18px',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: colors.textPrimary }}>
-                4. Network & Cloud Telemetry
-              </h3>
-              <span style={{ fontSize: '11px', color: colors.textMuted }}>
-                MQTT Broker configurations, TLS encryption, and Ubidots Industrial Cloud Gateway.
-              </span>
-            </div>
-
-            <button
-              onClick={handleTestMqtt}
-              style={{
-                backgroundColor: colors.surfaceAlt,
-                border: `1px solid ${colors.borderStrong}`,
-                padding: '5px 12px',
-                borderRadius: '6px',
-                fontSize: '11px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <Radio size={12} /> Test MQTT Broker
-            </button>
-          </div>
-
-          {mqttTestResult && (
-            <div style={{ padding: '8px 12px', borderRadius: '6px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', fontSize: '11px', color: '#334155' }}>
-              {mqttTestResult}
-            </div>
-          )}
-
-          {/* Central REST API Backend Gateway */}
-          <div style={{ backgroundColor: colors.surfaceAlt, padding: '14px', borderRadius: '8px', border: `1px solid ${colors.border}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-              <div>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: colors.textPrimary }}>
-                  Central SCADA REST API Gateway
-                </span>
-                <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: colors.textMuted }}>
-                  Authoritative endpoint for trains, coach consists, physical tank parameters, and SCADA alarms.
-                </p>
-              </div>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  onClick={() => { setBackendUrl(DEFAULT_LOCAL_API_URL); setHasUnsavedChanges(true); }}
-                  style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '4px', border: `1px solid ${colors.border}`, backgroundColor: colors.surface, cursor: 'pointer', color: colors.textPrimary }}
-                >
-                  Local (8000)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setBackendUrl(DEFAULT_PRODUCTION_API_URL); setHasUnsavedChanges(true); }}
-                  style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '4px', border: `1px solid ${colors.border}`, backgroundColor: colors.surface, cursor: 'pointer', color: colors.textPrimary }}
-                >
-                  Render Cloud
-                </button>
-                <button
-                  type="button"
-                  onClick={handleTestBackend}
-                  disabled={testingBackend}
-                  style={{ fontSize: '11px', padding: '4px 10px', borderRadius: '4px', border: 'none', backgroundColor: '#2563EB', color: '#fff', cursor: 'pointer', fontWeight: 600 }}
-                >
-                  {testingBackend ? 'Probing...' : 'Test API'}
-                </button>
-              </div>
-            </div>
-            <input
-              type="text"
-              disabled={!isAdmin}
-              value={backendUrl}
-              onChange={(e) => {
-                setBackendUrl(e.target.value);
-                setHasUnsavedChanges(true);
-              }}
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                borderRadius: '6px',
-                border: `1px solid ${colors.borderStrong}`,
-                backgroundColor: colors.surface,
-                color: colors.textPrimary,
-                fontSize: '12px',
-                fontFamily: 'monospace',
-                boxSizing: 'border-box',
-              }}
-              placeholder="e.g. http://127.0.0.1:8000/api/v1"
-            />
-            {backendTestStatus && (
-              <div style={{ marginTop: '8px', fontSize: '11px', color: backendTestStatus.startsWith('✓') ? '#16A34A' : '#DC2626', fontWeight: 600 }}>
-                {backendTestStatus}
-              </div>
-            )}
-          </div>
-
-          {/* MQTT Settings */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '14px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
-                MQTT Broker Host
-              </label>
-              <input
-                type="text"
-                disabled={!isAdmin}
-                value={mqttBroker}
-                onChange={(e) => {
-                  setMqttBroker(e.target.value);
-                  setHasUnsavedChanges(true);
-                }}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  border: `1px solid ${colors.borderStrong}`,
-                  fontSize: '13px',
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
-                Broker Port
-              </label>
-              <input
-                type="number"
-                disabled={!isAdmin}
-                value={mqttPort}
-                onChange={(e) => {
-                  setMqttPort(parseInt(e.target.value) || 1883);
-                  setHasUnsavedChanges(true);
-                }}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  border: `1px solid ${colors.borderStrong}`,
-                  fontSize: '13px',
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
-                Telemetry Topic Pattern
-              </label>
-              <input
-                type="text"
-                disabled={!isAdmin}
-                value={mqttTopic}
-                onChange={(e) => {
-                  setMqttTopic(e.target.value);
-                  setHasUnsavedChanges(true);
-                }}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  border: `1px solid ${colors.borderStrong}`,
-                  fontSize: '13px',
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '24px' }}>
-              <input
-                type="checkbox"
-                id="tls-checkbox"
-                disabled={!isAdmin}
-                checked={mqttUseTls}
-                onChange={(e) => {
-                  setMqttUseTls(e.target.checked);
-                  setHasUnsavedChanges(true);
-                }}
-                style={{ width: 16, height: 16, accentColor: colors.primary }}
-              />
-              <label htmlFor="tls-checkbox" style={{ fontSize: '13px', fontWeight: 600, color: colors.textPrimary, cursor: 'pointer' }}>
-                Enforce MQTTS TLS (Port 8883)
-              </label>
-            </div>
-          </div>
-
-          {/* Ubidots Cloud Integration */}
-          <div style={{ borderTop: '1px solid #E2E8F0', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: colors.textPrimary }}>
-              Ubidots Cloud Industrial Gateway
-            </h4>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
-                  Cloud API Endpoint
-                </label>
-                <input
-                  type="text"
-                  disabled={!isAdmin}
-                  value={ubidotsHost}
-                  onChange={(e) => {
-                    setUbidotsHost(e.target.value);
-                    setHasUnsavedChanges(true);
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                    border: `1px solid ${colors.borderStrong}`,
-                    fontSize: '13px',
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
-                  Device Label
-                </label>
-                <input
-                  type="text"
-                  disabled={!isAdmin}
-                  value={ubidotsLabel}
-                  onChange={(e) => {
-                    setUbidotsLabel(e.target.value);
-                    setHasUnsavedChanges(true);
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: '6px',
-                    border: `1px solid ${colors.borderStrong}`,
-                    fontSize: '13px',
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
-                  Ubidots Auth Token
-                </label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type={showToken ? 'text' : 'password'}
-                    disabled={!isAdmin}
-                    value={ubidotsToken}
-                    onChange={(e) => {
-                      setUbidotsToken(e.target.value);
-                      setHasUnsavedChanges(true);
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '8px 36px 8px 12px',
-                      borderRadius: '6px',
-                      border: `1px solid ${colors.borderStrong}`,
-                      fontSize: '13px',
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowToken(!showToken)}
-                    style={{
-                      position: 'absolute',
-                      right: '8px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: colors.textMuted,
-                    }}
-                  >
-                    {showToken ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* SECTION 5: Map & Location Settings */}
+      {/* SECTION 4: Map & Location Settings */}
       {/* ========================================================================= */}
       {(selectedSectionTab === 'all' || selectedSectionTab === 'map') && (
         <div
-          id="section-5-map"
+          id="section-4-map"
           style={{
             backgroundColor: colors.surface,
             border: `1px solid ${colors.border}`,
@@ -1481,7 +1183,7 @@ const AdminSystemSettings: React.FC = () => {
         >
           <div>
             <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: colors.textPrimary }}>
-              5. Map & Location Settings
+              4. Map & Location Settings
             </h3>
             <span style={{ fontSize: '11px', color: colors.textMuted }}>
               Railway corridor definitions, cartography layers, GNSS polling, and track winding models.
@@ -1573,11 +1275,11 @@ const AdminSystemSettings: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* SECTION 6: Notifications & Alerts */}
+      {/* SECTION 5: Notifications & Alerts */}
       {/* ========================================================================= */}
       {(selectedSectionTab === 'all' || selectedSectionTab === 'notifications') && (
         <div
-          id="section-6-notifications"
+          id="section-5-notifications"
           style={{
             backgroundColor: colors.surface,
             border: `1px solid ${colors.border}`,
@@ -1591,7 +1293,7 @@ const AdminSystemSettings: React.FC = () => {
         >
           <div>
             <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: colors.textPrimary }}>
-              6. Notifications & Alarm Setpoints
+              5. Notifications & Alarm Setpoints
             </h3>
             <span style={{ fontSize: '11px', color: colors.textMuted }}>
               Industrial water level thresholds, master alert engine, category filtering, and telemetry event ledger.
@@ -2032,11 +1734,11 @@ const AdminSystemSettings: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* SECTION 7: User Preferences */}
+      {/* SECTION 6: User Preferences */}
       {/* ========================================================================= */}
       {(selectedSectionTab === 'all' || selectedSectionTab === 'user') && (
         <div
-          id="section-7-user"
+          id="section-6-user"
           style={{
             backgroundColor: colors.surface,
             border: `1px solid ${colors.border}`,
@@ -2050,7 +1752,7 @@ const AdminSystemSettings: React.FC = () => {
         >
           <div>
             <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: colors.textPrimary }}>
-              7. User Preferences & Session Profile
+              6. User Preferences & Session Profile
             </h3>
             <span style={{ fontSize: '11px', color: colors.textMuted }}>
               Signed-in operator details, default startup view, sound effects, and administrative factory restoration.
