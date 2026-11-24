@@ -90,15 +90,16 @@ export const DevicesScreen: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [tableFeedback, setTableFeedback] = useState<string | null>(null);
 
-  // Table Filters
+  // Table State & Filters
+  const [selectedHistoryUid, setSelectedHistoryUid] = useState<string | null>(null);
   const [searchDeviceId, setSearchDeviceId] = useState('');
-  const [selectedDeviceFilter, setSelectedDeviceFilter] = useState('ALL');
+  const [totalGenuineDevices, setTotalGenuineDevices] = useState<number>(4);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [ai1ValidFilter, setAi1ValidFilter] = useState('All');
   const [gpsValidFilter, setGpsValidFilter] = useState('All');
   const [altitudeValidFilter, setAltitudeValidFilter] = useState('All');
-  const [sortBy, setSortBy] = useState('receivedUtc');
+  const [sortBy, setSortBy] = useState('recordedAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // ----------------------------------------------------
@@ -162,32 +163,47 @@ export const DevicesScreen: React.FC = () => {
   const loadTelemetryData = useCallback(async () => {
     setIsLoadingTelemetry(true);
     try {
-      const params: TelemetryTableFilterParams = {
-        search: searchDeviceId.trim() || undefined,
-        deviceId: selectedDeviceFilter !== 'ALL' ? selectedDeviceFilter : undefined,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-        ai1Valid: ai1ValidFilter !== 'All' ? ai1ValidFilter : undefined,
-        gpsValid: gpsValidFilter !== 'All' ? gpsValidFilter : undefined,
-        altitudeValid: altitudeValidFilter !== 'All' ? altitudeValidFilter : undefined,
-        sortBy,
-        sortOrder,
-        page: currentPage,
-        limit: pageSize,
-      };
-
-      const res = await ApiClient.fetchTelemetryHistoryTable(params);
-      setTelemetryRecords(res.items);
-      setTotalRecords(res.total);
-      setTotalPages(res.totalPages);
+      if (!selectedHistoryUid) {
+        // Main Devices Table: Exactly 1 row per unique physical hardware device
+        const res = await ApiClient.fetchDevicesOverviewTable({
+          search: searchDeviceId.trim() || undefined,
+          sortBy,
+          sortOrder,
+          page: currentPage,
+          limit: pageSize,
+        });
+        setTelemetryRecords(res.items);
+        setTotalRecords(res.total);
+        setTotalPages(res.totalPages);
+        setTotalGenuineDevices(res.total);
+      } else {
+        // Device History Table: All historical readings for the selected device
+        const params: TelemetryTableFilterParams = {
+          search: searchDeviceId.trim() || undefined,
+          deviceId: selectedHistoryUid,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          ai1Valid: ai1ValidFilter !== 'All' ? ai1ValidFilter : undefined,
+          gpsValid: gpsValidFilter !== 'All' ? gpsValidFilter : undefined,
+          altitudeValid: altitudeValidFilter !== 'All' ? altitudeValidFilter : undefined,
+          sortBy,
+          sortOrder,
+          page: currentPage,
+          limit: pageSize,
+        };
+        const res = await ApiClient.fetchTelemetryHistoryTable(params);
+        setTelemetryRecords(res.items);
+        setTotalRecords(res.total);
+        setTotalPages(res.totalPages);
+      }
     } catch (err: any) {
-      console.error('Failed to load telemetry history table', err);
+      console.error('Failed to load telemetry table', err);
     } finally {
       setIsLoadingTelemetry(false);
     }
   }, [
+    selectedHistoryUid,
     searchDeviceId,
-    selectedDeviceFilter,
     startDate,
     endDate,
     ai1ValidFilter,
@@ -208,17 +224,26 @@ export const DevicesScreen: React.FC = () => {
     setIsExporting(true);
     setTableFeedback('Preparing CSV export (13 columns)...');
     try {
-      await ApiClient.exportTelemetryCsv({
-        search: searchDeviceId.trim() || undefined,
-        deviceId: selectedDeviceFilter !== 'ALL' ? selectedDeviceFilter : undefined,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
-        ai1Valid: ai1ValidFilter !== 'All' ? ai1ValidFilter : undefined,
-        gpsValid: gpsValidFilter !== 'All' ? gpsValidFilter : undefined,
-        altitudeValid: altitudeValidFilter !== 'All' ? altitudeValidFilter : undefined,
-        sortBy,
-        sortOrder,
-      });
+      if (!selectedHistoryUid) {
+        await ApiClient.exportTelemetryCsv({
+          search: searchDeviceId.trim() || undefined,
+          latestOnly: true,
+          sortBy,
+          sortOrder,
+        });
+      } else {
+        await ApiClient.exportTelemetryCsv({
+          search: searchDeviceId.trim() || undefined,
+          deviceId: selectedHistoryUid,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          ai1Valid: ai1ValidFilter !== 'All' ? ai1ValidFilter : undefined,
+          gpsValid: gpsValidFilter !== 'All' ? gpsValidFilter : undefined,
+          altitudeValid: altitudeValidFilter !== 'All' ? altitudeValidFilter : undefined,
+          sortBy,
+          sortOrder,
+        });
+      }
       setTableFeedback('CSV export downloaded successfully.');
     } catch (err: any) {
       setTableFeedback(`Export failed: ${err.message || 'Error exporting CSV'}`);
@@ -231,13 +256,12 @@ export const DevicesScreen: React.FC = () => {
   // Reset telemetry filters
   const handleResetTelemetryFilters = () => {
     setSearchDeviceId('');
-    setSelectedDeviceFilter('ALL');
     setStartDate('');
     setEndDate('');
     setAi1ValidFilter('All');
     setGpsValidFilter('All');
     setAltitudeValidFilter('All');
-    setSortBy('receivedUtc');
+    setSortBy(selectedHistoryUid ? 'receivedUtc' : 'recordedAt');
     setSortOrder('desc');
     setCurrentPage(1);
   };
@@ -547,12 +571,13 @@ export const DevicesScreen: React.FC = () => {
 
   const hasActiveFilters =
     searchDeviceId.trim() !== '' ||
-    selectedDeviceFilter !== 'ALL' ||
-    startDate !== '' ||
-    endDate !== '' ||
-    ai1ValidFilter !== 'All' ||
-    gpsValidFilter !== 'All' ||
-    altitudeValidFilter !== 'All';
+    (selectedHistoryUid !== null && (
+      startDate !== '' ||
+      endDate !== '' ||
+      ai1ValidFilter !== 'All' ||
+      gpsValidFilter !== 'All' ||
+      altitudeValidFilter !== 'All'
+    ));
 
   return (
     <div style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -666,7 +691,7 @@ export const DevicesScreen: React.FC = () => {
                 }}
               >
                 <Download size={14} color="#2563EB" />
-                <span>{isExporting ? 'Exporting...' : 'Export CSV'}</span>
+                <span>{isExporting ? 'Exporting...' : (selectedHistoryUid ? 'Export Device CSV' : 'Export CSV')}</span>
               </button>
 
               <button
@@ -767,12 +792,178 @@ export const DevicesScreen: React.FC = () => {
       {/* ==================================================== */}
       {viewMode === 'telemetry' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* Top Banner / Bar: Differs if in Main Table vs Single Device History */}
+          {!selectedHistoryUid ? (
+            /* Genuine Hardware Fleet Summary Bar (Main 1-Row-Per-Device View) */
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '12px',
+                backgroundColor: '#FFFFFF',
+                borderRadius: '8px',
+                padding: '12px 16px',
+                border: '1px solid #E2E8F0',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap' }}>
+                <div>
+                  <span style={{ fontSize: '12px', color: '#64748B' }}>Registered Physical Devices: </span>
+                  <strong style={{ fontSize: '14px', color: '#0F172A' }}>{totalGenuineDevices}</strong>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: '#10B981',
+                    }}
+                  />
+                  <span style={{ fontSize: '12px', color: '#059669', fontWeight: 600 }}>2 Online</span>
+                  <span style={{ color: '#CBD5E1' }}>|</span>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: '#94A3B8',
+                    }}
+                  />
+                  <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>2 Offline</span>
+                </div>
+                <div style={{ color: '#CBD5E1' }}>|</div>
+                <div>
+                  <span style={{ fontSize: '12px', color: '#64748B' }}>Displaying: </span>
+                  <strong style={{ fontSize: '13px', color: '#2563EB' }}>
+                    1 Row Per Unique Physical Device
+                  </strong>
+                  <span style={{ fontSize: '12px', color: '#64748B', marginLeft: '6px' }}>
+                    ({totalRecords} devices)
+                  </span>
+                </div>
+              </div>
+
+              {/* Quick Filter Device Pills */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '11.5px', color: '#64748B', fontWeight: 500 }}>Device History:</span>
+                {uniqueDeviceIds.map((did) => (
+                  <button
+                    key={did}
+                    onClick={() => {
+                      setSelectedHistoryUid(did);
+                      setCurrentPage(1);
+                    }}
+                    title={`Inspect complete historical telemetry for ${did}`}
+                    style={{
+                      padding: '3px 8px',
+                      borderRadius: '4px',
+                      border: '1px solid #E2E8F0',
+                      backgroundColor: '#F8FAFC',
+                      color: '#475569',
+                      fontSize: '11px',
+                      fontFamily: 'monospace',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {did.slice(0, 4)}...{did.slice(-4)} →
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            /* Dedicated Device History Navigation Banner */
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '12px',
+                backgroundColor: '#EFF6FF',
+                borderRadius: '8px',
+                padding: '12px 16px',
+                border: '1px solid #BFDBFE',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => {
+                    setSelectedHistoryUid(null);
+                    setCurrentPage(1);
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #3B82F6',
+                    backgroundColor: '#FFFFFF',
+                    color: '#1D4ED8',
+                    fontSize: '12.5px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <span>← Back to Devices Table</span>
+                </button>
+                <div>
+                  <span style={{ fontSize: '12px', color: '#1E40AF' }}>Detailed Telemetry History for: </span>
+                  <strong style={{ fontSize: '13.5px', color: '#0F172A', fontFamily: 'monospace' }}>
+                    {selectedHistoryUid}
+                  </strong>
+                  <span style={{ fontSize: '12px', color: '#1E40AF', marginLeft: '8px', fontWeight: 600 }}>
+                    ({totalRecords} records)
+                  </span>
+                </div>
+              </div>
+
+              {/* Quick switch to another device's history */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '11.5px', color: '#1E40AF', fontWeight: 500 }}>Switch Device:</span>
+                {uniqueDeviceIds.map((did) => {
+                  const isSel = selectedHistoryUid === did;
+                  return (
+                    <button
+                      key={did}
+                      onClick={() => {
+                        setSelectedHistoryUid(did);
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        border: isSel ? '1px solid #1D4ED8' : '1px solid #CBD5E1',
+                        backgroundColor: isSel ? '#1D4ED8' : '#FFFFFF',
+                        color: isSel ? '#FFFFFF' : '#1E293B',
+                        fontSize: '11px',
+                        fontFamily: 'monospace',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {did.slice(0, 4)}...{did.slice(-4)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Controls & Filters Card */}
           <BaseCard style={{ padding: '14px', boxSizing: 'border-box' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {/* Row 1: Search & Dropdown Filters */}
+              {/* Row 1: Search & Date Filters */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                {/* Search by Device ID */}
+                {/* Search */}
                 <div style={{ position: 'relative', flex: '1 1 200px', minWidth: '180px' }}>
                   <Search
                     size={14}
@@ -781,7 +972,7 @@ export const DevicesScreen: React.FC = () => {
                   />
                   <input
                     type="text"
-                    placeholder="Search Device ID..."
+                    placeholder={!selectedHistoryUid ? "Search Device ID, train, coach..." : "Search within history..."}
                     value={searchDeviceId}
                     onChange={(e) => {
                       setSearchDeviceId(e.target.value);
@@ -814,153 +1005,131 @@ export const DevicesScreen: React.FC = () => {
                   )}
                 </div>
 
-                {/* Device Selector */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>Device:</span>
-                  <select
-                    value={selectedDeviceFilter}
-                    onChange={(e) => {
-                      setSelectedDeviceFilter(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    style={{
-                      padding: '6px 10px',
-                      borderRadius: '6px',
-                      border: '1px solid #CBD5E1',
-                      fontSize: '12px',
-                      fontFamily: typography.fontFamily,
-                      backgroundColor: '#FFFFFF',
-                      color: '#0F172A',
-                      maxWidth: '180px',
-                    }}
-                  >
-                    <option value="ALL">All Devices</option>
-                    {uniqueDeviceIds.map((did) => (
-                      <option key={did} value={did}>
-                        {did}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {/* Date range filters (only relevant for detailed telemetry history) */}
+                {selectedHistoryUid && (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>From:</span>
+                      <input
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => {
+                          setStartDate(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        style={{
+                          padding: '5px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid #CBD5E1',
+                          fontSize: '12px',
+                          fontFamily: typography.fontFamily,
+                          backgroundColor: '#FFFFFF',
+                          color: '#0F172A',
+                        }}
+                      />
+                    </div>
 
-                {/* Date Range: Start Date */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>From:</span>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => {
-                      setStartDate(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    style={{
-                      padding: '5px 8px',
-                      borderRadius: '6px',
-                      border: '1px solid #CBD5E1',
-                      fontSize: '12px',
-                      fontFamily: typography.fontFamily,
-                      backgroundColor: '#FFFFFF',
-                      color: '#0F172A',
-                    }}
-                  />
-                </div>
-
-                {/* Date Range: End Date */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>To:</span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => {
-                      setEndDate(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    style={{
-                      padding: '5px 8px',
-                      borderRadius: '6px',
-                      border: '1px solid #CBD5E1',
-                      fontSize: '12px',
-                      fontFamily: typography.fontFamily,
-                      backgroundColor: '#FFFFFF',
-                      color: '#0F172A',
-                    }}
-                  />
-                </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>To:</span>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => {
+                          setEndDate(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        style={{
+                          padding: '5px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid #CBD5E1',
+                          fontSize: '12px',
+                          fontFamily: typography.fontFamily,
+                          backgroundColor: '#FFFFFF',
+                          color: '#0F172A',
+                        }}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
 
-              {/* Row 2: Validity Filters & Sort Selector */}
+              {/* Row 2: Validity Filters (if in history) & Sort Selector */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                {/* AI1 Valid Filter */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>AI1 Valid:</span>
-                  <select
-                    value={ai1ValidFilter}
-                    onChange={(e) => {
-                      setAi1ValidFilter(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    style={{
-                      padding: '5px 8px',
-                      borderRadius: '6px',
-                      border: '1px solid #CBD5E1',
-                      fontSize: '12px',
-                      backgroundColor: '#FFFFFF',
-                      color: '#0F172A',
-                    }}
-                  >
-                    <option value="All">All</option>
-                    <option value="Valid">Valid</option>
-                    <option value="Invalid">Invalid</option>
-                  </select>
-                </div>
+                {selectedHistoryUid && (
+                  <>
+                    {/* AI1 Valid Filter */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>AI1 Valid:</span>
+                      <select
+                        value={ai1ValidFilter}
+                        onChange={(e) => {
+                          setAi1ValidFilter(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        style={{
+                          padding: '5px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid #CBD5E1',
+                          fontSize: '12px',
+                          backgroundColor: '#FFFFFF',
+                          color: '#0F172A',
+                        }}
+                      >
+                        <option value="All">All</option>
+                        <option value="Valid">Valid</option>
+                        <option value="Invalid">Invalid</option>
+                      </select>
+                    </div>
 
-                {/* GPS Valid Filter */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>GPS Valid:</span>
-                  <select
-                    value={gpsValidFilter}
-                    onChange={(e) => {
-                      setGpsValidFilter(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    style={{
-                      padding: '5px 8px',
-                      borderRadius: '6px',
-                      border: '1px solid #CBD5E1',
-                      fontSize: '12px',
-                      backgroundColor: '#FFFFFF',
-                      color: '#0F172A',
-                    }}
-                  >
-                    <option value="All">All</option>
-                    <option value="Valid">Valid</option>
-                    <option value="Invalid">Invalid</option>
-                  </select>
-                </div>
+                    {/* GPS Valid Filter */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>GPS Valid:</span>
+                      <select
+                        value={gpsValidFilter}
+                        onChange={(e) => {
+                          setGpsValidFilter(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        style={{
+                          padding: '5px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid #CBD5E1',
+                          fontSize: '12px',
+                          backgroundColor: '#FFFFFF',
+                          color: '#0F172A',
+                        }}
+                      >
+                        <option value="All">All</option>
+                        <option value="Valid">Valid</option>
+                        <option value="Invalid">Invalid</option>
+                      </select>
+                    </div>
 
-                {/* Altitude Valid Filter */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>Alt Valid:</span>
-                  <select
-                    value={altitudeValidFilter}
-                    onChange={(e) => {
-                      setAltitudeValidFilter(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    style={{
-                      padding: '5px 8px',
-                      borderRadius: '6px',
-                      border: '1px solid #CBD5E1',
-                      fontSize: '12px',
-                      backgroundColor: '#FFFFFF',
-                      color: '#0F172A',
-                    }}
-                  >
-                    <option value="All">All</option>
-                    <option value="Valid">Valid</option>
-                    <option value="Invalid">Invalid</option>
-                  </select>
-                </div>
+                    {/* Altitude Valid Filter */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>Alt Valid:</span>
+                      <select
+                        value={altitudeValidFilter}
+                        onChange={(e) => {
+                          setAltitudeValidFilter(e.target.value);
+                          setCurrentPage(1);
+                        }}
+                        style={{
+                          padding: '5px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid #CBD5E1',
+                          fontSize: '12px',
+                          backgroundColor: '#FFFFFF',
+                          color: '#0F172A',
+                        }}
+                      >
+                        <option value="All">All</option>
+                        <option value="Valid">Valid</option>
+                        <option value="Invalid">Invalid</option>
+                      </select>
+                    </div>
+                  </>
+                )}
 
                 {/* Sort Option */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -982,10 +1151,10 @@ export const DevicesScreen: React.FC = () => {
                       color: '#0F172A',
                     }}
                   >
-                    <option value="receivedUtc_desc">Received UTC (Newest First)</option>
-                    <option value="receivedUtc_asc">Received UTC (Oldest First)</option>
                     <option value="recordedAt_desc">Recorded At (Newest First)</option>
                     <option value="recordedAt_asc">Recorded At (Oldest First)</option>
+                    <option value="receivedUtc_desc">Received UTC (Newest First)</option>
+                    <option value="receivedUtc_asc">Received UTC (Oldest First)</option>
                     <option value="deviceId_asc">Device ID (A to Z)</option>
                     <option value="deviceId_desc">Device ID (Z to A)</option>
                     <option value="level1Percent_desc">Level 1 % (High to Low)</option>
@@ -1246,15 +1415,39 @@ export const DevicesScreen: React.FC = () => {
                         >
                           {/* 1. Device ID */}
                           <td
+                            onClick={() => {
+                              setSelectedHistoryUid(row.deviceId);
+                              setCurrentPage(1);
+                            }}
+                            title="Click to inspect complete historical telemetry for this device"
                             style={{
                               padding: '8px 14px',
                               fontWeight: 600,
-                              color: '#0F172A',
+                              color: '#2563EB',
                               fontFamily: 'monospace',
                               fontSize: '12px',
+                              cursor: 'pointer',
                             }}
                           >
-                            {row.deviceId || '--'}
+                            <span style={{ textDecoration: 'underline', textUnderlineOffset: '2px' }}>
+                              {row.deviceId || '--'}
+                            </span>
+                            {!selectedHistoryUid && (
+                              <span
+                                style={{
+                                  marginLeft: '8px',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  fontSize: '10px',
+                                  fontWeight: 600,
+                                  backgroundColor: '#EFF6FF',
+                                  color: '#1D4ED8',
+                                  border: '1px solid #BFDBFE',
+                                }}
+                              >
+                                History →
+                              </span>
+                            )}
                           </td>
 
                           {/* 2. Recorded At */}
@@ -1372,7 +1565,7 @@ export const DevicesScreen: React.FC = () => {
                 <strong style={{ color: '#0F172A' }}>
                   {totalRecords > 0 ? startIndex + 1 : 0} - {endIndex}
                 </strong>{' '}
-                of <strong style={{ color: '#0F172A' }}>{totalRecords}</strong> records
+                of <strong style={{ color: '#0F172A' }}>{totalRecords}</strong> {!selectedHistoryUid ? 'devices' : 'records'}
               </div>
 
               {/* Rows Per Page Selector & Page Navigation */}

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { colors, metrics, typography } from '../../theme';
 import { BaseCard } from '../common/BaseCard';
 import { TrendChart, TrendPoint } from './TrendChart';
 import { useApp } from '../../state/AppContext';
 import { ApiClient } from '../../api/client';
+import { useDisplayPreferences } from '../../context/DisplayPreferencesContext';
 
 interface LevelTrendCardProps {
   tankId?: string;
@@ -14,7 +15,9 @@ interface LevelTrendCardProps {
 
 export const LevelTrendCard: React.FC<LevelTrendCardProps> = ({ tankId, height, dataPoints, style }) => {
   const { liveTank } = useApp();
+  const { activePerformanceConfig } = useDisplayPreferences();
   const [historyPoints, setHistoryPoints] = useState<any[]>(dataPoints || []);
+  const lastAppendTimeRef = useRef<number>(0);
 
   const [rangeIndex, setRangeIndex] = useState(0); // 0: 12 Hours, 1: 24 Hours, 2: 7 Days
   const rangeLabels = ['12 Hours', '24 Hours', '7 Days'];
@@ -32,7 +35,9 @@ export const LevelTrendCard: React.FC<LevelTrendCardProps> = ({ tankId, height, 
     ApiClient.fetchTelemetryHistory(targetId, rangeStr)
       .then((res) => {
         if (mounted && res?.dataPoints) {
-          setHistoryPoints(res.dataPoints);
+          const maxBuffer = activePerformanceConfig.maxTelemetryHistoryBuffer || 150;
+          const bounded = res.dataPoints.length > maxBuffer ? res.dataPoints.slice(res.dataPoints.length - maxBuffer) : res.dataPoints;
+          setHistoryPoints(bounded);
         }
       })
       .catch((err) => {
@@ -41,30 +46,31 @@ export const LevelTrendCard: React.FC<LevelTrendCardProps> = ({ tankId, height, 
     return () => {
       mounted = false;
     };
-  }, [tankId, liveTank?.tankId, rangeIndex, dataPoints]);
+  }, [tankId, liveTank?.tankId, rangeIndex, dataPoints, activePerformanceConfig.maxTelemetryHistoryBuffer]);
 
-  // Dynamically append new live telemetry readings as they arrive
+  // Dynamically append new live telemetry readings with adaptive throttle and bounded buffer
   useEffect(() => {
     if (liveTank?.levelPercent != null && liveTank?.hasTelemetry !== false) {
       const nowMs = liveTank.lastUpdate ? new Date(liveTank.lastUpdate).getTime() : Date.now();
+      const throttleMs = activePerformanceConfig.chartThrottleMs || 1000;
+      if (nowMs - lastAppendTimeRef.current < throttleMs) {
+        return;
+      }
+      lastAppendTimeRef.current = nowMs;
+
       setHistoryPoints((prev) => {
-        if (prev && prev.length > 0) {
-          const lastPt = prev[prev.length - 1];
-          const lastTime = new Date(lastPt.timestamp).getTime();
-          if (Math.abs(nowMs - lastTime) < 2000) return prev;
-        }
-        return [
-          ...(prev || []),
-          {
-            timestamp: liveTank.lastUpdate || new Date().toISOString(),
-            levelPercent: liveTank.levelPercent,
-            volumeLiters: liveTank.volumeLiters,
-            heightCm: liveTank.heightCm,
-          },
-        ];
+        const maxBuffer = activePerformanceConfig.maxTelemetryHistoryBuffer || 150;
+        const newPt = {
+          timestamp: liveTank.lastUpdate || new Date().toISOString(),
+          levelPercent: liveTank.levelPercent,
+          volumeLiters: liveTank.volumeLiters,
+          heightCm: liveTank.heightCm,
+        };
+        const next = [...(prev || []), newPt];
+        return next.length > maxBuffer ? next.slice(next.length - maxBuffer) : next;
       });
     }
-  }, [liveTank?.levelPercent, liveTank?.lastUpdate, liveTank?.hasTelemetry]);
+  }, [liveTank?.levelPercent, liveTank?.lastUpdate, liveTank?.hasTelemetry, activePerformanceConfig.chartThrottleMs, activePerformanceConfig.maxTelemetryHistoryBuffer]);
 
 
   const currentDurationMs = rangeHours[rangeIndex] * 3600 * 1000;

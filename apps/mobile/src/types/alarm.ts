@@ -1,11 +1,13 @@
 export type AlarmSeverity = 'CRITICAL' | 'WARNING' | 'INFO';
-export type AlarmType = 'CRITICAL_LOW' | 'WARNING_LOW' | 'OVERFLOW' | 'SENSOR_FAULT' | 'VOLTAGE_FAULT' | 'DEVICE_OFFLINE';
+export type AlarmType = 'CRITICAL_LOW' | 'WARNING_LOW' | 'OVERFLOW' | 'SENSOR_FAULT' | 'VOLTAGE_FAULT' | 'DEVICE_OFFLINE' | 'LOW_BATTERY';
 export type AlarmLifecycleState = 'ACTIVE' | 'ACKNOWLEDGED' | 'RESOLVED';
 
 export interface AlarmItem {
   id: string;
   deviceId?: string;
   device_id?: string;
+  deviceUid?: string;
+  device_uid?: string;
   tankId?: string;
   tank_id?: string;
   coachNumber?: string;
@@ -21,6 +23,7 @@ export interface AlarmItem {
   threshold_value?: number;
   message: string;
   status: AlarmLifecycleState;
+  isAcknowledged?: boolean;
   triggeredAt?: string;
   triggered_at?: string;
   acknowledgedAt?: string;
@@ -31,8 +34,13 @@ export interface AlarmItem {
 
 export interface AlarmStats {
   totalActive: number;
+  total_active?: number;
   criticalCount: number;
   warningCount: number;
   resolvedToday: number;
+  critical?: number;
+  warning?: number;
+  info?: number;
+  acknowledged?: number;
 }
 

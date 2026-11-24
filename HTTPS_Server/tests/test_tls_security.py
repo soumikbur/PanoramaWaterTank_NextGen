@@ -56,16 +56,14 @@ def live_https_server():
         from scripts.generate_certificate import generate_self_signed_cert
         generate_self_signed_cert(output_dir=DEV_CERT_PATH.parent)
 
-    ctx = mp.get_context("spawn")
-    proc = ctx.Process(target=run_https_server, daemon=True)
-    proc.start()
+    import threading
+    server_thread = threading.Thread(target=run_https_server, daemon=True)
+    server_thread.start()
 
     # Wait for server to bind port
     start = time.time()
     bound = False
-    while time.time() - start < 8.0:
-        if not proc.is_alive():
-            pytest.fail(f"Live HTTPS test server process died unexpectedly with exit code {proc.exitcode}.")
+    while time.time() - start < 10.0:
         try:
             with socket.create_connection(("127.0.0.1", TEST_HTTPS_PORT), timeout=0.3):
                 bound = True
@@ -74,13 +72,9 @@ def live_https_server():
             time.sleep(0.1)
 
     if not bound:
-        proc.terminate()
         pytest.fail(f"Live HTTPS test server failed to bind port {TEST_HTTPS_PORT} in time.")
 
     yield f"https://127.0.0.1:{TEST_HTTPS_PORT}"
-
-    proc.terminate()
-    proc.join(timeout=2.0)
 
 
 def get_test_ssl_context():

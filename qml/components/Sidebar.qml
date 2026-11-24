@@ -18,20 +18,21 @@ Rectangle {
     readonly property int activeAlertCount: TankModel.activeAlertCount
 
     readonly property var primaryNavItems: [
-        { label: "Train Management", icon: "train", navIndex: 0, badge: 0 },
-        { label: "All Tanks", icon: "all-tanks", navIndex: 1, badge: 0 },
-        { label: "Devices", icon: "devices", navIndex: 2, badge: 0 },
-        { label: "Location", icon: "location", navIndex: 3, badge: 0 },
-        { label: "Alerts", icon: "alerts", navIndex: 4, badge: TrainManager.filteredAlertCount },
-        { label: "History", icon: "history", navIndex: 5, badge: 0 },
-        { label: "Reports", icon: "reports", navIndex: 6, badge: 0 }
+        { label: "Dashboard", icon: "dashboard", navIndex: 0, badge: 0 },
+        { label: "Train Management", icon: "train", navIndex: 1, badge: 0 },
+        { label: "All Tanks", icon: "all-tanks", navIndex: 2, badge: 0 },
+        { label: "Devices", icon: "devices", navIndex: 3, badge: 0 },
+        { label: "Location", icon: "location", navIndex: 4, badge: 0 },
+        { label: "Alerts", icon: "alerts", navIndex: 5, badge: TrainManager.filteredAlertCount },
+        { label: "History", icon: "history", navIndex: 6, badge: 0 },
+        { label: "Reports", icon: "reports", navIndex: 7, badge: 0 }
     ]
 
     readonly property var systemNavItems: [
-        { label: "Settings", icon: "settings", navIndex: 7, badge: 0, adminOnly: true },
-        { label: "Configuration", icon: "config", navIndex: 8, badge: 0 },
-        { label: "Users", icon: "users", navIndex: 9, badge: 0, adminOnly: true },
-        { label: "Logs", icon: "logs", navIndex: 10, badge: 0 }
+        { label: "Settings", icon: "settings", navIndex: 8, badge: 0, adminOnly: true },
+        { label: "Configuration", icon: "config", navIndex: 9, badge: 0 },
+        { label: "Users", icon: "users", navIndex: 10, badge: 0, adminOnly: true },
+        { label: "Raw Data & Logs", icon: "logs", navIndex: 11, badge: 0 }
     ]
 
     property bool isCollapsed: Settings.sidebarCollapsed
@@ -496,7 +497,7 @@ Rectangle {
                     label: modelData.label
                     iconGlyph: modelData.icon
                     badgeCount: modelData.badge
-                    active: root.currentIndex === modelData.navIndex || (root.currentIndex === 11 && modelData.navIndex === 0)
+                    active: root.currentIndex === modelData.navIndex || (root.currentIndex === 12 && modelData.navIndex === 1)
                     collapsed: root.isNarrow
                     onClicked: {
                         root.currentIndex = modelData.navIndex;

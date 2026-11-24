@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.core.database import engine, init_db, get_db
 from app.mqtt.client import mqtt_service
 from app.services.outbox_service import outbox_worker_loop
-from app.api.v1 import api_router, trains as trains_v1
+from app.api.v1 import api_router, trains as trains_v1, mqtt_topics as mqtt_topics_v1
 from app.api.v1.health import health_check
 from app.api.v1.ws import websocket_live_stream
 
@@ -135,6 +135,7 @@ async def normalize_api_trailing_slash(request: Request, call_next):
 # Mount API Routers
 app.include_router(api_router)
 app.include_router(trains_v1.router, prefix="/api", include_in_schema=False)
+app.include_router(mqtt_topics_v1.router, prefix="/api", include_in_schema=False)
 
 
 @app.middleware("http")

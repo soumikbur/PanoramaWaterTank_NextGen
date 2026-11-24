@@ -67,7 +67,7 @@ Item {
             loops: Animation.Infinite
             easing.type: Easing.Linear
             running: root.visible && root.opacity > 0
-                     && !Theme.reducedMotion
+                     && Theme.waveAnimationEnabled
                      && (root.Window ? root.Window.visibility !== Window.Hidden : true)
         }
     }

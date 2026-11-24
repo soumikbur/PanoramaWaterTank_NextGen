@@ -248,8 +248,8 @@
   }
 }
 
-/* Tier 3: Small Laptop / Tablet Landscape (768px - 1023px) */
-@media (min-width: 768px) and (max-width: 1023px) {
+/* Tier 3: Small Laptop / Large Tablet Landscape (801px - 1023px) */
+@media (min-width: 801px) and (max-width: 1023px) {
   .app-layout header {
     height: 56px !important;
     min-height: 56px !important;
@@ -286,11 +286,11 @@
   }
 }
 
-/* Tier 4: Mobile Viewport (< 768px) */
-@media (max-width: 767px) {
+/* Tier 4: Mobile & Tablet Viewports (<= 800px) */
+@media (max-width: 800px) {
   .app-layout header {
-    height: 56px !important;
-    min-height: 56px !important;
+    height: 50px !important;
+    min-height: 50px !important;
     padding-left: 8px !important;
     padding-right: 8px !important;
     overflow: visible !important;
@@ -308,7 +308,7 @@
   }
 
   .app-layout main {
-    padding: 10px 10px 24px 10px !important;
+    padding: 8px 10px calc(env(safe-area-inset-bottom, 0px) + 20px) 10px !important;
   }
 
   .hide-on-mobile {
@@ -507,7 +507,7 @@ html, body, #root, .app-layout {
   top: 0;
   left: 0;
   bottom: 0;
-  width: min(320px, 85vw);
+  width: 75vw;
   max-width: 320px;
   height: 100vh;
   height: 100dvh;
@@ -520,6 +520,22 @@ html, body, #root, .app-layout {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+}
+
+/* Small phones (< 380px): ~80% width */
+@media (max-width: 380px) {
+  .mobile-drawer-sheet {
+    width: 80vw !important;
+    max-width: 290px !important;
+  }
+}
+
+/* Tablets (>= 600px): max 320-360dp */
+@media (min-width: 600px) {
+  .mobile-drawer-sheet {
+    width: 340px !important;
+    max-width: 360px !important;
+  }
 }
 
 /* Interactive touch target standards */
@@ -750,13 +766,26 @@ html, body, #root, .app-layout {
   }
 }
 
-/* Fluid responsive table / card switcher */
+/* Fluid responsive table / card switcher & mobile SCADA card density */
 @media (max-width: 767px) {
   .dashboard-train-table-desktop {
     display: none !important;
   }
   .dashboard-train-cards-mobile {
     display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    width: 100% !important;
+  }
+  .dashboard-train-cards-mobile > div {
+    padding: 12px 14px !important;
+    border-radius: 8px !important;
+    box-sizing: border-box !important;
+  }
+  .system-status-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 6px 8px !important;
   }
   .mobile-controls-stack {
     flex-direction: column !important;
@@ -765,6 +794,25 @@ html, body, #root, .app-layout {
   }
   .mobile-controls-stack > * {
     width: 100% !important;
+  }
+  .interactive-card {
+    padding: 12px 14px !important;
+    border-radius: 8px !important;
+  }
+  .mobile-train-card {
+    padding: 10px 12px !important;
+    border-radius: 8px !important;
+    gap: 6px !important;
+  }
+  .profile-dropdown,
+  #mobile-account-dropdown {
+    width: min(340px, calc(100vw - 24px)) !important;
+    max-width: calc(100vw - 20px) !important;
+    max-height: calc(100dvh - 80px) !important;
+    overflow-y: auto !important;
+    box-sizing: border-box !important;
+    padding: 12px 14px !important;
+    gap: 8px !important;
   }
 }
 

@@ -1553,6 +1553,52 @@ Item {
                             spacing: 2
 
                             Text {
+                                text: "Adaptive Performance Profile"
+                                color: Theme.colors.textPrimary
+                                font.family: Theme.typography.fontFamily
+                                font.pixelSize: 14
+                                font.weight: Font.Medium
+                            }
+                            Text {
+                                text: "Current active profile: " + Theme.performanceProfile.toUpperCase() + (DisplayPerformanceManager.isAutoDetected ? " (Auto-Detected)" : " (Manual Override)")
+                                color: Theme.colors.primary
+                                font.family: Theme.typography.fontFamily
+                                font.pixelSize: 12
+                                font.weight: Font.DemiBold
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        StyledComboBox {
+                            id: perfProfileCombo
+                            Layout.preferredWidth: 200
+                            model: ["Auto (Recommended)", "High Performance", "Balanced", "Low Resource"]
+                            currentIndex: {
+                                const mode = DisplayPerformanceManager.profileOverride;
+                                if (mode === "high") return 1;
+                                if (mode === "balanced") return 2;
+                                if (mode === "low") return 3;
+                                return 0;
+                            }
+                            onActivated: function(index) {
+                                if (index === 1) DisplayPerformanceManager.profileOverride = "high";
+                                else if (index === 2) DisplayPerformanceManager.profileOverride = "balanced";
+                                else if (index === 3) DisplayPerformanceManager.profileOverride = "low";
+                                else DisplayPerformanceManager.profileOverride = "auto";
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.metrics.spacingSmall
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+
+                            Text {
                                 text: "Reduce Motion"
                                 color: Theme.colors.textPrimary
                                 font.family: Theme.typography.fontFamily

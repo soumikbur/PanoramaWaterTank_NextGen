@@ -1,14 +1,14 @@
 """Panorama Water Tank — HTTPS Receiver Main Application Entrypoint."""
 from contextlib import asynccontextmanager
 import logging
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from backend import config
-from backend.routes import health, sync, system, telemetry
+from backend.routes import health, sync, system, telemetry, v1_api
 from backend.services.shared_state_service import shared_state_service
 from backend.services.storage_service import storage_service
 
@@ -83,6 +83,19 @@ app.include_router(health.router)
 app.include_router(telemetry.router)
 app.include_router(system.router)
 app.include_router(sync.router)
+app.include_router(v1_api.router)
+
+
+@app.get("/health", tags=["Health"])
+async def root_health_probe():
+    """Alias for /api/v1/health probe."""
+    return await v1_api.health_v1()
+
+
+@app.websocket("/ws/live")
+async def root_ws_live(websocket: WebSocket):
+    """Alias for /api/v1/ws/live WebSocket stream."""
+    await v1_api.v1_ws_live_endpoint(websocket)
 
 
 @app.exception_handler(Exception)

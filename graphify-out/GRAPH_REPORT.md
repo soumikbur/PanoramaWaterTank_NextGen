@@ -1,17 +1,17 @@
-# Graph Report - PanoramaWaterTank_NextGen  (2026-11-17)
+# Graph Report - PanoramaWaterTank_NextGen  (2026-11-24)
 
 ## Corpus Check
-- 963 files · ~3,815,538 words
+- 1097 files · ~3,793,312 words
 - Verdict: corpus is large enough that graph structure adds value.
-- Unclassified: 134 file(s) not represented in the graph (top: .qml 69, (none) 21, .xml 11)
+- Unclassified: 131 file(s) not represented in the graph (top: .qml 69, (none) 20, .xml 11)
 
 ## Summary
-- 10375 nodes · 17891 edges · 688 communities (628 shown, 60 thin omitted)
-- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 1606 edges (avg confidence: 0.9)
+- 12241 nodes · 21022 edges · 777 communities (713 shown, 64 thin omitted)
+- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 1894 edges (avg confidence: 0.9)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `cd174404`
+- Built from commit: `a42c15c3`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -26,28 +26,28 @@
 - Community_20.md
 - RailwayManager
 - SearchManager
+- SettingsManager.cpp
 - AuthManager
 - ApplicationStateManager
 - Panorama SCADA — Chrome DevTools Browser Debug Report
 - LocationManager
-- react
+- App.tsx
 - postgres
 - TankModel.cpp
 - ref_http
-- hf
+- v1
 - ApiClient
 - Communities (72 total, 33 thin omitted)
-- Android Native System Notifications & Mobile Responsiveness Fix Report
+- devices.py
 - SettingsRepository
-- Panorama Water Tank Monitor — Packaging & Verification Audit Report
+- User
 - ApplicationController
 - telemetry.js
 - Communities (67 total, 31 thin omitted)
-- DisplayPerformanceManager
-- backend/tests/conftest.py
+- json
 - TrainManager
 - ApplicationState
-- DeviceRepository
+- ApplicationController.h
 - ConnectionManager
 - HistoryExporter.cpp
 - main
@@ -60,27 +60,27 @@
 - TimeManager
 - TankItem
 - test_train_lookup.py
-- test_tls_security.py
+- TrainConfigProvider
 - TrainManager.cpp
 - Panorama Water Tank Monitor — Migration Plan & Cutover Strategy
 - Quectel EC200U AT Command Reference Manual
 - package.json
 - Panorama Water Tank Monitor — UI Technical Fixes Log
-- TrainConfigProvider.cpp
+- test_end_to_end.py
 - backend-ci.yml
-- m0
+- TrainConfigProvider.cpp
 - StationService
-- Remediation Action Log
-- SettingsScreen.tsx
+- test_security_audit.py
+- client.ts
 - 3. Screen-by-Screen Feature Walkthrough
 - MqttService.cpp
 - Panorama Water Tank NextGen — Final Implementation & Verification Report
 - EndToEndVerifier
 - compilerOptions
 - RailwayStation
-- AppContext.tsx
-- lookupViaPublicDataMeet
-- m_
+- LoginScreen
+- Result
+- ft
 - Panorama Water Tank Monitor — Installation & Deployment Guide
 - 2. Core Functional Modules & Feature Inventory
 - Panorama Water Tank Monitor — Windows Desktop Build Guide
@@ -90,19 +90,19 @@
 - Panorama Water Tank Monitor — Runtime QA & Verification Audit Report
 - Panorama Water Tank NextGen — Deployment Workflow & Operational Guide
 - WaterEnduranceState
-- app/main.py
-- 3. Screen-by-Screen Structural Comparison
+- AppContext.tsx
+- Panorama Water Tank NextGen — UI/UX Redesign, Authentication & Quality Audit Report
 - Panorama Water Tank Monitor — Operations & Deployment Runbook
 - TelemetrySnapshot
 - Comprehensive UI Optimization, Audit & Quality Verification Report
 - Panorama Water Tank Monitor — NextGen SCADA System
 - Connections by Relation
 - 3.1 Architectural Modularization
-- verify_alert_lifecycle_e2e.cjs
+- database.py
 - properties
 - 2. Table Specifications & DDL
 - Panorama Water Tank Monitor — MQTT Protocol & Ingestion Specification
-- 3. Detailed Audit by Domain
+- TelemetryReading
 - MqttConfig
 - 2. Granular Architectural Breakdown
 - ConnectionManager
@@ -115,7 +115,7 @@
 - ref_assert
 - .composeTrendHistory
 - verify_display_preferences.cjs
-- Graph Report - graphify_pwt_source  (2026-10-30)
+- SharedStateService
 - main.cjs
 - 2. Granular Test Suite Results
 - 1. Visual Comparison by Screen
@@ -131,13 +131,13 @@
 - run_comprehensive_audit.cjs
 - Community_23.md
 - scripts
-- .recalculateAlarmsAndCounters
+- LocationScreen.tsx
 - State
 - Connections by Relation
 - 2. Root Cause Analysis
 - Panorama SCADA — Chrome DevTools Browser Debug Report
 - 3. Structural Redesign of Screens
-- app/schemas/__init__.py
+- test_tls_security.py
 - 1. Component Boundaries & Responsibilities
 - Community 46
 - Audit Checklist & Verification Status
@@ -157,7 +157,7 @@
 - Community 14
 - Community 15
 - Community 16
-- httpx
+- VolumeCalculator
 - Community 53
 - Community 64
 - Community 0
@@ -166,7 +166,7 @@
 - Community 71
 - UI Parity Checklist: Train Management Dashboard
 - trainLookupService.ts
-- verify_cross_device_persistence_runner.cjs
+- ROOT CAUSE ANALYSIS: LOGIN SCREEN NOT APPEARING ON ANDROID STARTUP
 - src/backend/AuthManager.cpp
 - src/backend/AuthManager.h
 - src/backend/PermissionManager.cpp
@@ -267,8 +267,8 @@
 - Community_21.md
 - Community 13
 - Production Readiness Review & Operational Sign-Off
-- test_security_audit.py
-- ref_fs
+- TelemetryParser
+- ref_child_process
 - PANORAMA WATER TANK MONITOR (NEXTGEN)
 - Community 22
 - Community 25
@@ -279,12 +279,12 @@
 - Community 2
 - 1. Audit Passes Overview
 - Community 31
-- env.py
+- frontend/js/app.js
 - comprehensive_e2e_audit.cjs
 - Community 50
 - Connections by Relation
 - TLS / SSL Security & HTTPS Configuration Specification
-- typing
+- InMemoryRateLimiter
 - Community 49
 - Community 3
 - verify_device_management.cjs
@@ -300,16 +300,16 @@
 - 2. Code Diffs & Key Modifications
 - Community 54
 - Community 39
-- time
+- v1_api.py
 - Panorama SCADA — Chrome DevTools Browser Debug Report
 - Connections by Relation
-- TrainLocation
+- httpx
 - Community 9
-- test_storage.py
+- InMemoryStorageService
 - Community 7
 - Community 57
 - 2. Detailed Work Packages
-- Administrator Authorization & Tank Configuration Test Report
+- simulate_telemetry.py
 - NextGen Build Verification Report
 - Community 40
 - Community 34
@@ -348,27 +348,27 @@
 - Community 69
 - Community 67
 - Authentication & Credential Governance Flow
-- LocationManager.cpp
+- frontend/js/api.js
 - Knowledge Graph Index
-- test_telemetry.py
+- Panorama Water Tank Monitor — Packaging & Verification Audit Report
 - DeviceRegistryService
 - ModemManager
 - ExampleInstrumentedTest.java
 - Community 42
 - Community 43
-- User
+- RouteStation
 - Community 66
 - Complete Developer Prerequisites & Workstation Configuration
 - Panorama SCADA — Chrome DevTools Browser Debug Report
-- test_api.py
+- 1. Parity Verification Table (100% Tested & Verified)
 - request
 - HTTPS Laboratory Dashboard — Frontend Test Report
 - verify_browser_notifications_e2e.cjs
 - Panorama SCADA — Chrome DevTools Browser Debug Report
-- RouteStation
+- TrainConfigProvider.h
 - verify_live.cjs
 - api.js
-- MqttTelemetryPayload
+- pre_task/package.json
 - verify_tank_states_e2e.cjs
 - Community 65
 - Community 68
@@ -384,7 +384,7 @@
 - Community 63
 - verify_coach_management_e2e.cjs
 - Water Tank Visualization 4-State Engine & Telemetry Truthfulness Audit
-- electron
+- ref_electron
 - test_ec200u_firmware.cpp
 - SyncService
 - Panorama Water Tank Monitor — Multi-Viewport Responsive Test Report
@@ -395,7 +395,7 @@
 - Ponytail Quality & Codebase Verification Report
 - verify_coach_details_and_e2e.cjs
 - Unslop Verification & AI-Pattern Remediation Report
-- [2.0.0] - 2026-11-09
+- verify_unique_devices_table_cdp.cjs
 - Panorama Water Tank Monitor (WLI SCADA Persistence)
 - Panorama Water Tank Monitor — Multi-Viewport Responsive Design Audit
 - Panorama Water Tank Monitor — Visual Regression & Consistency Results
@@ -403,15 +403,16 @@
 - Panorama Water Tank Monitor (Railway SCADA / WLI Next-Generation System)
 - VolumeCalculator.cpp
 - Codebase Architecture & Graphify Topological Analysis
+- SensorReadingResult
 - 3. Database Schema Specification
 - Contributing to Panorama Water Tank Monitor
 - low_resource_harness.cjs
-- run_audit_suite.cjs
-- os
+- train_lookup_service.py
+- measure_dual_device_post.cjs
 - Final System Architecture Specification
 - capture_location_viewports.cjs
-- test_local_express_db_erail_adapter_and_aggregator
-- TrainConfigProvider
+- CentralStateSyncService
+- verify_dashboard_responsive_matrix.cjs
 - Python 3.12, FastAPI & Asynchronous SCADA Daemon
 - Production Compilation, Static Asset Sync & Desktop Packaging
 - React 18, React Native Web & Vite HMI Architecture
@@ -430,7 +431,7 @@
 - Panorama Water Tank Monitor — Security Architecture & Threat Model
 - Panorama Water Tank Monitor — Database Setup & Migrations Guide
 - 3. Component-by-Component Transformation Breakdown
-- .connect
+- capture_dual_device_baseline.cjs
 - ESP-IDF / FreeRTOS Edge Firmware Architecture
 - Industrial Embedded Electronics & Transducer Specifications
 - 2. Step-by-Step Investigation Findings
@@ -440,13 +441,13 @@
 - Panorama Water Tank Monitor (Railway Communications)
 - verify_graphical_consist_e2e.cjs
 - Panorama Water Tank Monitor (Mobile HMI Experience)
+- TankRepository
 - API Documentation — Panorama Water Tank Monitor (NextGen)
 - Panorama SCADA — Chrome DevTools Browser Debug Report
 - Cloud Deployment & Production HTTPS Guide — Render Platform
 - verify_mobile_header_viewports.cjs
 - Panorama Water Tank Monitor — Architecture Documentation
 - 2. Environment, Migration & Security Issues
-- Extreme Functional Test Report
 - Panorama Water Tank Monitor — Security Policy & Vulnerability Disclosure
 - WebSocketService
 - 16. Defect & Vulnerability Register (P0–P4 Ranking)
@@ -455,17 +456,17 @@
 - Panorama Water Tank Monitor — Production Deployment Security Guide
 - AsyncClient
 - Panorama SCADA — Chrome DevTools Browser Debug Report
-- Ponytail Lazy Senior Developer Report — Phase 06
+- PANORAMA WATER TANK MONITOR
 - Panorama SCADA — Chrome DevTools Browser Debug Report
 - Panorama SCADA — Chrome DevTools Browser Debug Report
-- browserNotificationBridge
+- Final Security Audit & Production Hardening Report
 - Panorama Water Tank Monitor — Legacy UI/UX Audit & Design System Specification
 - Panorama SCADA — Chrome DevTools Browser Debug Report
-- verify_responsive_matrix.cjs
+- scripts/verify_login_responsive_matrix.cjs
 - Development Environment Audit — Office Desktop
 - Development Handover — Office Desktop Transition
 - verify_realtime_multiclient_sync.cjs
-- index.tsx
+- Cloud Deployment & Production HTTPS Guide — Render Platform
 - Panorama SCADA — Chrome DevTools Browser Debug Report
 - Panorama Water Tank Monitor – Backup & Disaster Recovery Guide
 - MainActivity.java
@@ -478,21 +479,22 @@
 - Crash, ANR & System Resilience Audit Report
 - Panorama SCADA — Chrome DevTools Browser Debug Report
 - Panorama Water Tank Monitor (WLI) — Final Project Handover Package
-- TrainConfig
-- Demo Data Removal & Codebase Cleansing Audit Report
+- import_express_trains.py
+- 2. Phase-by-Phase Task Specifications
 - Panorama SCADA — Chrome DevTools Browser Debug Report
-- electron
+- ref_fs
 - nsis
+- DisplayPerformanceManager
 - connect
-- ApplicationController.h
+- MockEsp32Server
 - win
 - Panorama SCADA — Chrome DevTools Browser Debug Report
 - Phase 09 — End-to-End System Integration & Field Test Report
-- st
-- Panorama SCADA — Complete Project Engineering Audit
+- Lf
+- frontend/js/dashboard.js
 - engines
 - vercel.json
-- verify_dashboard_train_visibility.cjs
+- HTTPS Receiver — Backend Architecture Specification
 - 2. Interactive Component & Lifecycle Tests
 - Panorama SCADA — Chrome DevTools Browser Debug Report
 - 2. Test Verification Details
@@ -501,7 +503,7 @@
 - PANORAMA WATER TANK MONITOR – FULL-SCALE SYSTEM & WEBSITE AUDIT REPORT
 - ApplicationLogger
 - 2. WebSocket Protocol & Lifecycle
-- flush_outbox_events
+- frontend/js/telemetry.js
 - Panorama SCADA — Chrome DevTools Browser Debug Report
 - 4. Feature-by-Feature Functional Audit (Pages A through K)
 - AsyncClient
@@ -512,14 +514,14 @@
 - Ponytail Execution & Engineering Context Report
 - Unslop UI/UX Engineering Review
 - Panorama SCADA — Chrome DevTools Browser Debug Report
-- verify_railway_zone_e2e.cjs
-- MqttMonitorScreen.tsx
+- ref_assert
+- Quectel EC200U TLS/SSL Certificate Setup & Provisioning Guide
 - Bug and Risk Assessment Report
 - Database Architecture & Persistence Specifications
 - Graphify Deep Codebase Analysis
-- Graphify Codebase Architecture & Topological Audit
+- verify_api_token
 - System Architecture & Technical Specifications
-- 3. Tool Usage & Verification
+- TelemetryService
 - 5. Backend & Database Audit
 - Remaining Operational Issues & External Infrastructure Requirements
 - verify_mqtt_terminal.cjs
@@ -537,8 +539,9 @@
 - Panorama SCADA — Chrome DevTools Browser Debug Report
 - Comprehensive Diagnostic & Verification Report: Raw Data / Live MQTT Monitor
 - Panorama SCADA — Production Verification & Deployment Certificate
-- App.tsx
-- sanitize_csv_cell
+- GLOBAL DATA SYNCHRONIZATION AUDIT & ARCHITECTURAL UNIFICATION
+- MockUartHal
+- .recalculateAlarmsAndCounters
 - Panorama SCADA — Responsive Layout & Viewport Verification Report
 - env
 - build-frontend
@@ -546,33 +549,35 @@
 - Production Endpoint Specification & Verification Record
 - Panorama Water Tank Monitor – Data Retention Policy
 - Panorama Mobile: Device-Adaptive UI Scaling Specification (Capacitor Android)
-- Panorama Water Tank Monitor — Browser Console Error Audit
+- MockUartHal
 - capture_search_showcase.cjs
 - test_android_notifications.cjs
+- inspect_live_emulator.cjs
 - 2. Detailed Data Flow Analysis
 - System Operations & Maintenance Guide
 - 2. Table Specifications
 - Detailed Defect Log & Permanent Solutions
 - services
 - 3. VOLUMETRIC TANK FORMULAS & CALIBRATION
-- adaptiveUiService
-- TrainConfigProvider.h
-- PANORAMA WATER TANK MONITOR
+- DeviceProfileService
+- MqttMonitorScreen.tsx
+- full_website_audit_runner.cjs
 - Panorama Water Tank Monitor (WLI SCADA HMI)
-- 2. Root Cause Analysis
-- test_multidevice_sync.cjs
-- Graphify Architecture Analysis Report
-- TelemetryService
-- Error Handling & Fault Recovery Strategy
+- Quectel EC200U TLS/SSL Certificate Setup & Provisioning Guide
+- verify_cleaned_devices_history_cdp.cjs
+- dependencies
+- backend/tests/conftest.py
+- TrainConfig
+- verify_website.cjs
 - Graphify Audit Report — Phase 04 Backend Implementation
-- 4. Screen-by-Screen Component Inventory
+- SyncConnectionManager
 - alert_lifecycle_electron_runner.cjs
 - verify_train_delete_e2e.cjs
 - PANORAMA WATER TANK MONITOR – NEXTGEN
 - Final Low-Resource Android Compatibility & Repair Report
 - API, MQTT & Hardware Communication Architecture
 - 2. VERIFICATION OF 5 MULTI-CLIENT SYNCHRONIZATION SCENARIOS
-- Result
+- Panorama Water Tank Monitor (WLI SCADA NextGen)
 - Multi-Device Real-Time Synchronization Audit Report
 - 4. Automated Test Execution Evidence
 - verify_post_image_fix.cjs
@@ -580,25 +585,25 @@
 - Panorama SCADA — Chrome DevTools Browser Debug Report
 - Panorama SCADA — Chrome DevTools Browser Debug Report
 - Panorama SCADA — Chrome DevTools Browser Debug Report
-- DATABASE RETENTION & PERSISTENCE AUDIT: PANORAMA WATER TANK MONITOR
+- test_telemetry.py
 - UartDriver
-- dev.cjs
+- audit_browser.cjs
 - Capacitor Android Mobile Application — Panorama NextGen
 - CPU Utilization & Processor Throttling Report
 - Memory Usage & Resource Allocation Report
 - verify_light_theme_e2e.cjs
 - 3. SUBSYSTEM AUDIT SUMMARY
-- v0
+- Nn
 - HTTPS Laboratory Dashboard — Architecture Specification
 - README.md
 - MQTT Protocol & Hardware Telemetry Specification
-- DisplayPreferencesService
+- DisplayPreferencesContext.tsx
 - Ponytail Lazy Senior Developer Report — Phase 05
 - Quectel EC200U Integration Test Execution Report
-- train_lookup_service.py
-- ve
+- verify_mqtt_serial_monitor.js
+- v
 - Deployment Architecture & Production Runbook — Panorama NextGen
-- 4. SCREEN-BY-SCREEN VERIFICATION & NAVIGATION AUDIT
+- TrainLookupResponse
 - 1. Simulated Failure Scenarios & Verified Behaviors
 - FRONTEND WEB & HMI AUDIT REPORT: PANORAMA WATER TANK MONITOR
 - PERFORMANCE & SCALABILITY AUDIT: PANORAMA WATER TANK MONITOR
@@ -614,95 +619,175 @@
 - Backend Automated Test Report — Panorama Water Tank Monitor (NextGen)
 - DEVICE MANAGEMENT & MQTT AUTO-DISCOVERY AUDIT REPORT
 - 9. Mobile Application — Capacitor Android
-- Vs
+- test_users_and_rbac.py
 - test_gateway_size_limiter_middleware
-- Phase 03 Graphify Architecture & Dependency Audit
+- backend/main.py
 - Initial Subsystem Architecture & Multi-Tenant Isolation
 - Graphify Audit Report — Phase 05 Dashboard Implementation
-- LogLevel
-- time
+- Authoritative Telemetry Schema Specification: HTTPS Ingestion Pipeline
+- Authoritative Telemetry Schema Specification: HTTPS Ingestion Pipeline
 - ModemState
-- full_website_audit_runner.cjs
-- Qt to NextGen UI/UX Mapping Matrix
+- verify_cross_device_persistence_runner.cjs
+- test_local_express_db_erail_adapter_and_aggregator
 - Certificate Management & TLS Architecture
-- PRIORITY FIX ROADMAP: PANORAMA WATER TANK MONITOR
-- 2. Component Responsibility Matrix
-- stress_test_android_app.cjs
+- verify_app_on_device.cjs
+- 2. Phase-by-Phase Technical Execution Breakdown
+- 2. Phase-by-Phase Technical Execution Breakdown
 - ec200u_http.cpp
-- 3. Detailed Test Assertions Breakdown
-- app.js
-- LoginScreen.tsx
+- py
+- static/js/app.js
+- Engineering Quality Audit & Refactoring Report
 - 3. Peripheral Interface Configurations
 - Production TLS Certificates & Strategy
-- Final Security Audit & Production Hardening Report
-- LocationScreen.tsx
-- MockUartHal
+- Android Native System Notifications & Mobile Responsiveness Fix Report
+- Complete Technical Audit Report: Water Level Indicator (WLI) HTTPS Migration
+- loadSessionSync
 - 2. System Integration Test Matrix
-- audit_browser.cjs
-- Ponytail Execution & Task Tracking Report — Phase 03
+- 3. Screen-by-Screen Structural Comparison
+- Complete Technical Audit Report: Water Level Indicator (WLI) HTTPS Migration
 - limit_request_size
-- verify_tank_count_electron.cjs
-- verify_map_and_scale_electron.cjs
+- Panorama Water Tank Monitor — Device Optimization Baseline
+- verify_alert_lifecycle_e2e.cjs
 - ModemDiagnostics
-- .toMap
+- Panorama Water Tank Monitor — Top Navigation Bar Permanent UI Fix Report
 - 2. Master Verification Test Matrix
 - verify_reference_layout_e2e.cjs
-- MockUartHal
-- Authoritative MQTT Telemetry Data Flow Specification
+- verify_https_lab_responsive.js
+- .fetchTelemetryHistory
 - Authoritative Telemetry Data Contract
-- test_users_and_rbac.py
+- verify_map_and_scale_electron.cjs
 - NetworkStatus
 - Ponytail Audit Report — Phase 07 Cloud Deployment & Public HTTPS
-- Graphify Audit Report — Phase 09 End-to-End System Integration
-- httpx
-- HTTPS Receiver — API Data Flow Specification
 - Final Backend Architecture & API Operations Guide
-- Graphify Audit Report — Phase 09 End-to-End System Integration
-- Graphify Audit Report — Phase 06 TLS/HTTPS Implementation
-- Graphify Audit Report — Phase 08 EC200U LTE Modem Integration & HTTPS Communication
-- Graphify Audit Report — Phase 07 Cloud Deployment & Production HTTPS
-- Ponytail Audit Report — Phase 08 EC200U LTE Modem Integration
-- 2. Requirement Verification Matrix
-- Ponytail Audit Report — Phase 08 EC200U LTE Modem Integration
-- Header.tsx
-- e0
-- test_railway_zone_persistence.py
-- SettingsManager::SettingsManager
+- .composeTrendHistory
+- 2. Comprehensive Module Inventory
+- Final Backend Architecture & API Operations Guide
+- [2.0.0] - 2026-11-09
 - get_resolved_tls_paths
+- Final Backend Architecture & API Operations Guide
+- Panorama Water Tank Monitor — Production Deployment Guide
+- Ponytail Audit Report — Phase 08 EC200U LTE Modem Integration
+- Authoritative MQTT Telemetry Data Flow Specification
+- Ponytail Audit Report — Phase 08 EC200U LTE Modem Integration
+- verify_cross_client_sync.cjs
+- verify_responsive_matrix.cjs
+- run_audit_suite.cjs
+- 3. Native Lifecycle & System Bar Integration
+- verify_water_tank_status_cdp.cjs
+- alertNotificationService.ts
+- 2. Multi-User Scenario Analysis
+- verify_tank_count_electron.cjs
+- Ponytail Lazy Senior Developer Report — Phase 04
+- Authoritative Telemetry Field Mapping: MQTT to HTTPS Migration
+- Panorama SCADA — Complete Project Engineering Audit
+- 2. Master Verification Test Matrix
+- Authoritative Telemetry Field Mapping: MQTT to HTTPS Migration
+- 2. Master Verification Test Matrix
+- Graphify Audit Report — Phase 10 Final Security Audit & Handover
+- verify_realtime_multiuser_e2e.py
+- 3. Screen-by-Screen Implementation Breakdown
+- Panorama Water Tank Monitor — Verification & Test Results
+- Graphify Audit Report — Phase 10 Final Security Audit & Handover
+- Ponytail Audit Report — Phase 10 Final Hardening & Handover
+- verify_raw_data_diagnostics.js
+- Panorama Water Tank Monitor (React 18 / HMI SPA)
+- Ponytail Audit Report — Phase 10 Final Hardening & Handover
+- Panorama Water Tank Monitor — Performance Measurement Report
+- cdp_cli.cjs
+- TelemetryPayload
+- verify_coach_fleet_and_registration_cdp.cjs
+- .toMap
+- showNotification
+- Graphify Audit Report — Phase 09 End-to-End System Integration
+- Ponytail Audit Report — Phase 09 End-to-End System Integration
+- Panorama Water Tank Monitor — API & Protocol Integration Report
+- Panorama Water Tank Monitor — Graphify Codebase Architecture & Dependency Report
+- Phase 10: Capacitor Error Handling and Reliability Audit
+- 3. Request & Response Handling Deficiencies
+- 1. Audit Iterations Summary
+- AdaptiveUiService
+- capture_scroll_screenshots.cjs
+- Panorama Water Tank Monitor — Dual-Device Performance Optimization Report
+- Panorama Water Tank Monitor — Dual-Device Test Results
+- Panorama Water Tank Monitor — Memory Footprint & Retention Analysis
+- build
+- seed_initial_accounts
+- 2. API 30 (Android 11) vs API 35 (Android 15) Divergence & Adaptations
+- capture_settings_no_network.cjs
+- typing
+- Graphify Codebase Architecture & Topological Audit
+- Graphify Audit Report — Phase 07 Cloud Deployment & Production HTTPS
+- Ponytail Lazy Senior Developer Report — Phase 06
+- 2. Classified Security Vulnerability Catalog
+- Ponytail Audit Report — Phase 09 End-to-End System Integration
+- 3. Module-by-Module UI Evaluation
+- Engineering Technical Audit: Executive Summary
+- BaseTrainProvider
+- test_multidevice_sync.cjs
+- LogLevel
+- 2. Build Pipeline Deficiencies & Findings
+- 3. Storage Vulnerabilities & Inconsistencies
+- 3. Coupling Analysis for the Capacitor Mobile App
+- capture_flash_screenshots.cjs
+- nsis
+- 2. Key Unslop Findings
+- scripts
+- Panorama Water Tank Monitor – NextGen: Final Android Flash Report
+- Panorama Water Tank Monitor – NextGen: API & Security Audit Report
+- Panorama Water Tank Monitor – NextGen: Capacitor Android Audit Report
+- 3. Performance Findings & Bottlenecks
+- Panorama Water Tank Monitor – NextGen: MQTT & Telemetry Audit Report
+- ._seed_baseline_if_empty
+- verify_settings_no_network.cjs
+- AUTHENTICATION FLOW AUDIT: PANORAMA SCADA MOBILE APPLICATION
+- 2. Detailed Test Case Verification
 - UI Component Inventory & Structural Breakdown
-- Panorama Water Tank Monitor (Electron Native HMI)
 - Panorama SCADA — Console Error Baseline & Discovery Ledger
-- 2. Migration Phases
-- _set_sqlite_pragmas
+- 6. MQTT Integration & Telemetry Audit
+- Phase 12: Capacitor Test Coverage and Quality Assurance Audit
+- Extreme Functional Test Report
+- 8. Performance Audit
+- win
+- Panorama Water Tank Monitor — Browser Console Error Audit
+- 2. Requirement Verification Matrix
+- Qt to NextGen UI/UX Mapping Matrix
+- Panorama Water Tank Monitor (WLI Engineering Audit)
+- 3. Tool Usage & Verification
+- Responsive Layout & Viewport Verification Report
+- 2. Identified Subsystems & Dependency Mappings
+- Header.tsx
+- Error Handling & Fault Recovery Strategy
+- engines
+- ps
 
 ## God Nodes (most connected - your core abstractions)
 1. `TankModel` - 188 edges
 2. `SettingsManager` - 177 edges
-3. `ApiClient` - 93 edges
+3. `ApiClient` - 102 edges
 4. `MqttService` - 85 edges
 5. `ApiClient` - 84 edges
 6. `LocationManager` - 84 edges
 7. `TrainManager` - 75 edges
-8. `RailwayManager` - 69 edges
-9. `ApplicationController` - 66 edges
-10. `mqttService` - 63 edges
+8. `RailwayManager` - 73 edges
+9. `User` - 71 edges
+10. `mqttService` - 69 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `B. Watchdog Integration` --references--> `FreeRtosCoordinator`  [INFERRED]
   WLI_DOCS/FINAL_FIRMWARE_GUIDE.md → EC200U/ec200u_freertos.h
-- `4. Architectural Analysis & Isolation Verification` --references--> `TelemetrySnapshot`  [INFERRED]
-  HTTPS_Server/docs/audit/PHASE_09_GRAPHIFY_AUDIT.md → EC200U/ec200u_types.h
+- `1. Minimal Working Diff Principle` --references--> `TelemetrySnapshot`  [INFERRED]
+  HTTPS_Server/docs/audit/PONYTAIL_PHASE_09_REPORT.md → EC200U/ec200u_types.h
+- `Phase 6: Integrate Actual STM32 Telemetry Data` --references--> `TelemetrySnapshot`  [INFERRED]
+  IMPLEMENTATION_PLAN.md → EC200U/ec200u_types.h
 - `4. Architectural Analysis & Isolation Verification` --references--> `TelemetrySnapshot`  [INFERRED]
   WLI_DOCS/audit/PHASE_09_GRAPHIFY_AUDIT.md → EC200U/ec200u_types.h
-- `Mutex Isolation Rule` --references--> `TelemetrySnapshot`  [INFERRED]
-  WLI_DOCS/EC200U_HTTPS_INTEGRATION.md → EC200U/ec200u_types.h
-- `Mutex Isolation Design` --references--> `TelemetrySnapshot`  [INFERRED]
-  WLI_DOCS/FINAL_SYSTEM_ARCHITECTURE.md → EC200U/ec200u_types.h
+- `1. Minimal Working Diff Principle` --references--> `TelemetrySnapshot`  [INFERRED]
+  WLI_DOCS/audit/PONYTAIL_PHASE_09_REPORT.md → EC200U/ec200u_types.h
 
 ## Import Cycles
 - None detected.
 
-## Communities (688 total, 60 thin omitted)
+## Communities (777 total, 64 thin omitted)
 
 ### Community 0 - "TankModel"
 Cohesion: 0.02
@@ -710,19 +795,19 @@ Nodes (50): TankModel, m_activeAlertCount, m_activeAlerts, m_alarmEvaluationEnab
 
 ### Community 1 - "SettingsManager"
 Cohesion: 0.02
-Nodes (44): SettingsManager, m_apiBaseUrl, m_apiToken, m_criticalThresholdPercent, m_dataSourceId, m_deviceLabel, m_distanceVariable, m_esp32Host (+36 more)
+Nodes (45): Logger, SettingsManager, m_apiBaseUrl, m_apiToken, m_criticalThresholdPercent, m_dataSourceId, m_deviceLabel, m_distanceVariable (+37 more)
 
 ### Community 2 - "DatabaseManager.cpp"
 Cohesion: 0.09
-Nodes (5): DatabaseManager, DatabaseManager::DatabaseManager(), m_connectionName, m_db, public
+Nodes (8): DatabaseManager, DatabaseManager::DatabaseManager(), m_connectionName, m_db, public, 1. Architectural Philosophy, 3. Data Flow & Synchronization, Architecture Specification: Train Management & Consist Hierarchy
 
 ### Community 3 - "Logger"
-Cohesion: 0.11
+Cohesion: 0.12
 Nodes (9): Logger, Logger::Logger(), m_consoleMirrorEnabled, m_currentLogLevel, m_logDirectory, m_logFile, m_mutex, m_openLogDate (+1 more)
 
 ### Community 4 - "index.js"
 Cohesion: 0.01
-Nodes (110): Ab(), addEventListener(), addListener(), af(), applyToDOM(), Bc(), bi(), bm() (+102 more)
+Nodes (107): abortActive(), addEventListener(), addListener(), applyToDOM(), Av(), _b(), Ba(), bi() (+99 more)
 
 ### Community 5 - "PanoramaWaterTank_Capacitor/package.json"
 Cohesion: 0.06
@@ -738,63 +823,63 @@ Nodes (35): Audit Trail, Community 20, Key Concepts, Relationships, Source Files
 
 ### Community 8 - "RailwayManager"
 Cohesion: 0.06
-Nodes (22): enrichTanksWithTelemetry(), RailwayManager, RailwayManager::getAllTanks(), RailwayManager::getCoach(), RailwayManager::getCoaches(), RailwayManager::getDevices(), RailwayManager::getRegions(), RailwayManager::getTank() (+14 more)
+Nodes (24): DatabaseManager, enrichTanksWithTelemetry(), RailwayManager, RailwayManager::getAllTanks(), RailwayManager::getCoach(), RailwayManager::getCoaches(), RailwayManager::getDevices(), RailwayManager::getRegions() (+16 more)
 
 ### Community 9 - "SearchManager"
 Cohesion: 0.04
-Nodes (27): 1. Top-Level Directory Map, 2. FastAPI Backend (`backend/`), 3. Responsive Frontend & Electron Desktop (`apps/mobile/`), 4. Classic Qt 6 Desktop Application (`app/`, `src/`, `qml/`, `tests/`), Source Code Structure — Panorama Water Tank NextGen, KnownLocation, code, division (+19 more)
+Nodes (28): DatabaseManager, KnownLocation, code, division, latitude, longitude, name, zone (+20 more)
 
 ### Community 11 - "AuthManager"
 Cohesion: 0.07
-Nodes (11): AuthManager, AuthManager::AuthManager(), m_adminHash, m_adminSalt, m_currentUserName, m_currentUserRole, m_dbManager, m_errorMessage (+3 more)
+Nodes (12): AuthManager, AuthManager::AuthManager(), m_adminHash, m_adminSalt, m_currentUserName, m_currentUserRole, m_dbManager, m_errorMessage (+4 more)
 
 ### Community 12 - "ApplicationStateManager"
 Cohesion: 0.06
-Nodes (12): ApplicationStateManager, ApplicationStateManager::ApplicationStateManager(), m_configProvider, m_currentPageIndex, m_selectedCoach, m_selectedRegionId, m_selectedRegionName, m_selectedTankId (+4 more)
+Nodes (16): ApplicationStateManager, ApplicationStateManager::ApplicationStateManager(), m_configProvider, m_currentPageIndex, m_selectedCoach, m_selectedRegionId, m_selectedRegionName, m_selectedTankId (+8 more)
 
 ### Community 13 - "Panorama SCADA — Chrome DevTools Browser Debug Report"
 Cohesion: 0.17
 Nodes (11): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API Inspection, 4. WebSocket Lifecycle & Frames, 5. SCADA Module Navigation Matrix, 6. Interactive Component & RBAC Verification, Error Messages (0), Failed Requests (0) (+3 more)
 
 ### Community 14 - "LocationManager"
-Cohesion: 0.04
-Nodes (24): LocationManager, m_activeTrainNumber, m_currentStationName, m_destinationDistanceKm, m_destinationEtaString, m_destinationStationName, m_enduranceState, m_gnssEngineState (+16 more)
+Cohesion: 0.03
+Nodes (29): degreesToRadians(), LocationManager, LocationManager::getStation(), LocationManager::LocationManager(), m_activeTrainNumber, m_currentStationName, m_destinationDistanceKm, m_destinationEtaString (+21 more)
 
-### Community 15 - "react"
-Cohesion: 0.08
-Nodes (49): LevelTrendCard(), LevelTrendCardProps, TrendChart(), TrendChartProps, TrendPoint, BaseCard(), BaseCardProps, InfoRow() (+41 more)
+### Community 15 - "App.tsx"
+Cohesion: 0.06
+Nodes (82): AccessDeniedScreen(), App(), AppShell(), MainContent(), LevelTrendCard(), LevelTrendCardProps, TrendChart(), TrendChartProps (+74 more)
 
 ### Community 16 - "postgres"
 Cohesion: 0.04
 Nodes (44): build, container_name, depends_on, environment, ports, restart, context, dockerfile (+36 more)
 
 ### Community 18 - "ref_http"
-Cohesion: 0.05
-Nodes (34): distDir, fs, http, mimeTypes, path, server, fs, http (+26 more)
+Cohesion: 0.03
+Nodes (50): distDir, fs, http, mimeTypes, path, server, createCdpClient(), getWsUrl() (+42 more)
 
-### Community 19 - "hf"
+### Community 19 - "v1"
 Cohesion: 0.07
-Nodes (32): Am(), Bd(), bx(), by(), c_(), Cy(), dC(), Gu() (+24 more)
+Nodes (50): _2(), b2(), b5(), Cn(), D6(), dy(), e5(), e6() (+42 more)
 
 ### Community 20 - "ApiClient"
-Cohesion: 0.04
+Cohesion: 0.05
 Nodes (24): ApiClient, m_apiBaseUrl, m_authToken, m_connectionState, m_deviceLabel, m_esp32Host, m_esp32Port, m_hasReceivedFirstValidReading (+16 more)
 
 ### Community 21 - "Communities (72 total, 33 thin omitted)"
 Cohesion: 0.05
 Nodes (40): Communities (72 total, 33 thin omitted), Community 0 - "Community 0", Community 10 - "Community 10", Community 11 - "Community 11", Community 12 - "Community 12", Community 13 - "Community 13", Community 14 - "Community 14", Community 15 - "Community 15" (+32 more)
 
-### Community 22 - "Android Native System Notifications & Mobile Responsiveness Fix Report"
-Cohesion: 0.22
-Nodes (8): 3. Engineering Implementation Details, 4. Verification & Test Evidence, 5. Visual Test Artifacts, 6. Files Modified Summary, A. Android Emulator Test (`Panorama_ULTRA_LOW_RESOURCE`), Android Native System Notifications & Mobile Responsiveness Fix Report, B. Viewport Zero-Overflow Audit Across Routes, Part 3: Header Optimization (< 1024px)
+### Community 22 - "devices.py"
+Cohesion: 0.05
+Nodes (28): create_device(), delete_device(), export_devices_telemetry_csv(), get_device_diagnostics(), get_devices_overview_table(), get_devices_telemetry_history(), list_devices(), update_device() (+20 more)
 
 ### Community 23 - "SettingsRepository"
-Cohesion: 0.06
-Nodes (16): apply_unified_config(), _ensure_seeded(), factory_reset_settings(), get_unified_config(), list_settings(), read_device_configuration(), test_device_connection(), test_mqtt_connection() (+8 more)
+Cohesion: 0.07
+Nodes (20): apply_unified_config(), _ensure_seeded(), factory_reset_settings(), get_unified_config(), list_settings(), read_device_configuration(), test_device_connection(), test_mqtt_connection() (+12 more)
 
-### Community 24 - "Panorama Water Tank Monitor — Packaging & Verification Audit Report"
-Cohesion: 0.10
-Nodes (19): 1. Executive Summary & Verification Matrix, 2. Root Cause Analysis: Blank Screen Diagnosis & Resolution, 3. Desktop Architecture & Lifecycle Management, 4. Electron Security Posture, 5. UI/UX & Functional Screen Audit, 6. Backend & Database Verification Log Evidence, 7. Known Limitations & Production Recommendations, Architectural Stack (+11 more)
+### Community 24 - "User"
+Cohesion: 0.04
+Nodes (51): change_password(), get_current_admin_user(), get_current_user(), get_current_user_optional(), get_me(), login(), logout(), register_employee() (+43 more)
 
 ### Community 25 - "ApplicationController"
 Cohesion: 0.04
@@ -808,21 +893,21 @@ Nodes (17): closeRecordModal(), copyRawJson(), detectDataType(), downloadRawJson
 Cohesion: 0.05
 Nodes (37): Communities (67 total, 31 thin omitted), Community 0 - "Community 0", Community 10 - "Community 10", Community 11 - "Community 11", Community 12 - "Community 12", Community 13 - "Community 13", Community 14 - "Community 14", Community 16 - "Community 16" (+29 more)
 
-### Community 28 - "DisplayPerformanceManager"
-Cohesion: 0.10
-Nodes (7): DisplayPerformanceManager, DisplayPerformanceManager::DisplayPerformanceManager(), m_currentScreen, m_reducedMotion, m_refreshRate, m_window, QML_ELEMENT
+### Community 29 - "json"
+Cohesion: 0.07
+Nodes (11): backup_sqlite(), run_backup(), sha256_checksum(), restore_sqlite(), run_restore(), sha256_checksum(), test_8_backup_and_restore_recovery(), sync_websocket_endpoint() (+3 more)
 
 ### Community 30 - "TrainManager"
 Cohesion: 0.05
-Nodes (20): TrainManager, m_activeTrainNumber, m_activeTrainTankIds, m_alertCount, m_configProvider, m_connectivityAlerts, m_dbManager, m_lowLevelCount (+12 more)
+Nodes (23): DatabaseManager, TankModel, TrainConfigProvider, TrainManager, m_activeTrainNumber, m_activeTrainTankIds, m_alertCount, m_configProvider (+15 more)
 
 ### Community 31 - "ApplicationState"
 Cohesion: 0.06
 Nodes (33): AlarmLevel, Critical, Low, Normal, Overflow, SensorError, Unassessed, ApplicationState (+25 more)
 
-### Community 32 - "DeviceRepository"
-Cohesion: 0.04
-Nodes (29): acknowledge_alarm(), clear_alarms(), get_alarm_stats(), list_alarms(), create_device(), delete_device(), get_device_diagnostics(), list_devices() (+21 more)
+### Community 32 - "ApplicationController.h"
+Cohesion: 0.07
+Nodes (6): QStringList, Logger, testHistoryEndpoint(), testOfflineHandling(), testTankConfiguration(), testTransientSpikeRejection()
 
 ### Community 33 - "ConnectionManager"
 Cohesion: 0.09
@@ -833,20 +918,20 @@ Cohesion: 0.09
 Nodes (20): defaultFilename(), downsampleLTTB(), ExportPoint, heightCm, levelPercentage, status, timestampMs, volumeLiters (+12 more)
 
 ### Community 35 - "main"
-Cohesion: 0.14
-Nodes (9): AuthManager, PermissionManager, m_authManager, PermissionManager::PermissionManager(), QML_ELEMENT, main(), 4. Verification and Results, Root Cause 1: Qt 6 QML Module Singleton Resolution Disconnect (+1 more)
+Cohesion: 0.09
+Nodes (18): Feature Status Matrix — Panorama Water Tank NextGen, Summary Status Table, AuthManager, PermissionManager, m_authManager, PermissionManager::PermissionManager(), QML_ELEMENT, main() (+10 more)
 
 ### Community 36 - "ApiClient"
-Cohesion: 0.07
-Nodes (16): ApiClient, readLocalRegistrations(), readLocalUsers(), resolveApiBase(), writeLocalRegistrations(), writeLocalUsers(), RouteConfigModal(), resolveHealthUrl() (+8 more)
+Cohesion: 0.06
+Nodes (23): ApiClient, readLocalRegistrations(), readLocalUsers(), resolveApiBase(), writeLocalRegistrations(), writeLocalUsers(), RouteConfigModal(), AddTrainModal() (+15 more)
 
 ### Community 37 - "steps"
 Cohesion: 0.06
-Nodes (34): name, runs-on, steps, concurrency, cancel-in-progress, group, VITE_API_BASE_URL, VITE_BACKEND_URL (+26 more)
+Nodes (38): name, runs-on, steps, concurrency, cancel-in-progress, group, VITE_API_BASE_URL, VITE_BACKEND_URL (+30 more)
 
 ### Community 38 - "trains.py"
-Cohesion: 0.05
-Nodes (42): add_coach_to_train(), _build_train_meta(), CoachAddRequest, CoachConsistItem, CoachCreateSpec, CoachRenameRequest, CoachReorderRequest, CoachUpdateRequest (+34 more)
+Cohesion: 0.04
+Nodes (49): add_coach_to_train(), _build_train_meta(), CoachAddRequest, CoachConsistItem, CoachCreateSpec, CoachRenameRequest, CoachReorderRequest, CoachUpdateRequest (+41 more)
 
 ### Community 39 - "TankRepository"
 Cohesion: 0.09
@@ -857,27 +942,27 @@ Cohesion: 0.20
 Nodes (9): 1. Original Defect & Root Cause, 2. Redesigned 5-Section Configuration Architecture, 3. Configuration Action Workflows, Section A: Device and Connectivity, Section B: Tank Physical Geometry, Section C: Sensor Calibration & Damping, Section D: Operational Alarm Setpoints, Section E: Edge Diagnostics & Persistence State (+1 more)
 
 ### Community 41 - "ref_path"
-Cohesion: 0.03
-Nodes (46): playwright, { chromium }, { chromium }, fs, path, runTests(), { chromium }, distDir (+38 more)
+Cohesion: 0.02
+Nodes (63): playwright, { chromium }, { chromium }, fs, path, runTests(), { chromium }, distDir (+55 more)
 
 ### Community 42 - "TimeManager"
-Cohesion: 0.10
-Nodes (8): TimeManager, m_currentDate, m_currentTime, m_dateFormat, m_timeFormat, m_timer, QML_ELEMENT, TimeManager::TimeManager()
+Cohesion: 0.07
+Nodes (16): 1. Top-Level Directory Map, 2. FastAPI Backend (`backend/`), 3. Responsive Frontend & Electron Desktop (`apps/mobile/`), 4. Classic Qt 6 Desktop Application (`app/`, `src/`, `qml/`, `tests/`), Source Code Structure — Panorama Water Tank NextGen, TimeManager, m_currentDate, m_currentTime (+8 more)
 
 ### Community 43 - "TankItem"
 Cohesion: 0.07
 Nodes (27): TankItem, alarmState, capacityLiters, coachId, coachName, coachType, connectionState, deviceId (+19 more)
 
 ### Community 44 - "test_train_lookup.py"
-Cohesion: 0.13
-Nodes (12): TrainLookupCache, RailRadarProvider, TrainDataAggregator, TrainLookupService, test_distinguishes_unavailable_vs_not_found(), test_error_code_differentiation_for_rate_limit_auth_timeout(), test_express_only_filter_metadata_and_heuristics(), test_fallback_on_primary_error_and_mismatch() (+4 more)
+Cohesion: 0.12
+Nodes (12): TrainLookupCache, DataMeetOpenProvider, RailRadarProvider, TrainLookupService, test_distinguishes_unavailable_vs_not_found(), test_error_code_differentiation_for_rate_limit_auth_timeout(), test_express_only_filter_metadata_and_heuristics(), test_fallback_on_primary_error_and_mismatch() (+4 more)
 
-### Community 45 - "test_tls_security.py"
-Cohesion: 0.06
-Nodes (15): main(), show_admin_status(), generate_self_signed_cert(), main(), inspect_certificate(), main(), main(), run() (+7 more)
+### Community 45 - "TrainConfigProvider"
+Cohesion: 0.15
+Nodes (7): TrainConfigProvider, m_regions, m_trains, public, QML_ELEMENT, QVariantList, QVariantMap
 
 ### Community 46 - "TrainManager.cpp"
-Cohesion: 0.10
+Cohesion: 0.11
 Nodes (4): matchesTankStatusFilter(), TrainManager::getFilteredTanksForTrain(), TrainManager::getTank(), TrainManager::getTanksFiltered()
 
 ### Community 47 - "Panorama Water Tank Monitor — Migration Plan & Cutover Strategy"
@@ -890,43 +975,43 @@ Nodes (47): 1. Document Scope & Hardware Profile, 2.1 AT — Modem Attention & S
 
 ### Community 49 - "package.json"
 Cohesion: 0.11
-Nodes (22): description, devDependencies, cross-env@^10.1.0, electron@^45.1.0, electron-builder@^26.18.0, @types/react@^18.3.3, @types/react-dom@^18.3.0, @types/react-native@^0.73.0 (+14 more)
+Nodes (23): description, devDependencies, cross-env@^10.1.0, electron@^45.1.0, electron-builder@^26.18.0, @types/react@^18.3.3, @types/react-dom@^18.3.0, @types/react-native@^0.73.0 (+15 more)
 
 ### Community 50 - "Panorama Water Tank Monitor — UI Technical Fixes Log"
 Cohesion: 0.09
 Nodes (22): 1. Global State & Telemetry Synchronization, 2. Water Tank Visualization & Standby Indicator, 3. Water Level Indicator (Rank) Pointer Correction, 4. Historical Level Trend Empty State & Dynamic Streaming, 5. Dashboard Summary Cards Responsive Scaling & Footer Clearance, 6. Multi-Layer Status Model Realignment, 7. Legacy String Elimination, Changes Implemented: (+14 more)
 
-### Community 51 - "TrainConfigProvider.cpp"
-Cohesion: 0.19
-Nodes (9): TrainConfigProvider::allConfiguredTanks(), TrainConfigProvider::coachesForTrain(), TrainConfigProvider::regionInfo(), TrainConfigProvider::regions(), TrainConfigProvider::routeStations(), TrainConfigProvider::tanksForTrain(), TrainConfigProvider::trainInfo(), TrainConfigProvider::trainsForRegion() (+1 more)
+### Community 51 - "test_end_to_end.py"
+Cohesion: 0.08
+Nodes (9): setup_and_teardown(), test_e2e_duplicate_request_behavior(), test_e2e_file_upload_validation(), test_e2e_invalid_authentication_rejected(), test_e2e_invalid_payload_rejection(), test_e2e_latest_telemetry_retrieval(), test_e2e_missing_authentication_rejected(), test_e2e_telemetry_history_ordering() (+1 more)
 
 ### Community 52 - "backend-ci.yml"
 Cohesion: 0.15
 Nodes (12): name, runs-on, concurrency, cancel-in-progress, group, jobs, backend-tests, name (+4 more)
 
-### Community 53 - "m0"
-Cohesion: 0.29
-Nodes (8): ay(), Ff(), g0(), h0(), m0(), x0(), Yx(), Zn()
+### Community 53 - "TrainConfigProvider.cpp"
+Cohesion: 0.15
+Nodes (10): buildTrainConsist(), TrainConfigProvider::coachesForTrain(), TrainConfigProvider::regionInfo(), TrainConfigProvider::regions(), TrainConfigProvider::routeStations(), TrainConfigProvider::tankIdsForTrain(), TrainConfigProvider::TrainConfigProvider(), TrainConfigProvider::trainInfo() (+2 more)
 
 ### Community 54 - "StationService"
 Cohesion: 0.08
-Nodes (14): build_corridor_stations_for_train(), configure_train_route(), CorridorStation, delete_train_route(), get_all_route_corridors(), get_official_train_route(), get_route_corridor(), get_train_locations() (+6 more)
+Nodes (16): build_corridor_stations_for_train(), configure_train_route(), CorridorStation, delete_train_route(), get_all_route_corridors(), get_official_train_route(), get_route_corridor(), get_train_locations() (+8 more)
 
-### Community 55 - "Remediation Action Log"
-Cohesion: 0.14
-Nodes (12): test_cors_tenant_isolation(), test_csp_hardening(), test_path_traversal_mitigation(), 17. Vulnerability Remediation & Code Fix Log, Action 1: Fixed Path Traversal / Arbitrary File Read (BUG-001), Action 2: Narrowed CORS Allowed Origin Regex (BUG-002), Action 3: Hardened Content Security Policy (BUG-006), Action 5: Centralized Online Tank Status Engine (BUG-008) (+4 more)
+### Community 55 - "test_security_audit.py"
+Cohesion: 0.07
+Nodes (25): sanitize_csv_cell(), validate_document_upload(), test_cors_tenant_isolation(), test_csp_hardening(), test_csv_formula_injection_defense(), test_document_upload_validation(), test_login_rate_limiting(), test_path_traversal_mitigation() (+17 more)
 
-### Community 56 - "SettingsScreen.tsx"
-Cohesion: 0.08
-Nodes (38): DisplaySettingsPanelProps, BACKEND_URL_CHANGED_EVENT, DEFAULT_LOCAL_API_URL, DEFAULT_PRODUCTION_API_URL, isValidHttpUrl(), resolveApiBaseUrl(), resolveWsUrl(), setCustomApiUrl() (+30 more)
+### Community 56 - "client.ts"
+Cohesion: 0.03
+Nodes (91): API_BASE, ClassifiedApiError, DEFAULT_USERS, PRODUCTION_BACKEND_URL, ErrorBoundary, Props, State, BACKEND_URL_CHANGED_EVENT (+83 more)
 
 ### Community 57 - "3. Screen-by-Screen Feature Walkthrough"
 Cohesion: 0.10
 Nodes (20): 1. Executive Summary & Architecture Overview, 2.1 Live Service Endpoints, 2.2 Startup Commands, 2. Quick-Start Guide (Running in Any Modern Browser), 3.1 Train Management (`/trains`), 3.2 Real-Time Dashboard (`/dashboard`), 3.3 Water Tank Monitor (`/watertank`), 3.4 Edge Device Fleet (`/devices`) (+12 more)
 
 ### Community 59 - "Panorama Water Tank NextGen — Final Implementation & Verification Report"
-Cohesion: 0.11
-Nodes (17): 2.1 Original Project Findings, 2.2 Rebuilt NextGen Architecture, 2. Codebase Discovery & Architectural Transformation, 3. UI Preservation & Visual Parity, 4.1 Build Execution, 4.2 CTest Results, 4.3 Runtime Verification, 4. Build & Test Verification Results (+9 more)
+Cohesion: 0.10
+Nodes (19): 1. Executive Summary, 2.1 Original Project Findings, 2.2 Rebuilt NextGen Architecture, 2. Codebase Discovery & Architectural Transformation, 3. UI Preservation & Visual Parity, 4.1 Build Execution, 4.2 CTest Results, 4.3 Runtime Verification (+11 more)
 
 ### Community 60 - "EndToEndVerifier"
 Cohesion: 0.14
@@ -937,20 +1022,20 @@ Cohesion: 0.11
 Nodes (18): compilerOptions, allowJs, allowSyntheticDefaultImports, esModuleInterop, forceConsistentCasingInFileNames, isolatedModules, jsx, lib (+10 more)
 
 ### Community 62 - "RailwayStation"
-Cohesion: 0.11
-Nodes (18): RailwayStation, code, distanceKm, etaMinutes, etaString, id, isDestination, isJunction (+10 more)
+Cohesion: 0.07
+Nodes (27): RailwayStation, code, distanceKm, etaMinutes, etaString, id, isDestination, isJunction (+19 more)
 
-### Community 63 - "AppContext.tsx"
-Cohesion: 0.03
-Nodes (105): API_BASE, BackendConnectivityStatus, ClassifiedApiError, DEFAULT_USERS, PRODUCTION_BACKEND_URL, COACH_CATEGORIES, ManageCoachModalProps, SummaryGridProps (+97 more)
+### Community 63 - "LoginScreen"
+Cohesion: 0.06
+Nodes (40): 1. Test Overview, 2. Test Execution Matrix, 3. Detailed Scenario Test Traces, 4. Final Verdict, ANDROID AUTHENTICATION VERIFICATION TEST REPORT, Scenario 1: Fresh Install / Cold Launch, Scenario 2: Valid Authentication Flow, Scenario 3: Cold Restart with Valid Session (+32 more)
 
-### Community 65 - "lookupViaPublicDataMeet"
-Cohesion: 0.22
-Nodes (20): abortActive(), Bg(), Co(), d1(), Dg(), Dl(), DS(), getCached() (+12 more)
+### Community 65 - "Result"
+Cohesion: 0.12
+Nodes (15): TlsManager, TlsManager::TlsManager(), Result, AUTH_REJECTED, BUFFER_OVERFLOW, BUSY, ERROR_GENERAL, HTTP_FAILED (+7 more)
 
-### Community 66 - "m_"
+### Community 66 - "ft"
 Cohesion: 0.05
-Nodes (69): ag(), au(), Ax(), Bf(), c0(), cl(), cs(), d0() (+61 more)
+Nodes (89): _5(), a0(), a1(), ay(), b0(), bd(), c0(), c5() (+81 more)
 
 ### Community 67 - "Panorama Water Tank Monitor — Installation & Deployment Guide"
 Cohesion: 0.12
@@ -981,24 +1066,24 @@ Cohesion: 0.15
 Nodes (12): 1. Overview & System Architecture, 2. Core Repository & Deployment Metadata, 3. Environment Variable Configuration, 4. Routine Development & Deployment Workflow, 5. Live Production Verification Procedure, 6. Rollback Procedure, 7. Backend & MQTT Operational Architecture, Panorama Water Tank NextGen — Deployment Workflow & Operational Guide (+4 more)
 
 ### Community 75 - "WaterEnduranceState"
-Cohesion: 0.10
-Nodes (21): RefillDecision, InsufficientData, NoFacilityReachable, RefillRecommended, RefillRequired, Safe, WaterEnduranceState, consumptionRateLph (+13 more)
+Cohesion: 0.05
+Nodes (36): RefillDecision, InsufficientData, NoFacilityReachable, RefillRecommended, RefillRequired, Safe, TrainLocation, accuracyMeters (+28 more)
 
-### Community 76 - "app/main.py"
-Cohesion: 0.02
-Nodes (31): test_employee_registration_workflow(), get_system_info(), get_latest_telemetry(), get_telemetry_history(), receive_telemetry_file(), receive_telemetry_json(), FileIngestResponse, SystemInfoResponse (+23 more)
+### Community 76 - "AppContext.tsx"
+Cohesion: 0.04
+Nodes (73): BackendConnectivityStatus, COACH_CATEGORIES, ManageCoachModalProps, matchCoachCategoryOption(), BaseCardProps, SummaryGridProps, TankInfoCardProps, TankTelemetryState (+65 more)
 
-### Community 77 - "3. Screen-by-Screen Structural Comparison"
-Cohesion: 0.06
-Nodes (30): Settings, 1. Design Token Fidelity Matrix, 2. Shell & Window Chrome Comparison, 3.1 Dashboard Screen, 3.3 Devices Screen, 3.4 Alerts Screen, 3.5 History Screen, 3.6 Settings Screen (+22 more)
+### Community 77 - "Panorama Water Tank NextGen — UI/UX Redesign, Authentication & Quality Audit Report"
+Cohesion: 0.12
+Nodes (15): 1. Executive Summary, 2.2 Role-Based Access Control (RBAC) Architecture, 2. Architecture & Root Cause Analysis, 3. Emoji Eradication Audit, 4. 5-Pass Browser & Integration Audit Results, 5. Screenshot Catalog & Artifacts Index, 6. Conclusion & Operational Recommendations, Component Replacements (+7 more)
 
 ### Community 78 - "Panorama Water Tank Monitor — Operations & Deployment Runbook"
 Cohesion: 0.14
 Nodes (13): 1. Prerequisites & System Requirements, 2. Infrastructure Deployment (Docker Compose), 3.1 Virtual Environment Setup & Dependencies, 3.2 Database Migrations, 3.3 Starting the Application Server, 3. Backend Deployment, 4. Frontend Deployment (React Native / Web), 5. Telemetry Edge Simulator (+5 more)
 
 ### Community 79 - "TelemetrySnapshot"
-Cohesion: 0.05
-Nodes (33): TelemetrySnapshot, alarm_status, battery_v, device_id, flow_rate_lpm, gps_lat, gps_lon, gps_valid (+25 more)
+Cohesion: 0.06
+Nodes (29): TelemetrySnapshot, alarm_status, battery_v, device_id, flow_rate_lpm, gps_lat, gps_lon, gps_valid (+21 more)
 
 ### Community 80 - "Comprehensive UI Optimization, Audit & Quality Verification Report"
 Cohesion: 0.18
@@ -1006,7 +1091,7 @@ Nodes (10): 1. Executive Summary, 3. Design System & Token Standardization, 4. M
 
 ### Community 81 - "Panorama Water Tank Monitor — NextGen SCADA System"
 Cohesion: 0.11
-Nodes (17): 1. Repository URL & Remote Verification, 2. Repository Structure: Before vs. After, 3. Inventory of Files Reorganized & Added, 4. Files Excluded from Version Control (Security & Cleanliness), 5. README Design Enhancements, 6. Curated Screenshot Inventory, 8. Continuous Integration & Push Status, 9. Remaining Operational Considerations for Production (+9 more)
+Nodes (18): 1. Repository URL & Remote Verification, 2. Repository Structure: Before vs. After, 3. Inventory of Files Reorganized & Added, 4. Files Excluded from Version Control (Security & Cleanliness), 5. README Design Enhancements, 6. Curated Screenshot Inventory, 7. Code Security Remediations Summary, 8. Continuous Integration & Push Status (+10 more)
 
 ### Community 82 - "Connections by Relation"
 Cohesion: 0.14
@@ -1016,41 +1101,41 @@ Nodes (12): ApplicationStateManager, Connections by Relation, contains, defines,
 Cohesion: 0.14
 Nodes (13): 1. Executive Summary, 2.1 Why the Old Application Still Opened, 2.2 Obsolete Artifacts Removed, 2. Root Cause Analysis & Obsolete Deployment Removal, 3.1 Architectural Modularization, 3.2 Compilation & Test Suite Execution, 3. Rebuild & Verification Summary, 4.1 Deployment Destination (+5 more)
 
-### Community 84 - "verify_alert_lifecycle_e2e.cjs"
-Cohesion: 0.16
-Nodes (13): assert, BACKEND_DIR, cp, electronPath, fs, http, httpJson(), os (+5 more)
+### Community 84 - "database.py"
+Cohesion: 0.04
+Nodes (29): init_db(), seed_initial_fleet(), seed_initial_regions(), seed_initial_settings(), _set_sqlite_pragmas(), generate_uuid(), utc_now(), DeletionAuditRecord (+21 more)
 
 ### Community 85 - "properties"
 Cohesion: 0.15
 Nodes (13): type, type, type, properties, alt, dt, long, sats (+5 more)
 
 ### Community 86 - "2. Table Specifications & DDL"
-Cohesion: 0.17
-Nodes (11): 1. Entity-Relationship Overview, 2.2 Table: `devices`, 2.3 Table: `tanks`, 2.4 Table: `telemetry_readings`, 2.5 Table: `alarms`, 2.6 Table: `alarm_history`, 2.7 Table: `settings`, 2.8 Table: `audit_events` (+3 more)
+Cohesion: 0.15
+Nodes (12): 1. Entity-Relationship Overview, 2.1 Table: `users`, 2.2 Table: `devices`, 2.3 Table: `tanks`, 2.4 Table: `telemetry_readings`, 2.5 Table: `alarms`, 2.6 Table: `alarm_history`, 2.7 Table: `settings` (+4 more)
 
 ### Community 87 - "Panorama Water Tank Monitor — MQTT Protocol & Ingestion Specification"
 Cohesion: 0.15
 Nodes (12): 1. Network & Connection Parameters, 2. Topic Namespace Hierarchy, 3.1 Topic: `panorama/telemetry/{deviceId}`, 3. Telemetry Payload Specification, 4.1 Topic: `panorama/status/{deviceId}`, 4. Lifecycle & Last Will and Testament (LWT), 5.1 Topic: `panorama/commands/{deviceId}`, 5. Downlink Commands Specification (+4 more)
 
-### Community 88 - "3. Detailed Audit by Domain"
-Cohesion: 0.12
-Nodes (10): InMemoryRateLimiter, 1. Executive Summary, 2. Vulnerability Findings & Severity Matrix, 3.1 Authentication & Credential Storage, 3.3 Session Lifecycle & Revocation, 3.4 Rate Limiting & Abuse Prevention, 3.5 File Upload Validation, 3.6 Frontend Session Security (+2 more)
+### Community 88 - "TelemetryReading"
+Cohesion: 0.06
+Nodes (30): acknowledge_alarm(), clear_alarms(), get_alarm_stats(), list_alarms(), get_live_tank_status(), list_all_tanks(), Alarm, AlarmHistory (+22 more)
 
 ### Community 89 - "MqttConfig"
 Cohesion: 0.17
 Nodes (10): MqttConfig, broker, clientId, enabled, password, port, tlsEnabled, topic (+2 more)
 
 ### Community 90 - "2. Granular Architectural Breakdown"
-Cohesion: 0.10
-Nodes (20): 1. Application Architecture, 2.10 GPS Tracking, 2.11 MQTT Communication, 2.12 Build and Deployment Configuration, 2.13 GitHub Actions Workflows, 2.14 Vercel Configuration, 2.1 Overall System Architecture, 2.2 Frontend Structure (`apps/mobile`) (+12 more)
+Cohesion: 0.11
+Nodes (18): 1. Application Architecture, 2.10 GPS Tracking, 2.11 MQTT Communication, 2.12 Build and Deployment Configuration, 2.13 GitHub Actions Workflows, 2.14 Vercel Configuration, 2.1 Overall System Architecture, 2.2 Frontend Structure (`apps/mobile`) (+10 more)
 
 ### Community 91 - "ConnectionManager"
 Cohesion: 0.10
 Nodes (9): ConnectionManager, 1. ENDPOINT INVENTORY & STATUS CODE AUDIT, 2. ROOT CAUSE ANALYSIS OF FAILING TESTS, 3. CORS & TRAILING SLASH MIDDLEWARE AUDIT, 4. DATABASE SESSION LIFECYCLE AUDIT, 5. WEBSOCKET CONNECTION LIFELINE & HEARTBEAT, BACKEND API & REST AUDIT REPORT: PANORAMA WATER TANK MONITOR, CORS Configuration (`backend/app/main.py`) (+1 more)
 
 ### Community 92 - "Legacy Qt Application UI/UX Comprehensive Audit"
-Cohesion: 0.18
-Nodes (10): 1. Executive Summary & Design System Philosophy, 2.1 Color Tokens (`qml/theme/Colors.qml`), 2.2 Metrics & Spacing Tokens (`qml/theme/Metrics.qml`), 2.3 Typography Tokens (`qml/theme/Typography.qml`), 2. Complete Design Token Specification, 3.1 Custom Title Bar Header (`qml/components/Header.qml`), 3.2 Fixed Left Sidebar (`qml/components/Sidebar.qml`), 3.3 Copyright Footer Bar (`qml/components/Footer.qml`) (+2 more)
+Cohesion: 0.10
+Nodes (19): 1. Executive Summary & Design System Philosophy, 2.1 Color Tokens (`qml/theme/Colors.qml`), 2.2 Metrics & Spacing Tokens (`qml/theme/Metrics.qml`), 2.3 Typography Tokens (`qml/theme/Typography.qml`), 2. Complete Design Token Specification, 3.1 Custom Title Bar Header (`qml/components/Header.qml`), 3.2 Fixed Left Sidebar (`qml/components/Sidebar.qml`), 3.3 Copyright Footer Bar (`qml/components/Footer.qml`) (+11 more)
 
 ### Community 93 - "Panorama Water Tank Monitor — Security Architecture & Hardening Guide"
 Cohesion: 0.18
@@ -1065,32 +1150,32 @@ Cohesion: 0.40
 Nodes (4): 1. Desktop Workstation Screenshots (`assets/screenshots/desktop/`), 2. Mobile Responsive Viewport Screenshots (`assets/screenshots/mobile/`), High-Resolution Visual Showcase (Desktop Workstations & Mobile Viewports), Panorama Water Tank Monitor — Application Screenshot Catalog
 
 ### Community 96 - "CROSS-DEVICE DATA PERSISTENCE & SYNCHRONIZATION REPORT"
-Cohesion: 0.12
-Nodes (16): syncFromAuthoritativeRegions(), syncTrainConsist(), 1. Existing Data Storage Problem, 3. Centralized Database Architecture, 4. Modified Frontend and Backend Files, 5. Database Schema & Persistence Mechanism, 6. Real-Time Synchronization Implementation, 7. Deletion and Recovery Mechanisms (+8 more)
+Cohesion: 0.11
+Nodes (17): 1. Existing Data Storage Problem, 2. Root Cause Analysis, 5. Database Schema & Persistence Mechanism, 6. Real-Time Synchronization Implementation, 7. Deletion and Recovery Mechanisms, 8. Cross-Device Test Results (8 Scenarios), 9. Preservation of Legitimate Production Records, Conclusion & Deployment Status (+9 more)
 
 ### Community 97 - "Panorama Water Tank Monitor — System Architecture"
 Cohesion: 0.17
 Nodes (12): 1. Executive Architecture Summary, 2. High-Level System Topology, 4. End-to-End Telemetry Data Flow, 5. Alarm Lifecycle State Machine, 6.1 Cellular & MQTT Disconnection, 6.2 Backend Ingestion Recovery, 6.3 Frontend Connection Degradation, 6. Failure Recovery & Resilience Strategy (+4 more)
 
 ### Community 98 - "ref_assert"
-Cohesion: 0.03
-Nodes (50): assert, esbuild, path, runUnitTests(), assert, cp, createStaticServer(), DIST_DIR (+42 more)
+Cohesion: 0.04
+Nodes (46): esbuild, fs, generateHtml(), http, net, path, sseClients, start() (+38 more)
 
 ### Community 100 - ".composeTrendHistory"
-Cohesion: 0.17
-Nodes (10): 1. Executive Summary, 2. Technology Stack & Environment, 3. Functionality Status Matrix, 4. Architectural Analysis & God Nodes (Graphify Insights), 5. Security & Safety Evaluation, Comprehensive Existing Project Audit, Hotspot 1: `TankModel` (188 edges), Hotspot 2: Monolithic `main.cpp` (550+ lines) (+2 more)
+Cohesion: 0.20
+Nodes (8): 1. Executive Summary, 2. Technology Stack & Environment, 3. Functionality Status Matrix, 4. Architectural Analysis & God Nodes (Graphify Insights), 5. Security & Safety Evaluation, Comprehensive Existing Project Audit, Hotspot 1: `TankModel` (188 edges), Hotspot 2: Monolithic `main.cpp` (550+ lines)
 
 ### Community 101 - "verify_display_preferences.cjs"
 Cohesion: 0.15
 Nodes (16): adminPrefs, assert, DEFAULT_PREFS, getStorageKey(), initial, loadedAdminAfterReset, loadPreferences(), migrated (+8 more)
 
-### Community 102 - "Graph Report - graphify_pwt_source  (2026-10-30)"
-Cohesion: 0.20
-Nodes (9): Community Hubs (Navigation), Corpus Check, God Nodes (most connected - your core abstractions), Graph Report - graphify_pwt_source  (2026-10-30), Import Cycles, Knowledge Gaps, Suggested Questions, Summary (+1 more)
+### Community 102 - "SharedStateService"
+Cohesion: 0.16
+Nodes (3): normalize_region(), SharedStateService, test_sqlite_shared_state_persistence_and_versioning()
 
 ### Community 103 - "main.cjs"
-Cohesion: 0.15
-Nodes (16): { app, BrowserWindow, ipcMain, shell, dialog }, checkBackendHealth(), createMainWindow(), fs, getBackendExecutable(), getLogPath(), gotLock, http (+8 more)
+Cohesion: 0.12
+Nodes (19): { app, BrowserWindow, ipcMain, shell, dialog }, checkBackendHealth(), createMainWindow(), fs, getBackendExecutable(), getLogPath(), gotLock, http (+11 more)
 
 ### Community 104 - "2. Granular Test Suite Results"
 Cohesion: 0.20
@@ -1118,7 +1203,7 @@ Nodes (11): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API
 
 ### Community 110 - "mqttService"
 Cohesion: 0.06
-Nodes (8): formatMqttTimestamp(), mqttService, LiveTelemetryPayload, MqttConnectionStatus, MqttGpsFix, TelemetryHistory, TelemetryPoint, TelemetryStats
+Nodes (4): mqttService, LiveTelemetryPayload, MqttConnectionStatus, MqttGpsFix
 
 ### Community 111 - "runBrowserAudit"
 Cohesion: 0.06
@@ -1148,6 +1233,10 @@ Nodes (30): Audit Trail, Community 23, Key Concepts, Relationships, Source Files
 Cohesion: 0.25
 Nodes (8): scripts, build, dev, electron, package:all, package:dir, preview, start
 
+### Community 118 - "LocationScreen.tsx"
+Cohesion: 0.14
+Nodes (15): calculateHaversineKm(), CoachMiniMap(), CoachMiniMapProps, CorridorStationDef, DEFAULT_STATIONS, calculateEta(), calculateTrackDistanceKm(), getTrainRouteColor() (+7 more)
+
 ### Community 119 - "State"
 Cohesion: 0.25
 Nodes (8): State, Connected, Connecting, Disconnected, Error, MqttConnecting, Reconnecting, TlsHandshake
@@ -1168,9 +1257,9 @@ Nodes (11): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API
 Cohesion: 0.15
 Nodes (12): UnifiedSettings, 1. Executive Summary, 2.1 Color Tokens (`apps/mobile/src/theme/colors.ts`), 2.2 Metrics & Responsive Grid (`apps/mobile/src/theme/metrics.ts`), 2. Design System & Token Consolidation, 3.1 Location & GPS Tracking (`LocationScreen.tsx`), 3.2 System Settings & Geometry (`SettingsScreen.tsx`), 3.3 Train Management (`TrainManagementScreen.tsx`) (+4 more)
 
-### Community 124 - "app/schemas/__init__.py"
-Cohesion: 0.07
-Nodes (34): get_me(), login(), update_device(), AlarmAcknowledge, AlarmOut, AlarmStats, ChangePasswordRequest, EmployeeRegistrationRequest (+26 more)
+### Community 124 - "test_tls_security.py"
+Cohesion: 0.05
+Nodes (20): generate_self_signed_cert(), main(), inspect_certificate(), main(), get_test_ssl_context(), live_https_server(), run_https_server(), test_test_a_valid_certificate_connection() (+12 more)
 
 ### Community 125 - "1. Component Boundaries & Responsibilities"
 Cohesion: 0.29
@@ -1189,8 +1278,8 @@ Cohesion: 0.18
 Nodes (10): 1. Defect Analysis & Root Cause, 2.1 Mapping Engine, 2.2 Verified Station Geodetic Coordinates, 2.3 Railway Track Axis, 2.4 Live Dynamic Train Marker, 2.5 Viewport Controls & Resize Resiliency, 2. Technical Architecture & Implementation, 3. Telemetry Source Verification Table (+2 more)
 
 ### Community 129 - "2. Core Architecture Components"
-Cohesion: 0.18
-Nodes (10): 1. High-Level Architecture Topology, 2.1 The Native Android Shell (`PanoramaWaterTank_Capacitor/android`), 2.2 The Zero-Overhead Native Bridge (`nativeBridge.ts`), 2.3 Real-Time Telemetry & MQTT Pipeline, 2. Core Architecture Components, 3.1 Industrial SCADA Theme, 3.2 Mobile-First Navigation, 3. UI/UX Design System & Mobile Viewport Strategy (+2 more)
+Cohesion: 0.17
+Nodes (11): 1. High-Level Architecture Topology, 2.1 The Native Android Shell (`PanoramaWaterTank_Capacitor/android`), 2.2 The Zero-Overhead Native Bridge (`nativeBridge.ts`), 2.3 Real-Time Telemetry & MQTT Pipeline, 2.4 Critical Alarm & Notification Subsystem, 2. Core Architecture Components, 3.1 Industrial SCADA Theme, 3.2 Mobile-First Navigation (+3 more)
 
 ### Community 130 - "verify_12_scenarios.cjs"
 Cohesion: 0.18
@@ -1248,9 +1337,9 @@ Nodes (5): Audit Trail, Community 15, Key Concepts, Relationships, Source Files
 Cohesion: 0.40
 Nodes (5): Audit Trail, Community 16, Key Concepts, Relationships, Source Files
 
-### Community 144 - "httpx"
-Cohesion: 0.05
-Nodes (33): _calculate_tank_status(), AlarmService, VolumeCalculator, LTTBDownsampler, math_floor(), test_critical_low_alarm(), test_normal_level(), test_overflow_alarm() (+25 more)
+### Community 144 - "VolumeCalculator"
+Cohesion: 0.06
+Nodes (28): _calculate_tank_status(), AlarmService, VolumeCalculator, test_critical_low_alarm(), test_normal_level(), test_overflow_alarm(), test_sensor_fault_detection(), test_voltage_fault() (+20 more)
 
 ### Community 145 - "Community 53"
 Cohesion: 0.40
@@ -1265,8 +1354,8 @@ Cohesion: 0.40
 Nodes (5): Audit Trail, Community 0, Key Concepts, Relationships, Source Files
 
 ### Community 148 - "notify"
-Cohesion: 0.09
-Nodes (47): acknowledgeAlert(), acknowledgeAll(), addHistoryEntry(), assignDevice(), buildBrowserNotificationPayload(), clearHistory(), deleteDevice(), detachTrain() (+39 more)
+Cohesion: 0.07
+Nodes (54): acknowledgeAlert(), acknowledgeAll(), addHistoryEntry(), assignDevice(), buildBrowserNotificationPayload(), clearHistory(), deleteDevice(), detachTrain() (+46 more)
 
 ### Community 149 - "Community 70"
 Cohesion: 0.33
@@ -1281,12 +1370,12 @@ Cohesion: 0.33
 Nodes (5): 1. Left Navigation Sidebar, 2. Top Header, 3. Main Content Area & Railway Regions, 4. Functional Interactions, UI Parity Checklist: Train Management Dashboard
 
 ### Community 152 - "trainLookupService.ts"
-Cohesion: 0.12
-Nodes (29): buildEmptyErrorResult(), CachedEntry, ClassifiedLookupError, classifyCaughtError(), classifyHttpFailure(), DATAMEET_ENDPOINTS, DataMeetCompactEntry, DAY_NAMES (+21 more)
+Cohesion: 0.06
+Nodes (57): ArchBox(), CommunicationArchitecturePanel(), FlowArrow(), formatDuration(), MqttBrokerDetailsRow(), CollapsibleCard(), DeviceHealthSummaryBar(), DeviceIdentityCard() (+49 more)
 
-### Community 153 - "verify_cross_device_persistence_runner.cjs"
-Cohesion: 0.21
-Nodes (11): { app, BrowserWindow, session }, delay(), fs, http, httpJsonRequest(), os, path, recordResult() (+3 more)
+### Community 153 - "ROOT CAUSE ANALYSIS: LOGIN SCREEN NOT APPEARING ON ANDROID STARTUP"
+Cohesion: 0.08
+Nodes (24): 1. Primary Root Cause: Unconditional Offline Fallback in `ApiClient.fetchCurrentUser()`, 2. Secondary Root Cause: Zero JWT & Token Expiration Verification, 3. Tertiary Root Cause: Route Guard Bypass in Browser URL & Hashchange Listener, 4. Quaternary Root Cause: Android Hardware Back Button Stack Leakage, 5. Quinary Root Cause: Partial Storage Eviction During Logout, 6. Senary Root Cause: Unintegrated Native Capacitor Preferences, Executive Summary, Flawed Implementation (+16 more)
 
 ### Community 154 - "src/backend/AuthManager.cpp"
 Cohesion: 0.40
@@ -1688,13 +1777,13 @@ Nodes (5): Audit Trail, Community 13, Key Concepts, Relationships, Source Files
 Cohesion: 0.22
 Nodes (8): 1. Readiness Checklist, 2. Environment Variables & Secret Configuration, 3.1 Health Check Endpoints, 3.2 Backup & Disaster Recovery, 3.3 Log Retention & Auditing, 3. Operational Runbook & Health Monitoring, 4. Final Sign-Off, Production Readiness Review & Operational Sign-Off
 
-### Community 254 - "test_security_audit.py"
-Cohesion: 0.15
-Nodes (10): validate_document_upload(), test_document_upload_validation(), test_login_rate_limiting(), test_rbac_mutation_endpoints_enforcement(), test_security_headers_present(), test_session_invalidation_on_admin_reset(), test_session_invalidation_on_logout(), test_session_invalidation_on_password_change() (+2 more)
+### Community 254 - "TelemetryParser"
+Cohesion: 0.06
+Nodes (9): MqttService, TelemetryParser, MqttTelemetryPayload, test_mqtt_unconfigured_train_auto_discovery(), test_invalid_json(), test_parse_contract_payload(), test_parse_legacy_keys(), test_parse_valid_json() (+1 more)
 
-### Community 255 - "ref_fs"
-Cohesion: 0.05
-Nodes (33): { app, BrowserWindow }, AUDIT_OUT_DIR, consoleErrors, consoleWarns, fs, path, { app, BrowserWindow }, AUDIT_OUT_DIR (+25 more)
+### Community 255 - "ref_child_process"
+Cohesion: 0.03
+Nodes (56): child, cp, electronPath, path, runnerFile, spawnEnv, child, cp (+48 more)
 
 ### Community 256 - "PANORAMA WATER TANK MONITOR (NEXTGEN)"
 Cohesion: 0.07
@@ -1713,8 +1802,8 @@ Cohesion: 0.40
 Nodes (5): Audit Trail, Community 26, Key Concepts, Relationships, Source Files
 
 ### Community 260 - "TelemetrySnapshot"
-Cohesion: 0.11
-Nodes (14): FreeRtosCoordinator, FreeRtosCoordinator::FreeRtosCoordinator(), m_has_new_data, m_last_upload_tick, m_shared_snapshot, m_upload_interval_s, m_watchdog_cb, WatchdogFeedCallback (+6 more)
+Cohesion: 0.08
+Nodes (20): FreeRtosCoordinator, FreeRtosCoordinator::FreeRtosCoordinator(), m_has_new_data, m_last_upload_tick, m_shared_snapshot, m_upload_interval_s, m_watchdog_cb, WatchdogFeedCallback (+12 more)
 
 ### Community 261 - "Community 28"
 Cohesion: 0.40
@@ -1736,9 +1825,9 @@ Nodes (7): 1. Audit Passes Overview, 2. Issues Discovered and Fixed During Audit
 Cohesion: 0.40
 Nodes (5): Audit Trail, Community 31, Key Concepts, Relationships, Source Files
 
-### Community 266 - "env.py"
-Cohesion: 0.12
-Nodes (6): do_run_migrations(), run_async_migrations(), run_migrations_online(), upgrade(), upgrade(), upgrade()
+### Community 266 - "frontend/js/app.js"
+Cohesion: 0.17
+Nodes (20): applyZoom(), escapeHtml(), highlightJson(), init(), initElements(), renderCommLogs(), renderFileResult(), renderPostResult() (+12 more)
 
 ### Community 267 - "comprehensive_e2e_audit.cjs"
 Cohesion: 0.25
@@ -1756,9 +1845,9 @@ Nodes (14): Connections by Relation, contains, defines, inherits, LocationManage
 Cohesion: 0.12
 Nodes (16): 1. Executive Summary, 2. TLS Architecture & Threat Model, 3.1. Certificate Cryptographic Attributes, 3.2. Subject Alternative Name (SAN) Configuration, 3. Local Self-Signed Certificate Generation, 4. Private Key Protection & Git Hygiene, 5.1. TLS Protocol Version & Cipher Enforcement, 5. Server Startup Configuration (+8 more)
 
-### Community 271 - "typing"
-Cohesion: 0.04
-Nodes (28): get_current_admin_user(), get_current_user(), get_current_user_optional(), database_health_check(), health_check(), mqtt_health_check(), websocket_live_stream(), get_db() (+20 more)
+### Community 271 - "InMemoryRateLimiter"
+Cohesion: 0.12
+Nodes (10): InMemoryRateLimiter, 1. Executive Summary, 2. Vulnerability Findings & Severity Matrix, 3.1 Authentication & Credential Storage, 3.3 Session Lifecycle & Revocation, 3.4 Rate Limiting & Abuse Prevention, 3.5 File Upload Validation, 3.6 Frontend Session Security (+2 more)
 
 ### Community 272 - "Community 49"
 Cohesion: 0.40
@@ -1789,8 +1878,8 @@ Cohesion: 0.40
 Nodes (5): Audit Trail, Community 18, Key Concepts, Relationships, Source Files
 
 ### Community 279 - "constructor"
-Cohesion: 0.09
-Nodes (28): applyMetrics(), cancelAlarmNotification(), checkIsNative(), componentDidCatch(), computeMetrics(), constructor(), createNotificationChannels(), determineCategory() (+20 more)
+Cohesion: 0.06
+Nodes (41): applyDomAttributes(), applyMetrics(), bindLifecycleEvents(), bindWebSocketListener(), cancelAlarmNotification(), checkIsNative(), componentDidCatch(), computeMetrics() (+33 more)
 
 ### Community 280 - "deploy"
 Cohesion: 0.22
@@ -1820,9 +1909,9 @@ Nodes (5): Audit Trail, Community 54, Key Concepts, Relationships, Source Files
 Cohesion: 0.40
 Nodes (5): Audit Trail, Community 39, Key Concepts, Relationships, Source Files
 
-### Community 287 - "time"
-Cohesion: 0.15
-Nodes (6): AtChannel, main(), PhysicalSerialChannel, run_ec200u_test_suite(), SimulatedModemChannel, _spawn_backend_instance()
+### Community 287 - "v1_api.py"
+Cohesion: 0.10
+Nodes (26): add_coach(), auth_login(), auth_logout(), auth_me(), CoachCreateRequest, CoachRenameRequest, CoachSpec, create_device() (+18 more)
 
 ### Community 288 - "Panorama SCADA — Chrome DevTools Browser Debug Report"
 Cohesion: 0.17
@@ -1832,17 +1921,17 @@ Nodes (11): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API
 Cohesion: 0.25
 Nodes (7): Connections by Relation, contains, defines, inherits, method, MqttService, references
 
-### Community 290 - "TrainLocation"
-Cohesion: 0.12
-Nodes (15): TrainLocation, accuracyMeters, altitudeMeters, hasValidFix, headingCardinal, headingDegrees, isLive, isStale (+7 more)
+### Community 290 - "httpx"
+Cohesion: 0.05
+Nodes (22): test_concurrent_read_queries(), test_high_throughput_telemetry_ingestion(), main(), run(), main(), _spawn_https_server(), test_https_communication(), main() (+14 more)
 
 ### Community 291 - "Community 9"
 Cohesion: 0.40
 Nodes (5): Audit Trail, Community 9, Key Concepts, Relationships, Source Files
 
-### Community 292 - "test_storage.py"
+### Community 292 - "InMemoryStorageService"
 Cohesion: 0.07
-Nodes (15): InMemoryStorageService, 1. Context & Scope Verification, 3. Debt Ledger Scan, 4. Deliberate Deferrals & Upgrade Ceilings, 5. What Was Skipped / Not Checked & Operational Risks, Ponytail Lazy Senior Developer Report — Phase 04, Scan Result:, Group E: In-Memory Storage & Retrieval (+7 more)
+Nodes (10): _default_telemetry_db_path(), InMemoryStorageService, Group E: In-Memory Storage & Retrieval, test_bounded_history_capacity(), test_get_history_ordering_and_filtering(), test_get_latest_all_devices(), test_get_latest_nonexistent_device_returns_404(), test_get_latest_specific_device() (+2 more)
 
 ### Community 293 - "Community 7"
 Cohesion: 0.40
@@ -1856,9 +1945,9 @@ Nodes (5): Audit Trail, Community 57, Key Concepts, Relationships, Source Files
 Cohesion: 0.12
 Nodes (15): 1. Roadmap Overview & Priority Matrix, 2.1 P0: Immediate Security & CI/CD Hardening, 2.2 P1: Fine-Grained RBAC & Enterprise Staff Onboarding, 2.3 P2: Predictive Analytics & Smart Refill Integrations, 2.4 P3: Platform Scale & Disconnected Operations, 2. Detailed Work Packages, Panorama Water Tank Monitor — Engineering Roadmap & Next Steps, Work Package P0.1: Rate Limiting & Brute-Force Throttling (+7 more)
 
-### Community 296 - "Administrator Authorization & Tank Configuration Test Report"
-Cohesion: 0.40
-Nodes (4): 1. Automated Test Suite Execution, 3. Unit & Integration Test Details (Test 1.4 Excerpt), 4. Verification Conclusion, Administrator Authorization & Tank Configuration Test Report
+### Community 296 - "simulate_telemetry.py"
+Cohesion: 0.17
+Nodes (3): simulate_train_run(), api_get(), run_tests()
 
 ### Community 297 - "NextGen Build Verification Report"
 Cohesion: 0.40
@@ -1933,8 +2022,8 @@ Cohesion: 0.17
 Nodes (11): 1. Executive Summary, 2. Reference Screenshot Defects & Root Cause Analysis, 3. Global Audit of All 17 Screens & Navigation Modules, 4. Verification Summary, Defect 1: Water Tank Empty Rendering & N/A Presentation, Defect 2: Inconsistent MQTT & Multi-Layer Status Conflation, Defect 3: Historical Level Trend Chart Empty State, Defect 4: Tank Information Card Typography & Layout Sizing (+3 more)
 
 ### Community 315 - "Panorama Water Tank Monitor — Production Deployment Guide"
-Cohesion: 0.13
-Nodes (14): 1. System Topology Overview, 2.1 Repository Setup & CI Workflow, 2.2 Build Pipeline, 2.3 Frontend Environment Variables, 2. Frontend Deployment (GitHub Pages), 3.1 System Prerequisites, 3.2 Backend Environment Variables, 3.3 Production Launch Command (+6 more)
+Cohesion: 0.14
+Nodes (13): 1. System Topology Overview, 2.1 Repository Setup & CI Workflow, 2.2 Build Pipeline, 2.3 Frontend Environment Variables, 2. Frontend Deployment (GitHub Pages), 3.1 System Prerequisites, 3.2 Backend Environment Variables, 3.3 Production Launch Command (+5 more)
 
 ### Community 316 - "Community 61"
 Cohesion: 0.40
@@ -1984,16 +2073,24 @@ Nodes (5): Audit Trail, Community 67, Key Concepts, Relationships, Source Files
 Cohesion: 0.18
 Nodes (10): 1. Overview, 2. Standard Login Sequence Flow, 3. Account Roles & Initial State, 4. Forced Password Change Workflow, 5. Admin Password Immobility & Developer Recovery, 6. Role-Based Route Guards (RBAC), Authentication & Credential Governance Flow, Core Security Principles (+2 more)
 
+### Community 340 - "frontend/js/api.js"
+Cohesion: 0.16
+Nodes (13): _dispatchLog(), getHealth(), getLatestTelemetry(), getSystemInfo(), getTelemetryHistory(), normalizeBaseUrl(), request(), resetBaseUrl() (+5 more)
+
 ### Community 341 - "Knowledge Graph Index"
 Cohesion: 0.67
 Nodes (3): Communities, God Nodes, Knowledge Graph Index
 
-### Community 342 - "test_telemetry.py"
+### Community 342 - "Panorama Water Tank Monitor — Packaging & Verification Audit Report"
+Cohesion: 0.10
+Nodes (19): 1. Executive Summary & Verification Matrix, 2. Root Cause Analysis: Blank Screen Diagnosis & Resolution, 3. Desktop Architecture & Lifecycle Management, 4. Electron Security Posture, 5. UI/UX & Functional Screen Audit, 6. Backend & Database Verification Log Evidence, 7. Known Limitations & Production Recommendations, Architectural Stack (+11 more)
+
+### Community 343 - "DeviceRegistryService"
 Cohesion: 0.21
-Nodes (8): Group B: Telemetry JSON Ingestion & Dynamic Variables, test_dynamic_variables_preservation(), test_invalid_json_body(), test_native_data_types_preserved(), test_post_telemetry_empty_device_id(), test_post_telemetry_missing_device_id(), test_post_valid_telemetry_json(), test_reception_timestamp_attached()
+Nodes (3): DeviceRegistryService, getCanonicalUid(), isGenuineHardwareUid()
 
 ### Community 344 - "ModemManager"
-Cohesion: 0.14
+Cohesion: 0.15
 Nodes (12): ModemManager, m_backoff_delay_ms, m_diag, m_last_state_tick, m_retry_count, m_signal, m_state, SignalQuality (+4 more)
 
 ### Community 346 - "Community 42"
@@ -2004,9 +2101,9 @@ Nodes (5): Audit Trail, Community 42, Key Concepts, Relationships, Source Files
 Cohesion: 0.40
 Nodes (5): Audit Trail, Community 43, Key Concepts, Relationships, Source Files
 
-### Community 348 - "User"
-Cohesion: 0.04
-Nodes (47): change_password(), logout(), register_employee(), approve_registration(), create_user(), delete_user(), get_registration_detail(), get_user_activity() (+39 more)
+### Community 348 - "RouteStation"
+Cohesion: 0.13
+Nodes (15): RouteStation, code, id, isDestination, isJunction, isSource, isWaterSource, lastVerified (+7 more)
 
 ### Community 349 - "Community 66"
 Cohesion: 0.40
@@ -2020,13 +2117,13 @@ Nodes (8): 1. Prerequisites, 2. Repository Cloning & Workspace Initialization, 3
 Cohesion: 0.17
 Nodes (11): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API Inspection, 4. WebSocket Lifecycle & Frames, 5. SCADA Module Navigation Matrix, 6. Interactive Component & RBAC Verification, Error Messages (92), Failed Requests (20) (+3 more)
 
-### Community 352 - "test_api.py"
-Cohesion: 0.06
-Nodes (40): test_auth_login(), test_cors_preflight(), test_csv_export(), test_device_connection_endpoint(), test_granular_database_health_endpoint(), test_granular_mqtt_health_endpoint(), test_granular_system_health_endpoint(), test_health_endpoint() (+32 more)
+### Community 352 - "1. Parity Verification Table (100% Tested & Verified)"
+Cohesion: 0.21
+Nodes (14): test_auth_login(), test_cors_preflight(), test_csv_export(), test_device_connection_endpoint(), test_granular_database_health_endpoint(), test_granular_mqtt_health_endpoint(), test_granular_system_health_endpoint(), test_health_endpoint() (+6 more)
 
 ### Community 353 - "request"
-Cohesion: 0.05
-Nodes (81): acknowledgeAlarm(), addCoach(), applyUnifiedConfig(), approveRegistration(), changePassword(), classifyError(), clearAlarmHistory(), configureRoute() (+73 more)
+Cohesion: 0.04
+Nodes (94): acknowledgeAlarm(), addCoach(), applyUnifiedConfig(), approveRegistration(), changePassword(), classifyError(), clearAlarmHistory(), configureRoute() (+86 more)
 
 ### Community 354 - "HTTPS Laboratory Dashboard — Frontend Test Report"
 Cohesion: 0.13
@@ -2040,21 +2137,21 @@ Nodes (14): assert, buildElectronRunnerScript(), cp, createTestServer(), broadca
 Cohesion: 0.17
 Nodes (11): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API Inspection, 4. WebSocket Lifecycle & Frames, 5. SCADA Module Navigation Matrix, 6. Interactive Component & RBAC Verification, Error Messages (0), Failed Requests (0) (+3 more)
 
-### Community 357 - "RouteStation"
-Cohesion: 0.13
-Nodes (15): RouteStation, code, id, isDestination, isJunction, isSource, isWaterSource, lastVerified (+7 more)
+### Community 357 - "TrainConfigProvider.h"
+Cohesion: 0.20
+Nodes (9): CoachConfig, coachName, coachNumber, coachType, tankIds, RegionConfig, regionId, regionName (+1 more)
 
 ### Community 358 - "verify_live.cjs"
 Cohesion: 0.50
 Nodes (3): check(), https, main()
 
 ### Community 359 - "api.js"
-Cohesion: 0.22
-Nodes (8): _dispatchLog(), getHealth(), getLatestTelemetry(), getSystemInfo(), getTelemetryHistory(), request(), sendTelemetryFile(), sendTelemetryJson()
+Cohesion: 0.16
+Nodes (13): _dispatchLog(), getHealth(), getLatestTelemetry(), getSystemInfo(), getTelemetryHistory(), normalizeBaseUrl(), request(), resetBaseUrl() (+5 more)
 
-### Community 360 - "MqttTelemetryPayload"
-Cohesion: 0.05
-Nodes (18): get_telemetry_history(), ingest_telemetry_rest(), TelemetryParser, MqttTelemetryPayload, TelemetryHistoryResponse, TelemetryPoint, TelemetryStats, HistoryService (+10 more)
+### Community 360 - "pre_task/package.json"
+Cohesion: 0.11
+Nodes (23): description, devDependencies, cross-env@^10.1.0, electron@^45.1.0, electron-builder@^26.18.0, @types/react@^18.3.3, @types/react-dom@^18.3.0, @types/react-native@^0.73.0 (+15 more)
 
 ### Community 361 - "verify_tank_states_e2e.cjs"
 Cohesion: 0.18
@@ -2071,6 +2168,10 @@ Nodes (5): Audit Trail, Community 68, Key Concepts, Relationships, Source Files
 ### Community 364 - "2. Reference Screenshot Defects & Root Cause Analysis"
 Cohesion: 0.17
 Nodes (11): 1. Executive Summary, 2. Reference Screenshot Defects & Root Cause Analysis, 3. Global Audit of All 17 Screens & Navigation Modules, 4. Verification Summary, Defect 1: Water Tank Empty Rendering & N/A Presentation, Defect 2: Inconsistent MQTT & Multi-Layer Status Conflation, Defect 3: Historical Level Trend Chart Empty State, Defect 4: Tank Information Card Typography & Layout Sizing (+3 more)
+
+### Community 365 - "env.d.ts"
+Cohesion: 0.33
+Nodes (5): ImportMeta, ImportMetaEnv, *.jpg, *.png, *.svg
 
 ### Community 366 - "Community 24"
 Cohesion: 0.40
@@ -2112,13 +2213,13 @@ Nodes (11): cp, createServer(), DIST_DIR, electronPath, fs, http, main(), OUTPUT
 Cohesion: 0.12
 Nodes (16): 1. Executive Summary & Root Cause Analysis, 2. The 4-State Deterministic Visualization Architecture, 3. Calibrated Physical Geometry, 4. Automated E2E Verification & Test Artifacts, 5. Water Tank Height & Vertical Scale Alignment Fix, Architectural Fix, Browser Zoom Invariance (1440 x 900), Mathematical Formulations (+8 more)
 
-### Community 376 - "electron"
-Cohesion: 0.04
-Nodes (41): child, cp, electronPath, path, runnerFile, spawnEnv, child, cp (+33 more)
+### Community 376 - "ref_electron"
+Cohesion: 0.03
+Nodes (61): { app, BrowserWindow }, AUDIT_OUT_DIR, consoleErrors, consoleWarns, fs, path, { contextBridge, ipcRenderer }, child (+53 more)
 
 ### Community 377 - "test_ec200u_firmware.cpp"
-Cohesion: 0.14
-Nodes (16): main(), test_freertos_coordinator(), test_https_post_telemetry(), test_json_payload_formatting(), test_modem_initialization(), test_pdp_activation(), test_sim_and_network(), test_tls_configuration() (+8 more)
+Cohesion: 0.19
+Nodes (9): main(), test_freertos_coordinator(), test_https_post_telemetry(), test_json_payload_formatting(), test_modem_initialization(), test_pdp_activation(), test_sim_and_network(), test_tls_configuration() (+1 more)
 
 ### Community 379 - "Panorama Water Tank Monitor — Multi-Viewport Responsive Test Report"
 Cohesion: 0.33
@@ -2152,9 +2253,9 @@ Nodes (10): cp, createServer(), DIST_DIR, fs, http, LOCAL_ARTIFACTS_DIR, main(),
 Cohesion: 0.29
 Nodes (6): 1. Tool Information & Methodology, 2. Scan Execution & Batch Results, 3. Macro-Structure Analysis (`structure_scan.py`), Analysis, Quantitative Metrics, Unslop Verification & AI-Pattern Remediation Report
 
-### Community 387 - "[2.0.0] - 2026-11-09"
-Cohesion: 0.29
-Nodes (6): [1.0.0] - Legacy Reference, [2.0.0] - 2026-11-09, Added, Changelog, Fixed, Security
+### Community 387 - "verify_unique_devices_table_cdp.cjs"
+Cohesion: 0.24
+Nodes (8): CdpConnection, fs, getJson(), http, path, run(), sleep(), WebSocket
 
 ### Community 388 - "Panorama Water Tank Monitor (WLI SCADA Persistence)"
 Cohesion: 0.29
@@ -2184,6 +2285,10 @@ Nodes (7): calculateArea(), calculateCapacityForShape(), calculateCustomVolume()
 Cohesion: 0.29
 Nodes (6): 1. Knowledge Graph Metrics, 2.2 Frontend Central Nodes, 2. God Nodes & Architectural Centrality Analysis, 3. Telemetry Flow & Status Topology, 4. Architectural Health & Modularity Conclusion, Codebase Architecture & Graphify Topological Analysis
 
+### Community 395 - "SensorReadingResult"
+Cohesion: 0.29
+Nodes (7): process_sensor_adc_voltage(), SensorReadingResult, alarm_state, height_cm, is_fault, percentage, sensor_status
+
 ### Community 396 - "3. Database Schema Specification"
 Cohesion: 0.20
 Nodes (9): 1. Executive Architecture Overview, 2. Entity-Relationship Model (ER Diagram), 3.1 Railway Hierarchy (`railway_regions` & `railway_zones`), 3.2 Fleet Entities (`trains` & `coaches`), 3.3 Hardware & Telemetry Entities (`devices`, `tanks`, `telemetry_readings`), 3.4 Governance & Audit (`audit_events`, `deletion_audit_records`, `sync_outbox`), 3. Database Schema Specification, 4. Connection Pooling and Reliability (+1 more)
@@ -2196,13 +2301,13 @@ Nodes (5): 1. Code of Conduct, 2. Development Workflow & Branching Strategy, 3. 
 Cohesion: 0.19
 Nodes (14): captureScreenshot(), CdpClient, checkAnrAndCrashes(), { execSync }, fs, getCpuUsage(), getMemoryUsage(), http (+6 more)
 
-### Community 399 - "run_audit_suite.cjs"
-Cohesion: 0.33
-Nodes (9): { app, BrowserWindow }, capture(), fs, log(), path, runAudit(), SCREENSHOT_DIR, sleep() (+1 more)
+### Community 399 - "train_lookup_service.py"
+Cohesion: 0.17
+Nodes (7): CoachCompositionItem, infer_coach_category(), infer_region_from_coords(), parse_coach_position_string(), ProviderAttempt, RouteStopItem, TrainDataAggregator
 
-### Community 400 - "os"
-Cohesion: 0.12
-Nodes (8): system_health_check(), backup_sqlite(), run_backup(), sha256_checksum(), restore_sqlite(), run_restore(), sha256_checksum(), test_8_backup_and_restore_recovery()
+### Community 400 - "measure_dual_device_post.cjs"
+Cohesion: 0.18
+Nodes (15): benchmarkDevice(), Cdp, { execSync }, fs, getCpu(), getGfx(), getMemory(), getWsUrl() (+7 more)
 
 ### Community 401 - "Final System Architecture Specification"
 Cohesion: 0.13
@@ -2212,13 +2317,9 @@ Nodes (14): 1. System Overview, 2. Hardware Subsystem Architecture, 3. Firmware 
 Cohesion: 0.17
 Nodes (12): cp, createServer(), DIST_DIR, electronPath, fs, http, main(), MOCK_LOCATIONS (+4 more)
 
-### Community 403 - "test_local_express_db_erail_adapter_and_aggregator"
-Cohesion: 0.19
-Nodes (3): LocalExpressDatabase, LocalExpressDatabaseAdapter, test_local_express_db_erail_adapter_and_aggregator()
-
-### Community 404 - "TrainConfigProvider"
-Cohesion: 0.11
-Nodes (9): buildTrainConsist(), TrainConfigProvider, m_regions, m_trains, public, QML_ELEMENT, QVariantList, QVariantMap (+1 more)
+### Community 404 - "verify_dashboard_responsive_matrix.cjs"
+Cohesion: 0.17
+Nodes (8): { app, BrowserWindow }, distDir, fs, http, mimeTypes, OUTPUT_DIR, path, VIEWPORTS
 
 ### Community 405 - "Python 3.12, FastAPI & Asynchronous SCADA Daemon"
 Cohesion: 0.33
@@ -2237,16 +2338,16 @@ Cohesion: 0.33
 Nodes (5): 03. Dependency Graph & Structural Analysis (Graphify Intelligence), 1. Graph Metrics & Network Topology, 2. Module Call Chains & Dependency Paths, 3. Circular Dependency & Coupling Assessment, Panorama Water Tank Monitor (WLI SCADA HMI)
 
 ### Community 409 - "verify_coach_drag_modal.cjs"
-Cohesion: 0.13
-Nodes (15): 08. Frontend Security & Client-Side Hardening, 1. Cross-Site Scripting (XSS) Defenses, 2. Client-Side Storage & Sensitive Data Handling, 3. Clickjacking & Frame Sandboxing, Panorama Water Tank Monitor (React 18 / HMI SPA), ARTIFACT_DIR, assert, CDPClient (+7 more)
+Cohesion: 0.19
+Nodes (10): ARTIFACT_DIR, assert, CDPClient, cp, fs, getJson(), http, main() (+2 more)
 
 ### Community 410 - "Panorama Water Tank Monitor (SCADA Engine)"
 Cohesion: 0.33
 Nodes (5): 14. Performance, Concurrency & Telemetry Scaling Audit, 1. Telemetry Ingestion Throughput, 2. Time-Series Downsampling Efficiency (LTTB Algorithm), 3. Frontend Bundle & Rendering Metrics, Panorama Water Tank Monitor (SCADA Engine)
 
 ### Community 411 - "dashboard.js"
-Cohesion: 0.39
-Nodes (11): formatDuration(), init(), initElements(), pollHealth(), pollHistory(), pollTelemetry(), setupVisibilityHandler(), startPolling() (+3 more)
+Cohesion: 0.29
+Nodes (17): formatDuration(), init(), initElements(), onAuthChanged(), pollHealth(), pollHistory(), pollTelemetry(), reconnect() (+9 more)
 
 ### Community 412 - "Panorama Water Tank Monitor (Railway SCADA System)"
 Cohesion: 0.33
@@ -2257,8 +2358,8 @@ Cohesion: 0.21
 Nodes (12): assert, BACKEND_DIR, buildElectronScript(), cp, electronPath, fs, http, httpJson() (+4 more)
 
 ### Community 414 - "2. Detailed Feature Breakdown & Known Limitations"
-Cohesion: 0.15
-Nodes (12): 10. User Management & 17. Authentication / Permissions, 11. Train & Coach Management, 12. Google Maps vs Leaflet Integration, 14. Ubidots Integration, 15 & 16. MQTT Communication & Data Export, 2. Detailed Feature Breakdown & Known Limitations, 3 & 4. Admin Panel & Admin Settings, 5. Device Management (+4 more)
+Cohesion: 0.20
+Nodes (10): 10. User Management & 17. Authentication / Permissions, 11. Train & Coach Management, 12. Google Maps vs Leaflet Integration, 14. Ubidots Integration, 15 & 16. MQTT Communication & Data Export, 2. Detailed Feature Breakdown & Known Limitations, 3 & 4. Admin Panel & Admin Settings, 5. Device Management (+2 more)
 
 ### Community 415 - "verify_alerts_and_settings.cjs"
 Cohesion: 0.20
@@ -2292,9 +2393,9 @@ Nodes (4): 1. Supported Storage Engines, 2. Alembic Database Migrations, 3. Dock
 Cohesion: 0.12
 Nodes (16): 1. Executive Summary, 2. Viewport Coverage & Validation Matrix, 3.1 Global Navigation & Header (`Header.tsx` & `Sidebar.tsx`), 3.2 Dashboard Screen (`EmployeeDashboard.tsx`), 3.3 Coach Details Screen (`CoachDetailsScreen.tsx`), 3.4 Telemetry History Screen (`HistoryScreen.tsx`), 3.5 Operational Reports Screen (`ReportsScreen.tsx`), 3.6 Location & Corridor Map (`LocationScreen.tsx`) (+8 more)
 
-### Community 423 - ".connect"
-Cohesion: 0.33
-Nodes (4): getHttpHealthUrl(), getWsUrl(), Root Cause 1: Defective `resolveApiBase()` & `getWsUrl()`, B. WebSocket Connection Loops (ERR-002)
+### Community 423 - "capture_dual_device_baseline.cjs"
+Cohesion: 0.17
+Nodes (14): BASELINE_DIR, benchmarkDevice(), Cdp, { execSync }, fs, getCpu(), getGfx(), getMemory() (+6 more)
 
 ### Community 424 - "ESP-IDF / FreeRTOS Edge Firmware Architecture"
 Cohesion: 0.40
@@ -2332,6 +2433,10 @@ Nodes (11): assert, buildElectronScript(), cp, createServer(), DIST_DIR, electro
 Cohesion: 0.40
 Nodes (4): 12. Mobile SCADA & Responsive Viewport Security Audit, 1. Viewport Adaptation & Touch Target Safety, 2. Mobile-Specific Vulnerability Surface, Panorama Water Tank Monitor (Mobile HMI Experience)
 
+### Community 433 - "TankRepository"
+Cohesion: 0.05
+Nodes (19): export_history_csv(), export_telemetry_table_csv(), update_tank_geometry(), get_telemetry_history(), ingest_telemetry_rest(), TankRepository, TelemetryHistoryResponse, TelemetryPoint (+11 more)
+
 ### Community 434 - "API Documentation — Panorama Water Tank Monitor (NextGen)"
 Cohesion: 0.11
 Nodes (18): 1. Authentication & User Management, 2. Health & Diagnostics (Phase 7), 3. Fleet & Train Management, 4. Hardware Devices & Auto-Discovery, 5. System Configuration & Unified Settings, API Documentation — Panorama Water Tank Monitor (NextGen), `DELETE /api/v1/trains/{train_number}`, `GET /api/v1/devices` (+10 more)
@@ -2356,21 +2461,21 @@ Nodes (19): 1. System Architecture — Graphify Visualization, 2. Architectural 
 Cohesion: 0.17
 Nodes (11): 1.1 Frontend `tsc --noEmit` Fails with 29 TypeScript Errors (Masked by `esbuild` & CI), 1.2 Backend Alarm Evaluator Ignores Admin `alarm.*_enabled` Settings Toggles, 1.3 Qt Telemetry Adapter Drops `cm1`/`cm2`/`bat` & Hardcodes Tank Dimensions, 1. Critical & High-Priority Code Bugs, 2.1 Broken Home-Laptop `.venv` Referenced Before Working `venv` in Electron, 2.2 Hardcoded Home Session Scratch Path in `qml/App.qml`, 2.3 `CMakePresets.json` Toolchain Mismatch on Office Desktop, 2.4 Security Hygiene & Credentials (+3 more)
 
-### Community 440 - "Extreme Functional Test Report"
-Cohesion: 0.22
-Nodes (8): 1. Objective & Scope, 2. Complete Boundary Matrix Results, 3.1 Cylindrical Geometry Parity, 3.2 Dynamic Downsampling & Data Integrity, 3. Mathematical Consistency Analysis, 4. Conclusion, Extreme Functional Test Report, Standard Cylindrical Tank Test Baseline:
-
 ### Community 441 - "Panorama Water Tank Monitor — Security Policy & Vulnerability Disclosure"
 Cohesion: 0.50
 Nodes (3): 1. Supported Software Versions, 2. Reporting a Vulnerability, Panorama Water Tank Monitor — Security Policy & Vulnerability Disclosure
+
+### Community 442 - "WebSocketService"
+Cohesion: 0.11
+Nodes (12): getHttpHealthUrl(), getWsUrl(), WebSocketService, 1. Executive Summary, 2. Architectural Context & Topology, 3. Deep-Dive Root Cause Analysis by Defect Category, 4. Architectural Safeguards Implemented, A. CORS and REST Polling Failures (ERR-001 & ERR-004) (+4 more)
 
 ### Community 443 - "16. Defect & Vulnerability Register (P0–P4 Ranking)"
 Cohesion: 0.50
 Nodes (3): 16. Defect & Vulnerability Register (P0–P4 Ranking), Master Defect Registry, Panorama Water Tank Monitor (WLI SCADA NextGen)
 
 ### Community 444 - "dependencies"
-Cohesion: 0.18
-Nodes (11): dependencies, esbuild@^0.21.5, leaflet@^1.9.4, lucide-react@^0.378.0, react@^18.3.1, react-dom@^18.3.1, react-native-web@^0.19.13, @types/leaflet@^1.9.22 (+3 more)
+Cohesion: 0.12
+Nodes (17): dependencies, esbuild@^0.21.5, leaflet@^1.9.4, lucide-react@^0.378.0, paho-mqtt@^1.1.0, react@^18.3.1, react-dom@^18.3.1, react-native-web@^0.19.13 (+9 more)
 
 ### Community 445 - "verify_mobile_search_button.cjs"
 Cohesion: 0.20
@@ -2384,9 +2489,9 @@ Nodes (8): Group D: Multipart File Upload, test_empty_file_upload(), test_file_m
 Cohesion: 0.17
 Nodes (11): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API Inspection, 4. WebSocket Lifecycle & Frames, 5. SCADA Module Navigation Matrix, 6. Interactive Component & RBAC Verification, Error Messages (0), Failed Requests (0) (+3 more)
 
-### Community 449 - "Ponytail Lazy Senior Developer Report — Phase 06"
-Cohesion: 0.25
-Nodes (7): 1. Context & Scope Verification, 2. Implementation Summary, 3. Debt Ledger Scan, 4. Deliberate Deferrals & Upgrade Ceilings, 5. What Was Skipped / Not Checked & Operational Risks, Ponytail Lazy Senior Developer Report — Phase 06, Scan Result:
+### Community 449 - "PANORAMA WATER TANK MONITOR"
+Cohesion: 0.17
+Nodes (10): 1. Executive Summary, 2. Architecture & Data Flow Verification, 3. Comprehensive 16-Module Functional Audit, 4. Automated Verification Results, 5. Deployment & Production Verification, Backend Test Suite, Key Milestones Achieved, PANORAMA WATER TANK MONITOR (+2 more)
 
 ### Community 450 - "Panorama SCADA — Chrome DevTools Browser Debug Report"
 Cohesion: 0.17
@@ -2396,6 +2501,10 @@ Nodes (11): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API
 Cohesion: 0.18
 Nodes (10): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API Inspection, 4. WebSocket Lifecycle & Frames, 5. SCADA Module Navigation Matrix, Error Messages (46), Failed Requests (11), HTTP 4xx / 5xx Responses (0) (+2 more)
 
+### Community 452 - "Final Security Audit & Production Hardening Report"
+Cohesion: 0.18
+Nodes (10): 1. Executive Summary, 2. Credential Audit & Secret Sanitization, 4. API Authentication & Token Protection, 5. TLS Transport Security & Certificate Validation, 6. Input Validation & Denial-of-Service (DoS) Protection, 7. Known Security Limitations & Operational Risks, A. Endpoint Guard Enforcement, A. Repository & Source Code Audit Findings (+2 more)
+
 ### Community 453 - "Panorama Water Tank Monitor — Legacy UI/UX Audit & Design System Specification"
 Cohesion: 0.20
 Nodes (9): 1.1 Color Palette, 1.2 Typography Hierarchy, 1.3 Elevation & Border Radii, 1. Visual Token Catalog (Design System), 2.1 Viewport Constraints, 2.2 Shell Component Structure, 2. Master Application Shell & Layout Grid, 4. Interaction & Motion Specifications (+1 more)
@@ -2404,25 +2513,25 @@ Nodes (9): 1.1 Color Palette, 1.2 Typography Hierarchy, 1.3 Elevation & Border R
 Cohesion: 0.18
 Nodes (10): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API Inspection, 4. WebSocket Lifecycle & Frames, 5. SCADA Module Navigation Matrix, Error Messages (0), Failed Requests (150), HTTP 4xx / 5xx Responses (0) (+2 more)
 
-### Community 455 - "verify_responsive_matrix.cjs"
-Cohesion: 0.05
-Nodes (35): { app, BrowserWindow }, collectedLogs, fs, moduleTestResults, os, path, SCREENSHOT_DIR, tempUserData (+27 more)
+### Community 455 - "scripts/verify_login_responsive_matrix.cjs"
+Cohesion: 0.03
+Nodes (47): { app, BrowserWindow }, collectedLogs, fs, moduleTestResults, os, path, SCREENSHOT_DIR, tempUserData (+39 more)
 
 ### Community 456 - "Development Environment Audit — Office Desktop"
-Cohesion: 0.25
-Nodes (7): 2. Home-Laptop Migration Findings & Machine-Specific Paths, 3. Safe Verification Results on Office Desktop, 4. Recommended Safe Build & Run Instructions for This Desktop, A. Run FastAPI Backend (Development), B. Build & Check Frontend HMI, C. Configure & Build Qt 6 Desktop App (Matching `mingw1310_64`), Development Environment Audit — Office Desktop
+Cohesion: 0.22
+Nodes (8): 1. Installed vs Required Software Audit, 2. Home-Laptop Migration Findings & Machine-Specific Paths, 3. Safe Verification Results on Office Desktop, 4. Recommended Safe Build & Run Instructions for This Desktop, A. Run FastAPI Backend (Development), B. Build & Check Frontend HMI, C. Configure & Build Qt 6 Desktop App (Matching `mingw1310_64`), Development Environment Audit — Office Desktop
 
 ### Community 457 - "Development Handover — Office Desktop Transition"
 Cohesion: 0.25
 Nodes (7): 1. Current Development Status, 2. Recent Development Changes & Doc-to-Code Drift, 3. What Is Ready vs Incomplete on This Office Desktop, 4. Safe Startup Checklist for Next Coding Session, Development Handover — Office Desktop Transition, Incomplete / Needs Action Before Resuming Feature Work, Ready Immediately
 
 ### Community 458 - "verify_realtime_multiclient_sync.cjs"
-Cohesion: 0.38
-Nodes (6): paho-mqtt@^1.1.0, createClient(), delay(), Paho, runVerification(), paho-mqtt
+Cohesion: 0.47
+Nodes (4): createClient(), delay(), Paho, runVerification()
 
-### Community 459 - "index.tsx"
-Cohesion: 0.10
-Nodes (17): Props, State, DEFAULT_PRODUCTION_WS_URL, container, AndroidDeviceCategory, AndroidDeviceMetrics, AndroidOrientation, MetricsListener (+9 more)
+### Community 459 - "Cloud Deployment & Production HTTPS Guide — Render Platform"
+Cohesion: 0.11
+Nodes (18): 1. Architectural Rationale, 2. Monorepo Integration Architecture, 3. Step-by-Step Render Deployment Procedure, 4. Production Environment Variables Configuration, 5. Reverse Proxy & Managed TLS Architecture, 6. Distinguishing Development vs. Production Certificates, 7. Validating the Deployed Public Endpoint, 8. Telemetry Storage Limitations (+10 more)
 
 ### Community 460 - "Panorama SCADA — Chrome DevTools Browser Debug Report"
 Cohesion: 0.18
@@ -2468,33 +2577,33 @@ Nodes (11): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API
 Cohesion: 0.13
 Nodes (14): 1. Quick-Start Guide for New Developers, 2. System Architecture & Communication Flow, 3. Repository Structure & Monorepo Isolation, 4. API Endpoints Reference, 5. Production Environment Variables Configuration, 6. Build & Flashing Instructions, 7. Known Limitations & Outstanding Risks, 8. Final Readiness Classification (+6 more)
 
-### Community 472 - "TrainConfig"
-Cohesion: 0.16
-Nodes (9): TrainConfig, coaches, destination, regionId, routeStations, source, tanks, trainName (+1 more)
+### Community 472 - "import_express_trains.py"
+Cohesion: 0.22
+Nodes (4): ErailPublicAdapter, is_express_family_train(), build_express_database(), main()
 
-### Community 473 - "Demo Data Removal & Codebase Cleansing Audit Report"
-Cohesion: 0.25
-Nodes (6): 1. Executive Summary, 2.2 Frontend Components & Screens (11 Screens Cleaned), 2. Complete Inventory of Discovered Demo Sources & Removals, 3. Database State Reset, 4. Verification Conclusion, Demo Data Removal & Codebase Cleansing Audit Report
+### Community 473 - "2. Phase-by-Phase Task Specifications"
+Cohesion: 0.10
+Nodes (19): 1. Remediation Phases Overview, 2. Phase-by-Phase Task Specifications, 3. Resource & Effort Estimation, Panorama Capacitor Application: Remediation Roadmap, Phase A: Critical Security & Auth Hardening (P0), Phase B: Core Backend Contract & Sync Remediation (P1), Phase C: Architectural Decomposition & Code Hygiene (P2), Phase D: Native Android Shell & Performance Optimization (P1/P2) (+11 more)
 
 ### Community 476 - "Panorama SCADA — Chrome DevTools Browser Debug Report"
 Cohesion: 0.18
 Nodes (10): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API Inspection, 4. WebSocket Lifecycle & Frames, 5. SCADA Module Navigation Matrix, Error Messages (2), Failed Requests (0), HTTP 4xx / 5xx Responses (0) (+2 more)
 
-### Community 477 - "electron"
-Cohesion: 0.04
-Nodes (37): { contextBridge, ipcRenderer }, child, cp, electronPath, path, runnerFile, spawnEnv, child (+29 more)
+### Community 477 - "ref_fs"
+Cohesion: 0.03
+Nodes (52): { app, BrowserWindow }, AUDIT_OUT_DIR, consoleErrors, consoleWarns, fs, path, RESOLUTIONS, fs (+44 more)
 
 ### Community 478 - "nsis"
 Cohesion: 0.25
 Nodes (8): nsis, allowToChangeInstallationDirectory, artifactName, createDesktopShortcut, createStartMenuShortcut, oneClick, perMachine, shortcutName
 
-### Community 480 - "connect"
-Cohesion: 0.07
-Nodes (40): bindNetworkListeners(), checkBackendHealth(), clearAllTimers(), clearStaleTimer(), connect(), Cv(), disconnect(), dispatchEvent() (+32 more)
+### Community 479 - "DisplayPerformanceManager"
+Cohesion: 0.04
+Nodes (31): 1. Executive Summary, 2. High-Level Architecture Overview, 4. Dual-Device Performance Optimization, 5. Verification Summary, Panorama Water Tank Monitor — Mobile Implementation Report, 1. Architectural Strategy: One Intelligent Application, 2. In-Depth Side-by-Side Comparison Matrix, 3.1 Water Tank Visualization Pipeline (+23 more)
 
-### Community 481 - "ApplicationController.h"
-Cohesion: 0.05
-Nodes (18): Logger, DatabaseManager, TankModel, DatabaseManager, TankModel, TrainConfigProvider, DatabaseManager, TrainConfigProvider (+10 more)
+### Community 480 - "connect"
+Cohesion: 0.09
+Nodes (42): applyRemoteRecord(), bindNetworkListeners(), By(), checkBackendHealth(), cleanupClient(), clearAllTimers(), clearStaleTimer(), clearTimers() (+34 more)
 
 ### Community 482 - "win"
 Cohesion: 0.33
@@ -2508,21 +2617,21 @@ Nodes (10): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API
 Cohesion: 0.11
 Nodes (18): 1. Operating Current Measurements (At $3.8\,\text{V}$ DC Nominal Supply), 2. Weighted Average Operating Current Calculations, 3. Realistic Battery Life Estimation, A. Test Environment, Architectural Evaluation: RAM Circular Buffer vs. Flash/EEPROM, B. Sensor Accuracy & Calibration Validation, C. Cellular Connectivity Validation, Calibration Verification Matrix (+10 more)
 
-### Community 485 - "st"
+### Community 485 - "Lf"
 Cohesion: 0.06
-Nodes (100): A_(), a0(), AC(), an(), ap(), Ar(), aS(), av() (+92 more)
+Nodes (47): a2(), a6(), Al(), Bn(), d1(), d2(), Dd(), Dm() (+39 more)
 
-### Community 486 - "Panorama SCADA — Complete Project Engineering Audit"
-Cohesion: 0.25
-Nodes (7): 1. Executive Summary, 2. Tool Verification & Execution Record, 3. Subsystem Audit Summary, 4. Key Metrics & Verification Status, A. Frontend Web & Mobile (React 18 + TypeScript + Vite/esbuild), B. Backend REST API & WebSockets (FastAPI + Python 3.12), Panorama SCADA — Complete Project Engineering Audit
+### Community 486 - "frontend/js/dashboard.js"
+Cohesion: 0.29
+Nodes (17): formatDuration(), init(), initElements(), onAuthChanged(), pollHealth(), pollHistory(), pollTelemetry(), reconnect() (+9 more)
 
 ### Community 489 - "vercel.json"
 Cohesion: 0.50
 Nodes (3): buildCommand, outputDirectory, rewrites
 
-### Community 490 - "verify_dashboard_train_visibility.cjs"
-Cohesion: 0.39
-Nodes (7): assert, getJson(), http, postJson(), run(), computeDisplayTrains(), normalizeRegionCode()
+### Community 490 - "HTTPS Receiver — Backend Architecture Specification"
+Cohesion: 0.18
+Nodes (10): 1. Executive Summary, 2. Updated Hardware & Communication Topology, 3.1. Layer Responsibilities, 3. Software Architecture & Module Decomposition, 4. Dynamic Variable Extraction, 5. Storage Architecture, 6. Security Architecture, Hardware Role Allocation: (+2 more)
 
 ### Community 491 - "2. Interactive Component & Lifecycle Tests"
 Cohesion: 0.18
@@ -2545,16 +2654,16 @@ Cohesion: 0.18
 Nodes (10): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API Inspection, 4. WebSocket Lifecycle & Frames, 5. SCADA Module Navigation Matrix, Error Messages (0), Failed Requests (0), HTTP 4xx / 5xx Responses (0) (+2 more)
 
 ### Community 503 - "PANORAMA WATER TANK MONITOR – FULL-SCALE SYSTEM & WEBSITE AUDIT REPORT"
-Cohesion: 0.12
-Nodes (16): 10. Bugs Discovered & Remediations Applied, 11. Automated Test Results Summary, 12. Remaining Issues & Operational Boundaries, 13. Final Health Score Table, 1. Executive Summary, 2. Technology Stack, 6.1. Architecture & Protocol, 6.2. Critical MQTT Storm Bug & Resolution (+8 more)
+Cohesion: 0.18
+Nodes (10): 10. Bugs Discovered & Remediations Applied, 11. Automated Test Results Summary, 12. Remaining Issues & Operational Boundaries, 13. Final Health Score Table, 1. Executive Summary, 2. Technology Stack, 7. Security Audit, 9. UI/UX & Responsive Layout Audit (+2 more)
 
 ### Community 505 - "2. WebSocket Protocol & Lifecycle"
 Cohesion: 0.33
 Nodes (5): 1. REST Endpoint Inventory & Security Status, 2. WebSocket Protocol & Lifecycle, Frame Specifications, Handshake & Route, REST API & WebSocket Protocol Audit
 
-### Community 506 - "flush_outbox_events"
-Cohesion: 0.17
-Nodes (6): lifespan(), flush_outbox_events(), outbox_worker_loop(), Critical Defect Identified: Unstarted Outbox Worker, 2. `[CRIT-02]` Transactional Outbox Worker Loop Unstarted (`backend/app/main.py`), 1. COMPREHENSIVE ROOT CAUSE ANALYSIS & ISSUE MATRIX
+### Community 506 - "frontend/js/telemetry.js"
+Cohesion: 0.24
+Nodes (17): closeRecordModal(), copyRawJson(), detectDataType(), downloadRawJson(), formatDisplayValue(), init(), initElements(), openRecordModal() (+9 more)
 
 ### Community 507 - "Panorama SCADA — Chrome DevTools Browser Debug Report"
 Cohesion: 0.17
@@ -2565,8 +2674,8 @@ Cohesion: 0.17
 Nodes (12): 4. Feature-by-Feature Functional Audit (Pages A through K), Page A: Dashboard (`#/dashboard`), Page B: Train Management (`#/trains`), Page C: Coach Details & Fleet Consist (`#/coach-details?train=12842&coach=A1`), Page D: Water Tank Screen (`#/watertank?train=12842&coach=A1`), Page E: Device Management (`#/devices`), Page F: Location Screen (`#/location`), Page G: Alerts & Alarms (`#/alerts`) (+4 more)
 
 ### Community 509 - "AsyncClient"
-Cohesion: 0.23
-Nodes (7): Group C: Authentication & Token Security, test_invalid_bearer_token(), test_malformed_authorization_header(), test_missing_authorization_header(), test_unconfigured_server_token_rejects(), test_valid_bearer_token(), test_valid_x_device_token()
+Cohesion: 0.16
+Nodes (11): Group C: Authentication & Token Security, test_case_insensitive_headers_and_bearer_scheme(), test_incorrect_and_empty_device_token_rejected(), test_invalid_bearer_token(), test_malformed_authorization_header(), test_missing_authorization_header(), test_postman_wli_lab_node_02_payload_and_sqlite_persistence(), test_unconfigured_server_token_rejects() (+3 more)
 
 ### Community 510 - "deploy"
 Cohesion: 0.25
@@ -2581,7 +2690,7 @@ Cohesion: 0.22
 Nodes (9): cp, createServer(), DIST_DIR, electronPath, fs, http, mockRegistrations, path (+1 more)
 
 ### Community 513 - "TankConfig"
-Cohesion: 0.11
+Cohesion: 0.10
 Nodes (18): TankConfig, capacityLiters, coachName, coachNumber, coachType, deviceId, isPrimaryHardwareDevice, legacyId (+10 more)
 
 ### Community 514 - "Ponytail Execution & Engineering Context Report"
@@ -2596,13 +2705,13 @@ Nodes (4): 1. Aesthetic Philosophy: SCADA vs. AI Slop, 2. Responsive Viewport Ma
 Cohesion: 0.17
 Nodes (11): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API Inspection, 4. WebSocket Lifecycle & Frames, 5. SCADA Module Navigation Matrix, 6. Interactive Component & RBAC Verification, Error Messages (40), Failed Requests (10) (+3 more)
 
-### Community 517 - "verify_railway_zone_e2e.cjs"
-Cohesion: 0.18
-Nodes (14): assert, BACKEND_DIR, { chromium }, cp, createStaticServer(), DIST_DIR, fs, http (+6 more)
+### Community 517 - "ref_assert"
+Cohesion: 0.05
+Nodes (41): assert, { app, BrowserWindow }, assert, fs, loginAsAdmin(), os, path, saveShot() (+33 more)
 
-### Community 518 - "MqttMonitorScreen.tsx"
-Cohesion: 0.19
-Nodes (12): ALLOWED_TELEMETRY_FIELDS, CleanDeviceTelemetry, CleanTelemetryFrame, DEFAULT_HARDWARE_UID, filterDeviceTelemetry(), formatTelemetryJson(), JsonSyntaxViewer(), JsonSyntaxViewerProps (+4 more)
+### Community 518 - "Quectel EC200U TLS/SSL Certificate Setup & Provisioning Guide"
+Cohesion: 0.12
+Nodes (16): 1. Executive Summary & Trust Model, 2.1 File Characteristics:, 2.2 Strict Security Boundary Rules:, 2. Certificate Artifact Identification & Format, 3. Step-by-Step Certificate Provisioning via AT Commands, 4. Automated Verification & Testing Sequence, 5. Troubleshooting & Error Diagnostic Matrix, Production Trust Model (Render Cloud): (+8 more)
 
 ### Community 519 - "Bug and Risk Assessment Report"
 Cohesion: 0.50
@@ -2616,17 +2725,17 @@ Nodes (3): 1. Schema ER Diagram, 2. Integrity & Persistence Guarantees, Database
 Cohesion: 0.50
 Nodes (3): 1. Corpus Summary, 2. Key Architecture Findings, Graphify Deep Codebase Analysis
 
-### Community 522 - "Graphify Codebase Architecture & Topological Audit"
-Cohesion: 0.29
-Nodes (6): 1. Executive Summary & Graph Metrics, 2. Architectural Layering & Subsystem Topology, 3. High-Centrality Hub Nodes & Risk Analysis, 5. Artifacts Generated, Graphify Codebase Architecture & Topological Audit, Quantitative Graph Metrics
+### Community 522 - "verify_api_token"
+Cohesion: 0.09
+Nodes (12): get_latest_telemetry(), get_telemetry_history(), _extract_bearer_token(), get_configured_token(), verify_api_token(), 1. Overview, 2. Telemetry Ingestion Flow (Direct JSON POST), 3. Telemetry Ingestion Flow (Multipart File Upload) (+4 more)
 
 ### Community 523 - "System Architecture & Technical Specifications"
 Cohesion: 0.50
 Nodes (3): 1. System Overview, 2. Component Topology Diagram, System Architecture & Technical Specifications
 
-### Community 524 - "3. Tool Usage & Verification"
-Cohesion: 0.50
-Nodes (4): 3.1. Ponytail (Lazy Senior Dev Mode), 3.2. Graphify Knowledge Graph, 3.3. Unslop Code Cleanliness, 3. Tool Usage & Verification
+### Community 524 - "TelemetryService"
+Cohesion: 0.20
+Nodes (5): TelemetryService, 1. Architectural Philosophy & Design Principles, 2. Directory Structure, 3. Key Architectural Improvements, NextGen Target Architecture Specification
 
 ### Community 525 - "5. Backend & Database Audit"
 Cohesion: 0.50
@@ -2660,10 +2769,6 @@ Nodes (17): 1. System Overview & Architecture, 2.1 Pin Assignment & Signal Inter
 Cohesion: 0.29
 Nodes (7): with, cache, cache-dependency-path, enablement, node-version, path, python-version
 
-### Community 534 - "nativeBridge"
-Cohesion: 0.25
-Nodes (3): nativeBridge, Part 1: Android Native System Notifications, 2.4 Critical Alarm & Notification Subsystem
-
 ### Community 535 - "2. Table Specifications"
 Cohesion: 0.14
 Nodes (13): 1. Relational Entity-Relationship (ER) Diagram, 2.1 `trains`, 2.2 `coaches`, 2.3 `devices`, 2.4 `tanks`, 2.5 `telemetry_readings`, 2.6 `sync_outbox`, 2. Table Specifications (+5 more)
@@ -2696,13 +2801,13 @@ Nodes (13): 1. Executive Summary & Root Cause Analysis, 2. Navigation & Routing 
 Cohesion: 0.40
 Nodes (4): 1. Production Verification Criteria Checklist, 2. Live Chrome DevTools Protocol Telemetry Snapshot, 3. Production Deployment Sign-Off, Panorama SCADA — Production Verification & Deployment Certificate
 
-### Community 543 - "App.tsx"
-Cohesion: 0.07
-Nodes (58): AccessDeniedScreen(), App(), AppShell(), MainContent(), ManageCoachModal(), matchCoachCategoryOption(), ActiveAlertBanner(), AlertToastBanner() (+50 more)
+### Community 543 - "GLOBAL DATA SYNCHRONIZATION AUDIT & ARCHITECTURAL UNIFICATION"
+Cohesion: 0.10
+Nodes (20): 1.1 Problem Statement, 1.2 Architectural Root Cause Identification, 1. EXECUTIVE SUMMARY & ROOT CAUSE ANALYSIS, 2.1 Authoritative Production Architecture, 2.2 End-to-End Multi-Client Mutation Sequence, 2. UNIFIED SYSTEM ARCHITECTURE & DATA FLOW, 3.1 Relational Tables & Primary Keys, 3. RELATIONAL SCHEMA & ENTITY HIERARCHY (+12 more)
 
-### Community 544 - "sanitize_csv_cell"
-Cohesion: 0.17
-Nodes (9): sanitize_csv_cell(), test_csv_formula_injection_defense(), 7. Code Security Remediations Summary, Action 4: Neutralized CSV Formula Injection (BUG-005), 18. Automated Verification & Regression Test Results, 1. Backend Pytest Execution Summary, 2. Frontend & Online Status Engine Test Results, Panorama Water Tank Monitor (WLI SCADA NextGen) (+1 more)
+### Community 544 - "MockUartHal"
+Cohesion: 0.25
+Nodes (4): MockUartHal, current_tick_ms, driver, tx_history
 
 ### Community 547 - "env"
 Cohesion: 0.50
@@ -2728,17 +2833,21 @@ Nodes (6): 1. Core Principle: Zero Automatic Data Loss, 2. Strict Prohibition of
 Cohesion: 0.15
 Nodes (12): 1. Architectural Overview, 2. Breakpoint Definitions & Design Tokens, 3. Component Adaptive Behaviours, 4. Verification Test Matrix Results, A. Adaptive Application Header, Adaptive Typography Matrix, B. Adaptive SCADA Dashboard, C. Safe Areas & System Bars (+4 more)
 
-### Community 553 - "Panorama Water Tank Monitor — Browser Console Error Audit"
-Cohesion: 0.33
-Nodes (5): 2. Centralized Error Logger Architecture, 3. Real Hardware Telemetry Integrity, Executive Summary, Key Features:, Panorama Water Tank Monitor — Browser Console Error Audit
+### Community 553 - "MockUartHal"
+Cohesion: 0.23
+Nodes (5): MockUartHal, current_tick_ms, driver, rx_queue, tx_history
 
 ### Community 554 - "capture_search_showcase.cjs"
 Cohesion: 0.22
 Nodes (9): cp, createServer(), DIST_DIR, electronPath, fs, http, main(), OUTPUT_DIR (+1 more)
 
 ### Community 555 - "test_android_notifications.cjs"
-Cohesion: 0.22
-Nodes (11): 1. Installed vs Required Software Audit, adb(), captureScreenshot(), cp, fs, getCdpTarget(), http, main() (+3 more)
+Cohesion: 0.24
+Nodes (10): adb(), captureScreenshot(), cp, fs, getCdpTarget(), http, main(), path (+2 more)
+
+### Community 556 - "inspect_live_emulator.cjs"
+Cohesion: 0.31
+Nodes (8): cp, fs, getWsUrl(), http, main(), path, sendCDP(), takeAdbScreenshot()
 
 ### Community 557 - "2. Detailed Data Flow Analysis"
 Cohesion: 0.25
@@ -2764,45 +2873,49 @@ Nodes (15): generateValue, key, value, services, branch, buildCommand, envVars, 
 Cohesion: 0.15
 Nodes (12): 1. HARDWARE ARCHITECTURE & EDGE SENSING, 1. Rectangular Tank Profile, 2. Cylindrical Horizontal Tank Profile, 2. TELEMETRY PAYLOAD SPECIFICATION & NORMALIZATION, 3. VOLUMETRIC TANK FORMULAS & CALIBRATION, 4. IDENTIFIED FIRMWARE INTEGRATION GAPS, Canonical Payload Schema:, FIRMWARE & HARDWARE INTEGRATION AUDIT: PANORAMA WATER TANK MONITOR (+4 more)
 
-### Community 564 - "TrainConfigProvider.h"
-Cohesion: 0.18
-Nodes (11): CoachConfig, coachName, coachNumber, coachType, tankIds, RegionConfig, regionId, regionName (+3 more)
+### Community 563 - "DeviceProfileService"
+Cohesion: 0.10
+Nodes (13): deviceProfileService, 1. Project Analysis & Architecture (Graphify), 2. Website Changes (Devices Page Redesign), 3. Capacitor Application (Android) Changes, 4. Code Quality & Audit Policy, 5. Deployment & Flashing Status, FINAL IMPLEMENTATION, AUDIT, DEPLOYMENT & VERIFICATION REPORT, PANORAMA WATER TANK MONITORING SYSTEM (+5 more)
 
-### Community 565 - "PANORAMA WATER TANK MONITOR"
-Cohesion: 0.17
-Nodes (10): 1. Executive Summary, 2. Architecture & Data Flow Verification, 3. Comprehensive 16-Module Functional Audit, 4. Automated Verification Results, 5. Deployment & Production Verification, Backend Test Suite, Key Milestones Achieved, PANORAMA WATER TANK MONITOR (+2 more)
+### Community 564 - "MqttMonitorScreen.tsx"
+Cohesion: 0.05
+Nodes (38): ALLOWED_TELEMETRY_FIELDS, BUFFER_OPTIONS, CleanDeviceTelemetry, convertRecordToSerialMessage(), DEFAULT_HARDWARE_UID, formatLocalTimeMs(), HighlightedJson, MqttMonitorScreen() (+30 more)
+
+### Community 565 - "full_website_audit_runner.cjs"
+Cohesion: 0.27
+Nodes (10): { app, BrowserWindow }, auditReport, captureScreenshot(), fs, navigateTo(), path, recordCheck(), runAudit() (+2 more)
 
 ### Community 566 - "Panorama Water Tank Monitor (WLI SCADA HMI)"
+Cohesion: 0.29
+Nodes (6): 06. Authentication & Authorization Security Audit, 1. Password Storage & Cryptographic Verification, 3. Role-Based Access Control (RBAC) Enforcement, Findings & Risk Assessment:, Implementation Inspection:, Panorama Water Tank Monitor (WLI SCADA HMI)
+
+### Community 567 - "Quectel EC200U TLS/SSL Certificate Setup & Provisioning Guide"
+Cohesion: 0.12
+Nodes (16): 1. Executive Summary & Trust Model, 2.1 File Characteristics:, 2.2 Strict Security Boundary Rules:, 2. Certificate Artifact Identification & Format, 3. Step-by-Step Certificate Provisioning via AT Commands, 4. Automated Verification & Testing Sequence, 5. Troubleshooting & Error Diagnostic Matrix, Production Trust Model (Render Cloud): (+8 more)
+
+### Community 568 - "verify_cleaned_devices_history_cdp.cjs"
+Cohesion: 0.24
+Nodes (8): CdpConnection, fs, getJson(), http, path, run(), sleep(), WebSocket
+
+### Community 569 - "dependencies"
+Cohesion: 0.12
+Nodes (17): dependencies, esbuild@^0.21.5, leaflet@^1.9.4, lucide-react@^0.378.0, paho-mqtt@^1.1.0, react@^18.3.1, react-dom@^18.3.1, react-native-web@^0.19.13 (+9 more)
+
+### Community 571 - "TrainConfig"
 Cohesion: 0.20
-Nodes (9): 06. Authentication & Authorization Security Audit, 1. Password Storage & Cryptographic Verification, 2. Session Management & JWT Security, 3. Role-Based Access Control (RBAC) Enforcement, Findings & Risk Assessment:, Implementation Inspection:, JWT Configuration:, Panorama Water Tank Monitor (WLI SCADA HMI) (+1 more)
+Nodes (9): TrainConfig, coaches, destination, regionId, routeStations, source, tanks, trainName (+1 more)
 
-### Community 567 - "2. Root Cause Analysis"
-Cohesion: 0.40
-Nodes (5): 2. Root Cause Analysis, Root Cause 2: Silent Mutation Swallowing in `client.ts`, Root Cause 3: Destructive Empty-Array State Overwrite in `AppContext.tsx`, Root Cause 4: WebSocket Event Name Mismatch, Root Cause 5: Client Cache Ghost Suppression in `localFleetStore.ts`
-
-### Community 568 - "test_multidevice_sync.cjs"
-Cohesion: 0.28
-Nodes (7): { chromium }, fs, loginAsAdmin(), parseArgs(), path, REPORT_DIR, runMultiDeviceSyncAudit()
-
-### Community 569 - "Graphify Architecture Analysis Report"
-Cohesion: 0.40
-Nodes (4): 1. Top Community Hubs & God Nodes, 2. Telemetry Ingestion to Visualization Callflow, 3. Impact & Dependency Validation, Graphify Architecture Analysis Report
-
-### Community 570 - "TelemetryService"
-Cohesion: 0.07
-Nodes (16): TelemetryService, 1. Executive Summary, 2. Updated Hardware & Communication Topology, 3.1. Layer Responsibilities, 3. Software Architecture & Module Decomposition, 4. Dynamic Variable Extraction, 5. Storage Architecture, 6. Security Architecture (+8 more)
-
-### Community 572 - "Error Handling & Fault Recovery Strategy"
-Cohesion: 0.50
-Nodes (3): 1. Fault Matrix & Recovery Procedures, 2. Invariant Rules for Error Handling, Error Handling & Fault Recovery Strategy
+### Community 572 - "verify_website.cjs"
+Cohesion: 0.20
+Nodes (9): cssFiles, distDir, fs, htmlContent, http, jsFiles, mainJs, path (+1 more)
 
 ### Community 573 - "Graphify Audit Report — Phase 04 Backend Implementation"
 Cohesion: 0.29
 Nodes (6): 1. Audit Metadata, 2. Graph Evolution Metrics, 3. Extracted Phase 04 Subsystem Topology, 4. Architectural Relationship Analysis, 5. Audit Conclusion, Graphify Audit Report — Phase 04 Backend Implementation
 
-### Community 574 - "4. Screen-by-Screen Component Inventory"
-Cohesion: 0.22
-Nodes (9): 4.1 Dashboard Page (`qml/pages/DashboardPage.qml`), 4.3 Devices Screen (`qml/pages/DevicesPage.qml`), 4.4 Alerts Screen (`qml/pages/AlertsPage.qml`), 4.5 History Screen (`qml/pages/HistoryPage.qml`), 4.6 Settings Screen (`qml/pages/SettingsPage.qml`), 4. Screen-by-Screen Component Inventory, Section 1: Top 3-Card Split (`qml/components/DashboardTopSection.qml`), Section 2: Water Level Indicator Rank Bar (`RankIndicator.qml`) (+1 more)
+### Community 574 - "SyncConnectionManager"
+Cohesion: 0.10
+Nodes (5): SyncConnectionManager, test_broadcast_stalled_socket_does_not_block_healthy_clients(), _run(), test_sync_optimistic_version_conflict_and_ws_origin_guard(), test_sync_rest_and_websocket_multi_client_broadcast()
 
 ### Community 575 - "alert_lifecycle_electron_runner.cjs"
 Cohesion: 0.21
@@ -2813,8 +2926,8 @@ Cohesion: 0.21
 Nodes (12): assert, BACKEND_DIR, buildElectronScript(), cp, electronPath, fs, http, httpJson() (+4 more)
 
 ### Community 577 - "PANORAMA WATER TANK MONITOR – NEXTGEN"
-Cohesion: 0.17
-Nodes (11): 1.1 The Observed Problem, 1.2 Root Cause Identification, 1.3 The Resolution, 1. EXECUTIVE SUMMARY & ROOT CAUSE ANALYSIS, 2. ADB DIAGNOSTICS & SYSTEM PROPERTIES, 3.1 Memory Profiling (`dumpsys meminfo`), 3.2 CPU Utilization (`top -n 1 -b`), 3. LOW-RESOURCE PERFORMANCE METRICS (1024 MB RAM / 2 CORES) (+3 more)
+Cohesion: 0.10
+Nodes (19): 1.1 The Observed Problem, 1.2 Root Cause Identification, 1.3 The Resolution, 1. EXECUTIVE SUMMARY & ROOT CAUSE ANALYSIS, 2. ADB DIAGNOSTICS & SYSTEM PROPERTIES, 3.1 Memory Profiling (`dumpsys meminfo`), 3.2 CPU Utilization (`top -n 1 -b`), 3. LOW-RESOURCE PERFORMANCE METRICS (1024 MB RAM / 2 CORES) (+11 more)
 
 ### Community 578 - "Final Low-Resource Android Compatibility & Repair Report"
 Cohesion: 0.17
@@ -2828,17 +2941,17 @@ Nodes (11): 1. End-to-End Telemetry & Control Flow, 2. MQTT Broker Configuration
 Cohesion: 0.17
 Nodes (11): 1. TOPIC TOPOLOGY & INGESTION ARCHITECTURE, 2. VERIFICATION OF 5 MULTI-CLIENT SYNCHRONIZATION SCENARIOS, 3. IDENTIFIED VULNERABILITIES & CODE DEFECTS, Defect 1: Hardcoded Device UIDs in `on_connect` (`backend/app/mqtt/client.py`), Defect 2: Missing Backoff Jitter on Reconnection, MQTT & REAL-TIME SYNCHRONIZATION AUDIT: PANORAMA WATER TANK MONITOR, Scenario 1: Train Creation, Scenario 2: Device Assignment (+3 more)
 
-### Community 581 - "Result"
-Cohesion: 0.12
-Nodes (15): TlsManager, TlsManager::TlsManager(), Result, AUTH_REJECTED, BUFFER_OVERFLOW, BUSY, ERROR_GENERAL, HTTP_FAILED (+7 more)
+### Community 581 - "Panorama Water Tank Monitor (WLI SCADA NextGen)"
+Cohesion: 0.33
+Nodes (5): 18. Automated Verification & Regression Test Results, 1. Backend Pytest Execution Summary, 2. Frontend & Online Status Engine Test Results, Panorama Water Tank Monitor (WLI SCADA NextGen), Test Suite Breakdown:
 
 ### Community 582 - "Multi-Device Real-Time Synchronization Audit Report"
 Cohesion: 0.50
 Nodes (3): Console & Runtime Errors, Multi-Device Real-Time Synchronization Audit Report, Test Execution Results
 
 ### Community 583 - "4. Automated Test Execution Evidence"
-Cohesion: 0.12
-Nodes (11): 4. Automated Test Execution Evidence, Group A: Health & Baseline Endpoints, test_docs_and_openapi_endpoints(), test_health_endpoint(), test_no_secrets_leaked(), test_root_dashboard_html(), test_static_assets_delivery(), test_environment_resilience_missing_env() (+3 more)
+Cohesion: 0.05
+Nodes (28): 1. Scope Boundaries & Tasks Completed, 2. Tracked Files Created, 3. Dependency Inventory, 4. Automated Test Execution Evidence, 5. Live Server Network Verification Evidence, 6. Errors Encountered & Resolved, 7. Technical Debt Ledger, Panorama Water Tank Monitor: HTTPS Project Initialization (+20 more)
 
 ### Community 584 - "verify_post_image_fix.cjs"
 Cohesion: 0.23
@@ -2860,17 +2973,17 @@ Nodes (11): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API
 Cohesion: 0.17
 Nodes (11): 1. Executive Summary, 2. Console Messages & Errors, 3. Network & API Inspection, 4. WebSocket Lifecycle & Frames, 5. SCADA Module Navigation Matrix, 6. Interactive Component & RBAC Verification, Error Messages (0), Failed Requests (0) (+3 more)
 
-### Community 589 - "DATABASE RETENTION & PERSISTENCE AUDIT: PANORAMA WATER TANK MONITOR"
-Cohesion: 0.18
-Nodes (10): 1. PERSISTENCE ARCHITECTURE & ZERO-TTL VERIFICATION, 2. DELETION PROTECTION & AUDIT TRAIL, 3. TRANSACTIONAL OUTBOX PATTERN & IDENTIFIED DEFECT, 4. SCHEMA MIGRATION & POSTGRESQL VS SQLITE COMPATIBILITY, DATABASE RETENTION & PERSISTENCE AUDIT: PANORAMA WATER TANK MONITOR, Development (SQLite in WAL Mode):, Production (PostgreSQL on Render):, Programmatic Migration Flaw in `_sync_schema_migration()`: (+2 more)
+### Community 589 - "test_telemetry.py"
+Cohesion: 0.21
+Nodes (8): Group B: Telemetry JSON Ingestion & Dynamic Variables, test_dynamic_variables_preservation(), test_invalid_json_body(), test_native_data_types_preserved(), test_post_telemetry_empty_device_id(), test_post_telemetry_missing_device_id(), test_post_valid_telemetry_json(), test_reception_timestamp_attached()
 
 ### Community 590 - "UartDriver"
-Cohesion: 0.16
-Nodes (9): HttpManager::HttpManager(), ModemManager::ModemManager(), IUartHal, UartDriver, m_rx_buffer, m_rx_head, m_rx_tail, UartDriver::UartDriver() (+1 more)
+Cohesion: 0.10
+Nodes (16): HttpManager::HttpManager(), ModemManager::ModemManager(), IUartHal, UartDriver, m_rx_buffer, m_rx_head, m_rx_tail, UartDriver::UartDriver() (+8 more)
 
-### Community 591 - "dev.cjs"
+### Community 591 - "audit_browser.cjs"
 Cohesion: 0.22
-Nodes (8): esbuild, fs, generateHtml(), http, net, path, sseClients, start()
+Nodes (8): { app, BrowserWindow }, AUDIT_OUT_DIR, consoleLogs, errors, fs, path, RESOLUTIONS, SCREENS
 
 ### Community 592 - "Capacitor Android Mobile Application — Panorama NextGen"
 Cohesion: 0.20
@@ -2889,12 +3002,12 @@ Cohesion: 0.18
 Nodes (11): cp, createServer(), DIST_DIR, electronPath, fs, http, LOCAL_ARTIFACTS_DIR, main() (+3 more)
 
 ### Community 596 - "3. SUBSYSTEM AUDIT SUMMARY"
-Cohesion: 0.11
-Nodes (16): get_next_sync_version(), 1. EXECUTIVE SUMMARY & AUDIT SCORECARD, 2. TOP CRITICAL FINDINGS (REQUIRING IMMEDIATE REMEDIATION), 3.1 Backend Architecture, 3.2 Database & Data Retention, 3.3 Real-Time Multi-Client Synchronization, 3.4 Frontend HMI & Responsiveness, 3.5 Firmware & Hardware Interfacing (+8 more)
+Cohesion: 0.12
+Nodes (15): 1. EXECUTIVE SUMMARY & AUDIT SCORECARD, 2. `[CRIT-02]` Transactional Outbox Worker Loop Unstarted (`backend/app/main.py`), 2. TOP CRITICAL FINDINGS (REQUIRING IMMEDIATE REMEDIATION), 3.1 Backend Architecture, 3.2 Database & Data Retention, 3.4 Frontend HMI & Responsiveness, 3.5 Firmware & Hardware Interfacing, 3.6 Security & Access Control (+7 more)
 
-### Community 597 - "v0"
-Cohesion: 0.09
-Nodes (28): _0(), b0(), Cd(), e(), Cm(), Df(), f0(), fu() (+20 more)
+### Community 597 - "Nn"
+Cohesion: 0.13
+Nodes (16): B6(), bs(), Cf(), cy(), Dh(), E0(), I0(), M6() (+8 more)
 
 ### Community 598 - "HTTPS Laboratory Dashboard — Architecture Specification"
 Cohesion: 0.25
@@ -2908,9 +3021,9 @@ Nodes (6): 1. Architectural Highlights, 2. Directory Layout, 3. Subsystem Health
 Cohesion: 0.22
 Nodes (8): 1. Broker Infrastructure, 2.1 Hardware Telemetry Topics, 2.2 System Synchronization Topics, 2. Topic Hierarchy, 3. Verified Telemetry JSON Payload Specification, 4. Reconnection & Offline Dead-Man Watchdog, Field Definitions, MQTT Protocol & Hardware Telemetry Specification
 
-### Community 601 - "DisplayPreferencesService"
-Cohesion: 0.11
-Nodes (13): ErrorBoundary, DisplayPreferencesProvider(), DisplayPreferencesService, getStorageKey(), 3. Launch Phase Breakdown, Phase B: Android System WebView & Chromium Spawning (< 350 ms), Phase C: Web Application Asset Hydration & First Contentful Paint (< 245 ms), 1 & 2. Desktop Dashboard & Mobile Dashboard (+5 more)
+### Community 601 - "DisplayPreferencesContext.tsx"
+Cohesion: 0.06
+Nodes (42): DisplaySettingsPanel(), DisplaySettingsPanelProps, SCALE_PRESETS, DisplayPreferencesContext, DisplayPreferencesContextType, DisplayPreferencesProvider(), DeviceHardwareDiagnostics, PerformanceProfileConfig (+34 more)
 
 ### Community 602 - "Ponytail Lazy Senior Developer Report — Phase 05"
 Cohesion: 0.25
@@ -2920,21 +3033,21 @@ Nodes (7): 1. Context & Scope Verification, 2. Implementation Summary, 3. Debt L
 Cohesion: 0.15
 Nodes (12): 1. Executive Summary, 2. Test Environment & Toolchain, 3.1 Compilation Command, 3.2 Results Matrix, 3. Tier 1: C++ Firmware Unit & Integration Tests, 4.1 Execution Command, 4.2 Detailed Test Execution Log, 4.3 Key Verification Findings (+4 more)
 
-### Community 604 - "train_lookup_service.py"
-Cohesion: 0.08
-Nodes (23): BaseTrainProvider, _classify_http_status(), CoachCompositionItem, _compute_missing_fields(), DataMeetOpenProvider, ErailPublicAdapter, _get_with_retry(), IndianRailApiProvider (+15 more)
+### Community 604 - "verify_mqtt_serial_monitor.js"
+Cohesion: 0.15
+Nodes (10): ARTIFACTS_DIR, { chromium }, DIST_DIR, { execFileSync }, fs, http, MIME, path (+2 more)
 
-### Community 605 - "ve"
-Cohesion: 0.36
-Nodes (8): B(), be(), Bp(), ne(), nh(), Up(), ve(), Xg()
+### Community 605 - "v"
+Cohesion: 0.08
+Nodes (32): a(), aa(), Ag(), be(), bg(), bl(), ca(), Cl() (+24 more)
 
 ### Community 606 - "Deployment Architecture & Production Runbook — Panorama NextGen"
 Cohesion: 0.25
 Nodes (7): 1. Hosting Architecture Overview, 2.1 Continuous Deployment Pipeline (`.github/workflows/backend-ci.yml`), 2. Frontend Deployment (GitHub Pages), 3.1 Docker Compose Deployment, 3.2 Starting Backend Container Stack, 3. Backend Deployment (Docker & Managed Cloud), Deployment Architecture & Production Runbook — Panorama NextGen
 
-### Community 607 - "4. SCREEN-BY-SCREEN VERIFICATION & NAVIGATION AUDIT"
-Cohesion: 0.25
-Nodes (8): 4.1 Dashboard, 4.2 Railway Regions & Train Management (Levels 1 & 2), 4.3 Train Details & Coach Consist, 4.4 Device Management & MQTT Auto-Discovery, 4.5 Live MQTT Terminal & Device Serial Monitor, 4.6 Location & Fleet-Wide Tracking Map, 4.7 Reboot & State Persistence Recovery, 4. SCREEN-BY-SCREEN VERIFICATION & NAVIGATION AUDIT
+### Community 607 - "TrainLookupResponse"
+Cohesion: 0.21
+Nodes (9): _classify_http_status(), _compute_missing_fields(), _get_with_retry(), map_zone_to_region(), normalize_train_type(), parse_running_days(), ProviderFetchOutcome, TrainLookupResponse (+1 more)
 
 ### Community 608 - "1. Simulated Failure Scenarios & Verified Behaviors"
 Cohesion: 0.22
@@ -2996,13 +3109,17 @@ Nodes (5): 1. Executive Summary, 2. Verification Test Results, 3. Telemetry Inge
 Cohesion: 0.50
 Nodes (4): 9.1 Native Android System Notifications, 9.2 Device-Adaptive UI Scaling Engine, 9.3 Low-Resource Testing Harness, 9. Mobile Application — Capacitor Android
 
-### Community 624 - "test_gateway_size_limiter_middleware"
-Cohesion: 0.33
-Nodes (4): Group F: Security & Limits, test_gateway_size_limiter_middleware(), test_path_traversal_filename_resilience(), test_tokens_never_leaked_in_responses()
+### Community 623 - "test_users_and_rbac.py"
+Cohesion: 0.28
+Nodes (3): test_admin_password_policy_restrictions(), test_admin_user_management_lifecycle(), test_employee_rbac_access_restrictions()
 
-### Community 625 - "Phase 03 Graphify Architecture & Dependency Audit"
-Cohesion: 0.20
-Nodes (7): read_root(), 1. Graph Statistics & Topology Delta, 2. Subsystem Isolation & Boundary Verification, 3. Verified Untouched Files, Key Graph Findings:, Phase 03 Graphify Architecture & Dependency Audit, Verification of Subsystem Isolation & Knowledge Graph Integration
+### Community 624 - "test_gateway_size_limiter_middleware"
+Cohesion: 0.21
+Nodes (7): Group F: Security & Limits, test_cors_headers_on_401_404_and_413_error_responses(), test_cors_preflight_and_explicit_github_pages_origin(), test_gateway_size_limiter_middleware(), test_path_traversal_filename_resilience(), test_telemetry_upload_endpoint_alias(), test_tokens_never_leaked_in_responses()
+
+### Community 625 - "backend/main.py"
+Cohesion: 0.04
+Nodes (18): is_origin_allowed(), lifespan(), read_root(), root_health_probe(), root_ws_live(), health_check(), get_system_info(), v1_ws_live_endpoint() (+10 more)
 
 ### Community 626 - "Initial Subsystem Architecture & Multi-Tenant Isolation"
 Cohesion: 0.29
@@ -3012,57 +3129,53 @@ Nodes (6): 1.1 Multi-Tier Isolation Matrix, 1. Architectural Independence & Isol
 Cohesion: 0.29
 Nodes (6): 1. Audit Metadata, 2. Graph Evolution Metrics, 3. Extracted Phase 05 Subsystem Topology, 4. Architectural Analysis & Verification, 5. Audit Conclusion, Graphify Audit Report — Phase 05 Dashboard Implementation
 
-### Community 628 - "LogLevel"
-Cohesion: 0.29
-Nodes (7): LogLevel, Critical, Debug, Error, Info, Trace, Warning
+### Community 628 - "Authoritative Telemetry Schema Specification: HTTPS Ingestion Pipeline"
+Cohesion: 0.13
+Nodes (14): 1. Specification Overview, 2.1 Ingestion Endpoints, 2.2 Telemetry Retrieval Endpoints, 2. API Endpoints, 3. Data Dictionary & Field Constraints, 4.1 Standard Complete JSON Telemetry Document, 4.2 Document with Legacy MQTT Field Aliases (Fully Supported), 4. Example Payload Documents (+6 more)
 
-### Community 629 - "time"
-Cohesion: 0.08
-Nodes (12): test_concurrent_read_queries(), test_high_throughput_telemetry_ingestion(), 3.2 Backend Test Failures, main(), mask_token(), run_test_suite(), _spawn_local_server(), TestResult (+4 more)
+### Community 629 - "Authoritative Telemetry Schema Specification: HTTPS Ingestion Pipeline"
+Cohesion: 0.13
+Nodes (14): 1. Specification Overview, 2.1 Ingestion Endpoints, 2.2 Telemetry Retrieval Endpoints, 2. API Endpoints, 3. Data Dictionary & Field Constraints, 4.1 Standard Complete JSON Telemetry Document, 4.2 Document with Legacy MQTT Field Aliases (Fully Supported), 4. Example Payload Documents (+6 more)
 
 ### Community 630 - "ModemState"
 Cohesion: 0.12
 Nodes (14): ModemState, DATA_CONNECTED, ERROR_STATE, HTTPS_READY, MODEM_INITIALIZING, MODEM_OFF, NETWORK_REGISTERED, NETWORK_SEARCH (+6 more)
 
-### Community 631 - "full_website_audit_runner.cjs"
-Cohesion: 0.27
-Nodes (10): { app, BrowserWindow }, auditReport, captureScreenshot(), fs, navigateTo(), path, recordCheck(), runAudit() (+2 more)
-
-### Community 632 - "Qt to NextGen UI/UX Mapping Matrix"
-Cohesion: 0.50
-Nodes (3): 1. Component & Screen Mapping Table, 2. Implementation Execution Plan, Qt to NextGen UI/UX Mapping Matrix
+### Community 631 - "verify_cross_device_persistence_runner.cjs"
+Cohesion: 0.21
+Nodes (11): { app, BrowserWindow, session }, delay(), fs, http, httpJsonRequest(), os, path, recordResult() (+3 more)
 
 ### Community 633 - "Certificate Management & TLS Architecture"
 Cohesion: 0.50
 Nodes (3): Architectural Decisions, Certificate Management & TLS Architecture, Purpose
 
-### Community 634 - "PRIORITY FIX ROADMAP: PANORAMA WATER TANK MONITOR"
-Cohesion: 0.50
-Nodes (3): 2. PHASED IMPLEMENTATION SEQUENCE, 3. VERIFICATION CRITERIA FOR COMPLETION, PRIORITY FIX ROADMAP: PANORAMA WATER TANK MONITOR
+### Community 634 - "verify_app_on_device.cjs"
+Cohesion: 0.20
+Nodes (10): CDPClient, cp, fs, getWsUrl(), http, path, run(), sleep() (+2 more)
 
-### Community 635 - "2. Component Responsibility Matrix"
-Cohesion: 0.25
-Nodes (7): 1. Architectural Philosophy, 2.1 QML Presentation Layer, 2.3 Repository Layer, 2.4 Search Layer, 2. Component Responsibility Matrix, 3. Data Flow & Synchronization, Architecture Specification: Train Management & Consist Hierarchy
+### Community 635 - "2. Phase-by-Phase Technical Execution Breakdown"
+Cohesion: 0.14
+Nodes (13): 1. Roadmap Overview & Phased Sequence, 2. Phase-by-Phase Technical Execution Breakdown, Engineering Implementation Plan: Water Level Indicator (WLI) HTTPS Migration, GATING CHECKPOINT: USER APPROVAL, Phase 10: Production Documentation & Handover, Phase 1: Complete Project Audit (Status: COMPLETED), Phase 2: Produce Audit Report and Implementation Plan (Status: COMPLETED), Phase 3: Affected Files Identification & Architectural Boundaries (+5 more)
 
-### Community 636 - "stress_test_android_app.cjs"
-Cohesion: 0.33
-Nodes (10): captureScreenshot(), { chromium }, { execSync }, fs, getCpuUsage(), getMemoryUsage(), path, run() (+2 more)
+### Community 636 - "2. Phase-by-Phase Technical Execution Breakdown"
+Cohesion: 0.14
+Nodes (13): 1. Roadmap Overview & Phased Sequence, 2. Phase-by-Phase Technical Execution Breakdown, Engineering Implementation Plan: Water Level Indicator (WLI) HTTPS Migration, GATING CHECKPOINT: USER APPROVAL, Phase 10: Production Documentation & Handover, Phase 1: Complete Project Audit (Status: COMPLETED), Phase 2: Produce Audit Report and Implementation Plan (Status: COMPLETED), Phase 3: Affected Files Identification & Architectural Boundaries (+5 more)
 
 ### Community 637 - "ec200u_http.cpp"
-Cohesion: 0.29
+Cohesion: 0.26
 Nodes (6): HttpManager, HttpResponse, content_length, http_status, quectel_err, success
 
-### Community 638 - "3. Detailed Test Assertions Breakdown"
-Cohesion: 0.14
-Nodes (9): 1. Test Execution Summary, 2. Test Group Results Matrix, 3. Detailed Test Assertions Breakdown, 4. Live Server Socket Verification Results, 5. Conclusion & Phase 04 Sign-off, Group G & H: Isolation & Diagnostics, HTTPS Receiver — Phase 04 API Test Report, test_isolation_from_mqtt() (+1 more)
+### Community 638 - "py"
+Cohesion: 0.07
+Nodes (77): _0(), ah(), Bf(), Bh(), c(), C2(), cd(), cp() (+69 more)
 
-### Community 641 - "app.js"
-Cohesion: 0.28
-Nodes (11): displayFileResult(), displayPostResult(), init(), initElements(), renderCommLogs(), setupAuthControls(), setupCommMonitor(), setupFileUpload() (+3 more)
+### Community 641 - "static/js/app.js"
+Cohesion: 0.17
+Nodes (20): applyZoom(), escapeHtml(), highlightJson(), init(), initElements(), renderCommLogs(), renderFileResult(), renderPostResult() (+12 more)
 
-### Community 644 - "LoginScreen.tsx"
-Cohesion: 0.09
-Nodes (22): AuthLayout(), AuthLayoutProps, LoginScreen(), QuickTestLoginProps, RegisterScreen(), RegisterScreenProps, StepNumber, radii (+14 more)
+### Community 644 - "Engineering Quality Audit & Refactoring Report"
+Cohesion: 0.13
+Nodes (14): 1. Executive Summary, 2. Ponytail Engineering Audit Findings, 3. Unslop Code & Documentation Audit, 4. Frontend Architecture & TypeScript Refactoring, 5. Backend Architecture & FastAPI Configuration, 6. Verification and Test Results, 7. Code Quality Summary Table, Automated Test Suite (`backend/tests`) (+6 more)
 
 ### Community 645 - "3. Peripheral Interface Configurations"
 Cohesion: 0.18
@@ -3072,45 +3185,49 @@ Nodes (10): 1. Cellular Modem Serial (USART2), 1. System Component Hardware Inve
 Cohesion: 0.50
 Nodes (3): 1. Production Architecture Overview, 2. Security Boundaries, Production TLS Certificates & Strategy
 
-### Community 647 - "Final Security Audit & Production Hardening Report"
-Cohesion: 0.18
-Nodes (10): 1. Executive Summary, 2. Credential Audit & Secret Sanitization, 3. Cryptographic Private Key & Trust Store Review, 4. API Authentication & Token Protection, 5. TLS Transport Security & Certificate Validation, 7. Known Security Limitations & Operational Risks, A. Endpoint Guard Enforcement, A. Repository & Source Code Audit Findings (+2 more)
+### Community 647 - "Android Native System Notifications & Mobile Responsiveness Fix Report"
+Cohesion: 0.22
+Nodes (8): 3. Engineering Implementation Details, 4. Verification & Test Evidence, 5. Visual Test Artifacts, 6. Files Modified Summary, A. Android Emulator Test (`Panorama_ULTRA_LOW_RESOURCE`), Android Native System Notifications & Mobile Responsiveness Fix Report, B. Viewport Zero-Overflow Audit Across Routes, Part 3: Header Optimization (< 1024px)
 
-### Community 648 - "LocationScreen.tsx"
-Cohesion: 0.29
-Nodes (8): calculateEta(), calculateTrackDistanceKm(), getTrainRouteColor(), LocationScreen(), TRAIN_ROUTE_PALETTE, UnifiedTrainTrackingItem, WORLD_MAP_BOUNDS, CorridorStation
+### Community 648 - "Complete Technical Audit Report: Water Level Indicator (WLI) HTTPS Migration"
+Cohesion: 0.15
+Nodes (12): 1. Executive Summary, 3.1 Existing Multi-Tier Architecture, 3.2 Target Hardware Architecture & Clean Separation of Concerns, 3. Existing Architecture vs. Target Hardware Architecture, 4.1 Exposed Legacy Ubidots Credential, 4.2 Legacy MQTT Coupling & Competing Telemetry, 4.3 Power Consumption & Battery Autonomy Trade-Off, 4. Problems Discovered During Audit & Remediation (+4 more)
 
-### Community 649 - "MockUartHal"
-Cohesion: 0.25
-Nodes (4): MockUartHal, current_tick_ms, driver, tx_history
+### Community 649 - "loadSessionSync"
+Cohesion: 0.26
+Nodes (12): clearSession(), clearSessionSync(), getPreferencesPlugin(), getToken(), getUser(), hasValidSession(), isTokenExpired(), loadSessionAsync() (+4 more)
 
 ### Community 650 - "2. System Integration Test Matrix"
 Cohesion: 0.18
 Nodes (10): 1. Scope & Objective, 2. System Integration Test Matrix, 3. Test Execution Summary, Category 1: Hardware & Sensor Tests (`HW`), Category 2: Communication & Protocol Tests (`COM`), Category 3: Backend & Storage Tests (`BE`), Category 4: Reliability & Fault Recovery Tests (`REL`), Category 5: Power Consumption & Battery Life (`PWR`) (+2 more)
 
-### Community 651 - "audit_browser.cjs"
-Cohesion: 0.22
-Nodes (8): { app, BrowserWindow }, AUDIT_OUT_DIR, consoleLogs, errors, fs, path, RESOLUTIONS, SCREENS
+### Community 651 - "3. Screen-by-Screen Structural Comparison"
+Cohesion: 0.17
+Nodes (11): 1. Design Token Fidelity Matrix, 2. Shell & Window Chrome Comparison, 3.1 Dashboard Screen, 3.3 Devices Screen, 3.4 Alerts Screen, 3.5 History Screen, 3.6 Settings Screen, 3. Screen-by-Screen Structural Comparison (+3 more)
 
-### Community 652 - "Ponytail Execution & Task Tracking Report — Phase 03"
-Cohesion: 0.22
-Nodes (8): 1. Scope Boundaries & Tasks Completed, 2. Tracked Files Created, 3. Dependency Inventory, 5. Live Server Network Verification Evidence, 6. Errors Encountered & Resolved, 7. Technical Debt Ledger, Panorama Water Tank Monitor: HTTPS Project Initialization, Ponytail Execution & Task Tracking Report — Phase 03
+### Community 652 - "Complete Technical Audit Report: Water Level Indicator (WLI) HTTPS Migration"
+Cohesion: 0.15
+Nodes (12): 1. Executive Summary, 3.1 Existing Multi-Tier Architecture, 3.2 Target Hardware Architecture & Clean Separation of Concerns, 3. Existing Architecture vs. Target Hardware Architecture, 4.1 Exposed Legacy Ubidots Credential, 4.2 Legacy MQTT Coupling & Competing Telemetry, 4.3 Power Consumption & Battery Autonomy Trade-Off, 4. Problems Discovered During Audit & Remediation (+4 more)
 
 ### Community 653 - "limit_request_size"
-Cohesion: 0.22
-Nodes (6): limit_request_size(), 3. Authentication & Security Middleware, A. Authentication Header Validation (`backend/utils/security.py`), B. Gateway Payload Size Limiter (`backend/main.py`), C. Reverse Proxy Header Support, 6. Input Validation & Denial-of-Service (DoS) Protection
+Cohesion: 0.20
+Nodes (4): limit_request_size(), unhandled_exception_handler(), Phase 4: Implement Backend File Reception and JSON Extraction, Phase 4: Implement Backend File Reception and JSON Extraction
 
-### Community 654 - "verify_tank_count_electron.cjs"
-Cohesion: 0.22
-Nodes (8): child, childEnv, cp, ELECTRON_BIN, fs, OUTPUT_DIR, path, runnerPath
+### Community 654 - "Panorama Water Tank Monitor — Device Optimization Baseline"
+Cohesion: 0.17
+Nodes (11): 1. Target Hardware Profiles & Specifications, 2.1 Startup & Lifecycle Latency, 2.2 Memory Footprint (`dumpsys meminfo`), 2.3 CPU & Battery Impact (`dumpsys cpuinfo`), 2.4 Frame Rendering & Scrolling Performance (`dumpsys gfxinfo`), 2.5 Package & Storage Footprint, 2. Baseline Performance Measurements (Pre-Optimization), 3. Major Screen Visual Inventory & Baseline Screenshots (+3 more)
 
-### Community 655 - "verify_map_and_scale_electron.cjs"
-Cohesion: 0.22
-Nodes (8): { app, BrowserWindow }, fs, http, path, projectDir, pythonBin, SCREENSHOT_DIR, { spawn }
+### Community 655 - "verify_alert_lifecycle_e2e.cjs"
+Cohesion: 0.16
+Nodes (13): assert, BACKEND_DIR, cp, electronPath, fs, http, httpJson(), os (+5 more)
 
 ### Community 656 - "ModemDiagnostics"
 Cohesion: 0.15
 Nodes (13): ModemDiagnostics, assigned_ip, firmware_revision, imei, last_http_status, last_quectel_err, last_upload_latency_ms, operator_name (+5 more)
+
+### Community 657 - "Panorama Water Tank Monitor — Top Navigation Bar Permanent UI Fix Report"
+Cohesion: 0.15
+Nodes (12): 1.1 Visual Inspection Findings on Google Pixel 7 (Android 15 / API 35), 1. Problem Statement & Root Cause Analysis, 2.1 Three-Tier Responsive Toolbar Architecture, 2.2 Profile Dropdown Menu Redesign, 2.3 Android System Bar & Safe-Area Inset Enforcement, 2. Permanent Architectural Solution, 3. Physical & Emulated Verification Matrix, 4. Visual Proof Artifacts (+4 more)
 
 ### Community 658 - "2. Master Verification Test Matrix"
 Cohesion: 0.25
@@ -3120,21 +3237,21 @@ Nodes (7): 1. Executive Summary, 2. Master Verification Test Matrix, 3. Physical
 Cohesion: 0.18
 Nodes (11): cp, createServer(), DIST_DIR, electronPath, fs, http, LOCAL_ARTIFACTS_DIR, main() (+3 more)
 
-### Community 660 - "MockUartHal"
-Cohesion: 0.23
-Nodes (5): MockUartHal, current_tick_ms, driver, rx_queue, tx_history
+### Community 660 - "verify_https_lab_responsive.js"
+Cohesion: 0.18
+Nodes (9): ARTIFACTS_DIR, { chromium }, fs, HTTPS_SERVER_DIR, path, PYTHON_EXE, SCREENSHOTS_DIR, { spawn } (+1 more)
 
-### Community 661 - "Authoritative MQTT Telemetry Data Flow Specification"
-Cohesion: 0.25
-Nodes (7): 1. Architectural Architecture Overview, 2. MQTT Broker & Topic Configuration, 3.1 JSON Payload Definition, 3.2 Field Specifications, 3. Edge Telemetry Message Schema, 5. Data Freshness & Stale Transition Rules, Authoritative MQTT Telemetry Data Flow Specification
+### Community 661 - ".fetchTelemetryHistory"
+Cohesion: 0.20
+Nodes (8): TelemetryHistory, 1. Executive Summary, 2.1 Backend Operational Services & Database, 2.2 Frontend Components & Screens (11 Screens Cleaned), 2. Complete Inventory of Discovered Demo Sources & Removals, 3. Database State Reset, 4. Verification Conclusion, Demo Data Removal & Codebase Cleansing Audit Report
 
 ### Community 662 - "Authoritative Telemetry Data Contract"
 Cohesion: 0.25
 Nodes (7): 1. Specification Overview, 2. Field Specification Matrix, 3. Wire Payload JSON Schema Example, 4. Semantic State Handling Rules, 5. Backward & Forward Compatibility, Authoritative Telemetry Data Contract, GPS Coordinate Handling Rule
 
-### Community 663 - "test_users_and_rbac.py"
-Cohesion: 0.28
-Nodes (3): test_admin_password_policy_restrictions(), test_admin_user_management_lifecycle(), test_employee_rbac_access_restrictions()
+### Community 663 - "verify_map_and_scale_electron.cjs"
+Cohesion: 0.22
+Nodes (8): { app, BrowserWindow }, fs, http, path, projectDir, pythonBin, SCREENSHOT_DIR, { spawn }
 
 ### Community 664 - "NetworkStatus"
 Cohesion: 0.29
@@ -3144,97 +3261,405 @@ Nodes (7): NetworkStatus, NOT_REGISTERED, REGISTERED_HOME, REGISTERED_ROAMING, R
 Cohesion: 0.33
 Nodes (5): 1. Minimal Working Diff Principle, 2. Blast Radius & Scope Checks, 3. Debt & Shortcuts Ledger, 4. Skipped & Unchecked Items, Ponytail Audit Report — Phase 07 Cloud Deployment & Public HTTPS
 
-### Community 666 - "Graphify Audit Report — Phase 09 End-to-End System Integration"
-Cohesion: 0.29
-Nodes (6): 1. Audit Metadata, 2. Graph Evolution Metrics, 3. Extracted Phase 09 System Integration Topology, 4. Architectural Analysis & Isolation Verification, 5. Audit Conclusion, Graphify Audit Report — Phase 09 End-to-End System Integration
+### Community 666 - "Final Backend Architecture & API Operations Guide"
+Cohesion: 0.18
+Nodes (10): 1. Backend Architecture & Components, 2. Complete REST API Reference, 3. Authentication & Security Middleware, 4. Telemetry Storage & Duplicate Detection Engine, 5. HTTPS Laboratory Dashboard, 6. Cloud Deployment Instructions (Render), A. Authentication Header Validation (`backend/utils/security.py`), B. Gateway Payload Size Limiter (`backend/main.py`) (+2 more)
 
-### Community 667 - "httpx"
-Cohesion: 0.12
-Nodes (9): get_test_ssl_context(), test_test_a_valid_certificate_connection(), test_test_b_untrusted_ca_rejected(), test_test_d_hostname_mismatch_rejected(), test_test_e_missing_api_token(), test_test_f_invalid_api_token(), test_test_g_valid_authenticated_post(), authenticate() (+1 more)
-
-### Community 668 - "HTTPS Receiver — API Data Flow Specification"
-Cohesion: 0.29
-Nodes (6): 1. Overview, 2. Telemetry Ingestion Flow (Direct JSON POST), 3. Telemetry Ingestion Flow (Multipart File Upload), 4. Telemetry Query Flow (Latest & History), 5. Data Transformation Pipeline, HTTPS Receiver — API Data Flow Specification
+### Community 668 - "2. Comprehensive Module Inventory"
+Cohesion: 0.17
+Nodes (11): 1. Architectural Overview & Graphify Intelligence, 2. Comprehensive Module Inventory, 3. Initial Build & Verification Status, 4. Technical Debt & Focus Areas for Audit, A. Frontend Application (`apps/mobile/`), B. Mobile Integration Layer (`PanoramaWaterTank_Capacitor/`), Core God Nodes (Architectural Hubs), D. Dedicated HTTPS Receiver (`HTTPS_Server/`) (+3 more)
 
 ### Community 669 - "Final Backend Architecture & API Operations Guide"
+Cohesion: 0.18
+Nodes (10): 1. Backend Architecture & Components, 2. Complete REST API Reference, 3. Authentication & Security Middleware, 4. Telemetry Storage & Duplicate Detection Engine, 5. HTTPS Laboratory Dashboard, 6. Cloud Deployment Instructions (Render), A. Authentication Header Validation (`backend/utils/security.py`), B. Gateway Payload Size Limiter (`backend/main.py`) (+2 more)
+
+### Community 670 - "[2.0.0] - 2026-11-09"
+Cohesion: 0.18
+Nodes (10): [1.0.0] - Legacy Reference, [2.0.0] - 2026-11-09, [2.2.0] - 2026-11-17, Added, Added, Changelog, Fixed, Security (+2 more)
+
+### Community 671 - "get_resolved_tls_paths"
 Cohesion: 0.29
-Nodes (6): 1. Backend Architecture & Components, 2. Complete REST API Reference, 4. Telemetry Storage & Duplicate Detection Engine, 5. HTTPS Laboratory Dashboard, 6. Cloud Deployment Instructions (Render), Final Backend Architecture & API Operations Guide
+Nodes (6): 1. Audit Metadata, 2. Graph Evolution Metrics, 3. Extracted Phase 06 Subsystem Topology, 4. Architectural Analysis & Verification, 5. Audit Conclusion, Graphify Audit Report — Phase 06 TLS/HTTPS Implementation
 
-### Community 670 - "Graphify Audit Report — Phase 09 End-to-End System Integration"
-Cohesion: 0.29
-Nodes (6): 1. Audit Metadata, 2. Graph Evolution Metrics, 3. Extracted Phase 09 System Integration Topology, 4. Architectural Analysis & Isolation Verification, 5. Audit Conclusion, Graphify Audit Report — Phase 09 End-to-End System Integration
+### Community 672 - "Final Backend Architecture & API Operations Guide"
+Cohesion: 0.18
+Nodes (10): 1. Backend Architecture & Components, 2. Complete REST API Reference, 3. Authentication & Security Middleware, 4. Telemetry Storage & Duplicate Detection Engine, 5. HTTPS Laboratory Dashboard, 6. Cloud Deployment Instructions (Render), A. Authentication Header Validation (`backend/utils/security.py`), B. Gateway Payload Size Limiter (`backend/main.py`) (+2 more)
 
-### Community 671 - "Graphify Audit Report — Phase 06 TLS/HTTPS Implementation"
-Cohesion: 0.33
-Nodes (5): 1. Audit Metadata, 2. Graph Evolution Metrics, 3. Extracted Phase 06 Subsystem Topology, 5. Audit Conclusion, Graphify Audit Report — Phase 06 TLS/HTTPS Implementation
-
-### Community 672 - "Graphify Audit Report — Phase 08 EC200U LTE Modem Integration & HTTPS Communication"
-Cohesion: 0.29
-Nodes (6): 1. Audit Metadata, 2. Graph Evolution Metrics, 3. Extracted Phase 08 Cellular Subsystem Topology, 4. Architectural Analysis & Isolation Verification, 5. Audit Conclusion, Graphify Audit Report — Phase 08 EC200U LTE Modem Integration & HTTPS Communication
-
-### Community 673 - "Graphify Audit Report — Phase 07 Cloud Deployment & Production HTTPS"
-Cohesion: 0.33
-Nodes (5): 1. Audit Metadata, 2. Graph Evolution Metrics, 3. Extracted Phase 07 Subsystem Topology, 5. Audit Conclusion, Graphify Audit Report — Phase 07 Cloud Deployment & Production HTTPS
+### Community 673 - "Panorama Water Tank Monitor — Production Deployment Guide"
+Cohesion: 0.20
+Nodes (9): 1. Architecture Overview, 2. GitHub Pages Deployment (Automated via GitHub Actions), 3. Render Backend Deployment (`HTTPS_Server`), 4. Postman & EC200U Integration Setup, 5. Local Development Quickstart, 6. Post-Deployment Verification Checklist, Panorama Water Tank Monitor — Production Deployment Guide, Required Environment Variables (Set in Render Dashboard — Never Commit Secrets) (+1 more)
 
 ### Community 674 - "Ponytail Audit Report — Phase 08 EC200U LTE Modem Integration"
 Cohesion: 0.33
 Nodes (5): 1. Minimal Working Diff Principle, 2. Blast Radius & Scope Checks, 3. Debt & Shortcuts Ledger, 4. Skipped & Unchecked Items, Ponytail Audit Report — Phase 08 EC200U LTE Modem Integration
 
-### Community 675 - "2. Requirement Verification Matrix"
-Cohesion: 0.33
-Nodes (5): 1. Automated Test Suite Execution, 2. Requirement Verification Matrix, 3. Files Modified & Built, 4. Live Runtime Verification, Train Management Dashboard Test & Verification Report
+### Community 675 - "Authoritative MQTT Telemetry Data Flow Specification"
+Cohesion: 0.22
+Nodes (8): 1. Architectural Architecture Overview, 2. MQTT Broker & Topic Configuration, 3.1 JSON Payload Definition, 3.2 Field Specifications, 3. Edge Telemetry Message Schema, 4. Telemetry Validation & Rejection Pipeline, 5. Data Freshness & Stale Transition Rules, Authoritative MQTT Telemetry Data Flow Specification
 
 ### Community 676 - "Ponytail Audit Report — Phase 08 EC200U LTE Modem Integration"
 Cohesion: 0.33
 Nodes (5): 1. Minimal Working Diff Principle, 2. Blast Radius & Scope Checks, 3. Debt & Shortcuts Ledger, 4. Skipped & Unchecked Items, Ponytail Audit Report — Phase 08 EC200U LTE Modem Integration
 
-### Community 677 - "Header.tsx"
-Cohesion: 0.16
-Nodes (11): Header(), SearchResultItem, InstallAppModal(), InstallAppModalProps, APP_DISTRIBUTION, AppDistributionConfig, isNativeCapacitorApp(), NativeNetworkStatus (+3 more)
+### Community 678 - "verify_cross_client_sync.cjs"
+Cohesion: 0.27
+Nodes (5): http, requestJson(), runVerification(), SimulatedClient, WS_BASE
 
-### Community 679 - "e0"
+### Community 679 - "verify_responsive_matrix.cjs"
+Cohesion: 0.22
+Nodes (10): { app, BrowserWindow }, fs, loginAsAdmin(), os, path, saveShot(), sleep(), userDataPath (+2 more)
+
+### Community 680 - "run_audit_suite.cjs"
+Cohesion: 0.33
+Nodes (9): { app, BrowserWindow }, capture(), fs, log(), path, runAudit(), SCREENSHOT_DIR, sleep() (+1 more)
+
+### Community 681 - "3. Native Lifecycle & System Bar Integration"
+Cohesion: 0.18
+Nodes (10): 1. Native Platform Specification, 2. Android Manifest & Permissions Analysis, 3.1 Android 15 (API 35) Edge-to-Edge Compliance, 3.2 Hardware Back Button Handling, 3.3 Background Execution & Memory Suspension, 3. Native Lifecycle & System Bar Integration, Configuration Analysis, Installed Native Capacitor Plugins (+2 more)
+
+### Community 682 - "verify_water_tank_status_cdp.cjs"
+Cohesion: 0.24
+Nodes (8): { execSync }, fs, getDevToolsPages(), http, main(), path, ROOT_DIR, runCDP()
+
+### Community 683 - "alertNotificationService.ts"
+Cohesion: 0.11
+Nodes (19): ActiveAlertBanner(), AlertToastBanner(), AlertToastBannerProps, ALERT_REMINDER_INTERVAL_MS, ALERT_REMINDER_INTERVAL_SECONDS, NOTIFICATION_CONFIG, ReminderMode, AlertsChangeListener (+11 more)
+
+### Community 684 - "2. Multi-User Scenario Analysis"
+Cohesion: 0.20
+Nodes (9): 1. Synchronization Architecture, 2. Multi-User Scenario Analysis, 3. High-Priority Synchronization Vulnerabilities, Finding SYNC-01: Non-Atomic Full-Snapshot Race Condition (Severity: P1 - High), Finding SYNC-02: Echo-Back Conflict on Rapid Network Transitions (Severity: P2 - Medium), Phase 5: Capacitor Multi-User Synchronization Audit, Scenario 1: User A Adds a Train -> User B Observes Train, Scenario 2: User B Edits a Train -> User A Observes Update (+1 more)
+
+### Community 685 - "verify_tank_count_electron.cjs"
+Cohesion: 0.22
+Nodes (8): child, childEnv, cp, ELECTRON_BIN, fs, OUTPUT_DIR, path, runnerPath
+
+### Community 686 - "Ponytail Lazy Senior Developer Report — Phase 04"
+Cohesion: 0.25
+Nodes (7): 1. Context & Scope Verification, 2. Implementation Summary, 3. Debt Ledger Scan, 4. Deliberate Deferrals & Upgrade Ceilings, 5. What Was Skipped / Not Checked & Operational Risks, Ponytail Lazy Senior Developer Report — Phase 04, Scan Result:
+
+### Community 687 - "Authoritative Telemetry Field Mapping: MQTT to HTTPS Migration"
+Cohesion: 0.25
+Nodes (7): 1. Overview & Data Consistency Principles, 2. Complete Field-by-Field Mapping Table (Section 8), 3.1 Legacy MQTT Payload Example, 3.2 Standardized Modern HTTPS JSON Telemetry Document, 3. Comparison of Legacy MQTT Payload vs. Modern HTTPS JSON Payload, 4. Ingestion & Preservation Guarantee, Authoritative Telemetry Field Mapping: MQTT to HTTPS Migration
+
+### Community 688 - "Panorama SCADA — Complete Project Engineering Audit"
+Cohesion: 0.25
+Nodes (7): 1. Executive Summary, 2. Tool Verification & Execution Record, 3. Subsystem Audit Summary, 4. Key Metrics & Verification Status, A. Frontend Web & Mobile (React 18 + TypeScript + Vite/esbuild), B. Backend REST API & WebSockets (FastAPI + Python 3.12), Panorama SCADA — Complete Project Engineering Audit
+
+### Community 689 - "2. Master Verification Test Matrix"
+Cohesion: 0.25
+Nodes (7): 1. Executive Summary, 2. Master Verification Test Matrix, 3. Physical Hardware Verification Status, A. Firmware Subsystem Tests (Compiled with `g++ -std=c++17`), B. Cloud Backend & API Integration Tests (`pytest tests -v`), C. Protocol & AT Command Simulation Tests (`tools/test_ec200u_live.py`), Final Test Execution & Quality Certification Report
+
+### Community 690 - "Authoritative Telemetry Field Mapping: MQTT to HTTPS Migration"
+Cohesion: 0.25
+Nodes (7): 1. Overview & Data Consistency Principles, 2. Complete Field-by-Field Mapping Table (Section 8), 3.1 Legacy MQTT Payload Example, 3.2 Standardized Modern HTTPS JSON Telemetry Document, 3. Comparison of Legacy MQTT Payload vs. Modern HTTPS JSON Payload, 4. Ingestion & Preservation Guarantee, Authoritative Telemetry Field Mapping: MQTT to HTTPS Migration
+
+### Community 691 - "2. Master Verification Test Matrix"
+Cohesion: 0.25
+Nodes (7): 1. Executive Summary, 2. Master Verification Test Matrix, 3. Physical Hardware Verification Status, A. Firmware Subsystem Tests (Compiled with `g++ -std=c++17`), B. Cloud Backend & API Integration Tests (`pytest tests -v`), C. Protocol & AT Command Simulation Tests (`tools/test_ec200u_live.py`), Final Test Execution & Quality Certification Report
+
+### Community 692 - "Graphify Audit Report — Phase 10 Final Security Audit & Handover"
+Cohesion: 0.29
+Nodes (6): 1. Audit Metadata, 2. Graph Evolution Across All 10 Project Phases, 3. Subsystem Architectural Dependency Graph, 4. Architectural Conformance & Cleanliness Audit, 5. Audit Conclusion, Graphify Audit Report — Phase 10 Final Security Audit & Handover
+
+### Community 694 - "3. Screen-by-Screen Implementation Breakdown"
+Cohesion: 0.08
+Nodes (22): [2.0.0] - 2026-11-19, [2.1.0] - 2026-11-19, Added, Changed, Fixed, Fixed, Panorama Water Tank Monitor — Changelog, Performance & Optimization (+14 more)
+
+### Community 695 - "Panorama Water Tank Monitor — Verification & Test Results"
+Cohesion: 0.29
+Nodes (6): 1. Automated Backend Test Suite (`HTTPS_Server/tests/`), 2. Live HTTP, Postman Payload & SQLite Persistence Verification (Local Uvicorn), 3. Multi-Browser Synchronization & Responsive Matrix (Local E2E — 4 Independent Browsers), 4. Frontend Build & JavaScript Validation, 5. Live Production Verification Status (Post-Merge), Panorama Water Tank Monitor — Verification & Test Results
+
+### Community 696 - "Graphify Audit Report — Phase 10 Final Security Audit & Handover"
+Cohesion: 0.29
+Nodes (6): 1. Audit Metadata, 2. Graph Evolution Across All 10 Project Phases, 3. Subsystem Architectural Dependency Graph, 4. Architectural Conformance & Cleanliness Audit, 5. Audit Conclusion, Graphify Audit Report — Phase 10 Final Security Audit & Handover
+
+### Community 697 - "Ponytail Audit Report — Phase 10 Final Hardening & Handover"
+Cohesion: 0.33
+Nodes (5): 1. Minimal Working Diff Principle, 2. Blast Radius & Scope Checks, 3. Debt & Shortcuts Ledger, 4. Skipped & Unchecked Items, Ponytail Audit Report — Phase 10 Final Hardening & Handover
+
+### Community 698 - "verify_raw_data_diagnostics.js"
+Cohesion: 0.20
+Nodes (8): ARTIFACTS_DIR, { chromium }, DIST_DIR, fs, http, MIME, path, SCREENSHOTS_DIR
+
+### Community 699 - "Panorama Water Tank Monitor (React 18 / HMI SPA)"
+Cohesion: 0.33
+Nodes (5): 08. Frontend Security & Client-Side Hardening, 1. Cross-Site Scripting (XSS) Defenses, 2. Client-Side Storage & Sensitive Data Handling, 3. Clickjacking & Frame Sandboxing, Panorama Water Tank Monitor (React 18 / HMI SPA)
+
+### Community 701 - "Ponytail Audit Report — Phase 10 Final Hardening & Handover"
+Cohesion: 0.33
+Nodes (5): 1. Minimal Working Diff Principle, 2. Blast Radius & Scope Checks, 3. Debt & Shortcuts Ledger, 4. Skipped & Unchecked Items, Ponytail Audit Report — Phase 10 Final Hardening & Handover
+
+### Community 702 - "Panorama Water Tank Monitor — Performance Measurement Report"
 Cohesion: 0.40
-Nodes (5): e0(), Fd(), Ga(), gf(), zy()
+Nodes (4): 1. Backend & SQLite Performance (`HTTPS_Server` Local Uvicorn Benchmark), 2. Frontend Build, Artifact & Repository Size Measurements, 3. Browser Runtime & Error Measurements (Headless Chrome 1366×768), Panorama Water Tank Monitor — Performance Measurement Report
 
-### Community 682 - "get_resolved_tls_paths"
+### Community 703 - "cdp_cli.cjs"
+Cohesion: 0.29
+Nodes (9): cp, evalJs(), fs, getWsUrl(), http, main(), path, takeScreenshot() (+1 more)
+
+### Community 704 - "TelemetryPayload"
+Cohesion: 0.20
+Nodes (4): 2. Implementation Audit Table (Section 2.1), TelemetryPayload, Mechanics:, 2. Implementation Audit Table (Section 2.1)
+
+### Community 705 - "verify_coach_fleet_and_registration_cdp.cjs"
+Cohesion: 0.25
+Nodes (6): evaluate(), { execSync }, fs, http, path, send()
+
+### Community 707 - "showNotification"
+Cohesion: 0.52
+Nodes (7): emitClick(), emitPermissionChange(), getPermission(), isSupported(), registerServiceWorker(), requestPermission(), showNotification()
+
+### Community 708 - "Graphify Audit Report — Phase 09 End-to-End System Integration"
+Cohesion: 0.29
+Nodes (6): 1. Audit Metadata, 2. Graph Evolution Metrics, 3. Extracted Phase 09 System Integration Topology, 4. Architectural Analysis & Isolation Verification, 5. Audit Conclusion, Graphify Audit Report — Phase 09 End-to-End System Integration
+
+### Community 712 - "Ponytail Audit Report — Phase 09 End-to-End System Integration"
+Cohesion: 0.33
+Nodes (5): 1. Minimal Working Diff Principle, 2. Blast Radius & Scope Checks, 3. Debt & Shortcuts Ledger, 4. Skipped & Unchecked Items, Ponytail Audit Report — Phase 09 End-to-End System Integration
+
+### Community 713 - "Panorama Water Tank Monitor — API & Protocol Integration Report"
+Cohesion: 0.20
+Nodes (8): 1. Network & Protocol Architecture Overview, 2. REST API Endpoint Inventory & Implementation, 3.1 Connection Specification, 3.2 Telemetry Packet Schema, 3.3 Telemetry Field Dictionary, 3. MQTT-over-TLS Telemetry Protocol, 4. Offline Resilience & SQLite Data Synchronization, Panorama Water Tank Monitor — API & Protocol Integration Report
+
+### Community 714 - "Panorama Water Tank Monitor — Graphify Codebase Architecture & Dependency Report"
+Cohesion: 0.20
+Nodes (9): 1. Executive Summary, 2. Global Graph Statistics, 3. High-Centrality Components ("God Nodes") Analysis, 4.1 Zero Circular Dependencies, 4.2 QML Binding Efficiency & Memory Optimization, 4. Key Architectural Findings & Validations, 5. Community Cluster Topology, 6. Conclusion (+1 more)
+
+### Community 715 - "Phase 10: Capacitor Error Handling and Reliability Audit"
+Cohesion: 0.20
+Nodes (8): 1.1 UI Fault Isolation: `ErrorBoundary.tsx`, 1.2 Telemetry Ingestion Resilience: `classifyMqttPayload()`, 1. Error Handling Infrastructure, 2. Network Transition & Fault Tolerance Matrix, 3. Reliability Weaknesses & Recommendations, Finding REL-01: Silent Fallback Masks Real Network Faults from Operators (Severity: P2 - Medium), Finding REL-02: Missing Service Worker in Native Capacitor WebView (Severity: P4 - Informational), Phase 10: Capacitor Error Handling and Reliability Audit
+
+### Community 716 - "3. Request & Response Handling Deficiencies"
+Cohesion: 0.22
+Nodes (8): 1. API Architecture & Endpoint Inventory, 2.2 Impact on Client Applications, 2. Root Cause Analysis: The Render Service Mismatch, 3.1 Authorization Header Propagation, 3.2 Timeout & Retry Mechanisms, 3.3 CORS Configuration, 3. Request & Response Handling Deficiencies, Phase 3: Capacitor Backend and API Integration Audit
+
+### Community 717 - "1. Audit Iterations Summary"
 Cohesion: 0.40
-Nodes (3): get_resolved_tls_paths(), 4. Architectural Analysis & Verification, 4. Architectural Analysis & Isolation Verification
+Nodes (4): 1. Audit Iterations Summary, 2. Category Review, Attempt 2: Final Verification, UNSLOP CODE QUALITY AUDIT REPORT
 
-### Community 683 - "UI Component Inventory & Structural Breakdown"
+### Community 719 - "capture_scroll_screenshots.cjs"
+Cohesion: 0.29
+Nodes (6): evaluate(), { execSync }, fs, http, path, sendCommand()
+
+### Community 720 - "Panorama Water Tank Monitor — Dual-Device Performance Optimization Report"
+Cohesion: 0.22
+Nodes (8): 1. Executive Summary & Comparative Matrix, 2. Root Cause Analysis of Pre-Optimization Bottlenecks, 3.1 Adaptive Hardware Profiling (`deviceProfileService.ts` & `DisplayPerformanceManager.cpp`), 3.2 Decoupled Water Visualization, 3.3 Telemetry Micro-Batching & Buffer Bounding, 3. Implemented Architectural Optimizations, 4. Visual Identity Preservation, Panorama Water Tank Monitor — Dual-Device Performance Optimization Report
+
+### Community 721 - "Panorama Water Tank Monitor — Dual-Device Test Results"
+Cohesion: 0.22
+Nodes (8): 1. Test Targets & Hardware Profiles, 2. Quantitative Performance Benchmarks, 3. Screen-by-Screen Functional Verification Checklist, 4.1 Portrait Orientation, 4.2 Landscape Orientation, 4. Visual Layout Integrity Verification, 5. Summary Conclusion, Panorama Water Tank Monitor — Dual-Device Test Results
+
+### Community 722 - "Panorama Water Tank Monitor — Memory Footprint & Retention Analysis"
+Cohesion: 0.22
+Nodes (8): 1.1 Device 1: Google Pixel 7 (Android 15, API 35), 1.2 Device 2: Low-Resource Android Device (Android 11, API 30), 1. Memory Profile Breakdown, 2.1 Unbounded Telemetry Accumulation (Resolved), 2.2 Chart Data Decimation & Ring Buffering (`LevelTrendCard.tsx`), 2. In-Memory Data Buffer Bounding, 3. Background Memory Retention & Trim Lifecycle, Panorama Water Tank Monitor — Memory Footprint & Retention Analysis
+
+### Community 723 - "build"
+Cohesion: 0.22
+Nodes (9): build, appId, copyright, directories, extraResources, files, productName, buildResources (+1 more)
+
+### Community 724 - "seed_initial_accounts"
+Cohesion: 0.09
+Nodes (21): seed_initial_accounts(), _sync_schema_migration(), Defensive Migration & Seeding Note, 4. Database Migrations & Initial Account Seeding, 2.1 Backend Central Nodes, 1. PERSISTENCE ARCHITECTURE & ZERO-TTL VERIFICATION, 2. DELETION PROTECTION & AUDIT TRAIL, 3. TRANSACTIONAL OUTBOX PATTERN & IDENTIFIED DEFECT (+13 more)
+
+### Community 726 - "2. API 30 (Android 11) vs API 35 (Android 15) Divergence & Adaptations"
+Cohesion: 0.25
+Nodes (7): 1. SDK Configuration & Manifest Settings, 2.1 Display Density & Window Insets, 2.2 Permissions & Security, 2.3 Activity Lifecycle & Memory Trim Handling, 2. API 30 (Android 11) vs API 35 (Android 15) Divergence & Adaptations, 3. Platform Verification Summary, Panorama Water Tank Monitor — Android Compatibility & Platform Report
+
+### Community 727 - "capture_settings_no_network.cjs"
+Cohesion: 0.29
+Nodes (6): evaluate(), { execSync }, fs, http, path, sendCommand()
+
+### Community 728 - "typing"
+Cohesion: 0.02
+Nodes (42): database_health_check(), health_check(), mqtt_health_check(), system_health_check(), get_all_latest_topics(), get_latest_topic_payload(), IngestMqttMessageRequest, list_known_topics() (+34 more)
+
+### Community 729 - "Graphify Codebase Architecture & Topological Audit"
+Cohesion: 0.29
+Nodes (6): 1. Executive Summary & Graph Metrics, 2. Architectural Layering & Subsystem Topology, 3. High-Centrality Hub Nodes & Risk Analysis, 5. Artifacts Generated, Graphify Codebase Architecture & Topological Audit, Quantitative Graph Metrics
+
+### Community 730 - "Graphify Audit Report — Phase 07 Cloud Deployment & Production HTTPS"
+Cohesion: 0.18
+Nodes (8): get_resolved_tls_paths(), 1. Audit Metadata, 2. Graph Evolution Metrics, 3. Extracted Phase 07 Subsystem Topology, 4. Architectural Analysis & Isolation Verification, 5. Audit Conclusion, Graphify Audit Report — Phase 07 Cloud Deployment & Production HTTPS, 3. Cryptographic Private Key & Trust Store Review
+
+### Community 731 - "Ponytail Lazy Senior Developer Report — Phase 06"
+Cohesion: 0.25
+Nodes (7): 1. Context & Scope Verification, 2. Implementation Summary, 3. Debt Ledger Scan, 4. Deliberate Deferrals & Upgrade Ceilings, 5. What Was Skipped / Not Checked & Operational Risks, Ponytail Lazy Senior Developer Report — Phase 06, Scan Result:
+
+### Community 732 - "2. Classified Security Vulnerability Catalog"
+Cohesion: 0.22
+Nodes (8): 1. Executive Security Evaluation, 2. Classified Security Vulnerability Catalog, 3. Capacitor Bridge & WebView Security Assessment, Finding SEC-01: Unauthenticated Remote State Mutation Endpoint (Severity: P0 - Critical), Finding SEC-02: Hardcoded Production Test Login Feature Flag (Severity: P0 - Critical), Finding SEC-03: User CA Certificates Permitted in Base Network Config (Severity: P2 - Medium), Finding SEC-04: Android Application Backup Enabled in Manifest (Severity: P2 - Medium), Phase 6: Capacitor Security Audit
+
+### Community 733 - "Ponytail Audit Report — Phase 09 End-to-End System Integration"
+Cohesion: 0.33
+Nodes (5): 1. Minimal Working Diff Principle, 2. Blast Radius & Scope Checks, 3. Debt & Shortcuts Ledger, 4. Skipped & Unchecked Items, Ponytail Audit Report — Phase 09 End-to-End System Integration
+
+### Community 734 - "3. Module-by-Module UI Evaluation"
+Cohesion: 0.22
+Nodes (8): 1. Visual Design & Industrial SCADA Compliance, 2. Multi-Viewport Responsive Matrix, 3.1 Global Navigation & Header (`Header.tsx` & `Sidebar.tsx`), 3.2 Dashboard Screen (`EmployeeDashboard.tsx`), 3.3 Raw Data Monitor (`MqttMonitorScreen.tsx`), 3.4 Form & Dialog Touch Targets, 3. Module-by-Module UI Evaluation, Phase 7: Capacitor UI/UX and Responsiveness Audit
+
+### Community 735 - "Engineering Technical Audit: Executive Summary"
+Cohesion: 0.22
+Nodes (8): 1. Overall Application Health Assessment, 2. Summary of Findings by Severity, 3. High-Priority Critical Findings, 4. Key Metrics Summary, 5. Audit Deliverable Index, Engineering Technical Audit: Executive Summary, Panorama Water Tank Monitor — Capacitor Mobile Application, Readiness Rating: **CONDITIONAL / PRE-PRODUCTION**
+
+### Community 736 - "BaseTrainProvider"
+Cohesion: 0.13
+Nodes (4): BaseTrainProvider, IndianRailApiProvider, LocalExpressDatabaseAdapter, RapidApiIrctcProvider
+
+### Community 737 - "test_multidevice_sync.cjs"
+Cohesion: 0.28
+Nodes (7): { chromium }, fs, loginAsAdmin(), parseArgs(), path, REPORT_DIR, runMultiDeviceSyncAudit()
+
+### Community 738 - "LogLevel"
+Cohesion: 0.29
+Nodes (7): LogLevel, Critical, Debug, Error, Info, Trace, Warning
+
+### Community 739 - "2. Build Pipeline Deficiencies & Findings"
+Cohesion: 0.25
+Nodes (7): 1. Build Pipeline Architecture, 2. Build Pipeline Deficiencies & Findings, 3. Build Performance Benchmark, Finding BUILD-01: Missing Release Signing Configuration (Severity: P2 - Medium), Finding BUILD-02: Proguard / R8 Bytecode Obfuscation Disabled (Severity: P2 - Medium), Finding BUILD-03: Transitive Vulnerabilities in Tooling Dependencies (Severity: P3 - Low), Phase 11: Capacitor Build and Deployment Audit
+
+### Community 740 - "3. Storage Vulnerabilities & Inconsistencies"
+Cohesion: 0.25
+Nodes (7): 1. Storage Architecture Overview, 2. Data Persistence Categorization, 3.1 Over-Reliance on `localStorage` in Native Android, 3.2 Data Redundancy & Serialization Overhead, 3.3 Foreign Key & Referential Integrity Gaps, 3. Storage Vulnerabilities & Inconsistencies, Phase 4: Capacitor Database and Data Persistence Audit
+
+### Community 741 - "3. Coupling Analysis for the Capacitor Mobile App"
+Cohesion: 0.25
+Nodes (7): 1. Graph Statistics & Community Topology, 2. Identified God Nodes & Architectural Hubs, 3.1 `AppContext.tsx` as the Central Hub, 3.2 Monolithic Communities, 3.3 Graph Recommendations, 3. Coupling Analysis for the Capacitor Mobile App, Graphify Codebase Intelligence & Dependency Analysis
+
+### Community 742 - "capture_flash_screenshots.cjs"
+Cohesion: 0.43
+Nodes (6): createCdpClient(), { execSync }, getWsUrl(), http, run(), sleep()
+
+### Community 743 - "nsis"
+Cohesion: 0.25
+Nodes (8): nsis, allowToChangeInstallationDirectory, artifactName, createDesktopShortcut, createStartMenuShortcut, oneClick, perMachine, shortcutName
+
+### Community 744 - "2. Key Unslop Findings"
+Cohesion: 0.22
+Nodes (8): 1. Code Quality Overview, 2.1 Redundant Single-Line Component Wrappers, 2.2 Dead Component Code, 2.3 Field Naming Inconsistencies & Dual Properties, 2.4 Over-Engineered Triple-Fallback Synchronization, 2.5 Monolithic Inline Styling, 2. Key Unslop Findings, Unslop Code Quality & Architecture Review
+
+### Community 745 - "scripts"
+Cohesion: 0.25
+Nodes (8): scripts, build, dev, electron, package:all, package:dir, preview, start
+
+### Community 746 - "Panorama Water Tank Monitor – NextGen: Final Android Flash Report"
+Cohesion: 0.25
+Nodes (7): 1. Production Package Metadata & Integrity, 2. Flash Execution & Device Installation, 3. End-to-End Runtime Verification on Physical Hardware Profiles, 4. Final Flash Status, A. Google Pixel 7 Emulator (`emulator-5556`, Android 15 API 35), B. Low-Resource Android Emulator (`emulator-5554`, Android 11 API 30, 360dp × 640dp), Panorama Water Tank Monitor – NextGen: Final Android Flash Report
+
+### Community 747 - "Panorama Water Tank Monitor – NextGen: API & Security Audit Report"
+Cohesion: 0.29
+Nodes (6): 1. Authentication & Session Security Audit, 2. Role-Based Access Control (RBAC) Matrix, 3. Threat Modeling & Vulnerability Defenses, 4. HTTPS Ingestion Server Security, Panorama Water Tank Monitor – NextGen: API & Security Audit Report, Token Architecture
+
+### Community 748 - "Panorama Water Tank Monitor – NextGen: Capacitor Android Audit Report"
+Cohesion: 0.29
+Nodes (6): 1. Native Android Configuration & Architecture, 2. Multi-Device Performance Profiles, 3. Hardware Back Button Handling, A. AndroidManifest.xml, B. MainActivity.java & System Window Insets, Panorama Water Tank Monitor – NextGen: Capacitor Android Audit Report
+
+### Community 749 - "3. Performance Findings & Bottlenecks"
+Cohesion: 0.29
+Nodes (6): 1. Dual-Device Profile Comparison, 2. Resource Consumption Benchmark, 3. Performance Findings & Bottlenecks, Finding PERF-01: Severe APK Size Bloat (78.5 MB) (Severity: P1 - High), Finding PERF-03: DOM Map Node Lifecycle during Rapid Screen Switching (Severity: P3 - Low), Phase 9: Capacitor Performance and Resource Audit
+
+### Community 750 - "Panorama Water Tank Monitor – NextGen: MQTT & Telemetry Audit Report"
+Cohesion: 0.29
+Nodes (6): 1. End-to-End Telematics Data Pipeline, 2. MQTT Broker & Connection Architecture, 3. Telemetry Payload Schema & Data Integrity, Panorama Water Tank Monitor – NextGen: MQTT & Telemetry Audit Report, Robustness & Resilience Features, Validation & Outlier Handling
+
+### Community 751 - "._seed_baseline_if_empty"
+Cohesion: 0.14
+Nodes (3): 8. MAINTENANCE & OPERATIONAL GUIDELINES, _default_db_path(), VersionConflictError
+
+### Community 752 - "verify_settings_no_network.cjs"
+Cohesion: 0.33
+Nodes (5): evaluate(), fs, http, path, sendCommand()
+
+### Community 753 - "AUTHENTICATION FLOW AUDIT: PANORAMA SCADA MOBILE APPLICATION"
+Cohesion: 0.33
+Nodes (5): 1. Architectural Overview, 2. Authentication Lifecycle Analysis, 4. Security & Hardening Assessment, AUTHENTICATION FLOW AUDIT: PANORAMA SCADA MOBILE APPLICATION, Core Authentication Subsystems
+
+### Community 754 - "2. Detailed Test Case Verification"
+Cohesion: 0.33
+Nodes (5): 1. Test Execution Summary, 2. Detailed Test Case Verification, A. Backend Pytest Suites (161 Tests), B. Android Runtime Verification via Chrome DevTools Protocol, Panorama Water Tank Monitor – NextGen: Full-Stack Regression Test Report
+
+### Community 755 - "UI Component Inventory & Structural Breakdown"
 Cohesion: 0.40
 Nodes (4): 1. Shell & Navigation Components, 2. Page Components, 4. Authentication Views, UI Component Inventory & Structural Breakdown
 
-### Community 684 - "Panorama Water Tank Monitor (Electron Native HMI)"
-Cohesion: 0.50
-Nodes (3): 13. Desktop SCADA & Electron Security Audit, 1. Electron Security Checklist & Posture, Panorama Water Tank Monitor (Electron Native HMI)
-
-### Community 685 - "Panorama SCADA — Console Error Baseline & Discovery Ledger"
+### Community 756 - "Panorama SCADA — Console Error Baseline & Discovery Ledger"
 Cohesion: 0.50
 Nodes (3): 1. Executive Summary, 3. Baseline vs Current Verification Metrics, Panorama SCADA — Console Error Baseline & Discovery Ledger
 
-### Community 686 - "2. Migration Phases"
+### Community 757 - "6. MQTT Integration & Telemetry Audit"
+Cohesion: 0.67
+Nodes (3): 6.1. Architecture & Protocol, 6.2. Critical MQTT Storm Bug & Resolution, 6. MQTT Integration & Telemetry Audit
+
+### Community 758 - "Phase 12: Capacitor Test Coverage and Quality Assurance Audit"
+Cohesion: 0.33
+Nodes (5): 1. Automated Test Coverage Overview, 2. Analysis of Existing Ad-Hoc Scripts, 3. High-Priority Testing Gaps, Phase 12: Capacitor Test Coverage and Quality Assurance Audit, Test Suite Inventory
+
+### Community 759 - "Extreme Functional Test Report"
+Cohesion: 0.22
+Nodes (8): 1. Objective & Scope, 2. Complete Boundary Matrix Results, 3.1 Cylindrical Geometry Parity, 3.2 Dynamic Downsampling & Data Integrity, 3. Mathematical Consistency Analysis, 4. Conclusion, Extreme Functional Test Report, Standard Cylindrical Tank Test Baseline:
+
+### Community 760 - "8. Performance Audit"
+Cohesion: 0.67
+Nodes (3): 8.1. Runtime Performance Metrics, 8.2. Network & Asset Optimization, 8. Performance Audit
+
+### Community 762 - "win"
+Cohesion: 0.33
+Nodes (6): win, artifactName, executableName, icon, requestedExecutionLevel, target
+
+### Community 764 - "Panorama Water Tank Monitor — Browser Console Error Audit"
+Cohesion: 0.33
+Nodes (5): 2. Centralized Error Logger Architecture, 3. Real Hardware Telemetry Integrity, Executive Summary, Key Features:, Panorama Water Tank Monitor — Browser Console Error Audit
+
+### Community 765 - "2. Requirement Verification Matrix"
+Cohesion: 0.40
+Nodes (4): 1. Automated Test Suite Execution, 3. Files Modified & Built, 4. Live Runtime Verification, Train Management Dashboard Test & Verification Report
+
+### Community 766 - "Qt to NextGen UI/UX Mapping Matrix"
 Cohesion: 0.50
-Nodes (3): 1. Migration Protocol & Principles, 2. Migration Phases, Migration Plan & Execution Strategy
+Nodes (3): 1. Component & Screen Mapping Table, 2. Implementation Execution Plan, Qt to NextGen UI/UX Mapping Matrix
+
+### Community 767 - "Panorama Water Tank Monitor (WLI Engineering Audit)"
+Cohesion: 0.40
+Nodes (4): 15. Code Quality, Dead Code & Engineering Cleanup (Unslop Principles), 1. Unslop Audit Findings & Redundancy Elimination, 2. Dead Code & Duplicate Logic Catalog, Panorama Water Tank Monitor (WLI Engineering Audit)
+
+### Community 768 - "3. Tool Usage & Verification"
+Cohesion: 0.50
+Nodes (4): 3.1. Ponytail (Lazy Senior Dev Mode), 3.2. Graphify Knowledge Graph, 3.3. Unslop Code Cleanliness, 3. Tool Usage & Verification
+
+### Community 769 - "Responsive Layout & Viewport Verification Report"
+Cohesion: 0.50
+Nodes (3): 1. Viewport Test Matrix Results, 2. Key Responsive Techniques Implemented, Responsive Layout & Viewport Verification Report
+
+### Community 772 - "2. Identified Subsystems & Dependency Mappings"
+Cohesion: 0.29
+Nodes (6): 1. Graph Overview, 2. Identified Subsystems & Dependency Mappings, 3. Scope & Unmodified Modules, A. Frontend Architecture (`apps/mobile`), C. Capacitor Application Architecture (`PanoramaWaterTank_Capacitor`), GRAPHIFY ARCHITECTURE & DEPENDENCY REPORT
+
+### Community 773 - "Header.tsx"
+Cohesion: 0.07
+Nodes (25): Header(), SearchResultItem, InstallAppModal(), InstallAppModalProps, NavItemDef, APP_DISTRIBUTION, AppDistributionConfig, AndroidDeviceCategory (+17 more)
+
+### Community 774 - "Error Handling & Fault Recovery Strategy"
+Cohesion: 0.50
+Nodes (3): 1. Fault Matrix & Recovery Procedures, 2. Invariant Rules for Error Handling, Error Handling & Fault Recovery Strategy
 
 ## Knowledge Gaps
-- **573 isolated node(s):** `m_state`, `m_signal`, `m_diag`, `m_last_state_tick`, `m_retry_count` (+568 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 5674 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **60 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **577 isolated node(s):** `m_state`, `m_signal`, `m_diag`, `m_last_state_tick`, `m_retry_count` (+572 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 6556 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **64 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `VolumeCalculator` connect `httpx` to `DeviceRepository`, `3. Component Details & Design Contracts`, `SearchManager`, `2. Migration Phases`, `Panorama Water Tank Monitor — Migration Plan & Cutover Strategy`, `typing`, `react`, `3. VOLUMETRIC TANK FORMULAS & CALIBRATION`, `1. Component Boundaries & Responsibilities`, `2. Detailed Feature Breakdown & Known Limitations`?**
-  _High betweenness centrality (0.187) - this node is a cross-community bridge._
+- **Why does `VolumeCalculator` connect `VolumeCalculator` to `2. Detailed Feature Breakdown & Known Limitations`, `3. Component Details & Design Contracts`, `SearchManager`, `TimeManager`, `ApplicationStateManager`, `Panorama Water Tank Monitor — Migration Plan & Cutover Strategy`, `App.tsx`, `3. VOLUMETRIC TANK FORMULAS & CALIBRATION`, `database.py`, `typing`, `1. Component Boundaries & Responsibilities`, `TelemetryParser`?**
+  _High betweenness centrality (0.099) - this node is a cross-community bridge._
 - **What connects `m_state`, `m_signal`, `m_diag` to the rest of the system?**
-  _573 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _577 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `TankModel` be split into smaller, more focused modules?**
-  _Cohesion score 0.015873015873015872 - nodes in this community are weakly interconnected._
-- **Why does `2. Telemetry Ingestion Data Flow` connect `react` to `httpx`?**
-  _High betweenness centrality (0.130) - this node is a cross-community bridge._
+  _Cohesion score 0.015384615384615385 - nodes in this community are weakly interconnected._
+- **Why does `D. Unauthenticated Navigation & Interaction Obstruction (ERR-005)` connect `WebSocketService` to `runBrowserAudit`, `Header.tsx`, `LoginScreen`?**
+  _High betweenness centrality (0.098) - this node is a cross-community bridge._
 - **Should `SettingsManager` be split into smaller, more focused modules?**
-  _Cohesion score 0.01904761904761905 - nodes in this community are weakly interconnected._
-- **Why does `4. Modified Frontend and Backend Files` connect `CROSS-DEVICE DATA PERSISTENCE & SYNCHRONIZATION REPORT` to `ApiClient`, `.connect`?**
-  _High betweenness centrality (0.125) - this node is a cross-community bridge._
+  _Cohesion score 0.01824771903512061 - nodes in this community are weakly interconnected._
+- **Why does `PageTester` connect `runBrowserAudit` to `WebSocketService`?**
+  _High betweenness centrality (0.098) - this node is a cross-community bridge._
 - **Should `DatabaseManager.cpp` be split into smaller, more focused modules?**
-  _Cohesion score 0.09423076923076923 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08647936786654961 - nodes in this community are weakly interconnected._

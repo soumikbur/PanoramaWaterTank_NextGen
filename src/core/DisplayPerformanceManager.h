@@ -53,6 +53,20 @@ class DisplayPerformanceManager : public QObject
     /// or "low" (fallback / constrained).
     Q_PROPERTY(QString performanceMode READ performanceMode NOTIFY performanceModeChanged)
 
+    /// Active resolved dual-device performance profile: "high", "balanced", "low"
+    Q_PROPERTY(QString performanceProfile READ performanceProfile NOTIFY performanceProfileChanged)
+
+    /// Manual performance profile override: "auto" (default), "high", "balanced", "low"
+    Q_PROPERTY(QString profileOverride READ profileOverride WRITE setProfileOverride NOTIFY profileOverrideChanged)
+
+    /// Hardware diagnostics exposed to QML
+    Q_PROPERTY(int cpuCores READ cpuCores CONSTANT)
+    Q_PROPERTY(int totalMemoryMb READ totalMemoryMb CONSTANT)
+    Q_PROPERTY(bool isAutoDetected READ isAutoDetected NOTIFY profileOverrideChanged)
+    Q_PROPERTY(bool waveAnimationEnabled READ waveAnimationEnabled NOTIFY performanceProfileChanged)
+    Q_PROPERTY(int chartMaxPoints READ chartMaxPoints NOTIFY performanceProfileChanged)
+    Q_PROPERTY(int mqttBatchIntervalMs READ mqttBatchIntervalMs NOTIFY performanceProfileChanged)
+
     /// User-controlled reduced-motion preference.  When true, decorative
     /// animations (wave, looping effects) are disabled and transition
     /// durations are shortened, but functional feedback (switches,
@@ -79,13 +93,25 @@ public:
     bool  reducedMotion()  const { return m_reducedMotion; }
     qreal animationScale() const;
 
+    QString performanceProfile() const;
+    QString profileOverride() const { return m_profileOverride; }
+    int cpuCores() const { return m_cpuCores; }
+    int totalMemoryMb() const { return m_totalMemoryMb; }
+    bool isAutoDetected() const { return m_profileOverride == QLatin1String("auto"); }
+    bool waveAnimationEnabled() const;
+    int chartMaxPoints() const;
+    int mqttBatchIntervalMs() const;
+
 public slots:
     void setReducedMotion(bool reduced);
+    void setProfileOverride(const QString &override);
 
 signals:
     void refreshRateChanged();
     void performanceModeChanged();
     void reducedMotionChanged();
+    void performanceProfileChanged();
+    void profileOverrideChanged();
 
 private slots:
     void onScreenChanged(QScreen *screen);
@@ -93,11 +119,17 @@ private slots:
 
 private:
     void updateFromScreen(QScreen *screen);
+    void detectHardwareCapabilities();
+    QString computeAutoProfile() const;
 
     QPointer<QQuickWindow> m_window;
     QPointer<QScreen>      m_currentScreen;
     qreal                  m_refreshRate{60.0};
     bool                   m_reducedMotion{false};
+    QString                m_profileOverride{QStringLiteral("auto")};
+    int                    m_cpuCores{4};
+    int                    m_totalMemoryMb{4096};
+    QString                m_cachedAutoProfile{QStringLiteral("high")};
 };
 
 } // namespace Panorama

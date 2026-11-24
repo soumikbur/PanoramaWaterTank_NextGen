@@ -12,6 +12,7 @@ from app.models.deletion_audit import DeletionAuditRecord
 from app.models.train import Train, TrainLookupCache
 from app.models.railway import RailwayRegion, RailwayZone
 from app.models.outbox import SyncOutboxEvent
+from app.models.mqtt_message import MqttLatestMessage
 
 __all__ = [
     "Base",
@@ -30,5 +31,6 @@ __all__ = [
     "RailwayRegion",
     "RailwayZone",
     "SyncOutboxEvent",
+    "MqttLatestMessage",
 ]
 

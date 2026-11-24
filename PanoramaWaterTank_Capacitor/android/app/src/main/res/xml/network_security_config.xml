@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- Base config: enforce system and user certificates -->
-    <base-config cleartextTrafficPermitted="false">
+    <!-- Base config: permit cleartext traffic for local development & LAN gateways -->
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
             <certificates src="user" />

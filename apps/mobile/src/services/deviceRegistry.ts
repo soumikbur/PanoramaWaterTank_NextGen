@@ -131,6 +131,8 @@ class DeviceRegistryService {
 
           parsed.forEach((d) => {
             if (!d || !d.uid || !isGenuineHardwareUid(d.uid) || d.registrationStatus === 'DISCOVERED') return;
+            if (/TEST|AUDIT|DUMMY|DEMO|SEED|PLACEHOLDER|ROGUE|MOCK/i.test(d.name || '') ||
+                /TEST|AUDIT|DUMMY|DEMO|SEED|PLACEHOLDER|ROGUE|MOCK/i.test(d.hardwareModel || '')) return;
             const canonical = getCanonicalUid(d.uid);
             if (seenCanonical.has(canonical)) return;
             seenCanonical.add(canonical);
@@ -229,6 +231,35 @@ class DeviceRegistryService {
           lastSeenTimestamp: Date.now(),
           firstDiscovered: '2026-11-14T08:26:58.000Z',
           registeredAt: '2026-11-14T08:26:58.000Z',
+          hardwareModel: 'WLI EC200U-CN',
+        });
+      }
+
+      // 4. Node 353337 (genuine hardware node, offline)
+      if (!this.devices.has('0027004D4B42501120353337') && !this.deletedUids.has('0027004D4B42501120353337')) {
+        this.devices.set('0027004D4B42501120353337', {
+          uid: '0027004D4B42501120353337',
+          name: 'Node (353337)',
+          trainNumber: '12626',
+          coachNumber: 'S1',
+          registrationStatus: 'REGISTERED',
+          assignmentStatus: 'ENGAGED',
+          isOnline: false,
+          batteryPercent: 85,
+          batteryVoltage: 3.8,
+          tank1Level: null,
+          tank1HeightCm: null,
+          tank2Level: null,
+          tank2HeightCm: null,
+          valve1Normal: true,
+          valve2Normal: true,
+          latitude: null,
+          longitude: null,
+          speedKmh: 0,
+          lastSeen: 'Offline (No Telemetry Recorded)',
+          lastSeenTimestamp: 0,
+          firstDiscovered: '2026-11-24T10:46:54.000Z',
+          registeredAt: '2026-11-24T10:46:54.000Z',
           hardwareModel: 'WLI EC200U-CN',
         });
       }
@@ -465,6 +496,10 @@ class DeviceRegistryService {
     });
 
     return list.sort((a, b) => b.lastSeenTimestamp - a.lastSeenTimestamp);
+  }
+
+  public getRegisteredDevices(): ManagedDevice[] {
+    return this.getDevices().filter((d) => d.registrationStatus === 'REGISTERED');
   }
 
   public getDeviceByUid(uid: string): ManagedDevice | undefined {

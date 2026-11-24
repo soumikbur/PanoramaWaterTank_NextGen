@@ -6,6 +6,7 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.WebView;
+import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -33,10 +34,21 @@ public class MainActivity extends BridgeActivity {
             insetsController.setAppearanceLightNavigationBars(true); // Dark navigation bar handle
         }
 
+        // Apply window insets to root content view so toolbar never overlaps status bar icons (especially on Android 15 / API 35)
+        View contentView = findViewById(android.R.id.content);
+        if (contentView != null) {
+            ViewCompat.setOnApplyWindowInsetsListener(contentView, (v, insets) -> {
+                androidx.core.graphics.Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
+                v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+                return insets;
+            });
+        }
+
         // Prevent black flashing and ensure proper hardware-accelerated surface on low-end devices and emulators
         if (bridge != null && bridge.getWebView() != null) {
             WebView webView = bridge.getWebView();
             webView.setBackgroundColor(Color.parseColor("#F8FAFC"));
+            webView.getSettings().setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         }
     }
 }

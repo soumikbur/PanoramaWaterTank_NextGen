@@ -5504,38 +5504,6 @@
     "receivedUtc": "09-11-2026 02:01:17"
   },
   {
-    "id": 482,
-    "deviceId": "0026004D4B42501120353332",
-    "recordedAt": "09-11-2026 02:01:17",
-    "ai1Ma": 16.0,
-    "level1Percent": "75.0%",
-    "ai1Valid": "Valid",
-    "batteryV": 3.75,
-    "batteryPercent": "62.5%",
-    "latitude": 22.5839,
-    "longitude": 88.3426,
-    "altitudeM": null,
-    "gpsValid": "Valid",
-    "altitudeValid": "--",
-    "receivedUtc": "09-11-2026 02:01:17"
-  },
-  {
-    "id": 478,
-    "deviceId": "0026004D4B42501120353332",
-    "recordedAt": "09-11-2026 02:01:17",
-    "ai1Ma": 16.0,
-    "level1Percent": "75.0%",
-    "ai1Valid": "Valid",
-    "batteryV": 3.75,
-    "batteryPercent": "62.5%",
-    "latitude": 22.5839,
-    "longitude": 88.3426,
-    "altitudeM": null,
-    "gpsValid": "Valid",
-    "altitudeValid": "--",
-    "receivedUtc": "09-11-2026 02:01:17"
-  },
-  {
     "id": 471,
     "deviceId": "0026004D4B42501120353332",
     "recordedAt": "09-11-2026 02:01:17",

@@ -67,31 +67,19 @@ async def list_devices(
     return results
 
 
-@router.get("/telemetry-history", response_model=TelemetryTableResponse)
-async def get_devices_telemetry_history(
-    search: Optional[str] = Query(None, description="Search by Device ID"),
-    device_id: Optional[str] = Query(None, description="Filter by Device ID"),
-    start_date: Optional[datetime] = Query(None, description="Start date filter"),
-    end_date: Optional[datetime] = Query(None, description="End date filter"),
-    ai1_valid: Optional[str] = Query(None, description="Filter AI1 Valid: Valid, Invalid, or All"),
-    gps_valid: Optional[str] = Query(None, description="Filter GPS Valid: Valid, Invalid, or All"),
-    altitude_valid: Optional[str] = Query(None, description="Filter Altitude Valid: Valid, Invalid, or All"),
-    sort_by: str = Query("receivedUtc", description="Sort by field: receivedUtc, recordedAt, deviceId, ai1Ma, level1Percent, batteryPercent"),
+@router.get("/overview-table", response_model=TelemetryTableResponse)
+async def get_devices_overview_table(
+    search: Optional[str] = Query(None, description="Search by Device ID, train or coach number"),
+    sort_by: str = Query("recordedAt", description="Sort by field: recordedAt, deviceId, level1Percent, batteryPercent"),
     sort_order: str = Query("desc", description="Sort order: asc or desc"),
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(25, ge=1, le=100, description="Items per page"),
     db: AsyncSession = Depends(get_db)
 ):
-    """Retrieve historical telemetry records formatted for the 13-column SCADA table."""
+    """Retrieve exactly one record per unique genuine physical device for the main Devices table."""
     telemetry_repo = TelemetryRepository(db)
-    total, total_pages, items = await telemetry_repo.get_paginated_telemetry_records(
+    total, total_pages, items = await telemetry_repo.get_unique_devices_latest_records(
         search=search,
-        device_id=device_id,
-        start_date=start_date,
-        end_date=end_date,
-        ai1_valid=ai1_valid,
-        gps_valid=gps_valid,
-        altitude_valid=altitude_valid,
         sort_by=sort_by,
         sort_order=sort_order,
         page=page,
@@ -102,6 +90,70 @@ async def get_devices_telemetry_history(
         page=page,
         limit=limit,
         totalPages=total_pages,
+        totalDevices=total,
+        items=items,
+    )
+
+
+@router.get("/telemetry-history", response_model=TelemetryTableResponse)
+async def get_devices_telemetry_history(
+    search: Optional[str] = Query(None, description="Search by Device ID"),
+    device_id: Optional[str] = Query(None, description="Filter by Device ID"),
+    start_date: Optional[datetime] = Query(None, description="Start date filter"),
+    end_date: Optional[datetime] = Query(None, description="End date filter"),
+    ai1_valid: Optional[str] = Query(None, description="Filter AI1 Valid: Valid, Invalid, or All"),
+    gps_valid: Optional[str] = Query(None, description="Filter GPS Valid: Valid, Invalid, or All"),
+    altitude_valid: Optional[str] = Query(None, description="Filter Altitude Valid: Valid, Invalid, or All"),
+    latest_only: bool = Query(False, description="Filter for latest telemetry record per genuine device"),
+    sort_by: str = Query("receivedUtc", description="Sort by field: receivedUtc, recordedAt, deviceId, ai1Ma, level1Percent, batteryPercent"),
+    sort_order: str = Query("desc", description="Sort order: asc or desc"),
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(25, ge=1, le=100, description="Items per page"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Retrieve historical telemetry records formatted for the 13-column SCADA table."""
+    telemetry_repo = TelemetryRepository(db)
+    device_repo = DeviceRepository(db)
+    genuine_devices = await device_repo.list_all()
+    total_genuine_devices = len(genuine_devices)
+
+    if latest_only and not device_id:
+        total, total_pages, items = await telemetry_repo.get_unique_devices_latest_records(
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            page=page,
+            limit=limit,
+        )
+        return TelemetryTableResponse(
+            total=total,
+            page=page,
+            limit=limit,
+            totalPages=total_pages,
+            totalDevices=total_genuine_devices,
+            items=items,
+        )
+
+    total, total_pages, items = await telemetry_repo.get_paginated_telemetry_records(
+        search=search,
+        device_id=device_id,
+        start_date=start_date,
+        end_date=end_date,
+        ai1_valid=ai1_valid,
+        gps_valid=gps_valid,
+        altitude_valid=altitude_valid,
+        latest_only=latest_only,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page=page,
+        limit=limit,
+    )
+    return TelemetryTableResponse(
+        total=total,
+        page=page,
+        limit=limit,
+        totalPages=total_pages,
+        totalDevices=total_genuine_devices,
         items=items,
     )
 
@@ -115,23 +167,32 @@ async def export_devices_telemetry_csv(
     ai1_valid: Optional[str] = Query(None, description="Filter AI1 Valid: Valid, Invalid, or All"),
     gps_valid: Optional[str] = Query(None, description="Filter GPS Valid: Valid, Invalid, or All"),
     altitude_valid: Optional[str] = Query(None, description="Filter Altitude Valid: Valid, Invalid, or All"),
+    latest_only: bool = Query(False, description="Filter for latest telemetry record per genuine device"),
     sort_by: str = Query("receivedUtc", description="Sort column"),
     sort_order: str = Query("desc", description="Sort order: asc or desc"),
     db: AsyncSession = Depends(get_db)
 ):
     """Export historical telemetry data formatted strictly as the 13-column RFC 4180 CSV."""
     telemetry_repo = TelemetryRepository(db)
-    records = await telemetry_repo.get_all_telemetry_records_for_export(
-        search=search,
-        device_id=device_id,
-        start_date=start_date,
-        end_date=end_date,
-        ai1_valid=ai1_valid,
-        gps_valid=gps_valid,
-        altitude_valid=altitude_valid,
-        sort_by=sort_by,
-        sort_order=sort_order,
-    )
+    if latest_only and not device_id:
+        records = await telemetry_repo.get_unique_devices_records_for_export(
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
+    else:
+        records = await telemetry_repo.get_all_telemetry_records_for_export(
+            search=search,
+            device_id=device_id,
+            start_date=start_date,
+            end_date=end_date,
+            ai1_valid=ai1_valid,
+            gps_valid=gps_valid,
+            altitude_valid=altitude_valid,
+            latest_only=latest_only,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
 
     def sanitize(val: Any) -> str:
         if val is None:
@@ -222,7 +283,7 @@ async def get_device_diagnostics(
 async def create_device(
     payload: DeviceCreate,
     upsert: bool = False,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Register a new edge monitoring device and auto-provision associated tanks (Admin & Employee)."""

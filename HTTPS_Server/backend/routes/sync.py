@@ -174,7 +174,7 @@ async def put_namespace_state(namespace: str, body: SyncStateUpsertRequest):
 async def sync_websocket_endpoint(websocket: WebSocket):
     """Real-time bidirectional WebSocket channel for multi-browser state synchronization."""
     origin = (websocket.headers.get("origin") or "").rstrip("/")
-    if origin and origin not in config.CORS_ORIGINS:
+    if origin and not config.is_origin_allowed(origin):
         await websocket.close(code=1008, reason="Origin not allowed")
         return
 

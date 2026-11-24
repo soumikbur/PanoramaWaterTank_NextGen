@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { typography } from '../../theme';
 import { useApp, ScreenName } from '../../state/AppContext';
 import panoramaLogoIcon from '../../assets/panorama_logo_icon.png';
@@ -25,6 +25,7 @@ import {
   Radio,
   Droplet,
   X,
+  Menu,
   RadioTower,
   Terminal,
 } from 'lucide-react';
@@ -87,6 +88,53 @@ export const Sidebar: React.FC = () => {
     }
   }, [isMobileNavOpen, setIsMobileNavOpen]);
 
+  // Edge Swipe Listener: Right swipe from screen's left edge (<= 32px) opens mobile drawer
+  useEffect(() => {
+    let startX = 0;
+    let startY = 0;
+    let trackingEdge = false;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      if (t.clientX <= 32) {
+        startX = t.clientX;
+        startY = t.clientY;
+        trackingEdge = true;
+      } else {
+        trackingEdge = false;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!trackingEdge || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      // Trigger if horizontal right swipe dominates vertical movement (no conflict with table scrolling)
+      if (dx > 48 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+        setIsMobileNavOpen(true);
+        trackingEdge = false;
+      }
+    };
+
+    const onTouchEnd = () => {
+      trackingEdge = false;
+    };
+
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [setIsMobileNavOpen]);
+
+  const drawerTouchRef = useRef<{ startX: number; startY: number } | null>(null);
+
   const { sidebarMode, setSidebarMode } = useDisplayPreferences();
 
   const isConnected = connectionStatus === 'CONNECTED' || mqttConnectionStatus === 'CONNECTED';
@@ -122,6 +170,10 @@ export const Sidebar: React.FC = () => {
 
   const systemNavItems: NavItemDef[] = [
     { id: 'settings', label: 'Settings', icon: SettingsIcon },
+    ...(isAdmin ? [
+      { id: 'users' as ScreenName, label: 'Users', icon: UsersIcon },
+      { id: 'logs' as ScreenName, label: 'Logs', icon: ScrollText },
+    ] : []),
   ];
 
   const onlineDevicesCount = devices.filter((d) => d.isOnline ?? d.is_online).length;
@@ -677,54 +729,113 @@ export const Sidebar: React.FC = () => {
           role="dialog"
           aria-modal="true"
           aria-label="Navigation Menu"
+          onTouchStart={(e) => {
+            if (e.touches.length === 1) {
+              drawerTouchRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY };
+            }
+          }}
+          onTouchMove={(e) => {
+            if (!drawerTouchRef.current || e.touches.length !== 1) return;
+            const dx = e.touches[0].clientX - drawerTouchRef.current.startX;
+            const dy = e.touches[0].clientY - drawerTouchRef.current.startY;
+            if (dx < -48 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+              setIsMobileNavOpen(false);
+              drawerTouchRef.current = null;
+            }
+          }}
+          onTouchEnd={() => {
+            drawerTouchRef.current = null;
+          }}
         >
-          {/* 1. Header with Logo, Title, and Close Button (X, min 44x44px) */}
+          {/* 1. Header with Hamburger Toggle, Logo, Title, Role Badge, and Close Button */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '14px 16px',
+              padding: '12px 14px',
               borderBottom: '1px solid #E2E8F0',
               backgroundColor: '#FFFFFF',
               flexShrink: 0,
+              gap: '8px',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Left group: Hamburger toggle button matching Header position, Logo, Title */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+              <button
+                type="button"
+                onClick={() => setIsMobileNavOpen(false)}
+                aria-label="Close Navigation Menu"
+                className="touch-target-44"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '6px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  color: '#0F172A',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  width: '40px',
+                  height: '40px',
+                }}
+              >
+                <Menu size={22} />
+              </button>
               <img
                 src={panoramaLogoIcon}
                 alt="Panorama"
-                style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '6px' }}
+                style={{ width: '28px', height: '28px', objectFit: 'contain', borderRadius: '6px', flexShrink: 0 }}
               />
-              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
-                <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', letterSpacing: '0.4px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2, minWidth: 0 }}>
+                <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>
                   PANORAMA
                 </span>
-                <span style={{ fontSize: '10px', fontWeight: 700, color: '#2563EB', letterSpacing: '0.5px' }}>
+                <span style={{ fontSize: '9px', fontWeight: 700, color: '#2563EB', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
                   WATER TANK MONITOR
                 </span>
               </div>
             </div>
 
-            <button
-              onClick={() => setIsMobileNavOpen(false)}
-              aria-label="Close menu"
-              className="touch-target-44"
-              style={{
-                width: '44px',
-                height: '44px',
-                borderRadius: '8px',
-                backgroundColor: '#F1F5F9',
-                border: '1px solid #CBD5E1',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                color: '#475569',
-              }}
-            >
-              <X size={20} />
-            </button>
+            {/* Right group: User Role Badge + Explicit Close Button (X) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+              <span
+                style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  padding: '3px 7px',
+                  borderRadius: '4px',
+                  backgroundColor: isAdmin ? '#EFF6FF' : '#F1F5F9',
+                  color: isAdmin ? '#2563EB' : '#475569',
+                  border: `1px solid ${isAdmin ? '#BFDBFE' : '#CBD5E1'}`,
+                  letterSpacing: '0.4px',
+                }}
+              >
+                {isAdmin ? 'ADMIN' : 'OPR'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsMobileNavOpen(false)}
+                aria-label="Close menu"
+                className="touch-target-44"
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '6px',
+                  backgroundColor: '#F1F5F9',
+                  border: '1px solid #CBD5E1',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#475569',
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
 
           {/* 2. Scrollable Drawer Content */}
@@ -951,24 +1062,55 @@ export const Sidebar: React.FC = () => {
             </div>
           </div>
 
-          {/* 3. User Profile & Sign Out Footer */}
+          {/* 3. Footer: System connection status, application version, user profile & logout */}
           <div
             style={{
-              padding: '14px 16px',
+              padding: '12px 14px',
               borderTop: '1px solid #E2E8F0',
               backgroundColor: '#F8FAFC',
               display: 'flex',
               flexDirection: 'column',
-              gap: '10px',
+              gap: '8px',
               flexShrink: 0,
             }}
           >
+            {/* System Status & Version Row */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '11px',
+                color: '#64748B',
+                paddingBottom: '4px',
+                borderBottom: '1px solid #EDF2F7',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span
+                  style={{
+                    width: '7px',
+                    height: '7px',
+                    borderRadius: '50%',
+                    backgroundColor: isConnected ? '#16A34A' : '#EAB308',
+                    display: 'inline-block',
+                  }}
+                />
+                <span style={{ fontWeight: 600, color: isConnected ? '#15803D' : '#854D0E' }}>
+                  {isConnected ? 'SCADA Live' : 'Connecting'}
+                </span>
+              </div>
+              <span style={{ fontSize: '10px', color: '#94A3B8', fontWeight: 500 }}>
+                v2.0.0 · Build 2026.11
+              </span>
+            </div>
+
             {currentUser && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div
                   style={{
-                    width: '36px',
-                    height: '36px',
+                    width: '34px',
+                    height: '34px',
                     borderRadius: '50%',
                     backgroundColor: '#2563EB',
                     color: '#FFFFFF',
@@ -976,7 +1118,7 @@ export const Sidebar: React.FC = () => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontWeight: 700,
-                    fontSize: '13px',
+                    fontSize: '12px',
                     flexShrink: 0,
                   }}
                 >

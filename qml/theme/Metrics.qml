@@ -11,8 +11,10 @@ QtObject {
     readonly property int windowDefaultWidth: 1672
     readonly property int windowDefaultHeight: 941
 
-    readonly property int windowMinimumWidth: 1280
-    readonly property int windowMinimumHeight: 720
+    // Adaptive minimum dimensions to support mobile portrait displays (Pixel 7 / 360-412dp)
+    readonly property int windowMinimumWidth: 320
+    readonly property int windowMinimumHeight: 480
+    readonly property int statusBarHeight: 24
 
     readonly property int compactBreakpoint: 1350
     readonly property int tabletBreakpoint: 700

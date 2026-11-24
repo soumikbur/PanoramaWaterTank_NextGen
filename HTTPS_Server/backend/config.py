@@ -47,8 +47,15 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 # CORS Allowed Origins (explicit allowlist — never wildcard '*' with credentials)
 _DEFAULT_CORS_ORIGINS: List[str] = [
     "https://soumikbur.github.io",
+    "http://localhost",
+    "https://localhost",
+    "capacitor://localhost",
+    "http://localhost:3000",
+    "http://localhost:5173",
     "http://localhost:8000",
     "https://localhost:8443",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
     "http://127.0.0.1:8000",
     "https://127.0.0.1:8443",
 ]
@@ -60,11 +67,31 @@ if _raw_cors:
         _parsed_cors = [o.strip() for o in _raw_cors.split(",") if o.strip()]
     # Strip wildcard '*' and guarantee the official GitHub Pages frontend origin is permitted
     _filtered_cors = [o.rstrip("/") for o in _parsed_cors if isinstance(o, str) and o.strip() and o.strip() != "*"]
-    if "https://soumikbur.github.io" not in _filtered_cors:
-        _filtered_cors.insert(0, "https://soumikbur.github.io")
+    for def_orig in _DEFAULT_CORS_ORIGINS:
+        if def_orig not in _filtered_cors:
+            _filtered_cors.append(def_orig)
     CORS_ORIGINS: List[str] = list(dict.fromkeys(_filtered_cors))
 else:
     CORS_ORIGINS = list(_DEFAULT_CORS_ORIGINS)
+
+
+def is_origin_allowed(origin: Optional[str]) -> bool:
+    """Check if origin is allowed for WebSocket or HTTP CORS.
+    
+    Permits empty origins (native mobile apps/webviews), localhost/127.0.0.1 on any port,
+    Capacitor origins, and explicit production domains.
+    """
+    if not origin or not origin.strip():
+        return True
+    cleaned = origin.strip().rstrip("/")
+    if cleaned in CORS_ORIGINS:
+        return True
+    if cleaned == "null" or cleaned == "capacitor://localhost":
+        return True
+    import re
+    if re.match(r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$", cleaned, re.IGNORECASE):
+        return True
+    return False
 
 
 def get_resolved_tls_paths() -> Tuple[Optional[Path], Optional[Path]]:

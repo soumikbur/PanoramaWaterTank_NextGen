@@ -1046,7 +1046,7 @@ class TrainLookupService {
       const srcCode = (record[3] || '').trim().toUpperCase() || null;
       const dstName = (record[4] || '').trim() || null;
       const dstCode = (record[5] || '').trim().toUpperCase() || null;
-      const runDays = parseRunningDays((record[13] || '').trim() || null);
+      const runDays = normalizeRunDays((record[13] || '').trim() || null);
       const attempt: ProviderAttempt = { provider: 'eRail OpenData', outcome: 'verified', latency_ms: latency };
       const missingFields: string[] = [];
       if (!srcName && !srcCode) missingFields.push('sourceStation');

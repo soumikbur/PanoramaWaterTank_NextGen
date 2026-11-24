@@ -3,6 +3,9 @@ import { typography } from '../theme';
 import { useApp } from '../state/AppContext';
 import { mqttService, RawMqttFrame, MqttPayloadType, classifyMqttPayload } from '../services/mqttService';
 import { deviceRegistry } from '../services/deviceRegistry';
+import { ApiClient } from '../api/client';
+import { localMqttStore } from '../services/localMqttStore';
+import { MqttLatestTopicRecord } from '../types/telemetry';
 import {
   Terminal,
   Play,
@@ -17,6 +20,11 @@ import {
   Code2,
   AlignLeft,
   Download,
+  Search,
+  X,
+  Sliders,
+  Activity,
+  Zap,
 } from 'lucide-react';
 
 export const DEFAULT_HARDWARE_UID = '002F00654B42501320353332';
@@ -62,7 +70,7 @@ export interface CleanDeviceTelemetry {
   trno: string | null;
 }
 
-/** Retained for compatibility with any existing imports/tests. */
+/** Retained for compatibility with existing imports/tests. */
 export function filterDeviceTelemetry(raw: any, expectedUid: string): CleanDeviceTelemetry | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const rawUid = raw.uid ?? raw.device_uid ?? raw.deviceId ?? raw.device_id;
@@ -90,7 +98,7 @@ export function filterDeviceTelemetry(raw: any, expectedUid: string): CleanDevic
   };
 }
 
-/** Retained for compatibility with any existing imports/tests. */
+/** Retained for compatibility with existing imports/tests. */
 export function formatTelemetryJson(t: CleanDeviceTelemetry): string {
   return JSON.stringify(t, null, 2);
 }
@@ -101,17 +109,56 @@ interface SerialMessage {
   topic: string;
   qos: number;
   payloadSize: number;
-  payloadType: MqttPayloadType;  // JSON | TEXT | BINARY | INVALID
+  payloadType: MqttPayloadType; // JSON | TEXT | BINARY | INVALID
   isEmpty: boolean;
   parseError?: string;
   receivedAt: number;
-  receivedTimeShort: string;     // HH:mm:ss.SSS (local reception time)
-  receivedAtFormatted: string;   // YYYY-MM-DD HH:mm:ss.SSS
+  receivedTimeShort: string; // HH:mm:ss.SSS (local reception time)
+  receivedAtFormatted: string; // YYYY-MM-DD HH:mm:ss.SSS
   deviceTimestamp: string | null; // Extracted from payload if present
-  rawPayload: string;            // Verbatim original MQTT payload
+  rawPayload: string; // Verbatim original MQTT payload
   isJson: boolean;
   parsedJson: any;
-  formattedJson: string | null;  // Pretty-printed JSON if valid
+  formattedJson: string | null; // Pretty-printed JSON if valid
+  statusBadge?: string | null; // Extracted or inferred status: NORMAL, WARNING, CRITICAL
+  isRetained?: boolean;
+}
+
+function convertRecordToSerialMessage(rec: MqttLatestTopicRecord, seq: number): SerialMessage {
+  const rawPayload =
+    typeof rec.payload === 'object' && rec.payload !== null
+      ? JSON.stringify(rec.payload)
+      : String(rec.payload ?? '');
+
+  const classified = classifyMqttPayload(rawPayload);
+  const formattedJson =
+    classified.payloadType === 'JSON' && classified.parsedJson !== null && classified.parsedJson !== undefined
+      ? JSON.stringify(classified.parsedJson, null, 2)
+      : null;
+
+  const receivedDate = rec.received_at ? new Date(rec.received_at) : new Date();
+  const nowMs = receivedDate.getTime();
+
+  return {
+    id: rec.id || `retained-${rec.topic}-${nowMs}`,
+    seq,
+    topic: rec.topic,
+    qos: rec.qos ?? 0,
+    payloadSize: rawPayload.length,
+    payloadType: classified.payloadType,
+    isEmpty: classified.isEmpty,
+    parseError: classified.error,
+    receivedAt: nowMs,
+    receivedTimeShort: formatLocalTimeMs(receivedDate),
+    receivedAtFormatted: receivedDate.toISOString(),
+    deviceTimestamp: null,
+    rawPayload,
+    isJson: classified.isJson,
+    parsedJson: classified.parsedJson,
+    formattedJson,
+    statusBadge: 'RETAINED',
+    isRetained: true,
+  };
 }
 
 const PAYLOAD_BADGE_STYLES: Record<MqttPayloadType, { color: string; bg: string; border: string }> = {
@@ -121,7 +168,18 @@ const PAYLOAD_BADGE_STYLES: Record<MqttPayloadType, { color: string; bg: string;
   INVALID: { color: '#F87171', bg: '#2F1114', border: '#661E24' },
 };
 
-/** Standard MQTT wildcard matcher (+ and #) so subscribing to any topic works reliably. */
+function getStatusBadgeStyle(status: string): { color: string; bg: string; border: string } {
+  const s = status.toUpperCase();
+  if (s.includes('CRIT') || s.includes('ALERT') || s.includes('ERR') || s.includes('FAULT')) {
+    return { color: '#F87171', bg: '#2F1114', border: '#661E24' };
+  }
+  if (s.includes('WARN') || s.includes('LOW') || s.includes('HIGH')) {
+    return { color: '#F59E0B', bg: '#2D2006', border: '#5C3D0C' };
+  }
+  return { color: '#3FB950', bg: '#0F2918', border: '#1F512D' };
+}
+
+/** Standard MQTT wildcard matcher (+ and #) */
 function mqttTopicMatches(subscription: string, incomingTopic: string): boolean {
   const sub = subscription.trim();
   const inc = incomingTopic.trim();
@@ -142,10 +200,10 @@ function formatLocalTimeMs(date: Date): string {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`;
 }
 
-/** Lightweight syntax-highlighted JSON renderer preserving exact original structure & nesting. */
+/** Lightweight syntax-highlighted JSON renderer matching professional SCADA styling on light background */
 const HighlightedJson: React.FC<{ text: string }> = React.memo(({ text }) => {
   const tokens = useMemo(() => {
-    const regex = /("(?:\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(?:\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g;
+    const regex = /("(?:\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(?:\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|[{}\[\],])/g;
     const parts: React.ReactNode[] = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;
@@ -153,21 +211,41 @@ const HighlightedJson: React.FC<{ text: string }> = React.memo(({ text }) => {
 
     while ((match = regex.exec(text)) !== null) {
       if (match.index > lastIndex) {
-        parts.push(text.slice(lastIndex, match.index));
+        parts.push(
+          <span key={key++} style={{ color: '#0F172A' }}>
+            {text.slice(lastIndex, match.index)}
+          </span>
+        );
       }
       const token = match[0];
-      let color = '#FFA657'; // number
+      let color = '#EA580C'; // Numbers: orange
+
       if (/^"/.test(token)) {
         if (/:$/.test(token)) {
-          color = '#79C0FF'; // JSON key
+          const keyName = token.slice(0, -1);
+          parts.push(
+            <span key={key++} style={{ color: '#2563EB', fontWeight: 600 }}>
+              {keyName}
+            </span>
+          );
+          parts.push(
+            <span key={key++} style={{ color: '#0F172A' }}>
+              :
+            </span>
+          );
+          lastIndex = regex.lastIndex;
+          continue;
         } else {
-          color = '#7EE787'; // string value
+          color = '#16A34A'; // Strings: green
         }
       } else if (/^(true|false)$/.test(token)) {
-        color = '#FF7B72'; // boolean
+        color = '#9333EA'; // Booleans: purple
       } else if (token === 'null') {
-        color = '#8B949E'; // null
+        color = '#64748B'; // Null: muted
+      } else if (/^[{}[\],]$/.test(token)) {
+        color = '#0F172A'; // Brackets and punctuation: dark navy
       }
+
       parts.push(
         <span key={key++} style={{ color }}>
           {token}
@@ -176,7 +254,11 @@ const HighlightedJson: React.FC<{ text: string }> = React.memo(({ text }) => {
       lastIndex = regex.lastIndex;
     }
     if (lastIndex < text.length) {
-      parts.push(text.slice(lastIndex));
+      parts.push(
+        <span key={key++} style={{ color: '#0F172A' }}>
+          {text.slice(lastIndex)}
+        </span>
+      );
     }
     return parts;
   }, [text]);
@@ -185,11 +267,12 @@ const HighlightedJson: React.FC<{ text: string }> = React.memo(({ text }) => {
     <pre
       style={{
         margin: 0,
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-        fontSize: '12.5px',
+        fontFamily: '"JetBrains Mono", Consolas, "Courier New", monospace',
+        fontSize: '12px',
         lineHeight: '19px',
-        color: '#C9D1D9',
+        color: '#0F172A',
         whiteSpace: 'pre',
+        tabSize: 2,
       }}
     >
       {tokens}
@@ -197,10 +280,10 @@ const HighlightedJson: React.FC<{ text: string }> = React.memo(({ text }) => {
   );
 });
 
-/** Single memoized terminal entry to prevent unnecessary re-renders during continuous streams. */
+/** Single memoized hardware terminal entry - Clean White SCADA Card */
 const SerialLogEntry: React.FC<{
   entry: SerialMessage;
-  viewMode: 'json' | 'raw';
+  viewMode: 'raw' | 'json';
   showTimestamps: boolean;
   isSelected: boolean;
   isFirst: boolean;
@@ -211,54 +294,46 @@ const SerialLogEntry: React.FC<{
     <div
       onClick={() => onSelect(entry.id)}
       style={{
-        padding: '8px 10px',
-        borderRadius: '4px',
-        backgroundColor: isSelected ? '#161B22' : 'transparent',
-        border: isSelected ? '1px solid #30363D' : '1px solid transparent',
-        borderTop: !isFirst && !isSelected ? '1px dashed #21262D' : isSelected ? '1px solid #30363D' : '1px solid transparent',
+        padding: '10px 12px',
+        borderRadius: '8px',
+        backgroundColor: '#FFFFFF',
+        border: isSelected ? '1px solid #2563EB' : '1px solid #E2E8F0',
+        boxShadow: isSelected ? '0 0 0 1px #2563EB' : '0 1px 2px rgba(0,0,0,0.03)',
         cursor: 'pointer',
+        transition: 'all 0.15s ease',
       }}
     >
-      {/* Entry header line */}
+      {/* Header Line: Timestamp, Retained indicator, Copy button */}
       <div
         style={{
           display: 'flex',
-          flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '8px',
-          marginBottom: '6px',
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
           fontSize: '11px',
+          marginBottom: '6px',
         }}
       >
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
-          <span style={{ color: '#58A6FF', fontWeight: 700 }}>
-            {showTimestamps ? `[${entry.receivedTimeShort}] ` : ''}MQTT MESSAGE RECEIVED
-          </span>
-          <span style={{ color: '#8B949E' }}>#{entry.seq}</span>
-          <span style={{ color: '#79C0FF', backgroundColor: '#161B22', padding: '1px 6px', borderRadius: '3px', border: '1px solid #21262D' }}>
-            {entry.topic}
-          </span>
-          <span style={{ color: '#8B949E' }}>QoS {entry.qos}</span>
-          <span style={{ color: '#8B949E' }}>{entry.payloadSize} B</span>
-          <span
-            title={entry.parseError || `Payload type: ${entry.payloadType}`}
-            style={{
-              color: PAYLOAD_BADGE_STYLES[entry.payloadType].color,
-              backgroundColor: PAYLOAD_BADGE_STYLES[entry.payloadType].bg,
-              border: `1px solid ${PAYLOAD_BADGE_STYLES[entry.payloadType].border}`,
-              padding: '1px 6px',
-              borderRadius: '3px',
-              fontSize: '10px',
-              fontWeight: 700,
-              letterSpacing: '0.3px',
-            }}
-          >
-            {entry.payloadType}
-          </span>
-          {entry.deviceTimestamp && (
-            <span style={{ color: '#A5D6FF' }}>Device Time: &quot;{entry.deviceTimestamp}&quot;</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {showTimestamps && (
+            <span style={{ color: '#475569', fontWeight: 600, fontFamily: 'monospace' }}>
+              {entry.receivedTimeShort}
+            </span>
+          )}
+          {entry.isRetained && (
+            <span
+              style={{
+                color: '#2563EB',
+                backgroundColor: '#EFF6FF',
+                border: '1px solid #BFDBFE',
+                padding: '1px 5px',
+                borderRadius: '3px',
+                fontSize: '9.5px',
+                fontWeight: 700,
+                letterSpacing: '0.3px',
+              }}
+            >
+              RETAINED
+            </span>
           )}
         </div>
 
@@ -268,47 +343,43 @@ const SerialLogEntry: React.FC<{
             e.stopPropagation();
             onCopy(entry);
           }}
-          title="Copy message"
+          title="Copy payload"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '4px',
-            padding: '2px 7px',
-            backgroundColor: '#21262D',
-            color: '#C9D1D9',
-            border: '1px solid #30363D',
-            borderRadius: '3px',
-            fontSize: '10px',
+            gap: '3px',
+            padding: '2px 8px',
+            backgroundColor: '#F8FAFC',
+            color: '#475569',
+            border: '1px solid #CBD5E1',
+            borderRadius: '4px',
+            fontSize: '10.5px',
             fontWeight: 600,
             cursor: 'pointer',
+            transition: 'background-color 0.15s ease',
           }}
         >
-          <Copy size={10} />
-          Copy
+          <Copy size={11} />
+          <span>Copy</span>
         </button>
       </div>
 
-      {/* Entry body: Formatted JSON (object or array) or verbatim Raw payload */}
-      <div style={{ overflowX: 'auto', paddingLeft: '2px' }}>
-        {viewMode === 'json' && entry.payloadType === 'JSON' && entry.formattedJson !== null ? (
+      {/* Entry Body: Pure JSON or Raw Text */}
+      <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        {viewMode === 'json' && entry.isJson && entry.formattedJson ? (
           <HighlightedJson text={entry.formattedJson} />
         ) : (
           <pre
             style={{
               margin: 0,
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+              fontFamily: '"JetBrains Mono", Consolas, "Courier New", monospace',
               fontSize: '12px',
-              lineHeight: '18px',
+              lineHeight: '19px',
               color: entry.isEmpty
-                ? '#8B949E'
-                : entry.payloadType === 'JSON'
-                  ? '#7EE787'
-                  : entry.payloadType === 'BINARY'
-                    ? '#D8B4FE'
-                    : entry.payloadType === 'INVALID'
-                      ? '#FCA5A5'
-                      : '#E6EDF3',
-              fontStyle: entry.isEmpty ? 'italic' : 'normal',
+                ? '#94A3B8'
+                : entry.payloadType === 'INVALID'
+                  ? '#DC2626'
+                  : '#0F172A',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
             }}
@@ -324,7 +395,7 @@ const SerialLogEntry: React.FC<{
 export const MqttMonitorScreen: React.FC = () => {
   const { mqttBrokerStatus, devices } = useApp();
 
-  // Preserve existing topic selection & localStorage keys
+  // Topic selection & localStorage keys
   const [topicInput, setTopicInput] = useState<string>(() => {
     if (typeof window === 'undefined') return DEFAULT_HARDWARE_UID;
     const saved =
@@ -350,7 +421,29 @@ export const MqttMonitorScreen: React.FC = () => {
   const [qosInput, setQosInput] = useState<number>(0);
   const [isSubscribed, setIsSubscribed] = useState<boolean>(true);
 
-  const [messages, setMessages] = useState<SerialMessage[]>([]);
+  // Persistent Topic Registry: authoritative latest message per topic
+  const [topicRegistry, setTopicRegistry] = useState<Record<string, MqttLatestTopicRecord>>(() => {
+    const list = localMqttStore.getAll();
+    const map: Record<string, MqttLatestTopicRecord> = {};
+    for (const item of list) {
+      if (item && item.topic) map[item.topic] = item;
+    }
+    return map;
+  });
+
+  const [messages, setMessages] = useState<SerialMessage[]>(() => {
+    const initTopic =
+      (typeof window !== 'undefined' &&
+        (localStorage.getItem('panorama_mqtt_selected_device') ||
+          localStorage.getItem('panorama_mqtt_target_topic'))) ||
+      DEFAULT_HARDWARE_UID;
+    const clean = initTopic.split('/')[0].trim();
+    const cached = localMqttStore.getLatest(clean);
+    if (cached) {
+      return [convertRecordToSerialMessage(cached, 1)];
+    }
+    return [];
+  });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [totalMessagesCount, setTotalMessagesCount] = useState<number>(0);
   const [queuedWhilePaused, setQueuedWhilePaused] = useState<number>(0);
@@ -362,16 +455,32 @@ export const MqttMonitorScreen: React.FC = () => {
   const [showTimestamps, setShowTimestamps] = useState<boolean>(() =>
     typeof window === 'undefined' ? true : localStorage.getItem('panorama_mqtt_show_timestamps') !== 'false'
   );
-  const [viewMode, setViewMode] = useState<'json' | 'raw'>(() => {
+  const [viewMode, setViewMode] = useState<'raw' | 'json'>(() => {
     if (typeof window === 'undefined') return 'json';
     const saved = localStorage.getItem('panorama_mqtt_view_mode');
-    return saved === 'raw' ? 'raw' : 'json';
+    if (saved === 'raw' || saved === 'json') return saved;
+    return 'json';
   });
   const [maxBuffer, setMaxBuffer] = useState<number>(DEFAULT_MAX_BUFFER);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [liveStatus, setLiveStatus] = useState<string>(() => mqttService.getStatus());
+  const [filterText, setFilterText] = useState<string>('');
 
-  // Refs to avoid re-subscribing or recreating MQTT listeners on UI toggles
+  // Broker details & configuration modal state
+  const [brokerInfo, setBrokerInfo] = useState(() => mqttService.getBrokerInfo());
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState<boolean>(false);
+  const [configHost, setConfigHost] = useState<string>(() => brokerInfo.host);
+  const [configPort, setConfigPort] = useState<number>(() => brokerInfo.port);
+  const [configPath, setConfigPath] = useState<string>(() => brokerInfo.path);
+  const [configSsl, setConfigSsl] = useState<boolean>(() => brokerInfo.useSSL);
+
+  // Dynamic Statistics
+  const [messagesPerMinute, setMessagesPerMinute] = useState<number>(0);
+  const [lastMessageTimeShort, setLastMessageTimeShort] = useState<string | null>(null);
+  const [lastMessageTimestamp, setLastMessageTimestamp] = useState<number | null>(null);
+  const [lastMessageTimeDiff, setLastMessageTimeDiff] = useState<string>('Awaiting telemetry');
+
+  // Refs to avoid re-subscribing or recreating listeners
   const activeTopicRef = useRef<string>(activeTopic);
   activeTopicRef.current = activeTopic;
   const isSubscribedRef = useRef<boolean>(isSubscribed);
@@ -383,22 +492,49 @@ export const MqttMonitorScreen: React.FC = () => {
   const seqRef = useRef<number>(0);
   const pendingBufferRef = useRef<SerialMessage[]>([]);
   const terminalRef = useRef<HTMLDivElement | null>(null);
+  const recentTimestampsRef = useRef<number[]>([]);
 
   const showToast = useCallback((msg: string) => {
     setFeedback(msg);
-    setTimeout(() => setFeedback(null), 1800);
+    setTimeout(() => setFeedback(null), 2000);
   }, []);
 
-  // Track real MQTT connection status from existing singleton
+  // Update live broker connection status and brokerInfo
   useEffect(() => {
-    const unsub = mqttService.onStatusChange((st) => setLiveStatus(st));
+    const unsub = mqttService.onStatusChange((st) => {
+      setLiveStatus(st);
+      setBrokerInfo(mqttService.getBrokerInfo());
+    });
     return () => unsub();
   }, []);
 
   const isBrokerConnected =
     mqttBrokerStatus === 'CONNECTED' ||
     liveStatus === 'CONNECTED' ||
-    mqttService.getBrokerInfo().status === 'CONNECTED';
+    brokerInfo.status === 'CONNECTED';
+
+  // Dynamic rate and last message elapsed calculation timer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = Date.now();
+      recentTimestampsRef.current = recentTimestampsRef.current.filter((t) => t > now - 60000);
+      setMessagesPerMinute(recentTimestampsRef.current.length);
+
+      if (lastMessageTimestamp) {
+        const sec = Math.max(0, Math.round((now - lastMessageTimestamp) / 1000));
+        if (sec < 5) {
+          setLastMessageTimeDiff('Just now');
+        } else if (sec < 60) {
+          setLastMessageTimeDiff(`${sec}s ago`);
+        } else {
+          const min = Math.floor(sec / 60);
+          setLastMessageTimeDiff(`${min}m ago`);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [lastMessageTimestamp]);
 
   // Existing registered device presets dropdown
   const availableDevices = useMemo(() => {
@@ -417,7 +553,79 @@ export const MqttMonitorScreen: React.FC = () => {
     return list;
   }, [devices]);
 
-  // Subscribe once on mount without creating duplicate overlapping wildcard subscriptions
+  // Combined available topics from registered devices and retained topics registry
+  const availableTopics = useMemo(() => {
+    const list: Array<{ topic: string; label: string }> = [];
+    const seen = new Set<string>();
+
+    availableDevices.forEach((d) => {
+      seen.add(d.uid);
+      const hasRetained = Boolean(topicRegistry[d.uid]);
+      list.push({
+        topic: d.uid,
+        label: `${d.label}${hasRetained ? ' [Retained]' : ''}`,
+      });
+    });
+
+    Object.keys(topicRegistry).forEach((t) => {
+      if (!seen.has(t)) {
+        seen.add(t);
+        list.push({
+          topic: t,
+          label: `${t} [Retained]`,
+        });
+      }
+    });
+
+    return list;
+  }, [availableDevices, topicRegistry]);
+
+  // Fetch authoritative retained messages for all topics from backend
+  useEffect(() => {
+    let isMounted = true;
+
+    // 1. Fetch from backend API
+    ApiClient.getLatestMqttTopics().then((res) => {
+      if (!isMounted || !res || !Array.isArray(res.topics)) return;
+      setTopicRegistry((prev) => {
+        const next = { ...prev };
+        for (const t of res.topics) {
+          if (t && t.topic) next[t.topic] = t;
+        }
+        return next;
+      });
+
+      // If messages list is currently empty, check if activeTopic has a retained record
+      const curTopic = activeTopicRef.current.trim();
+      const rec = res.topics.find((t) => t.topic === curTopic) || localMqttStore.getLatest(curTopic);
+      if (rec) {
+        setMessages((prevMsgs) => {
+          if (prevMsgs.length === 0) {
+            seqRef.current += 1;
+            const msg = convertRecordToSerialMessage(rec, seqRef.current);
+            return [msg];
+          }
+          return prevMsgs;
+        });
+        const d = rec.received_at ? new Date(rec.received_at) : new Date();
+        setLastMessageTimeShort(formatLocalTimeMs(d));
+        setLastMessageTimestamp(d.getTime());
+      }
+    });
+
+    // 2. Subscribe to localMqttStore updates (which also receives WebSocket MQTT_TOPIC_UPDATE broadcasts)
+    const unsubStore = localMqttStore.subscribe((topic, record) => {
+      if (!isMounted) return;
+      setTopicRegistry((prev) => ({ ...prev, [topic]: record }));
+    });
+
+    return () => {
+      isMounted = false;
+      unsubStore();
+    };
+  }, []);
+
+  // Subscribe once on mount
   useEffect(() => {
     const topic = activeTopicRef.current.trim();
     if (topic) {
@@ -429,7 +637,7 @@ export const MqttMonitorScreen: React.FC = () => {
     }
   }, []);
 
-  // Listen directly to existing MQTT client message event
+  // Listen directly to MQTT messages
   useEffect(() => {
     const unsubscribe = mqttService.onRawMessage((frame: RawMqttFrame) => {
       if (!isSubscribedRef.current) return;
@@ -437,15 +645,14 @@ export const MqttMonitorScreen: React.FC = () => {
       const subscribedTopic = activeTopicRef.current.trim();
       if (!subscribedTopic) return;
 
-      // Ignore unrelated topics and internal fleet sync traffic unless explicitly subscribed
       if (!mqttTopicMatches(subscribedTopic, frame.topic)) {
         return;
       }
 
       const rawPayload = frame.payloadString ?? '';
       const receivedDate = new Date(frame.receivedAt || Date.now());
+      const nowMs = receivedDate.getTime();
 
-      // Use centralized payload classifier (JSON object/array, TEXT, BINARY, INVALID) — never discard any frame
       const classified = frame.payloadType
         ? {
             payloadType: frame.payloadType,
@@ -462,23 +669,33 @@ export const MqttMonitorScreen: React.FC = () => {
           : null;
 
       let deviceTimestamp: string | null = frame.deviceTimestamp ?? null;
+      let statusBadge: string | null = null;
+
       if (
-        !deviceTimestamp &&
         classified.payloadType === 'JSON' &&
         classified.parsedJson &&
         typeof classified.parsedJson === 'object' &&
         !Array.isArray(classified.parsedJson)
       ) {
-        if (classified.parsedJson.time !== undefined && classified.parsedJson.time !== null) {
-          deviceTimestamp = String(classified.parsedJson.time);
-        } else if (classified.parsedJson.timestamp !== undefined && classified.parsedJson.timestamp !== null) {
-          deviceTimestamp = String(classified.parsedJson.timestamp);
+        const pj = classified.parsedJson;
+        if (!deviceTimestamp) {
+          if (pj.time !== undefined && pj.time !== null) {
+            deviceTimestamp = String(pj.time);
+          } else if (pj.timestamp !== undefined && pj.timestamp !== null) {
+            deviceTimestamp = String(pj.timestamp);
+          }
+        }
+        if (pj.status !== undefined && pj.status !== null) {
+          statusBadge = String(pj.status);
+        } else if (pj.wlp1 !== undefined && Number.isFinite(Number(pj.wlp1))) {
+          const p = Number(pj.wlp1);
+          statusBadge = p < 25 ? 'CRITICAL' : p < 50 ? 'WARNING' : 'NORMAL';
         }
       }
 
       seqRef.current += 1;
       const entry: SerialMessage = {
-        id: frame.id || `serial-${receivedDate.getTime()}-${seqRef.current}`,
+        id: frame.id || `serial-${nowMs}-${seqRef.current}`,
         seq: seqRef.current,
         topic: frame.topic,
         qos: frame.qos ?? 0,
@@ -486,7 +703,7 @@ export const MqttMonitorScreen: React.FC = () => {
         payloadType: classified.payloadType,
         isEmpty: classified.isEmpty,
         parseError: classified.error,
-        receivedAt: receivedDate.getTime(),
+        receivedAt: nowMs,
         receivedTimeShort: formatLocalTimeMs(receivedDate),
         receivedAtFormatted: frame.receivedAtFormatted || receivedDate.toISOString(),
         deviceTimestamp,
@@ -494,11 +711,28 @@ export const MqttMonitorScreen: React.FC = () => {
         isJson: classified.isJson,
         parsedJson: classified.parsedJson,
         formattedJson,
+        statusBadge,
       };
 
       setTotalMessagesCount((prev) => prev + 1);
+      recentTimestampsRef.current.push(nowMs);
+      setLastMessageTimeShort(formatLocalTimeMs(receivedDate));
+      setLastMessageTimestamp(nowMs);
+      setLastMessageTimeDiff('Just now');
 
-      // Pause stops rendering ONLY — keep receiving & buffering in background!
+      // Persist to local store for per-topic retention
+      localMqttStore.saveRecord({
+        topic: frame.topic,
+        payload: classified.isJson ? classified.parsedJson : rawPayload,
+        payload_type: classified.payloadType === 'JSON' ? 'JSON' : 'TEXT',
+        qos: frame.qos ?? 0,
+        retained: true,
+        received_at: receivedDate.toISOString(),
+        updated_at: receivedDate.toISOString(),
+        message_sequence: seqRef.current,
+      });
+
+      // Pause stops rendering only — keep receiving in background
       if (isPausedRef.current) {
         pendingBufferRef.current.push(entry);
         if (pendingBufferRef.current.length > maxBufferRef.current) {
@@ -510,7 +744,12 @@ export const MqttMonitorScreen: React.FC = () => {
 
       setMessages((prev) => {
         const limit = maxBufferRef.current;
-        const next = [...prev, entry];
+        let next: SerialMessage[];
+        if (prev.length === 1 && prev[0].isRetained && prev[0].topic === entry.topic) {
+          next = [entry];
+        } else {
+          next = [...prev, entry];
+        }
         return next.length > limit ? next.slice(next.length - limit) : next;
       });
     });
@@ -518,14 +757,14 @@ export const MqttMonitorScreen: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Auto-scroll smoothly to latest entry
+  // Auto-scroll to latest entry
   useEffect(() => {
     if (autoScroll && !isPaused && terminalRef.current) {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
   }, [messages, autoScroll, isPaused]);
 
-  // Trim displayed messages if buffer limit is reduced
+  // Trim messages if buffer limit is reduced
   useEffect(() => {
     setMessages((prev) => (prev.length > maxBuffer ? prev.slice(prev.length - maxBuffer) : prev));
   }, [maxBuffer]);
@@ -538,10 +777,22 @@ export const MqttMonitorScreen: React.FC = () => {
       const previous = activeTopicRef.current.trim();
       if (previous && previous !== target) {
         mqttService.unsubscribeTopic(previous);
-        setMessages([]);
         pendingBufferRef.current = [];
         setQueuedWhilePaused(0);
         setSelectedId(null);
+
+        // Immediately check if target topic has a persistent retained record
+        const retained = topicRegistry[target] || localMqttStore.getLatest(target);
+        if (retained) {
+          seqRef.current += 1;
+          const initialMsg = convertRecordToSerialMessage(retained, seqRef.current);
+          setMessages([initialMsg]);
+          const d = retained.received_at ? new Date(retained.received_at) : new Date();
+          setLastMessageTimeShort(formatLocalTimeMs(d));
+          setLastMessageTimestamp(d.getTime());
+        } else {
+          setMessages([]);
+        }
       }
 
       if (!target.endsWith('/#')) {
@@ -559,7 +810,7 @@ export const MqttMonitorScreen: React.FC = () => {
       }
       showToast(`Subscribed: ${target} (QoS ${qosInput})`);
     },
-    [topicInput, qosInput, showToast]
+    [topicInput, qosInput, showToast, topicRegistry]
   );
 
   const handleUnsubscribe = useCallback(() => {
@@ -589,13 +840,13 @@ export const MqttMonitorScreen: React.FC = () => {
     });
   }, []);
 
-  // Clear console does NOT unsubscribe or disconnect MQTT
   const handleClearConsole = useCallback(() => {
+    // Only clears visible session stream, preserves backend and local retained latest-topic records
     setMessages([]);
     pendingBufferRef.current = [];
     setQueuedWhilePaused(0);
     setSelectedId(null);
-    showToast('Console cleared');
+    showToast('Console cleared (session only)');
   }, [showToast]);
 
   const handleToggleAutoScroll = useCallback(() => {
@@ -606,22 +857,17 @@ export const MqttMonitorScreen: React.FC = () => {
     });
   }, []);
 
-  const handleToggleTimestamps = useCallback(() => {
-    setShowTimestamps((prev) => {
-      const next = !prev;
-      if (typeof window !== 'undefined') localStorage.setItem('panorama_mqtt_show_timestamps', String(next));
-      return next;
-    });
-  }, []);
-
-  const handleSetViewMode = useCallback((mode: 'json' | 'raw') => {
+  const handleSetViewMode = useCallback((mode: 'raw' | 'json') => {
     setViewMode(mode);
     if (typeof window !== 'undefined') localStorage.setItem('panorama_mqtt_view_mode', mode);
   }, []);
 
   const copyEntryText = useCallback(
     (entry: SerialMessage) => {
-      const text = viewMode === 'json' && entry.formattedJson ? entry.formattedJson : entry.rawPayload;
+      const text =
+        viewMode === 'json' && entry.formattedJson
+          ? entry.formattedJson
+          : entry.rawPayload;
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         navigator.clipboard.writeText(text).then(() => showToast(`Copied #${entry.seq}`));
       }
@@ -663,334 +909,205 @@ export const MqttMonitorScreen: React.FC = () => {
     showToast(`Downloaded ${messages.length} log(s)`);
   }, [activeTopic, messages, totalMessagesCount, showToast]);
 
+  // Apply reconfigured broker settings
+  const handleApplyBrokerConfig = useCallback(() => {
+    mqttService.reconfigureBroker(configHost.trim(), configPort, configPath.trim(), configSsl);
+    setIsConfigModalOpen(false);
+    setBrokerInfo(mqttService.getBrokerInfo());
+    showToast(`Reconnecting to ${configHost}:${configPort}...`);
+  }, [configHost, configPort, configPath, configSsl, showToast]);
+
+  // Filtered messages list
+  const filteredMessages = useMemo(() => {
+    const q = filterText.trim().toLowerCase();
+    if (!q) return messages;
+    return messages.filter(
+      (m) =>
+        m.topic.toLowerCase().includes(q) ||
+        m.rawPayload.toLowerCase().includes(q) ||
+        (m.deviceTimestamp && m.deviceTimestamp.toLowerCase().includes(q))
+    );
+  }, [messages, filterText]);
+
   return (
     <div
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: '6px',
+        gap: '12px',
         width: '100%',
-        height: 'calc(100vh - 134px)',
-        minHeight: '540px',
+        maxWidth: '100%',
         fontFamily: typography.fontFamily,
         boxSizing: 'border-box',
-        overflow: 'hidden',
+        padding: '12px 14px 24px 14px',
+        backgroundColor: '#F8FAFC',
+        minHeight: '100%',
       }}
     >
-      {/* Clean dark terminal scrollbar styling */}
+      {/* Scrollbar styling */}
       <style>{`
-        .mqtt-serial-stream::-webkit-scrollbar { width: 8px; height: 8px; }
-        .mqtt-serial-stream::-webkit-scrollbar-track { background: #0D1117; }
-        .mqtt-serial-stream::-webkit-scrollbar-thumb { background: #30363D; border-radius: 4px; }
-        .mqtt-serial-stream::-webkit-scrollbar-thumb:hover { background: #484F58; }
+        .mqtt-serial-stream::-webkit-scrollbar { width: 5px; height: 5px; }
+        .mqtt-serial-stream::-webkit-scrollbar-track { background: #F1F5F9; }
+        .mqtt-serial-stream::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+        .mqtt-serial-stream::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
       `}</style>
 
-      {/* A. COMPACT MQTT HEADER */}
+      {/* SECTION 1: PAGE HEADING */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '2px 0',
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            width: '42px',
+            height: '42px',
+            borderRadius: '10px',
+            backgroundColor: '#EFF6FF',
+            border: '1px solid #BFDBFE',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#2563EB',
+            flexShrink: 0,
+          }}
+        >
+          <Radio size={22} />
+        </div>
+        <div>
+          <h1
+            style={{
+              fontSize: '18px',
+              fontWeight: 800,
+              color: '#0F172A',
+              margin: 0,
+              letterSpacing: '-0.2px',
+              lineHeight: '22px',
+            }}
+          >
+            Raw Data Monitor
+          </h1>
+          <p
+            style={{
+              fontSize: '12px',
+              color: '#64748B',
+              margin: '2px 0 0 0',
+              lineHeight: '16px',
+            }}
+          >
+            Real-time device data
+          </p>
+        </div>
+      </div>
+
+      {/* SECTION 2: DATA VIEW CARD */}
       <div
         style={{
           backgroundColor: '#FFFFFF',
           border: '1px solid #E2E8F0',
-          borderRadius: '6px',
-          padding: '8px 12px',
+          borderRadius: '12px',
+          padding: '12px 14px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
           display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '8px',
+          flexDirection: 'column',
+          gap: '12px',
           flexShrink: 0,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div
+        {/* View Selector: Two equal-width tabs */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '8px',
+            width: '100%',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => handleSetViewMode('raw')}
             style={{
-              width: '26px',
-              height: '26px',
-              borderRadius: '5px',
-              backgroundColor: '#0F172A',
-              color: '#38BDF8',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              flexShrink: 0,
+              gap: '6px',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              border: 'none',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              backgroundColor: viewMode === 'raw' ? '#2563EB' : '#F1F5F9',
+              color: viewMode === 'raw' ? '#FFFFFF' : '#0F172A',
+              boxShadow: viewMode === 'raw' ? '0 1px 3px rgba(37,99,235,0.25)' : 'none',
             }}
           >
-            <Terminal size={15} />
-          </div>
-          <h1 style={{ fontSize: '14px', fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '0.2px' }}>
-            RAW MQTT SERIAL MONITOR
-          </h1>
+            <AlignLeft size={14} color={viewMode === 'raw' ? '#FFFFFF' : '#475569'} />
+            Raw View
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSetViewMode('json')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              border: 'none',
+              fontSize: '12px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              backgroundColor: viewMode === 'json' ? '#2563EB' : '#F1F5F9',
+              color: viewMode === 'json' ? '#FFFFFF' : '#0F172A',
+              boxShadow: viewMode === 'json' ? '0 1px 3px rgba(37,99,235,0.25)' : 'none',
+            }}
+          >
+            <Code2 size={14} color={viewMode === 'json' ? '#FFFFFF' : '#475569'} />
+            JSON View
+          </button>
         </div>
 
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
-          {/* Connection Status */}
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              padding: '3px 8px',
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 700,
-              backgroundColor: isBrokerConnected ? '#F0FDF4' : '#FEF2F2',
-              border: `1px solid ${isBrokerConnected ? '#BBF7D0' : '#FECACA'}`,
-              color: isBrokerConnected ? '#15803D' : '#B91C1C',
-            }}
-          >
-            <span
-              style={{
-                width: '7px',
-                height: '7px',
-                borderRadius: '50%',
-                backgroundColor: isBrokerConnected ? '#16A34A' : '#DC2626',
-              }}
-            />
-            {isBrokerConnected ? 'CONNECTED' : 'DISCONNECTED'}
-          </span>
-
-          {/* Live / Paused Indicator */}
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              padding: '3px 8px',
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 700,
-              backgroundColor: isPaused ? '#FFFBEB' : '#F0FDF4',
-              border: `1px solid ${isPaused ? '#FDE68A' : '#BBF7D0'}`,
-              color: isPaused ? '#B45309' : '#15803D',
-            }}
-          >
-            <span
-              style={{
-                width: '7px',
-                height: '7px',
-                borderRadius: '50%',
-                backgroundColor: isPaused ? '#D97706' : '#16A34A',
-              }}
-            />
-            {isPaused ? `PAUSED${queuedWhilePaused > 0 ? ` (+${queuedWhilePaused})` : ''}` : 'LIVE'}
-          </span>
-
-          {/* Selected Topic */}
-          <span
+        {/* Controls Toolbar */}
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+        >
+          {/* Auto Scroll */}
+          <button
+            type="button"
+            onClick={handleToggleAutoScroll}
+            title="Toggle autoscroll to latest frame"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '4px',
-              padding: '3px 8px',
-              borderRadius: '4px',
+              padding: '5px 9px',
+              backgroundColor: autoScroll ? '#EFF6FF' : '#FFFFFF',
+              color: autoScroll ? '#2563EB' : '#475569',
+              border: `1px solid ${autoScroll ? '#BFDBFE' : '#CBD5E1'}`,
+              borderRadius: '6px',
               fontSize: '11px',
-              backgroundColor: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-              color: '#475569',
+              fontWeight: 600,
+              cursor: 'pointer',
             }}
           >
-            Topic: <strong style={{ fontFamily: 'monospace', color: '#0F172A' }}>{activeTopic}</strong>
-          </span>
+            <ArrowDown size={12} />
+            Auto Scroll
+          </button>
 
-          {/* Subscription Status */}
-          <span
-            style={{
-              padding: '3px 8px',
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 700,
-              backgroundColor: isSubscribed ? '#EFF6FF' : '#F8FAFC',
-              border: `1px solid ${isSubscribed ? '#BFDBFE' : '#CBD5E1'}`,
-              color: isSubscribed ? '#1D4ED8' : '#64748B',
-            }}
-          >
-            {isSubscribed ? 'SUBSCRIBED' : 'UNSUBSCRIBED'}
-          </span>
-
-          {/* Total Messages Received */}
-          <span
-            style={{
-              padding: '3px 8px',
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 700,
-              backgroundColor: '#F8FAFC',
-              border: '1px solid #E2E8F0',
-              color: '#0F172A',
-            }}
-          >
-            Messages: <span style={{ fontFamily: 'monospace', color: '#2563EB' }}>{totalMessagesCount}</span>
-          </span>
-        </div>
-      </div>
-
-      {/* B. MQTT TOPIC CONTROLS */}
-      <div
-        style={{
-          backgroundColor: '#FFFFFF',
-          border: '1px solid #E2E8F0',
-          borderRadius: '6px',
-          padding: '6px 12px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          gap: '6px',
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontSize: '11px', fontWeight: 700, color: '#475569' }}>Topic:</span>
-        <input
-          type="text"
-          value={topicInput}
-          onChange={(e) => setTopicInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') handleSubscribe();
-          }}
-          placeholder="Enter MQTT topic..."
-          style={{
-            width: '230px',
-            maxWidth: '100%',
-            padding: '5px 8px',
-            fontFamily: 'monospace',
-            fontSize: '11.5px',
-            fontWeight: 700,
-            color: '#0F172A',
-            backgroundColor: '#F8FAFC',
-            border: '1px solid #CBD5E1',
-            borderRadius: '4px',
-            outline: 'none',
-          }}
-        />
-
-        <select
-          value={availableDevices.some((d) => d.uid === topicInput) ? topicInput : ''}
-          onChange={(e) => {
-            if (e.target.value) {
-              setTopicInput(e.target.value);
-              handleSubscribe(e.target.value);
-            }
-          }}
-          title="Select registered device topic"
-          style={{
-            padding: '5px 7px',
-            fontSize: '11px',
-            color: '#334155',
-            backgroundColor: '#F1F5F9',
-            border: '1px solid #CBD5E1',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            maxWidth: '210px',
-          }}
-        >
-          <option value="" disabled>
-            Saved Topics...
-          </option>
-          {availableDevices.map((d) => (
-            <option key={d.uid} value={d.uid}>
-              {d.label}
-            </option>
-          ))}
-        </select>
-
-        <span style={{ fontSize: '11px', fontWeight: 700, color: '#475569', marginLeft: '4px' }}>QoS:</span>
-        <select
-          value={qosInput}
-          onChange={(e) => setQosInput(Number(e.target.value))}
-          style={{
-            padding: '5px 7px',
-            fontSize: '11px',
-            fontWeight: 700,
-            color: '#0F172A',
-            backgroundColor: '#F8FAFC',
-            border: '1px solid #CBD5E1',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
-          <option value={0}>0</option>
-          <option value={1}>1</option>
-          <option value={2}>2</option>
-        </select>
-
-        <button
-          type="button"
-          onClick={() => handleSubscribe()}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '5px 11px',
-            backgroundColor: isSubscribed && activeTopic === topicInput.trim() ? '#15803D' : '#2563EB',
-            color: '#FFFFFF',
-            border: 'none',
-            borderRadius: '4px',
-            fontSize: '11px',
-            fontWeight: 700,
-            cursor: 'pointer',
-          }}
-        >
-          <Radio size={12} />
-          SUBSCRIBE
-        </button>
-
-        <button
-          type="button"
-          onClick={handleUnsubscribe}
-          disabled={!isSubscribed}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            padding: '5px 11px',
-            backgroundColor: '#FFFFFF',
-            color: isSubscribed ? '#DC2626' : '#94A3B8',
-            border: `1px solid ${isSubscribed ? '#FECACA' : '#E2E8F0'}`,
-            borderRadius: '4px',
-            fontSize: '11px',
-            fontWeight: 700,
-            cursor: isSubscribed ? 'pointer' : 'not-allowed',
-          }}
-        >
-          <WifiOff size={12} />
-          UNSUBSCRIBE
-        </button>
-
-        {feedback && (
-          <span
-            style={{
-              marginLeft: 'auto',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '3px 8px',
-              borderRadius: '4px',
-              fontSize: '10px',
-              fontWeight: 700,
-              color: '#15803D',
-              backgroundColor: '#DCFCE7',
-              border: '1px solid #86EFAC',
-            }}
-          >
-            <Check size={11} /> {feedback}
-          </span>
-        )}
-      </div>
-
-      {/* C. TERMINAL CONTROLS TOOLBAR */}
-      <div
-        style={{
-          backgroundColor: '#FFFFFF',
-          border: '1px solid #E2E8F0',
-          borderRadius: '6px',
-          padding: '6px 12px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '6px',
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '5px' }}>
+          {/* Pause */}
           <button
             type="button"
             onClick={handleTogglePause}
@@ -998,20 +1115,21 @@ export const MqttMonitorScreen: React.FC = () => {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '4px',
-              padding: '4px 9px',
+              padding: '5px 9px',
               backgroundColor: isPaused ? '#ECFDF5' : '#FFFBEB',
               color: isPaused ? '#059669' : '#B45309',
               border: `1px solid ${isPaused ? '#A7F3D0' : '#FDE68A'}`,
-              borderRadius: '4px',
+              borderRadius: '6px',
               fontSize: '11px',
               fontWeight: 700,
               cursor: 'pointer',
             }}
           >
-            {isPaused ? <Play size={11} /> : <Pause size={11} />}
-            {isPaused ? 'Resume' : 'Pause'}
+            {isPaused ? <Play size={12} /> : <Pause size={12} />}
+            {isPaused ? `Resume${queuedWhilePaused > 0 ? ` (+${queuedWhilePaused})` : ''}` : 'Pause'}
           </button>
 
+          {/* Clear */}
           <button
             type="button"
             onClick={handleClearConsole}
@@ -1019,126 +1137,21 @@ export const MqttMonitorScreen: React.FC = () => {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '4px',
-              padding: '4px 9px',
+              padding: '5px 9px',
               backgroundColor: '#FFFFFF',
               color: '#475569',
               border: '1px solid #CBD5E1',
-              borderRadius: '4px',
+              borderRadius: '6px',
               fontSize: '11px',
               fontWeight: 600,
               cursor: 'pointer',
             }}
           >
-            <Trash2 size={11} />
-            Clear Console
+            <Trash2 size={12} />
+            Clear
           </button>
 
-          <button
-            type="button"
-            onClick={handleToggleAutoScroll}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 9px',
-              backgroundColor: autoScroll ? '#EFF6FF' : '#F8FAFC',
-              color: autoScroll ? '#1D4ED8' : '#64748B',
-              border: `1px solid ${autoScroll ? '#BFDBFE' : '#CBD5E1'}`,
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            <ArrowDown size={11} />
-            Auto Scroll
-          </button>
-
-          <button
-            type="button"
-            onClick={handleToggleTimestamps}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 9px',
-              backgroundColor: showTimestamps ? '#EFF6FF' : '#F8FAFC',
-              color: showTimestamps ? '#1D4ED8' : '#64748B',
-              border: `1px solid ${showTimestamps ? '#BFDBFE' : '#CBD5E1'}`,
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            <Clock size={11} />
-            Timestamps
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSetViewMode('json')}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 9px',
-              backgroundColor: viewMode === 'json' ? '#0F172A' : '#F8FAFC',
-              color: viewMode === 'json' ? '#FFFFFF' : '#475569',
-              border: `1px solid ${viewMode === 'json' ? '#0F172A' : '#CBD5E1'}`,
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            <Code2 size={11} />
-            JSON View
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSetViewMode('raw')}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 9px',
-              backgroundColor: viewMode === 'raw' ? '#0F172A' : '#F8FAFC',
-              color: viewMode === 'raw' ? '#FFFFFF' : '#475569',
-              border: `1px solid ${viewMode === 'raw' ? '#0F172A' : '#CBD5E1'}`,
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            <AlignLeft size={11} />
-            Raw View
-          </button>
-
-          <button
-            type="button"
-            onClick={handleToolbarCopy}
-            disabled={messages.length === 0}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '4px 9px',
-              backgroundColor: '#FFFFFF',
-              color: messages.length > 0 ? '#334155' : '#94A3B8',
-              border: '1px solid #CBD5E1',
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 600,
-              cursor: messages.length > 0 ? 'pointer' : 'not-allowed',
-            }}
-          >
-            <Copy size={11} />
-            Copy
-          </button>
-
+          {/* Download */}
           <button
             type="button"
             onClick={handleDownloadLogs}
@@ -1147,147 +1160,275 @@ export const MqttMonitorScreen: React.FC = () => {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '4px',
-              padding: '4px 9px',
+              padding: '5px 9px',
               backgroundColor: '#FFFFFF',
-              color: messages.length > 0 ? '#1D4ED8' : '#94A3B8',
+              color: messages.length > 0 ? '#2563EB' : '#94A3B8',
               border: `1px solid ${messages.length > 0 ? '#BFDBFE' : '#E2E8F0'}`,
-              borderRadius: '4px',
+              borderRadius: '6px',
               fontSize: '11px',
-              fontWeight: 700,
+              fontWeight: 600,
               cursor: messages.length > 0 ? 'pointer' : 'not-allowed',
             }}
           >
-            <Download size={11} />
-            Download Logs
+            <Download size={12} />
+            Download
           </button>
-        </div>
 
-        {/* Buffer limit selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#64748B' }}>
-          <span>Buffer:</span>
-          <select
-            value={maxBuffer}
-            onChange={(e) => setMaxBuffer(Number(e.target.value))}
-            title="Maximum displayed messages"
+          {/* Copy */}
+          <button
+            type="button"
+            onClick={handleToolbarCopy}
+            disabled={messages.length === 0}
             style={{
-              padding: '3px 6px',
-              fontSize: '11px',
-              fontFamily: 'monospace',
-              fontWeight: 700,
-              color: '#0F172A',
-              backgroundColor: '#F8FAFC',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '5px 9px',
+              backgroundColor: '#FFFFFF',
+              color: messages.length > 0 ? '#475569' : '#94A3B8',
               border: '1px solid #CBD5E1',
-              borderRadius: '4px',
+              borderRadius: '6px',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: messages.length > 0 ? 'pointer' : 'not-allowed',
             }}
           >
-            {BUFFER_OPTIONS.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-          <span style={{ fontFamily: 'monospace', color: '#475569' }}>
-            ({messages.length}/{maxBuffer})
-          </span>
+            <Copy size={12} />
+            Copy
+          </button>
+
+          {/* Buffer Limit Selector */}
+          <div
+            style={{
+              marginLeft: 'auto',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '11px',
+              color: '#64748B',
+            }}
+          >
+            <span>Buffer:</span>
+            <select
+              value={maxBuffer}
+              onChange={(e) => setMaxBuffer(Number(e.target.value))}
+              style={{
+                padding: '4px 6px',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                fontWeight: 700,
+                color: '#0F172A',
+                backgroundColor: '#F8FAFC',
+                border: '1px solid #CBD5E1',
+                borderRadius: '6px',
+                cursor: 'pointer',
+              }}
+            >
+              {BUFFER_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* D. MAIN SERIAL MONITOR TERMINAL (75–85% OF PAGE HEIGHT) */}
+      {/* SECTION 3: LIVE MESSAGES CARD */}
       <div
+        className="live-message-monitor"
         style={{
-          flex: 1,
-          minHeight: 0,
-          backgroundColor: '#0D1117',
-          border: '1px solid #30363D',
-          borderRadius: '6px',
+          width: '100%',
+          minHeight: 'clamp(380px, 60dvh, 760px)',
+          backgroundColor: '#FFFFFF',
+          border: '1px solid #E2E8F0',
+          borderRadius: '12px',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          boxShadow: '0 4px 12px rgba(15, 23, 42, 0.14)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+          flex: '1 1 auto',
+          minWidth: 0,
         }}
       >
-        {/* Minimal Terminal Status Bar */}
+        {/* Terminal Header */}
         <div
           style={{
-            backgroundColor: '#161B22',
-            borderBottom: '1px solid #30363D',
-            padding: '5px 12px',
+            backgroundColor: '#FFFFFF',
+            borderBottom: '1px solid #E2E8F0',
+            padding: '10px 14px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-            fontSize: '11px',
-            color: '#8B949E',
+            gap: '8px',
             flexShrink: 0,
           }}
         >
-          <span style={{ color: '#C9D1D9', fontWeight: 600 }}>
-            LIVE MQTT TERMINAL &mdash; {activeTopic}
-          </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ color: '#58A6FF' }}>{viewMode === 'json' ? 'JSON VIEW' : 'RAW VIEW'}</span>
-            <span style={{ color: isPaused ? '#F59E0B' : '#3FB950', fontWeight: 700 }}>
-              {isPaused ? 'PAUSED' : '● STREAMING'}
+          {/* Left: Green Live Dot + Live Messages Title + Count Badge */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: isPaused ? '#F59E0B' : '#22C55E',
+                boxShadow: isPaused ? '0 0 6px #F59E0B' : '0 0 6px rgba(34, 197, 94, 0.4)',
+              }}
+            />
+            <span style={{ color: '#0F172A', fontWeight: 700, fontSize: '13px' }}>
+              Live Messages
             </span>
+            <span
+              style={{
+                backgroundColor: '#EFF6FF',
+                color: '#2563EB',
+                border: '1px solid #DBEAFE',
+                padding: '2px 8px',
+                borderRadius: '12px',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                fontWeight: 700,
+              }}
+            >
+              {filteredMessages.length}
+              {filteredMessages.length !== messages.length ? ` / ${messages.length}` : ''}
+            </span>
+          </div>
+
+          {/* Right: Search / Filter input */}
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <Search
+              size={12}
+              style={{
+                color: '#94A3B8',
+                position: 'absolute',
+                left: '8px',
+                pointerEvents: 'none',
+              }}
+            />
+            <input
+              type="text"
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              placeholder="Filter messages..."
+              style={{
+                padding: '5px 22px 5px 24px',
+                fontSize: '11.5px',
+                color: '#0F172A',
+                backgroundColor: '#F8FAFC',
+                border: '1px solid #CBD5E1',
+                borderRadius: '6px',
+                width: '135px',
+                outline: 'none',
+              }}
+            />
+            {filterText && (
+              <button
+                type="button"
+                onClick={() => setFilterText('')}
+                style={{
+                  position: 'absolute',
+                  right: '5px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#94A3B8',
+                  cursor: 'pointer',
+                  padding: 0,
+                  display: 'flex',
+                }}
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Scrollable Terminal Stream */}
+        {/* Scrollable Message Container: light background */}
         <div
-          ref={terminalRef}
-          className="mqtt-serial-stream"
           style={{
             flex: 1,
             minHeight: 0,
-            overflowY: 'auto',
-            overflowX: 'auto',
-            padding: '10px 14px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '4px',
+            padding: '10px 12px',
+            backgroundColor: '#F8FAFC',
           }}
         >
-          {messages.length === 0 ? (
-            <div
-              style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#8B949E',
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                fontSize: '12px',
-                gap: '6px',
-                textAlign: 'center',
-              }}
-            >
-              <div style={{ color: '#C9D1D9', fontWeight: 700 }}>
-                {isSubscribed
-                  ? `Listening on MQTT topic: ${activeTopic}`
-                  : `Unsubscribed from topic: ${activeTopic}`}
+          <div
+            ref={terminalRef}
+            className="mqtt-serial-stream live-message-content"
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
+              overflowX: 'auto',
+              overscrollBehavior: 'contain',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+            }}
+          >
+            {filteredMessages.length === 0 ? (
+              <div
+                style={{
+                  flex: 1,
+                  minHeight: '220px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#64748B',
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  gap: '8px',
+                  textAlign: 'center',
+                  padding: '24px',
+                }}
+              >
+                <Terminal size={32} color="#94A3B8" />
+                <div style={{ color: '#0F172A', fontWeight: 700 }}>
+                  {filterText
+                    ? `No messages matching "${filterText}"`
+                    : 'Listening for incoming device telemetry...'}
+                </div>
+                <div style={{ fontSize: '11px', color: '#64748B' }}>
+                  {filterText
+                    ? 'Try clearing the search filter.'
+                    : isBrokerConnected
+                      ? 'Connected to broker. Waiting for live telemetry packets...'
+                      : 'Connecting to MQTT broker...'}
+                </div>
               </div>
-              <div>
-                {isBrokerConnected
-                  ? 'Waiting for incoming MQTT messages...'
-                  : 'Connecting to MQTT broker...'}
-              </div>
-            </div>
-          ) : (
-            messages.map((entry, idx) => (
-              <SerialLogEntry
-                key={entry.id}
-                entry={entry}
-                viewMode={viewMode}
-                showTimestamps={showTimestamps}
-                isSelected={entry.id === selectedId}
-                isFirst={idx === 0}
-                onSelect={setSelectedId}
-                onCopy={copyEntryText}
-              />
-            ))
-          )}
+            ) : (
+              filteredMessages.map((entry, idx) => (
+                <SerialLogEntry
+                  key={entry.id}
+                  entry={entry}
+                  viewMode={viewMode}
+                  showTimestamps={showTimestamps}
+                  isSelected={entry.id === selectedId}
+                  isFirst={idx === 0}
+                  onSelect={setSelectedId}
+                  onCopy={copyEntryText}
+                />
+              ))
+            )}
+          </div>
         </div>
+      </div>
+
+      {/* SECTION 4: FOOTER */}
+      <div
+        style={{
+          textAlign: 'center',
+          padding: '16px 8px 8px 8px',
+          fontSize: '11px',
+          color: '#94A3B8',
+          letterSpacing: '0.2px',
+          flexShrink: 0,
+        }}
+      >
+        &copy; 2026 Panorama Water Tank Monitoring System
       </div>
     </div>
   );

@@ -119,7 +119,7 @@ export const MqttBrokerDetailsRow: React.FC<{
         <SpecRow label="Messages Received (Topic)" value={String(topicMessagesCount)} mono />
         <SpecRow
           label="Connection Duration"
-          value={formatDuration(brokerDiag.connectedAt, brokerDiag.mqttSessionConnected, nowTick)}
+          value={formatDuration(brokerDiag.connectedAt ?? null, brokerDiag.mqttSessionConnected, nowTick)}
           mono
         />
         <SpecRow label="Reconnection Attempts" value={String(brokerDiag.reconnectAttempts)} mono />
@@ -151,7 +151,7 @@ export const MqttBrokerDetailsRow: React.FC<{
         icon={<Activity size={15} />}
         badge={
           <StatusPill
-            label={brokerDiag.brokerReachable}
+            label={brokerDiag.brokerReachable || 'UNKNOWN'}
             tone={brokerDiag.brokerReachable === 'REACHABLE' ? 'success' : brokerDiag.brokerReachable === 'UNREACHABLE' ? 'danger' : 'neutral'}
           />
         }

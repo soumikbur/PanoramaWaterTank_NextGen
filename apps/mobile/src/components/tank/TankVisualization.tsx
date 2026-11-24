@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { colors, metrics, typography } from '../../theme';
 import { TankLiveStatus } from '../../types';
 import { BaseCard } from '../common/BaseCard';
 import { StatusBadge } from '../common/StatusBadge';
+import { useDisplayPreferences } from '../../context/DisplayPreferencesContext';
 
 interface TankVisualizationProps {
   tank: TankLiveStatus | null;
@@ -138,9 +139,10 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({
     ? new Date(tank.lastUpdate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : 'Awaiting Telemetry';
 
-  // 5. Animation Control (Only animate wave if valid live telemetry reading exists)
-  const shouldAnimateWave = state === 'VALID_READING' && fillPercentage > 0;
-  const [wavePhase, setWavePhase] = useState(0);
+  // 5. Animation Control (Only animate wave if valid live telemetry reading exists and enabled by performance profile)
+  const { activePerformanceConfig } = useDisplayPreferences();
+  const shouldAnimateWave = state === 'VALID_READING' && fillPercentage > 0 && activePerformanceConfig.enableWaveAnimation;
+  const wavePhaseRef = useRef(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerSize, setContainerSize] = useState<{ width: number; height: number }>({ width: 180, height: 320 });
@@ -172,37 +174,52 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({
     return () => ro.disconnect();
   }, []);
 
+  const [renderTick, setRenderTick] = useState(0);
+
   useEffect(() => {
+    targetFillRef.current = fillPercentage;
+    if (!shouldAnimateWave) {
+      animatedFillRef.current = fillPercentage;
+      setRenderTick((t) => t + 1);
+    }
+  }, [fillPercentage, shouldAnimateWave]);
+
+  useEffect(() => {
+    if (!shouldAnimateWave) return;
+
     let animId: number;
+    let lastFrameTime = 0;
+    const targetIntervalMs = activePerformanceConfig.waveAnimationFps === 30 ? 33 : 16;
     let start: number | null = null;
 
-    const prefersReducedMotion =
-      typeof window !== 'undefined' &&
-      window.matchMedia &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
     const animate = (timestamp: number) => {
-      if (shouldAnimateWave && !prefersReducedMotion) {
+      // Pause completely if app is in background to preserve battery
+      if (typeof document !== 'undefined' && document.hidden) {
+        animId = requestAnimationFrame(animate);
+        return;
+      }
+
+      if (timestamp - lastFrameTime >= targetIntervalMs) {
+        lastFrameTime = timestamp;
         if (!start) start = timestamp;
         const progress = (timestamp - start) % 4000;
-        setWavePhase((progress / 4000) * Math.PI * 2);
-      }
+        wavePhaseRef.current = (progress / 4000) * Math.PI * 2;
 
-      // Smooth fluid level transition
-      const target = targetFillRef.current;
-      const current = animatedFillRef.current;
-      if (Math.abs(target - current) < 0.05) {
-        animatedFillRef.current = target;
-      } else {
-        animatedFillRef.current = current + (target - current) * 0.08;
+        const target = targetFillRef.current;
+        const current = animatedFillRef.current;
+        if (Math.abs(target - current) < 0.05) {
+          animatedFillRef.current = target;
+        } else {
+          animatedFillRef.current = current + (target - current) * 0.08;
+        }
+        setRenderTick((t) => t + 1);
       }
-
       animId = requestAnimationFrame(animate);
     };
 
     animId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animId);
-  }, [shouldAnimateWave]);
+  }, [shouldAnimateWave, activePerformanceConfig]);
 
   // 6. Dynamic Responsive Canvas Rendering Logic
   useEffect(() => {
@@ -270,41 +287,49 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({
           grad.addColorStop(1, colorBottom);
           ctx.fillStyle = grad;
 
-          // Dual smooth sine waves scaled proportionally with tank size
-          const phase1 = wavePhase;
-          const phase2 = wavePhase * 1.6 + 1.2;
-          const amp1 = Math.min(3.0, h * 0.012);
-          const amp2 = Math.min(1.8, h * 0.007);
+          if (activePerformanceConfig.enableWaveAnimation) {
+            // Dual smooth sine waves scaled proportionally with tank size
+            const phase1 = wavePhaseRef.current;
+            const phase2 = wavePhaseRef.current * 1.6 + 1.2;
+            const amp1 = Math.min(3.0, h * 0.012);
+            const amp2 = Math.min(1.8, h * 0.007);
 
-          ctx.beginPath();
-          ctx.moveTo(0, h);
-          ctx.lineTo(0, waterTopY);
+            ctx.beginPath();
+            ctx.moveTo(0, h);
+            ctx.lineTo(0, waterTopY);
 
-          for (let x = 0; x <= w; x += 3) {
-            const waveY =
-              waterTopY +
-              Math.sin((x / w) * Math.PI * 2.0 + phase1) * amp1 +
-              Math.sin((x / w) * Math.PI * 4.0 + phase2) * amp2;
-            ctx.lineTo(x, waveY);
+            const step = activePerformanceConfig.id === 'balanced' ? 6 : 3;
+            for (let x = 0; x <= w; x += step) {
+              const waveY =
+                waterTopY +
+                Math.sin((x / w) * Math.PI * 2.0 + phase1) * amp1 +
+                Math.sin((x / w) * Math.PI * 4.0 + phase2) * amp2;
+              ctx.lineTo(x, waveY);
+            }
+
+            ctx.lineTo(w, h);
+            ctx.closePath();
+            ctx.fill();
+
+            // Wave crest highlight
+            ctx.beginPath();
+            for (let x2 = 0; x2 <= w; x2 += step) {
+              const waveY2 =
+                waterTopY +
+                Math.sin((x2 / w) * Math.PI * 2.0 + phase1) * amp1 +
+                Math.sin((x2 / w) * Math.PI * 4.0 + phase2) * amp2;
+              if (x2 === 0) ctx.moveTo(x2, waveY2);
+              else ctx.lineTo(x2, waveY2);
+            }
+            ctx.lineWidth = 2.0;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+            ctx.stroke();
+          } else {
+            // Low-Resource Profile: Static crisp liquid level with zero sine wave / loop overhead
+            ctx.fillRect(0, waterTopY, w, waterH);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+            ctx.fillRect(0, waterTopY, w, 2);
           }
-
-          ctx.lineTo(w, h);
-          ctx.closePath();
-          ctx.fill();
-
-          // Wave crest highlight
-          ctx.beginPath();
-          for (let x2 = 0; x2 <= w; x2 += 3) {
-            const waveY2 =
-              waterTopY +
-              Math.sin((x2 / w) * Math.PI * 2.0 + phase1) * amp1 +
-              Math.sin((x2 / w) * Math.PI * 4.0 + phase2) * amp2;
-            if (x2 === 0) ctx.moveTo(x2, waveY2);
-            else ctx.lineTo(x2, waveY2);
-          }
-          ctx.lineWidth = 2.0;
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
-          ctx.stroke();
         }
       } else if (state === 'STALE') {
         const waterH = h * (animatedFillRef.current / 100.0);
@@ -384,7 +409,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({
     } catch (err) {
       console.warn('[TankVisualization canvas render error]:', err);
     }
-  }, [state, fillPercentage, wavePhase, isOverflow, containerSize]);
+  }, [state, fillPercentage, renderTick, isOverflow, containerSize, activePerformanceConfig]);
 
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const canvasWidth = Math.max(10, Math.round(containerSize.width * dpr));

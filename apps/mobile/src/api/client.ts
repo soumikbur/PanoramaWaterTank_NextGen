@@ -27,7 +27,7 @@ import {
 import rawTelemetrySeed from '../data/telemetrySeed.json';
 import { localMqttStore } from '../services/localMqttStore';
 import { TrainLookupResult, TrainCreatePayload } from '../types/train';
-import { deviceRegistry } from '../services/deviceRegistry';
+import { deviceRegistry, isGenuineHardwareUid, getCanonicalUid } from '../services/deviceRegistry';
 import { localFleetStore } from '../services/localFleetStore';
 import { alertNotificationService } from '../services/alertNotificationService';
 import {
@@ -1997,6 +1997,95 @@ export class ApiClient {
     }
   }
 
+  static async fetchDevicesOverviewTable(
+    params: {
+      search?: string;
+      sortBy?: string;
+      sortOrder?: string;
+      page?: number;
+      limit?: number;
+    } = {}
+  ): Promise<TelemetryTableResponse> {
+    const {
+      search,
+      sortBy = 'recordedAt',
+      sortOrder = 'desc',
+      page = 1,
+      limit = 25,
+    } = params;
+
+    if (API_BASE && !this.isRemoteUnreachable()) {
+      try {
+        const queryParams = new URLSearchParams();
+        if (search) queryParams.append('search', search);
+        queryParams.append('sort_by', sortBy);
+        queryParams.append('sort_order', sortOrder);
+        queryParams.append('page', String(page));
+        queryParams.append('limit', String(limit));
+
+        const remote = await this.request<TelemetryTableResponse>(
+          `/devices/overview-table?${queryParams.toString()}`
+        );
+        if (remote && Array.isArray(remote.items)) {
+          return remote;
+        }
+      } catch (err) {
+        Logger.debug('API', 'ApiClient', 'Remote fetchDevicesOverviewTable failed, falling back to local registry', 'fetchDevicesOverviewTable', err);
+      }
+    }
+
+    // Local fallback: return exactly the registered genuine physical devices
+    const registered = deviceRegistry.getRegisteredDevices().filter((d) => isGenuineHardwareUid(d.uid));
+    const items: TelemetryTableRow[] = registered.map((d) => {
+      const canonical = getCanonicalUid(d.uid);
+      const seedMatch = (rawTelemetrySeed as TelemetryTableRow[]).find((s) => getCanonicalUid(s.deviceId) === canonical);
+      const trainNum = d.trainNumber || (d as any).train_number;
+      const coachNum = d.coachNumber || (d as any).coach_number;
+      const isOnline = d.isOnline ?? (d as any).is_online ?? false;
+      const devId = (d as any).id || canonical;
+
+      if (seedMatch) {
+        return {
+          ...seedMatch,
+          deviceId: canonical,
+          deviceName: d.name || `Node ${canonical.slice(-6)}`,
+          trainNumber: trainNum && trainNum !== 'UNASSIGNED' ? trainNum : undefined,
+          coachNumber: coachNum && coachNum !== 'UNASSIGNED' ? coachNum : undefined,
+          isOnline,
+        };
+      }
+      return {
+        id: `dev-${devId}`,
+        deviceId: canonical,
+        deviceName: d.name || `Node ${canonical.slice(-6)}`,
+        trainNumber: trainNum && trainNum !== 'UNASSIGNED' ? trainNum : undefined,
+        coachNumber: coachNum && coachNum !== 'UNASSIGNED' ? coachNum : undefined,
+        recordedAt: '--',
+        ai1Ma: null,
+        level1Percent: '--',
+        ai1Valid: '--',
+        batteryV: null,
+        batteryPercent: '--',
+        latitude: null,
+        longitude: null,
+        altitudeM: null,
+        gpsValid: '--',
+        altitudeValid: '--',
+        receivedUtc: '--',
+        isOnline,
+      };
+    });
+
+    return {
+      total: items.length,
+      page: 1,
+      limit,
+      totalPages: 1,
+      totalDevices: items.length,
+      items,
+    };
+  }
+
   static async fetchTelemetryHistoryTable(
     params: TelemetryTableFilterParams = {}
   ): Promise<TelemetryTableResponse> {
@@ -2008,6 +2097,7 @@ export class ApiClient {
       ai1Valid,
       gpsValid,
       altitudeValid,
+      latestOnly,
       sortBy = 'receivedUtc',
       sortOrder = 'desc',
       page = 1,
@@ -2024,6 +2114,7 @@ export class ApiClient {
         if (ai1Valid && ai1Valid !== 'All') queryParams.append('ai1_valid', ai1Valid);
         if (gpsValid && gpsValid !== 'All') queryParams.append('gps_valid', gpsValid);
         if (altitudeValid && altitudeValid !== 'All') queryParams.append('altitude_valid', altitudeValid);
+        if (latestOnly !== undefined) queryParams.append('latest_only', String(latestOnly));
         queryParams.append('sort_by', sortBy);
         queryParams.append('sort_order', sortOrder);
         queryParams.append('page', String(page));
@@ -2042,6 +2133,17 @@ export class ApiClient {
 
     // Local resilient filtering from real database seed
     let items = (rawTelemetrySeed as TelemetryTableRow[]).slice();
+
+    if (latestOnly) {
+      const latestMap = new Map<string, TelemetryTableRow>();
+      items.forEach((item) => {
+        const key = item.deviceId;
+        if (!latestMap.has(key)) {
+          latestMap.set(key, item);
+        }
+      });
+      items = Array.from(latestMap.values());
+    }
 
     if (search && search.trim()) {
       const q = search.trim().toLowerCase();
@@ -2151,6 +2253,7 @@ export class ApiClient {
       ai1Valid,
       gpsValid,
       altitudeValid,
+      latestOnly,
       sortBy = 'receivedUtc',
       sortOrder = 'desc',
     } = params;
@@ -2166,6 +2269,7 @@ export class ApiClient {
         if (ai1Valid && ai1Valid !== 'All') queryParams.append('ai1_valid', ai1Valid);
         if (gpsValid && gpsValid !== 'All') queryParams.append('gps_valid', gpsValid);
         if (altitudeValid && altitudeValid !== 'All') queryParams.append('altitude_valid', altitudeValid);
+        if (latestOnly !== undefined) queryParams.append('latest_only', String(latestOnly));
         queryParams.append('sort_by', sortBy);
         queryParams.append('sort_order', sortOrder);
 

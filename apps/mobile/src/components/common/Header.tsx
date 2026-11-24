@@ -31,6 +31,7 @@ import {
   Bell,
   Smartphone,
   Download,
+  RefreshCw,
 } from 'lucide-react';
 import { InstallAppModal } from './InstallAppModal';
 import { isNativeCapacitorApp } from '../../services/nativeBridge';
@@ -94,10 +95,19 @@ export const Header: React.FC = () => {
   const [isMobileAccountMenuOpen, setIsMobileAccountMenuOpen] = useState(false);
   const [isInstallModalOpen, setIsInstallModalOpen] = useState(false);
   const [isNativeApp, setIsNativeApp] = useState(() => isNativeCapacitorApp());
+  const [windowWidth, setWindowWidth] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 360
+  );
 
   useEffect(() => {
     setIsNativeApp(isNativeCapacitorApp());
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  const isMobileViewport = windowWidth <= 430;
+  const isTabletViewport = windowWidth > 430 && windowWidth <= 800;
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
   const profileContainerRef = useRef<HTMLDivElement>(null);
@@ -123,6 +133,31 @@ export const Header: React.FC = () => {
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, []);
+
+  // Handle hardware back dismiss for open popups/dialogs
+  useEffect(() => {
+    const handleDismissPopups = (e: CustomEvent) => {
+      if (isOpen || isProfileOpen || isMobileAccountMenuOpen || isMobileSearchOpen || isInstallModalOpen) {
+        e.preventDefault();
+        setIsOpen(false);
+        setIsProfileOpen(false);
+        setIsMobileAccountMenuOpen(false);
+        setIsMobileSearchOpen(false);
+        setIsInstallModalOpen(false);
+      }
+    };
+    window.addEventListener('panorama:dismiss_popups', handleDismissPopups as EventListener);
+    return () => window.removeEventListener('panorama:dismiss_popups', handleDismissPopups as EventListener);
+  }, [isOpen, isProfileOpen, isMobileAccountMenuOpen, isMobileSearchOpen, isInstallModalOpen]);
+
+  const [isMenuThrottled, setIsMenuThrottled] = useState(false);
+  const handleToggleMobileNav = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    if (isMenuThrottled) return;
+    setIsMenuThrottled(true);
+    setTimeout(() => setIsMenuThrottled(false), 250);
+    toggleMobileNav();
+  };
 
   // Screen titles and subtitles matching Qt App.qml specification
   const screenInfo: Record<ScreenName, { title: string; subtitle: string }> = {
@@ -389,6 +424,7 @@ export const Header: React.FC = () => {
 
     // 5. Search Stations from configured trains' verified source/destination & route stops
     const seenStations = new Set<string>();
+    const configuredTrains = Array.from(trainMap.values()).map(item => item.train);
     configuredTrains.forEach((tr) => {
       const candidates = [
         tr.source_code && tr.source_station ? { code: tr.source_code, name: tr.source_station, train: tr.train_number } : null,
@@ -1028,13 +1064,13 @@ export const Header: React.FC = () => {
               {/* 1. Hamburger Menu Button */}
               <button
                 type="button"
-                onClick={toggleMobileNav}
-                aria-label="Open Navigation Menu"
+                onClick={handleToggleMobileNav}
+                aria-label={isMobileNavOpen ? "Close Navigation Menu" : "Open Navigation Menu"}
                 className="touch-target-44"
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  padding: '6px',
+                  padding: '5px',
                   borderRadius: '6px',
                   cursor: 'pointer',
                   color: '#0F172A',
@@ -1042,12 +1078,16 @@ export const Header: React.FC = () => {
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0,
+                  minWidth: '40px',
+                  minHeight: '40px',
+                  width: '40px',
+                  height: '40px',
                 }}
               >
-                <Menu size={22} />
+                <Menu size={20} />
               </button>
 
-              {/* 2. Panorama Logo Icon (Image only, no text branding on mobile) */}
+              {/* 2. Panorama Logo Icon (Clearly recognizable, preserved aspect ratio, vertically centered) */}
               <div
                 onClick={() => {
                   setActiveScreen('dashboard');
@@ -1057,16 +1097,19 @@ export const Header: React.FC = () => {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
+                  justifyContent: 'center',
                   cursor: 'pointer',
                   flexShrink: 0,
+                  width: '28px',
+                  height: '28px',
                 }}
               >
                 <img
                   src={panoramaLogoIcon}
                   alt="Panorama"
                   style={{
-                    width: '26px',
-                    height: '26px',
+                    width: '28px',
+                    height: '28px',
                     objectFit: 'contain',
                     borderRadius: '4px',
                     display: 'block',
@@ -1074,18 +1117,31 @@ export const Header: React.FC = () => {
                 />
               </div>
 
-              {/* 3. Current Dynamic Section Name */}
+              {/* Vertical divider */}
+              <div
+                style={{
+                  width: '1px',
+                  height: '16px',
+                  backgroundColor: '#CBD5E1',
+                  margin: '0 4px',
+                  flexShrink: 0,
+                }}
+              />
+
+              {/* 3. Current Dynamic Section Name (Vertically centered, readable typography, no clipping) */}
               <div
                 style={{
                   flex: 1,
                   minWidth: 0,
                   overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
                 }}
               >
                 <span
                   data-testid="mobile-header-section-name"
                   style={{
-                    fontSize: '14px',
+                    fontSize: 'clamp(13px, 3.8vw, 15px)',
                     fontWeight: 700,
                     color: '#0F172A',
                     fontFamily: typography.fontFamily,
@@ -1102,19 +1158,21 @@ export const Header: React.FC = () => {
               </div>
             </div>
 
-            {/* Right: Exactly 4 responsive controls: MQTT indicator, Notification bell, Settings, Profile menu */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+            {/* Right: Responsive controls adapted per device width */}
+            {/* Mobile (<= 430px): [LIVE status pill] and [Profile button] (Notifications & Settings in overflow menu) */}
+            {/* Tablet (431px - 800px): [LIVE status pill], [Alerts bell], [Settings], [Profile button] */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
               {/* 1. MQTT Connection Indicator */}
               <div
                 id="mobile-mqtt-status-pill"
                 title={`MQTT Telemetry Broker: ${mqttConnectionStatus}`}
                 style={{
-                  height: '28px',
+                  height: '24px',
                   padding: '0 7px',
-                  borderRadius: '14px',
+                  borderRadius: '12px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '4px',
+                  gap: '3px',
                   backgroundColor:
                     mqttConnectionStatus === 'CONNECTED'
                       ? '#E8F8EE'
@@ -1132,8 +1190,8 @@ export const Header: React.FC = () => {
               >
                 <div
                   style={{
-                    width: '6px',
-                    height: '6px',
+                    width: '5px',
+                    height: '5px',
                     borderRadius: '50%',
                     backgroundColor:
                       mqttConnectionStatus === 'CONNECTED'
@@ -1145,7 +1203,7 @@ export const Header: React.FC = () => {
                 />
                 <span
                   style={{
-                    fontSize: '9px',
+                    fontSize: '9.5px',
                     fontWeight: 700,
                     color:
                       mqttConnectionStatus === 'CONNECTED'
@@ -1159,7 +1217,7 @@ export const Header: React.FC = () => {
                 </span>
               </div>
 
-              {/* 2. Mobile Alerts Bell Button */}
+              {/* 2. Alerts Bell Button */}
               <button
                 type="button"
                 id="mobile-alerts-bell-btn"
@@ -1204,7 +1262,7 @@ export const Header: React.FC = () => {
                 )}
               </button>
 
-              {/* 3. Direct Mobile Settings Button */}
+              {/* 3. Settings Button */}
               <button
                 type="button"
                 id="mobile-header-settings-btn"
@@ -1227,7 +1285,7 @@ export const Header: React.FC = () => {
                 <SettingsIcon size={18} />
               </button>
 
-              {/* 4. Mobile Dedicated Account & Session Menu */}
+              {/* 4. Responsive Profile Dropdown Control */}
               {currentUser && (
                 <div ref={mobileAccountMenuRef} style={{ position: 'relative' }}>
                   <button
@@ -1238,6 +1296,9 @@ export const Header: React.FC = () => {
                     title={`${currentUser.full_name || currentUser.username} (${isAdmin ? 'Admin' : 'Employee'})`}
                     className="touch-target-44"
                     style={{
+                      height: '32px',
+                      minHeight: '32px',
+                      minWidth: '46px',
                       background: isMobileAccountMenuOpen ? '#EFF6FF' : '#F8FAFC',
                       border: `1px solid ${isMobileAccountMenuOpen ? '#BFDBFE' : '#CBD5E1'}`,
                       color: isAdmin ? '#2563EB' : '#1E293B',
@@ -1245,51 +1306,56 @@ export const Header: React.FC = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      padding: '4px 6px',
-                      borderRadius: '6px',
+                      padding: '2px 6px',
+                      borderRadius: '5px',
                       gap: '2px',
                       fontSize: '11px',
                       fontWeight: 700,
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                     }}
                   >
                     <span>{isAdmin ? 'ADM' : 'EMP'}</span>
-                    <ChevronDown size={11} style={{ opacity: 0.7 }} />
+                    <ChevronDown size={11} style={{ opacity: 0.8 }} />
                   </button>
 
-                  {/* Mobile Account Dropdown Menu */}
+                  {/* Profile Dropdown Menu */}
                   {isMobileAccountMenuOpen && (
                     <div
                       id="mobile-account-dropdown"
-                      className="dialog-content"
+                      className="dialog-content profile-dropdown"
                       style={{
                         position: 'absolute',
-                        top: 'calc(100% + 8px)',
+                        top: 'calc(100% + 6px)',
                         right: 0,
-                        width: '240px',
+                        width: 'min(340px, calc(100vw - 24px))',
+                        maxWidth: 'calc(100vw - 20px)',
+                        maxHeight: 'calc(100dvh - 80px)',
+                        overflowY: 'auto',
                         backgroundColor: '#FFFFFF',
                         border: '1px solid #CBD5E1',
                         borderRadius: '8px',
                         boxShadow: '0 10px 25px rgba(0,0,0,0.18)',
-                        padding: '12px',
+                        padding: '12px 14px',
                         zIndex: 10000,
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '8px',
+                        boxSizing: 'border-box',
                       }}
                     >
                       {/* User Info Header */}
                       <div style={{ borderBottom: '1px solid #E2E8F0', paddingBottom: '8px' }}>
-                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A' }}>
+                        <div style={{ fontSize: '15px', fontWeight: 700, color: '#0F172A' }}>
                           {currentUser.full_name || currentUser.username}
                         </div>
-                        <div style={{ fontSize: '11px', color: '#64748B' }}>
+                        <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px' }}>
                           {currentUser.designation || (isAdmin ? 'System Administrator' : 'Station Operator')}
                         </div>
                         <span
                           style={{
                             display: 'inline-block',
                             marginTop: '4px',
-                            fontSize: '9px',
+                            fontSize: '9.5px',
                             fontWeight: 700,
                             color: isAdmin ? '#2563EB' : '#475569',
                             backgroundColor: isAdmin ? '#EFF6FF' : '#F1F5F9',
@@ -1302,6 +1368,91 @@ export const Header: React.FC = () => {
                         </span>
                       </div>
 
+                      {/* On Mobile: Notifications Item with Active Count Badge */}
+                      {isMobileViewport && (
+                        <button
+                          type="button"
+                          id="mobile-menu-alerts-btn"
+                          onClick={() => {
+                            setActiveScreen('alerts');
+                            setIsMobileAccountMenuOpen(false);
+                          }}
+                          style={{
+                            minHeight: '44px',
+                            height: '44px',
+                            padding: '0 12px',
+                            borderRadius: '6px',
+                            backgroundColor: activeScreen === 'alerts' ? '#EFF6FF' : '#F8FAFC',
+                            border: activeScreen === 'alerts' ? '1px solid #BFDBFE' : '1px solid #CBD5E1',
+                            color: '#0F172A',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            width: '100%',
+                            boxSizing: 'border-box',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <Bell size={18} color={activeAlarmCount > 0 ? '#EF4444' : '#64748B'} />
+                            <span>Notifications & Alerts</span>
+                          </div>
+                          {activeAlarmCount > 0 ? (
+                            <span
+                              style={{
+                                backgroundColor: '#EF4444',
+                                color: '#FFFFFF',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                borderRadius: '10px',
+                                padding: '1px 7px',
+                                minWidth: '18px',
+                                textAlign: 'center',
+                              }}
+                            >
+                              {activeAlarmCount}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '11px', color: '#94A3B8' }}>0</span>
+                          )}
+                        </button>
+                      )}
+
+                      {/* On Mobile: Settings & Configuration Item */}
+                      {isMobileViewport && (
+                        <button
+                          type="button"
+                          id="mobile-menu-settings-btn"
+                          onClick={() => {
+                            setActiveScreen('settings');
+                            setIsMobileAccountMenuOpen(false);
+                          }}
+                          style={{
+                            minHeight: '44px',
+                            height: '44px',
+                            padding: '0 12px',
+                            borderRadius: '6px',
+                            backgroundColor: activeScreen === 'settings' ? '#EFF6FF' : '#F8FAFC',
+                            border: activeScreen === 'settings' ? '1px solid #BFDBFE' : '1px solid #CBD5E1',
+                            color: '#0F172A',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            textAlign: 'left',
+                            width: '100%',
+                            boxSizing: 'border-box',
+                          }}
+                        >
+                          <SettingsIcon size={18} color="#2563EB" />
+                          <span>Settings & Display</span>
+                        </button>
+                      )}
+
                       {/* Search Shortcut */}
                       <button
                         type="button"
@@ -1311,22 +1462,25 @@ export const Header: React.FC = () => {
                           setIsMobileSearchOpen(true);
                         }}
                         style={{
-                          padding: '8px 10px',
+                          minHeight: '44px',
+                          height: '44px',
+                          padding: '0 12px',
                           borderRadius: '6px',
                           backgroundColor: '#F8FAFC',
                           border: '1px solid #CBD5E1',
                           color: '#0F172A',
-                          fontSize: '12px',
+                          fontSize: '13px',
                           fontWeight: 600,
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '8px',
+                          gap: '10px',
                           textAlign: 'left',
                           width: '100%',
+                          boxSizing: 'border-box',
                         }}
                       >
-                        <Search size={14} color="#64748B" />
+                        <Search size={18} color="#64748B" />
                         <span>Search Trains & Coaches</span>
                       </button>
 
@@ -1337,7 +1491,9 @@ export const Header: React.FC = () => {
                           triggerSync();
                         }}
                         style={{
-                          padding: '8px 10px',
+                          minHeight: '44px',
+                          height: '44px',
+                          padding: '0 12px',
                           borderRadius: '6px',
                           backgroundColor: '#F8FAFC',
                           border: '1px solid #CBD5E1',
@@ -1345,44 +1501,18 @@ export const Header: React.FC = () => {
                           alignItems: 'center',
                           justifyContent: 'space-between',
                           cursor: 'pointer',
+                          width: '100%',
+                          boxSizing: 'border-box',
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <RefreshCw size={14} color="#64748B" className={syncState === 'SYNCHRONIZING' ? 'spin' : ''} />
-                          <span style={{ fontSize: '12px', fontWeight: 600, color: '#0F172A' }}>Central Sync</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <RefreshCw size={18} color="#64748B" className={syncState === 'SYNCHRONIZING' ? 'spin' : ''} />
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#0F172A' }}>Central Sync</span>
                         </div>
-                        <span style={{ fontSize: '10px', fontWeight: 700, color: syncState === 'SYNCHRONIZED' ? '#16A34A' : '#D97706' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: syncState === 'SYNCHRONIZED' ? '#16A34A' : '#D97706' }}>
                           {syncState === 'SYNCHRONIZED' ? 'SYNCED' : syncState === 'SYNCHRONIZING' ? 'SYNCING...' : 'OFFLINE'}
                         </span>
                       </div>
-
-                      {/* Settings Item */}
-                      <button
-                        type="button"
-                        id="mobile-menu-settings-btn"
-                        onClick={() => {
-                          setActiveScreen('settings');
-                          setIsMobileAccountMenuOpen(false);
-                        }}
-                        style={{
-                          padding: '8px 10px',
-                          borderRadius: '6px',
-                          backgroundColor: activeScreen === 'settings' ? '#EFF6FF' : '#F8FAFC',
-                          border: '1px solid #CBD5E1',
-                          color: '#0F172A',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          textAlign: 'left',
-                          width: '100%',
-                        }}
-                      >
-                        <SettingsIcon size={14} color="#2563EB" />
-                        <span>Settings & Display</span>
-                      </button>
 
                       {/* Install App Item (if web) */}
                       {!isNativeApp && (
@@ -1394,27 +1524,33 @@ export const Header: React.FC = () => {
                             setIsMobileAccountMenuOpen(false);
                           }}
                           style={{
-                            padding: '8px 10px',
+                            minHeight: '44px',
+                            height: '44px',
+                            padding: '0 12px',
                             borderRadius: '6px',
                             backgroundColor: '#EFF6FF',
                             border: '1px solid #BFDBFE',
                             color: '#2563EB',
-                            fontSize: '12px',
+                            fontSize: '13px',
                             fontWeight: 600,
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '8px',
+                            gap: '10px',
                             textAlign: 'left',
                             width: '100%',
+                            boxSizing: 'border-box',
                           }}
                         >
-                          <Download size={14} />
-                          <span>Install Panorama App</span>
+                          <Smartphone size={18} color="#2563EB" />
+                          <span>Install Android / PWA App</span>
                         </button>
                       )}
 
-                      {/* Logout Item */}
+                      {/* Divider */}
+                      <div style={{ height: '1px', backgroundColor: '#E2E8F0', margin: '2px 0' }} />
+
+                      {/* Logout Action */}
                       <button
                         type="button"
                         id="mobile-menu-logout-btn"
@@ -1423,23 +1559,26 @@ export const Header: React.FC = () => {
                           logout();
                         }}
                         style={{
-                          padding: '8px 10px',
+                          minHeight: '44px',
+                          height: '44px',
+                          padding: '0 12px',
                           borderRadius: '6px',
-                          backgroundColor: 'rgba(239, 68, 68, 0.08)',
-                          border: '1px solid rgba(239, 68, 68, 0.25)',
-                          color: '#EF4444',
-                          fontSize: '12px',
+                          backgroundColor: '#FEF2F2',
+                          border: '1px solid #FEE2E2',
+                          color: '#DC2626',
+                          fontSize: '13px',
                           fontWeight: 600,
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '8px',
+                          gap: '10px',
                           textAlign: 'left',
                           width: '100%',
+                          boxSizing: 'border-box',
                         }}
                       >
-                        <LogOut size={14} />
-                        <span>Sign Out Session</span>
+                        <LogOut size={18} color="#DC2626" />
+                        <span>Sign Out ({currentUser.username})</span>
                       </button>
                     </div>
                   )}

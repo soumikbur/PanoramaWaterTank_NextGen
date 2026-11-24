@@ -38,24 +38,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children }) => {
   }, []);
 
   return (
-    <div
-      id="auth-root"
-      className="auth-layout"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        width: '100vw',
-        padding: 'calc(32px + var(--safe-area-top, 0px)) calc(16px + var(--safe-area-right, 0px)) calc(32px + var(--safe-area-bottom, 0px)) calc(16px + var(--safe-area-left, 0px))',
-        boxSizing: 'border-box',
-        backgroundColor: '#F5F7FB',
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        position: 'relative',
-      }}
-    >
+    <div id="auth-root" className="auth-layout login-page">
       <div className="auth-card-container">
         {children}
       </div>

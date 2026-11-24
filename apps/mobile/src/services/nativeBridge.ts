@@ -127,6 +127,14 @@ class NativeBridge {
             window.dispatchEvent(new CustomEvent('panorama:app_paused'));
           }
         });
+
+        // 4b. Hardware Back Button Listener (Single registration)
+        App.addListener('backButton', () => {
+          console.log('[NativeBridge] Android hardware backButton pressed.');
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('panorama:hardware_back'));
+          }
+        });
       }
     } catch (err) {
       console.warn('[NativeBridge] App lifecycle listener warning:', err);

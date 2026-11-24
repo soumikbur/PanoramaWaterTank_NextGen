@@ -312,6 +312,10 @@ class AlertNotificationService {
       .map((a) => ({ ...a }));
   }
 
+  public getActiveAlerts(): ManagedAlertRecord[] {
+    return this.getNonResolvedAlerts();
+  }
+
   /**
    * Set authoritative fleet validator to gate alert generation and reconcile active alerts.
    */
@@ -767,6 +771,7 @@ class AlertNotificationService {
     timestamp: string;
     trainNumber?: string;
     coachNumber?: string;
+    deviceId?: string;
     tankId?: string;
     tankName?: string;
     levelPercent?: number | null;

@@ -309,10 +309,10 @@ export const LocationScreen: React.FC = () => {
         const fixRecord: MqttGpsFix = {
           lat: payload.lat,
           long: payload.long,
-          alt: payload.alt,
+          alt: payload.alt ?? null,
           speed: payload.speed,
-          sats: payload.sats,
-          accuracy: payload.accuracy,
+          sats: payload.sats ?? null,
+          accuracy: payload.accuracy ?? null,
           time: payload.time,
           receivedAt: payload.receivedAt || Date.now(),
           uid: payload.uid,

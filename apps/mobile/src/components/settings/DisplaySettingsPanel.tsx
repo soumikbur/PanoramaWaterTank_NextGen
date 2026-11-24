@@ -256,7 +256,7 @@ export const DisplaySettingsPanel: React.FC<DisplaySettingsPanelProps> = ({ embe
                 >
                   <span style={{ fontSize: '13px', fontWeight: 700 }}>{preset.label}</span>
                   <span style={{ fontSize: '15px', fontWeight: 800, marginTop: '2px' }}>{preset.value}</span>
-                  {preset.isDefault && (
+                  {(preset as any).isDefault && (
                     <span
                       style={{
                         marginTop: '4px',

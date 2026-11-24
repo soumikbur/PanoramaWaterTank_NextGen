@@ -12,6 +12,7 @@ from app.api.v1.ws import router as ws_router
 from app.api.v1.trains import router as trains_router
 from app.api.v1.users import router as users_router
 from app.api.v1.location import router as location_router
+from app.api.v1.mqtt_topics import router as mqtt_topics_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -27,3 +28,4 @@ api_router.include_router(ws_router)
 api_router.include_router(trains_router)
 api_router.include_router(users_router)
 api_router.include_router(location_router)
+api_router.include_router(mqtt_topics_router)

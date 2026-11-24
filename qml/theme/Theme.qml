@@ -184,6 +184,12 @@ QtObject {
     readonly property bool reducedMotion: DisplayPerformanceManager.reducedMotion
     readonly property real animationScale: DisplayPerformanceManager.animationScale
 
+    readonly property string performanceProfile: DisplayPerformanceManager.performanceProfile
+    readonly property string profileOverride: DisplayPerformanceManager.profileOverride
+    readonly property bool isLowResourceProfile: DisplayPerformanceManager.performanceProfile === "low"
+    readonly property bool waveAnimationEnabled: DisplayPerformanceManager.waveAnimationEnabled
+    readonly property int chartMaxPoints: DisplayPerformanceManager.chartMaxPoints
+
     //=========================================================================
     // Icons
     //=========================================================================

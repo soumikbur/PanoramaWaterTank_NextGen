@@ -7,6 +7,7 @@ interface BaseCardProps {
   action?: ReactNode;
   children: ReactNode;
   style?: React.CSSProperties;
+  className?: string;
   padding?: number;
   elevated?: boolean;
 }
@@ -17,12 +18,13 @@ export const BaseCard: React.FC<BaseCardProps> = ({
   action,
   children,
   style,
+  className,
   padding = metrics.cardPadding,
   elevated = true,
 }) => {
   return (
     <div
-      className="interactive-card"
+      className={`interactive-card ${className || ''}`.trim()}
       style={{
         backgroundColor: colors.surface,
         borderRadius: `${metrics.radiusLarge}px`,

@@ -84,6 +84,7 @@ export interface TelemetryTableFilterParams {
   ai1Valid?: string;
   gpsValid?: string;
   altitudeValid?: string;
+  latestOnly?: boolean;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
   page?: number;
@@ -95,6 +96,7 @@ export interface TelemetryTableResponse {
   page: number;
   limit: number;
   totalPages: number;
+  totalDevices?: number;
   items: TelemetryTableRow[];
 }
 

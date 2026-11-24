@@ -23,6 +23,7 @@ import { mqttService } from '../services/mqttService';
 import { syncService, SyncState } from '../services/syncService';
 import { centralStateSync } from '../services/centralStateSync';
 import { DisplayPreferencesService, ScalePreset } from '../services/displayPreferencesService';
+import { AuthStorageService } from '../services/authStorageService';
 import { AppRouter } from '../services/router';
 import { deviceRegistry, ManagedDevice } from '../services/deviceRegistry';
 import { localFleetStore, FLEET_STORAGE_KEY, FLEET_UPDATED_EVENT } from '../services/localFleetStore';
@@ -54,6 +55,7 @@ export type ScreenName =
   | 'coach-details'
   | 'watertank'
   | 'devices'
+  | 'device-mapping'
   | 'raw-data'
   | 'mqtt-monitor'
   | 'location'
@@ -574,7 +576,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Global Display Scaling preferences (delegated to DisplayPreferencesService)
   const [displayScale, setDisplayScaleState] = useState<string>(() => {
-    return DisplayPreferencesService.loadPreferences().scale;
+    return DisplayPreferencesService.loadPreferences().scale || '100%';
   });
 
   const setDisplayScale = (newScale: string) => {
@@ -583,8 +585,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     DisplayPreferencesService.savePreferences(
       {
         ...prefs,
-        scale: newScale as ScalePreset,
-        fontSize: DisplayPreferencesService.scaleToFontSize(newScale as ScalePreset),
+        scale: (newScale as ScalePreset) || '100%',
+        fontSize: DisplayPreferencesService.scaleToFontSize((newScale as ScalePreset) || '100%'),
       },
       currentUser?.username
     );
@@ -592,14 +594,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const resetDisplayScale = () => {
     const defaults = DisplayPreferencesService.resetPreferences(currentUser?.username);
-    setDisplayScaleState(defaults.scale);
+    setDisplayScaleState(defaults.scale || '100%');
   };
 
   // Synchronize display scale whenever authenticated user session changes
   useEffect(() => {
     if (currentUser?.username) {
       const prefs = DisplayPreferencesService.loadPreferences(currentUser.username);
-      setDisplayScaleState(prefs.scale);
+      setDisplayScaleState(prefs.scale || '100%');
     }
   }, [currentUser?.username]);
 
@@ -613,13 +615,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, 3500);
 
     const checkAuthSession = async () => {
-      const token = localStorage.getItem('panorama_token');
-      if (!token) {
+      // 1. Asynchronously read and validate session from native Preferences or localStorage
+      const session = await AuthStorageService.loadSessionAsync();
+      if (!session || !session.token) {
         completed = true;
         clearTimeout(safetyTimer);
         setIsAuthenticated(false);
         setCurrentUser(null);
         setActiveScreen('login');
+        AppRouter.navigate('login');
         setAuthLoading(false);
         return;
       }
@@ -640,7 +644,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         completed = true;
         clearTimeout(safetyTimer);
         console.warn('[AppContext] Stale or invalid session token. Resetting to login:', err);
-        ApiClient.logout();
+        await AuthStorageService.clearSession();
         setIsAuthenticated(false);
         setCurrentUser(null);
         setActiveScreen('login');
@@ -663,6 +667,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     const handleUrlChange = () => {
       const parsed = AppRouter.parseCurrentRoute();
+      const hasAuth = isAuthenticated || AuthStorageService.hasValidSession();
+      if (!hasAuth && parsed.screen !== 'login') {
+        setActiveScreen('login');
+        AppRouter.navigate('login');
+        return;
+      }
       if (parsed.screen && parsed.screen !== activeScreen) {
         setActiveScreen(parsed.screen as ScreenName);
       }
@@ -682,7 +692,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         window.removeEventListener('popstate', handleUrlChange);
       };
     }
-  }, [activeScreen, selectedTrainNumber, selectedCoachNumber]);
+  }, [activeScreen, selectedTrainNumber, selectedCoachNumber, isAuthenticated]);
 
   // Clock & Date ticker
   useEffect(() => {
@@ -896,14 +906,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         window.dispatchEvent(new CustomEvent('panorama:settings-updated', { detail: data }));
       }
     });
+    const unsubCentralFleet = centralStateSync.onRemoteUpdate('fleet', () => {
+      refreshRegions();
+      refreshData();
+    });
 
     const unsubSyncState = syncService.onStateChange((st, time) => {
       setSyncState(st);
       setLastSyncTime(time);
     });
 
-    const unsubSyncEvents = syncService.onSyncEvent((evt) => {
-      const type = evt.event_type;
+    const handleSyncEventPayload = (type?: string) => {
+      if (!type) return;
       if (
         type === 'TRAIN_CREATED' ||
         type === 'TRAIN_UPDATED' ||
@@ -924,7 +938,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       ) {
         refreshData();
       }
+    };
+
+    const unsubSyncEvents = syncService.onSyncEvent((evt) => {
+      handleSyncEventPayload(evt?.event_type);
     });
+
+    const handleWindowSyncEvent = (e: any) => {
+      handleSyncEventPayload(e?.detail?.event_type);
+    };
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('panorama:sync-event', handleWindowSyncEvent);
+    }
 
     const handleReqSync = () => {
       refreshRegions();
@@ -938,9 +963,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       centralStateSync.stop();
       unsubCentralUsers();
       unsubCentralSettings();
+      unsubCentralFleet();
       unsubSyncState();
       unsubSyncEvents();
       if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+        window.removeEventListener('panorama:sync-event', handleWindowSyncEvent);
         window.removeEventListener('panorama:request-authoritative-sync', handleReqSync);
       }
     };
@@ -1193,6 +1220,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               tank_capacity_liters: payload.tank_capacity_liters || 20.0,
               coaches_count: payload.coaches_count || 1,
               tanks_count: payload.tanks_count || 2,
+              status: 'Operational',
               is_online: false,
               active_alarms: 0,
             };
@@ -1891,8 +1919,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const handleSetActiveScreen = (screen: ScreenName) => {
     setIsMobileNavOpen(false);
-    const hasToken = typeof localStorage !== 'undefined' && Boolean(localStorage.getItem('panorama_token'));
-    if (!isAuthenticated && !hasToken && screen !== 'login') {
+    const hasAuth = isAuthenticated || AuthStorageService.hasValidSession();
+    if (!hasAuth && screen !== 'login') {
       setActiveScreen('login');
       AppRouter.navigate('login');
       return;
@@ -1928,7 +1956,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as any).panoramaNavigate = (screen: ScreenName, train?: string, coach?: string) => {
-        if (!isAuthenticated && !ApiClient.hasToken() && screen !== 'login') {
+        const hasAuth = isAuthenticated || AuthStorageService.hasValidSession();
+        if (!hasAuth && screen !== 'login') {
           setActiveScreen('login');
           AppRouter.navigate('login');
           return;
@@ -1954,14 +1983,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await refreshData();
   };
 
-  const logout = () => {
+  const logout = async () => {
     if (typeof document !== 'undefined') {
       document.documentElement.style.zoom = '';
       if (document.body) {
         document.body.style.zoom = '';
       }
     }
-    ApiClient.logout();
+    await ApiClient.logout();
     setIsAuthenticated(false);
     setCurrentUser(null);
     setActiveScreen('login');

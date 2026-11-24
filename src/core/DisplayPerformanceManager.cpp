@@ -4,8 +4,18 @@
 #include <QQuickWindow>
 #include <QScreen>
 #include <QSettings>
+#include <QThread>
 
 #include <cmath>
+
+#if defined(Q_OS_WIN)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#elif defined(Q_OS_LINUX) || defined(Q_OS_ANDROID)
+#include <unistd.h>
+#endif
 
 namespace Panorama {
 
@@ -16,10 +26,14 @@ namespace Panorama {
 DisplayPerformanceManager::DisplayPerformanceManager(QObject *parent)
     : QObject(parent)
 {
-    // Restore persisted reduced-motion preference.
+    detectHardwareCapabilities();
+
+    // Restore persisted reduced-motion and profile preferences.
     QSettings settings;
     m_reducedMotion = settings.value(
         QStringLiteral("display/reducedMotion"), false).toBool();
+    m_profileOverride = settings.value(
+        QStringLiteral("display/profileOverride"), QStringLiteral("auto")).toString();
 
     // Initial seed from primary screen until attached to a specific window.
     if (qGuiApp) {
@@ -186,6 +200,100 @@ void DisplayPerformanceManager::setReducedMotion(bool reduced)
     settings.setValue(QStringLiteral("display/reducedMotion"), reduced);
 
     emit reducedMotionChanged();
+    emit performanceProfileChanged();
+}
+
+// -----------------------------------------------------------------------
+// Hardware Diagnostics & Performance Profile Resolution
+// -----------------------------------------------------------------------
+
+void DisplayPerformanceManager::detectHardwareCapabilities()
+{
+    m_cpuCores = QThread::idealThreadCount();
+    if (m_cpuCores <= 0)
+        m_cpuCores = 2;
+
+#if defined(Q_OS_WIN)
+    MEMORYSTATUSEX memInfo;
+    memInfo.dwLength = sizeof(MEMORYSTATUSEX);
+    if (GlobalMemoryStatusEx(&memInfo)) {
+        m_totalMemoryMb = static_cast<int>(memInfo.ullTotalPhys / (1024 * 1024));
+    }
+#elif defined(Q_OS_LINUX) || defined(Q_OS_ANDROID)
+    const long pages = sysconf(_SC_PHYS_PAGES);
+    const long pageSize = sysconf(_SC_PAGE_SIZE);
+    if (pages > 0 && pageSize > 0) {
+        m_totalMemoryMb = static_cast<int>((pages * pageSize) / (1024 * 1024));
+    }
+#else
+    m_totalMemoryMb = 4096;
+#endif
+
+    m_cachedAutoProfile = computeAutoProfile();
+}
+
+QString DisplayPerformanceManager::computeAutoProfile() const
+{
+    // Low-resource criteria (e.g. 2 cores, <= 2GB RAM, or sub-50Hz display)
+    if (m_cpuCores <= 2 || m_totalMemoryMb <= 2048 || m_refreshRate < 50.0) {
+        return QStringLiteral("low");
+    }
+    // Mid-tier balanced criteria
+    if (m_cpuCores <= 4 && m_totalMemoryMb <= 3500) {
+        return QStringLiteral("balanced");
+    }
+    // Flagship / modern devices (Google Pixel 7)
+    return QStringLiteral("high");
+}
+
+QString DisplayPerformanceManager::performanceProfile() const
+{
+    if (m_profileOverride != QLatin1String("auto") && !m_profileOverride.isEmpty()) {
+        return m_profileOverride;
+    }
+    return m_cachedAutoProfile;
+}
+
+void DisplayPerformanceManager::setProfileOverride(const QString &override)
+{
+    const QString clean = override.trimmed().toLower();
+    if (clean != QLatin1String("auto") && clean != QLatin1String("high") &&
+        clean != QLatin1String("balanced") && clean != QLatin1String("low")) {
+        return;
+    }
+
+    if (m_profileOverride == clean)
+        return;
+
+    m_profileOverride = clean;
+
+    QSettings settings;
+    settings.setValue(QStringLiteral("display/profileOverride"), m_profileOverride);
+
+    emit profileOverrideChanged();
+    emit performanceProfileChanged();
+}
+
+bool DisplayPerformanceManager::waveAnimationEnabled() const
+{
+    if (m_reducedMotion) return false;
+    return performanceProfile() != QLatin1String("low");
+}
+
+int DisplayPerformanceManager::chartMaxPoints() const
+{
+    const QString p = performanceProfile();
+    if (p == QLatin1String("low")) return 20;
+    if (p == QLatin1String("balanced")) return 45;
+    return 100;
+}
+
+int DisplayPerformanceManager::mqttBatchIntervalMs() const
+{
+    const QString p = performanceProfile();
+    if (p == QLatin1String("low")) return 800;
+    if (p == QLatin1String("balanced")) return 300;
+    return 100;
 }
 
 } // namespace Panorama

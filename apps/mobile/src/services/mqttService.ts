@@ -8,6 +8,7 @@
 import Paho from 'paho-mqtt';
 import { Logger } from './logger';
 import { LiveTelemetryPayload, MqttConnectionStatus, MqttGpsFix } from '../types';
+import { deviceProfileService } from './deviceProfileService';
 
 export interface ParsedMqttGps {
   lat: number | null;
@@ -269,6 +270,38 @@ export function formatMqttMessageBlock(frame: RawMqttFrame): string {
 export type TelemetryCallback = (payload: LiveTelemetryPayload) => void;
 export type MqttStatusCallback = (status: MqttConnectionStatus) => void;
 
+export type { MqttGpsFix } from '../types/telemetry';
+
+export interface MqttBrokerDiagnostics {
+  brokerName: string;
+  host: string;
+  port: number;
+  path: string;
+  protocol: string;
+  mqttVersion: string;
+  transportSecurity: string;
+  websocketConnected: boolean;
+  mqttSessionConnected: boolean;
+  cleanSession?: boolean;
+  keepAliveSeconds?: number;
+  connectionUptimeMs?: number | null;
+  reconnectAttempts?: number;
+  messagesReceivedTotal?: number;
+  messagesSentTotal?: number;
+  lastError?: string | null;
+  lastConnectedAt?: number | null;
+  lastDisconnectedAt?: number | null;
+  connectedAt?: number | null;
+  disconnectedAt?: number | null;
+  authMode?: string;
+  certValidation?: string;
+  brokerReachable?: string;
+  connectionLatencyMs?: number;
+  autoReconnect?: boolean;
+  totalBrokerMessages?: number;
+  useSSL?: boolean;
+}
+
 export class MqttService {
   private static instance: MqttService;
   private client: any = null;
@@ -500,8 +533,9 @@ export class MqttService {
           };
 
           // Step 3: Always deliver every received frame to the Serial Monitor (never discard!)
+          const maxRaw = deviceProfileService.getActiveProfile().maxTelemetryHistoryBuffer || 150;
           this.rawMessageHistory.push(frame);
-          if (this.rawMessageHistory.length > 1000) {
+          if (this.rawMessageHistory.length > maxRaw) {
             this.rawMessageHistory.shift();
           }
 
@@ -770,25 +804,58 @@ export class MqttService {
       }
     }
 
+    const maxBuffer = deviceProfileService.getActiveProfile().maxTelemetryHistoryBuffer || 150;
     this.lastTelemetry = telemetry;
     this.historyBuffer.unshift(telemetry);
-    if (this.historyBuffer.length > 500) {
+    if (this.historyBuffer.length > maxBuffer) {
       this.historyBuffer.pop();
     }
 
     this.setStatus('CONNECTED');
     this.resetStaleTimer();
 
-    // Dispatch to all subscribers
+    // Dispatch to subscribers via adaptive batch scheduler
+    this.scheduleTelemetryDispatch(telemetry);
+
+    return telemetry;
+  }
+
+  private pendingDispatchTelemetry: LiveTelemetryPayload | null = null;
+  private dispatchTimer: any = null;
+  private lastDispatchTime: number = 0;
+
+  private scheduleTelemetryDispatch(telemetry: LiveTelemetryPayload): void {
+    this.pendingDispatchTelemetry = telemetry;
+    const interval = deviceProfileService.getActiveProfile().mqttBatchIntervalMs || 100;
+    const now = Date.now();
+    const elapsed = now - this.lastDispatchTime;
+
+    if (elapsed >= interval && !this.dispatchTimer) {
+      this.flushTelemetryDispatch();
+      return;
+    }
+
+    if (!this.dispatchTimer) {
+      this.dispatchTimer = setTimeout(() => {
+        this.dispatchTimer = null;
+        this.flushTelemetryDispatch();
+      }, Math.max(10, interval - elapsed));
+    }
+  }
+
+  private flushTelemetryDispatch(): void {
+    if (!this.pendingDispatchTelemetry) return;
+    const t = this.pendingDispatchTelemetry;
+    this.pendingDispatchTelemetry = null;
+    this.lastDispatchTime = Date.now();
+
     this.telemetryListeners.forEach((listener) => {
       try {
-        listener(telemetry);
+        listener(t);
       } catch (listenerErr) {
         console.error('[MQTT] Error in telemetry listener:', listenerErr);
       }
     });
-
-    return telemetry;
   }
 
   private resetStaleTimer(): void {
@@ -1391,6 +1458,10 @@ export class MqttService {
     }
 
     return frame;
+  }
+
+  public isConnected(): boolean {
+    return this.status === 'CONNECTED';
   }
 
   public getBrokerInfo(): {

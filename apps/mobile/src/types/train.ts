@@ -69,6 +69,9 @@ export interface TrainCreatePayload {
   region: string;
   coach_number?: string;
   tank_capacity?: number;
+  tank_capacity_liters?: number;
+  tank_height?: number;
+  tank_height_cm?: number;
   source_station?: string | null;
   source_code?: string | null;
   destination_station?: string | null;
@@ -86,15 +89,17 @@ export interface TrainCreatePayload {
   has_official_composition?: boolean;
   api_provider?: string | null;
   last_verified_at?: string | null;
-  route?: any[];
 }
 
 export interface TrainOverviewItem {
   train_number: string;
   name: string;
   type: string;
+  train_type?: string | null;
   coaches_count: number;
   tanks_count: number;
+  tank_height_cm?: number | null;
+  tank_capacity_liters?: number | null;
   is_online: boolean;
   connectivity_status?: 'ONLINE' | 'OFFLINE' | 'STANDBY' | 'NEVER_CONNECTED' | string;
   last_seen_at?: string | null;
@@ -135,6 +140,7 @@ export interface TankConsist {
   name: string;
   capacity_liters: number;
   height_cm?: number;
+  cross_sectional_area_m2?: number | null;
   tank_type?: string;
   geometry?: string;
   current_height_cm?: number | null;
@@ -177,6 +183,8 @@ export interface TrainConsist {
   region: string;
   coaches_count: number;
   tanks_count: number;
+  tank_height_cm?: number | null;
+  tank_capacity_liters?: number | null;
   online_status: boolean;
   active_alarms_count: number;
   coaches: CoachConsist[];

@@ -1,6 +1,6 @@
 """Telemetry Pydantic Schemas."""
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -77,7 +77,7 @@ class TelemetryHistoryResponse(BaseModel):
 
 class TelemetryTableRow(BaseModel):
     """Row model for the 13-column Historical Telemetry Data Table."""
-    id: int
+    id: Union[int, str]
     deviceId: str = Field(..., description="Unique device identifier")
     recordedAt: str = Field(..., description="Timestamp recorded by the device (DD-MM-YYYY HH:mm:ss)")
     ai1Ma: Optional[float] = Field(None, description="Analog input current in milliamperes")
@@ -91,6 +91,10 @@ class TelemetryTableRow(BaseModel):
     gpsValid: str = Field("--", description="GPS location validity: Valid | Invalid | --")
     altitudeValid: str = Field("--", description="Altitude validity status: Valid | Invalid | --")
     receivedUtc: str = Field(..., description="Server-side reception timestamp strictly in UTC (DD-MM-YYYY HH:mm:ss)")
+    isOnline: Optional[bool] = Field(None, description="Device connection online status")
+    deviceName: Optional[str] = Field(None, description="Device or node name")
+    trainNumber: Optional[str] = Field(None, description="Assigned train number")
+    coachNumber: Optional[str] = Field(None, description="Assigned coach number")
 
 
 class TelemetryTableResponse(BaseModel):
@@ -99,6 +103,7 @@ class TelemetryTableResponse(BaseModel):
     page: int
     limit: int
     totalPages: int
+    totalDevices: Optional[int] = Field(None, description="Total number of genuine registered physical devices in the fleet")
     items: List[TelemetryTableRow]
 
 
