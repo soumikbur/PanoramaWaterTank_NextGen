@@ -41,75 +41,21 @@ import {
 } from '../config/apiConfig';
 
 export const SettingsScreen: React.FC = () => {
-  const { currentUser } = useApp();
-  const [adminTab, setAdminTab] = useState<'system' | 'display'>('system');
-  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : true));
-
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  if (isMobile || currentUser?.role !== 'ADMIN') {
-    return <DisplaySettingsPanel />;
-  }
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: `${metrics.cardSpacing}px`, backgroundColor: colors.background, boxSizing: 'border-box', minHeight: '100%' }}>
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '8px',
-          borderBottom: `1px solid ${colors.border}`,
-          paddingBottom: '12px',
-        }}
-      >
-        <button
-          onClick={() => setAdminTab('system')}
-          style={{
-            padding: '10px 16px',
-            minHeight: '44px',
-            borderRadius: '6px',
-            border: `1px solid ${adminTab === 'system' ? colors.primaryBorder : colors.borderStrong}`,
-            backgroundColor: adminTab === 'system' ? colors.primarySurface : colors.surfaceAlt,
-            color: adminTab === 'system' ? colors.primary : colors.textSecondary,
-            fontSize: '13px',
-            fontWeight: adminTab === 'system' ? 700 : 600,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-          }}
-        >
-          <SettingsIcon size={14} />
-          <span>System & Hardware Configuration</span>
-        </button>
-        <button
-          onClick={() => setAdminTab('display')}
-          style={{
-            padding: '10px 16px',
-            minHeight: '44px',
-            borderRadius: '6px',
-            border: `1px solid ${adminTab === 'display' ? colors.primaryBorder : colors.borderStrong}`,
-            backgroundColor: adminTab === 'display' ? colors.primarySurface : colors.surfaceAlt,
-            color: adminTab === 'display' ? colors.primary : colors.textSecondary,
-            fontSize: '13px',
-            fontWeight: adminTab === 'display' ? 700 : 600,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-          }}
-        >
-          <Sliders size={14} />
-          <span>Display & Interface Preferences</span>
-        </button>
-      </div>
-      {adminTab === 'display' ? <DisplaySettingsPanel isAdminView={true} /> : <AdminSystemSettings />}
+    <div
+      id="settings-screen-container"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: `${metrics.cardSpacing}px`,
+        backgroundColor: colors.background,
+        boxSizing: 'border-box',
+        minHeight: '100%',
+        paddingBottom: '80px',
+        width: '100%',
+      }}
+    >
+      <AdminSystemSettings />
     </div>
   );
 };
@@ -902,7 +848,9 @@ const AdminSystemSettings: React.FC = () => {
       {/* SECTION 2: Appearance & Display (User Core Requirement) */}
       {/* ========================================================================= */}
       {(selectedSectionTab === 'all' || selectedSectionTab === 'appearance') && (
-        <DisplaySettingsPanel isAdminView={true} />
+        <div id="section-2-appearance">
+          <DisplaySettingsPanel embedded={true} />
+        </div>
       )}
 
       {/* ========================================================================= */}

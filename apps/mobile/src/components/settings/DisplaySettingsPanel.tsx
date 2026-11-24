@@ -5,6 +5,7 @@ import { RotateCcw, Check } from 'lucide-react';
 
 interface DisplaySettingsPanelProps {
   isAdminView?: boolean;
+  embedded?: boolean;
 }
 
 export const SCALE_PRESETS = [
@@ -16,7 +17,7 @@ export const SCALE_PRESETS = [
   { label: 'Maximum', value: '150%', numeric: 150 },
 ] as const;
 
-export const DisplaySettingsPanel: React.FC<DisplaySettingsPanelProps> = () => {
+export const DisplaySettingsPanel: React.FC<DisplaySettingsPanelProps> = ({ embedded = false }) => {
   const {
     displayScale,
     setDisplayScale,
@@ -66,13 +67,17 @@ export const DisplaySettingsPanel: React.FC<DisplaySettingsPanelProps> = () => {
 
   return (
     <div
-      style={{
-        padding: isMobile ? '12px' : '20px',
-        maxWidth: '820px',
-        margin: '0 auto',
-        width: '100%',
-        boxSizing: 'border-box',
-      }}
+      style={
+        embedded
+          ? { width: '100%', boxSizing: 'border-box' }
+          : {
+              padding: isMobile ? '12px' : '20px',
+              maxWidth: '820px',
+              margin: '0 auto',
+              width: '100%',
+              boxSizing: 'border-box',
+            }
+      }
     >
       {/* Toast Feedback */}
       {toastMessage && (
@@ -416,19 +421,21 @@ export const DisplaySettingsPanel: React.FC<DisplaySettingsPanelProps> = () => {
           </div>
         </div>
 
-        {/* Footer */}
-        <div
-          style={{
-            textAlign: 'center',
-            fontSize: '11px',
-            color: '#64748B',
-            marginTop: '16px',
-            borderTop: '1px solid #F1F5F9',
-            paddingTop: '12px',
-          }}
-        >
-          © 2026 Panorama Water Tank Monitoring System
-        </div>
+        {/* Footer (rendered when not embedded in complete multi-section settings page) */}
+        {!embedded && (
+          <div
+            style={{
+              textAlign: 'center',
+              fontSize: '11px',
+              color: '#64748B',
+              marginTop: '16px',
+              borderTop: '1px solid #F1F5F9',
+              paddingTop: '12px',
+            }}
+          >
+            © 2026 Panorama Water Tank Monitoring System
+          </div>
+        )}
       </div>
     </div>
   );
