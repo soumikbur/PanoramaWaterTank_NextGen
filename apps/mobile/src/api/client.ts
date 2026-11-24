@@ -18,8 +18,14 @@ import {
   TrainLocation,
   CoachFormInput,
   CoachConsist,
-  DeviceCreatePayload
+  DeviceCreatePayload,
+  MqttLatestTopicRecord,
+  TelemetryTableRow,
+  TelemetryTableFilterParams,
+  TelemetryTableResponse,
 } from '../types';
+import rawTelemetrySeed from '../data/telemetrySeed.json';
+import { localMqttStore } from '../services/localMqttStore';
 import { TrainLookupResult, TrainCreatePayload } from '../types/train';
 import { deviceRegistry } from '../services/deviceRegistry';
 import { localFleetStore } from '../services/localFleetStore';
@@ -32,6 +38,7 @@ import {
 } from '../services/mqttService';
 import { centralStateSync } from '../services/centralStateSync';
 import { Logger } from '../services/logger';
+import { AuthStorageService } from '../services/authStorageService';
 import {
   resolveApiBaseUrl,
   DEFAULT_PRODUCTION_API_URL,
@@ -443,7 +450,7 @@ export class ApiClient {
       throw offErr;
     }
 
-    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('panorama_token') : null;
+    const token = AuthStorageService.getToken();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -540,36 +547,41 @@ export class ApiClient {
   }
 
   // Auth
+  static hasToken(): boolean {
+    return AuthStorageService.hasValidSession();
+  }
+
   static async login(username: string, password: string): Promise<{ access_token: string; user: UserProfile; must_change_password?: boolean }> {
     try {
       const res = await this.request<any>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ username, password }),
       });
+      const user: UserProfile = {
+        id: res.user.id,
+        username: res.user.username,
+        full_name: res.user.fullName || res.user.full_name,
+        email: res.user.email,
+        phone: res.user.phone,
+        employee_id: res.user.employeeId || res.user.employee_id,
+        designation: res.user.designation,
+        department: res.user.department,
+        division_region: res.user.divisionRegion || res.user.division_region,
+        role: res.user.role,
+        account_status: res.user.accountStatus || res.user.account_status || 'ACTIVE',
+        is_active: res.user.isActive ?? res.user.is_active ?? true,
+        must_change_password: res.user.mustChangePassword ?? res.user.must_change_password ?? res.must_change_password ?? false,
+        joining_date: res.user.joiningDate || res.user.joining_date,
+        last_login_at: res.user.lastLoginAt || res.user.last_login_at,
+        last_activity_at: res.user.lastActivityAt || res.user.last_activity_at,
+        created_at: res.user.createdAt || res.user.created_at,
+      };
       if (res.access_token) {
-        localStorage.setItem('panorama_token', res.access_token);
+        await AuthStorageService.saveSession(res.access_token, user);
       }
       return {
         access_token: res.access_token,
-        user: {
-          id: res.user.id,
-          username: res.user.username,
-          full_name: res.user.fullName || res.user.full_name,
-          email: res.user.email,
-          phone: res.user.phone,
-          employee_id: res.user.employeeId || res.user.employee_id,
-          designation: res.user.designation,
-          department: res.user.department,
-          division_region: res.user.divisionRegion || res.user.division_region,
-          role: res.user.role,
-          account_status: res.user.accountStatus || res.user.account_status || 'ACTIVE',
-          is_active: res.user.isActive ?? res.user.is_active ?? true,
-          must_change_password: res.user.mustChangePassword ?? res.user.must_change_password ?? res.must_change_password ?? false,
-          joining_date: res.user.joiningDate || res.user.joining_date,
-          last_login_at: res.user.lastLoginAt || res.user.last_login_at,
-          last_activity_at: res.user.lastActivityAt || res.user.last_activity_at,
-          created_at: res.user.createdAt || res.user.created_at,
-        },
+        user,
         must_change_password: res.must_change_password ?? res.user.must_change_password ?? false,
       };
     } catch (err: any) {
@@ -596,8 +608,7 @@ export class ApiClient {
           created_at: '2024-01-15T00:00:00Z',
         };
         const demoToken = 'demo-employee-session-token';
-        localStorage.setItem('panorama_token', demoToken);
-        localStorage.setItem('panorama_demo_user', JSON.stringify(demoUser));
+        await AuthStorageService.saveSession(demoToken, demoUser);
         return { access_token: demoToken, user: demoUser, must_change_password: false };
       }
       if ((cleanUser === '@admin' || cleanUser === 'admin') && password === 'Admin@123') {
@@ -621,8 +632,7 @@ export class ApiClient {
           created_at: '2023-01-01T00:00:00Z',
         };
         const demoToken = 'demo-admin-session-token';
-        localStorage.setItem('panorama_token', demoToken);
-        localStorage.setItem('panorama_demo_user', JSON.stringify(demoAdmin));
+        await AuthStorageService.saveSession(demoToken, demoAdmin);
         return { access_token: demoToken, user: demoAdmin, must_change_password: false };
       }
       throw err;
@@ -630,17 +640,19 @@ export class ApiClient {
   }
 
   static async fetchCurrentUser(): Promise<UserProfile> {
-    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('panorama_demo_user') : null;
+    const session = AuthStorageService.loadSessionSync();
+    if (!session || !session.token) {
+      throw new Error('Not authenticated: No active session token found');
+    }
+
     if (!API_BASE || this.isRemoteUnreachable()) {
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch {}
+      if (session.user) {
+        return session.user;
       }
     }
     try {
       const res = await this.request<any>('/auth/me');
-      return {
+      const user: UserProfile = {
         id: res.id,
         username: res.username,
         full_name: res.fullName || res.full_name,
@@ -659,11 +671,15 @@ export class ApiClient {
         last_activity_at: res.lastActivityAt || res.last_activity_at,
         created_at: res.createdAt || res.created_at,
       };
-    } catch (err) {
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (e) {}
+      await AuthStorageService.saveSession(session.token, user);
+      return user;
+    } catch (err: any) {
+      if (err?.status === 401 || err?.status === 403) {
+        await AuthStorageService.clearSession();
+        throw err;
+      }
+      if (session.user && !AuthStorageService.isTokenExpired(session.token, session.expiresAt)) {
+        return session.user;
       }
       throw err;
     }
@@ -679,8 +695,8 @@ export class ApiClient {
     });
   }
 
-  static logout(): void {
-    const token = localStorage.getItem('panorama_token');
+  static async logout(): Promise<void> {
+    const token = AuthStorageService.getToken();
     if (token && API_BASE && !this.isRemoteUnreachable()) {
       try {
         fetch(`${API_BASE}/auth/logout`, {
@@ -692,8 +708,7 @@ export class ApiClient {
         }).catch(() => {});
       } catch {}
     }
-    localStorage.removeItem('panorama_token');
-    localStorage.removeItem('panorama_demo_user');
+    await AuthStorageService.clearSession();
   }
 
   // Users & Employee Management
@@ -1442,7 +1457,7 @@ export class ApiClient {
         entity_type: 'COACH',
         entity_id: `${cleanTrain}:${cleanCoach}`,
         operation: 'UPDATE',
-        payload: { train_number: cleanTrain, coach_number: cleanCoach, ...data },
+        payload: { ...data, train_number: cleanTrain, coach_number: cleanCoach },
       });
     } catch {}
     this.notifyCrossTabFleetSync();
@@ -1649,7 +1664,7 @@ export class ApiClient {
           }),
         });
       } catch (err) {
-        Logger.warn('API', 'ApiClient', 'Failed remote saveRoute, falling back to localFleetStore', err);
+        Logger.warn('API', 'ApiClient', 'Failed remote saveRoute, falling back to localFleetStore', err instanceof Error ? err.message : String(err));
       }
     }
     localFleetStore.configureRoute(clean, stations);
@@ -1675,7 +1690,7 @@ export class ApiClient {
           method: 'DELETE',
         });
       } catch (err) {
-        Logger.warn('API', 'ApiClient', 'Failed remote deleteRoute, falling back to localFleetStore', err);
+        Logger.warn('API', 'ApiClient', 'Failed remote deleteRoute, falling back to localFleetStore', err instanceof Error ? err.message : String(err));
       }
     }
     localFleetStore.deleteRoute(clean);
@@ -1960,9 +1975,17 @@ export class ApiClient {
     } catch (err) {
       Logger.debug('API', 'ApiClient', 'fetchTelemetryHistory failed, returning empty history', 'fetchTelemetryHistory', err);
       return {
+        tankId: tankId || 'TANK-01',
         tank_id: tankId || 'TANK-01',
-        range,
+        range: (range || '24h') as "12h" | "24h" | "7d",
+        dataPoints: [],
         data_points: [],
+        stats: {
+          averagePercent: 0,
+          minPercent: 0,
+          maxPercent: 0,
+          deltaPercent: 0,
+        },
         statistics: {
           min_level: 0,
           max_level: 0,
@@ -1973,6 +1996,261 @@ export class ApiClient {
       };
     }
   }
+
+  static async fetchTelemetryHistoryTable(
+    params: TelemetryTableFilterParams = {}
+  ): Promise<TelemetryTableResponse> {
+    const {
+      search,
+      deviceId,
+      startDate,
+      endDate,
+      ai1Valid,
+      gpsValid,
+      altitudeValid,
+      sortBy = 'receivedUtc',
+      sortOrder = 'desc',
+      page = 1,
+      limit = 25,
+    } = params;
+
+    if (API_BASE && !this.isRemoteUnreachable()) {
+      try {
+        const queryParams = new URLSearchParams();
+        if (search) queryParams.append('search', search);
+        if (deviceId && deviceId.toUpperCase() !== 'ALL') queryParams.append('device_id', deviceId);
+        if (startDate) queryParams.append('start_date', startDate);
+        if (endDate) queryParams.append('end_date', endDate);
+        if (ai1Valid && ai1Valid !== 'All') queryParams.append('ai1_valid', ai1Valid);
+        if (gpsValid && gpsValid !== 'All') queryParams.append('gps_valid', gpsValid);
+        if (altitudeValid && altitudeValid !== 'All') queryParams.append('altitude_valid', altitudeValid);
+        queryParams.append('sort_by', sortBy);
+        queryParams.append('sort_order', sortOrder);
+        queryParams.append('page', String(page));
+        queryParams.append('limit', String(limit));
+
+        const remote = await this.request<TelemetryTableResponse>(
+          `/devices/telemetry-history?${queryParams.toString()}`
+        );
+        if (remote && Array.isArray(remote.items)) {
+          return remote;
+        }
+      } catch (err) {
+        Logger.debug('API', 'ApiClient', 'Remote fetchTelemetryHistoryTable failed, falling back to local seed', 'fetchTelemetryHistoryTable', err);
+      }
+    }
+
+    // Local resilient filtering from real database seed
+    let items = (rawTelemetrySeed as TelemetryTableRow[]).slice();
+
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      items = items.filter((item) =>
+        item.deviceId.toLowerCase().includes(q)
+      );
+    }
+
+    if (deviceId && deviceId.trim() && deviceId.toUpperCase() !== 'ALL') {
+      const did = deviceId.trim().toLowerCase();
+      items = items.filter((item) =>
+        item.deviceId.toLowerCase() === did
+      );
+    }
+
+    if (startDate) {
+      items = items.filter((item) => {
+        if (!item.recordedAt || item.recordedAt === '--') return false;
+        const [dStr] = item.recordedAt.split(' ');
+        const parts = dStr.split('-');
+        if (parts.length === 3) {
+          const itemDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+          return itemDate >= startDate;
+        }
+        return true;
+      });
+    }
+
+    if (endDate) {
+      items = items.filter((item) => {
+        if (!item.recordedAt || item.recordedAt === '--') return false;
+        const [dStr] = item.recordedAt.split(' ');
+        const parts = dStr.split('-');
+        if (parts.length === 3) {
+          const itemDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+          return itemDate <= endDate;
+        }
+        return true;
+      });
+    }
+
+    if (ai1Valid && ai1Valid !== 'All') {
+      items = items.filter((item) => item.ai1Valid === ai1Valid);
+    }
+
+    if (gpsValid && gpsValid !== 'All') {
+      items = items.filter((item) => item.gpsValid === gpsValid);
+    }
+
+    if (altitudeValid && altitudeValid !== 'All') {
+      items = items.filter((item) => item.altitudeValid === altitudeValid);
+    }
+
+    // Sort items
+    items.sort((a, b) => {
+      let valA: any = a.receivedUtc;
+      let valB: any = b.receivedUtc;
+
+      if (sortBy === 'recordedAt') {
+        valA = a.recordedAt;
+        valB = b.recordedAt;
+      } else if (sortBy === 'deviceId') {
+        valA = a.deviceId;
+        valB = b.deviceId;
+      } else if (sortBy === 'ai1Ma') {
+        valA = a.ai1Ma ?? -1;
+        valB = b.ai1Ma ?? -1;
+      } else if (sortBy === 'level1Percent') {
+        valA = parseFloat(a.level1Percent || '-1') || -1;
+        valB = parseFloat(b.level1Percent || '-1') || -1;
+      } else if (sortBy === 'batteryPercent') {
+        valA = parseFloat(a.batteryPercent || '-1') || -1;
+        valB = parseFloat(b.batteryPercent || '-1') || -1;
+      } else if (sortBy === 'batteryV') {
+        valA = a.batteryV ?? -1;
+        valB = b.batteryV ?? -1;
+      }
+
+      if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+      if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+      return sortOrder === 'asc' ? a.id - b.id : b.id - a.id;
+    });
+
+    const total = items.length;
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const safePage = Math.max(1, Math.min(page, totalPages));
+    const startIndex = (safePage - 1) * limit;
+    const pagedItems = items.slice(startIndex, startIndex + limit);
+
+    return {
+      total,
+      page: safePage,
+      limit,
+      totalPages,
+      items: pagedItems,
+    };
+  }
+
+  static async exportTelemetryCsv(
+    params: TelemetryTableFilterParams = {}
+  ): Promise<void> {
+    const {
+      search,
+      deviceId,
+      startDate,
+      endDate,
+      ai1Valid,
+      gpsValid,
+      altitudeValid,
+      sortBy = 'receivedUtc',
+      sortOrder = 'desc',
+    } = params;
+
+    // Check if remote export is available
+    if (API_BASE && !this.isRemoteUnreachable()) {
+      try {
+        const queryParams = new URLSearchParams();
+        if (search) queryParams.append('search', search);
+        if (deviceId && deviceId.toUpperCase() !== 'ALL') queryParams.append('device_id', deviceId);
+        if (startDate) queryParams.append('start_date', startDate);
+        if (endDate) queryParams.append('end_date', endDate);
+        if (ai1Valid && ai1Valid !== 'All') queryParams.append('ai1_valid', ai1Valid);
+        if (gpsValid && gpsValid !== 'All') queryParams.append('gps_valid', gpsValid);
+        if (altitudeValid && altitudeValid !== 'All') queryParams.append('altitude_valid', altitudeValid);
+        queryParams.append('sort_by', sortBy);
+        queryParams.append('sort_order', sortOrder);
+
+        const url = `${API_BASE}/devices/telemetry-csv?${queryParams.toString()}`;
+        const token = AuthStorageService.getToken();
+        const res = await fetch(url, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const blob = await res.blob();
+          const downloadUrl = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.download = `telemetry_history_${new Date().toISOString().replace(/[:.-]/g, '_').slice(0, 15)}.csv`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(downloadUrl);
+          return;
+        }
+      } catch (err) {
+        Logger.debug('API', 'ApiClient', 'Remote export failed, generating CSV client-side', 'exportTelemetryCsv', err);
+      }
+    }
+
+    // Client-side fallback export with EXACTLY the 13 columns (strictly NO IMEI, NO SIM)
+    const tableRes = await this.fetchTelemetryHistoryTable({
+      ...params,
+      page: 1,
+      limit: 10000,
+    });
+
+    const headers = [
+      'Device ID',
+      'Recorded At',
+      'AI1 mA',
+      'Level 1 %',
+      'AI1 Valid',
+      'Battery V',
+      'Battery %',
+      'Latitude',
+      'Longitude',
+      'Altitude m',
+      'GPS Valid',
+      'Altitude Valid',
+      'Received UTC',
+    ];
+
+    const sanitizeCsvCell = (val: any) => {
+      if (val === null || val === undefined) return '""';
+      let str = String(val);
+      if (str.length > 0 && ['=', '+', '-', '@', '\t', '\r'].includes(str[0])) {
+        str = `'${str}`;
+      }
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+
+    const rows = tableRes.items.map((r) => [
+      sanitizeCsvCell(r.deviceId),
+      sanitizeCsvCell(r.recordedAt),
+      sanitizeCsvCell(r.ai1Ma != null ? r.ai1Ma.toFixed(2) : '--'),
+      sanitizeCsvCell(r.level1Percent || '--'),
+      sanitizeCsvCell(r.ai1Valid),
+      sanitizeCsvCell(r.batteryV != null ? r.batteryV.toFixed(3) : '--'),
+      sanitizeCsvCell(r.batteryPercent || '--'),
+      sanitizeCsvCell(r.latitude != null ? r.latitude.toFixed(7) : '--'),
+      sanitizeCsvCell(r.longitude != null ? r.longitude.toFixed(7) : '--'),
+      sanitizeCsvCell(r.altitudeM != null ? r.altitudeM.toFixed(2) : '--'),
+      sanitizeCsvCell(r.gpsValid),
+      sanitizeCsvCell(r.altitudeValid),
+      sanitizeCsvCell(r.receivedUtc),
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map((row) => row.join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `telemetry_history_${new Date().toISOString().replace(/[:.-]/g, '_').slice(0, 15)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+  }
+
 
   // Alarms
   static async fetchAlarms(status?: string): Promise<AlarmItem[]> {
@@ -2018,10 +2296,14 @@ export class ApiClient {
   static async fetchAlarmStats(): Promise<AlarmStats> {
     if (!API_BASE || this.isRemoteUnreachable()) {
       const alerts = alertNotificationService.getActiveAlerts();
-      const critical = alerts.filter(a => a.severity === 'CRITICAL' || a.severity === 'critical').length;
-      const warning = alerts.filter(a => a.severity === 'WARNING' || a.severity === 'warning').length;
+      const critical = alerts.filter((a: any) => a.severity === 'CRITICAL' || a.severity === 'critical').length;
+      const warning = alerts.filter((a: any) => a.severity === 'WARNING' || a.severity === 'warning').length;
       return {
+        totalActive: alerts.length,
         total_active: alerts.length,
+        criticalCount: critical,
+        warningCount: warning,
+        resolvedToday: 0,
         critical,
         warning,
         info: alerts.length - (critical + warning),
@@ -2032,10 +2314,14 @@ export class ApiClient {
       return await this.request<AlarmStats>('/alarms/stats');
     } catch {
       const alerts = alertNotificationService.getActiveAlerts();
-      const critical = alerts.filter(a => a.severity === 'CRITICAL' || a.severity === 'critical').length;
-      const warning = alerts.filter(a => a.severity === 'WARNING' || a.severity === 'warning').length;
+      const critical = alerts.filter((a: any) => a.severity === 'CRITICAL' || a.severity === 'critical').length;
+      const warning = alerts.filter((a: any) => a.severity === 'WARNING' || a.severity === 'warning').length;
       return {
+        totalActive: alerts.length,
         total_active: alerts.length,
+        criticalCount: critical,
+        warningCount: warning,
+        resolvedToday: 0,
         critical,
         warning,
         info: alerts.length - (critical + warning),
@@ -2256,5 +2542,83 @@ export class ApiClient {
     const params = new URLSearchParams({ range });
     if (tankId) params.append('tank_id', tankId);
     return `${API_BASE}/export/csv?${params.toString()}`;
+  }
+
+  /**
+   * Retrieves the latest received message for all known MQTT topics from the backend.
+   * Automatically updates the local offline cache.
+   */
+  static async getLatestMqttTopics(limit = 500): Promise<{ count: number; total: number; topics: MqttLatestTopicRecord[] }> {
+    try {
+      const res: any = await this.request(`/mqtt/topics/latest?limit=${limit}`);
+      if (res && Array.isArray(res.topics)) {
+        localMqttStore.saveBatch(res.topics);
+        return res;
+      }
+    } catch (err) {
+      Logger.warn('MQTT', 'ApiClient', 'Failed to fetch latest MQTT topics from server, using local cache', 'getLatestMqttTopics', err);
+    }
+    const cached = localMqttStore.getAll();
+    return { count: cached.length, total: cached.length, topics: cached };
+  }
+
+  /**
+   * Retrieves the latest message for a single specific MQTT topic.
+   */
+  static async getLatestMqttTopic(topic: string): Promise<MqttLatestTopicRecord | null> {
+    const clean = topic.trim();
+    if (!clean) return null;
+    try {
+      const res: any = await this.request(`/mqtt/topics/${encodeURIComponent(clean)}/latest`);
+      if (res && res.topic) {
+        localMqttStore.saveRecord(res);
+        return res;
+      }
+    } catch (err) {
+      Logger.warn('MQTT', 'ApiClient', `Failed to fetch latest payload for topic ${clean}`, 'getLatestMqttTopic', err);
+    }
+    return localMqttStore.getLatest(clean);
+  }
+
+  /**
+   * Publishes / ingests an MQTT message into backend persistence and broadcasts via WebSocket.
+   */
+  static async ingestMqttTopicMessage(
+    topic: string,
+    payload: any,
+    qos = 0,
+    retain = true,
+    publishToBroker = true
+  ): Promise<any> {
+    const clean = topic.trim();
+    if (!clean) throw new Error('Topic cannot be blank');
+    return this.request(`/mqtt/topics/${encodeURIComponent(clean)}/message?publish_to_broker=${publishToBroker}`, {
+      method: 'POST',
+      body: JSON.stringify({ payload, qos, retain }),
+    });
+  }
+
+  /**
+   * Lists known MQTT topics with metadata.
+   */
+  static async listMqttTopics(): Promise<{ count: number; total: number; topics: any[] }> {
+    try {
+      return await this.request('/mqtt/topics');
+    } catch (err) {
+      const cached = localMqttStore.getAll();
+      return {
+        count: cached.length,
+        total: cached.length,
+        topics: cached.map(r => ({
+          topic: r.topic,
+          payload_type: r.payload_type,
+          qos: r.qos,
+          retained: r.retained,
+          received_at: r.received_at,
+          updated_at: r.updated_at,
+          message_sequence: r.message_sequence
+        }))
+      };
+    }
   }
 }

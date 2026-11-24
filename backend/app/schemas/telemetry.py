@@ -74,3 +74,31 @@ class TelemetryHistoryResponse(BaseModel):
     stats: TelemetryStats
     dataPoints: List[TelemetryPoint]
 
+
+class TelemetryTableRow(BaseModel):
+    """Row model for the 13-column Historical Telemetry Data Table."""
+    id: int
+    deviceId: str = Field(..., description="Unique device identifier")
+    recordedAt: str = Field(..., description="Timestamp recorded by the device (DD-MM-YYYY HH:mm:ss)")
+    ai1Ma: Optional[float] = Field(None, description="Analog input current in milliamperes")
+    level1Percent: Optional[str] = Field(None, description="Water level percentage e.g. 59.0%")
+    ai1Valid: str = Field("Valid", description="Analog input validity: Valid | Invalid | --")
+    batteryV: Optional[float] = Field(None, description="Battery voltage e.g. 3.135")
+    batteryPercent: Optional[str] = Field(None, description="Battery percentage e.g. 72.2%")
+    latitude: Optional[float] = Field(None, description="GPS latitude")
+    longitude: Optional[float] = Field(None, description="GPS longitude")
+    altitudeM: Optional[float] = Field(None, description="GPS altitude in metres")
+    gpsValid: str = Field("--", description="GPS location validity: Valid | Invalid | --")
+    altitudeValid: str = Field("--", description="Altitude validity status: Valid | Invalid | --")
+    receivedUtc: str = Field(..., description="Server-side reception timestamp strictly in UTC (DD-MM-YYYY HH:mm:ss)")
+
+
+class TelemetryTableResponse(BaseModel):
+    """Paginated response for the 13-column Historical Telemetry Data Table."""
+    total: int
+    page: int
+    limit: int
+    totalPages: int
+    items: List[TelemetryTableRow]
+
+

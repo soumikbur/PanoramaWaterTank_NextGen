@@ -1,11 +1,30 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { colors, metrics, typography } from '../theme';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { metrics, typography } from '../theme';
 import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
 import { BaseCard } from '../components/common/BaseCard';
 import { InfoRow } from '../components/common/InfoRow';
-import { RefreshCw, X, Plus, Edit3, Trash2, CheckCircle2, AlertCircle } from 'lucide-react';
-import { formatSensorHealth, getSensorHealthColor } from '../utils/formatters';
+import { TelemetryTableRow, TelemetryTableFilterParams } from '../types';
+import {
+  RefreshCw,
+  X,
+  Plus,
+  Edit3,
+  Trash2,
+  CheckCircle2,
+  AlertCircle,
+  Download,
+  Search,
+  Table as TableIcon,
+  Server,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from 'lucide-react';
 
 export interface DeviceTelemetry {
   dbId: string;
@@ -43,7 +62,47 @@ export interface DeviceTelemetry {
 }
 
 export const DevicesScreen: React.FC = () => {
-  const { liveTank, devices, connectionStatus, currentTime, refreshData, currentUser, selectedDeviceId } = useApp();
+  const {
+    liveTank,
+    devices,
+    connectionStatus,
+    currentTime,
+    refreshData,
+    currentUser,
+    selectedDeviceId,
+    selectedTrainNumber,
+    selectedCoachNumber,
+  } = useApp();
+
+  // Top view switcher: 'telemetry' (default historical table) or 'fleet' (device management)
+  const [viewMode, setViewMode] = useState<'telemetry' | 'fleet'>('telemetry');
+
+  // ----------------------------------------------------
+  // HISTORICAL TELEMETRY TABLE STATE
+  // ----------------------------------------------------
+  const [telemetryRecords, setTelemetryRecords] = useState<TelemetryTableRow[]>([]);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [isLoadingTelemetry, setIsLoadingTelemetry] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [tableFeedback, setTableFeedback] = useState<string | null>(null);
+
+  // Table Filters
+  const [searchDeviceId, setSearchDeviceId] = useState('');
+  const [selectedDeviceFilter, setSelectedDeviceFilter] = useState('ALL');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [ai1ValidFilter, setAi1ValidFilter] = useState('All');
+  const [gpsValidFilter, setGpsValidFilter] = useState('All');
+  const [altitudeValidFilter, setAltitudeValidFilter] = useState('All');
+  const [sortBy, setSortBy] = useState('receivedUtc');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // ----------------------------------------------------
+  // FLEET MANAGEMENT STATE (Preserved)
+  // ----------------------------------------------------
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [connFilter, setConnFilter] = useState('All');
@@ -56,7 +115,7 @@ export const DevicesScreen: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
-  // Add Device Form (11 fields)
+  // Add Device Form
   const [addName, setAddName] = useState('Coach Water Monitor');
   const [addUid, setAddUid] = useState('');
   const [addDeviceType, setAddDeviceType] = useState('Quectel EC200U 4G LTE');
@@ -82,7 +141,188 @@ export const DevicesScreen: React.FC = () => {
   const [editStatus, setEditStatus] = useState('AVAILABLE');
   const [editFirmwareVersion, setEditFirmwareVersion] = useState('2.0.0');
 
-  // Live devices mapped strictly from registered backend database devices
+  // List of unique device IDs for filter dropdown
+  const uniqueDeviceIds = useMemo(() => {
+    const set = new Set<string>();
+    devices.forEach((d) => {
+      if (d.uid) set.add(d.uid);
+    });
+    telemetryRecords.forEach((r) => {
+      if (r.deviceId) set.add(r.deviceId);
+    });
+    return Array.from(set).sort();
+  }, [devices, telemetryRecords]);
+
+  // Load telemetry data from backend (with local seed fallback)
+  const loadTelemetryData = useCallback(async () => {
+    setIsLoadingTelemetry(true);
+    try {
+      const params: TelemetryTableFilterParams = {
+        search: searchDeviceId.trim() || undefined,
+        deviceId: selectedDeviceFilter !== 'ALL' ? selectedDeviceFilter : undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        ai1Valid: ai1ValidFilter !== 'All' ? ai1ValidFilter : undefined,
+        gpsValid: gpsValidFilter !== 'All' ? gpsValidFilter : undefined,
+        altitudeValid: altitudeValidFilter !== 'All' ? altitudeValidFilter : undefined,
+        sortBy,
+        sortOrder,
+        page: currentPage,
+        limit: pageSize,
+      };
+
+      const res = await ApiClient.fetchTelemetryHistoryTable(params);
+      setTelemetryRecords(res.items);
+      setTotalRecords(res.total);
+      setTotalPages(res.totalPages);
+    } catch (err: any) {
+      console.error('Failed to load telemetry history table', err);
+    } finally {
+      setIsLoadingTelemetry(false);
+    }
+  }, [
+    searchDeviceId,
+    selectedDeviceFilter,
+    startDate,
+    endDate,
+    ai1ValidFilter,
+    gpsValidFilter,
+    altitudeValidFilter,
+    sortBy,
+    sortOrder,
+    currentPage,
+    pageSize,
+  ]);
+
+  useEffect(() => {
+    loadTelemetryData();
+  }, [loadTelemetryData]);
+
+  // Handle CSV Export
+  const handleExportCsv = async () => {
+    setIsExporting(true);
+    setTableFeedback('Preparing CSV export (13 columns)...');
+    try {
+      await ApiClient.exportTelemetryCsv({
+        search: searchDeviceId.trim() || undefined,
+        deviceId: selectedDeviceFilter !== 'ALL' ? selectedDeviceFilter : undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        ai1Valid: ai1ValidFilter !== 'All' ? ai1ValidFilter : undefined,
+        gpsValid: gpsValidFilter !== 'All' ? gpsValidFilter : undefined,
+        altitudeValid: altitudeValidFilter !== 'All' ? altitudeValidFilter : undefined,
+        sortBy,
+        sortOrder,
+      });
+      setTableFeedback('CSV export downloaded successfully.');
+    } catch (err: any) {
+      setTableFeedback(`Export failed: ${err.message || 'Error exporting CSV'}`);
+    } finally {
+      setIsExporting(false);
+      setTimeout(() => setTableFeedback(null), 4000);
+    }
+  };
+
+  // Reset telemetry filters
+  const handleResetTelemetryFilters = () => {
+    setSearchDeviceId('');
+    setSelectedDeviceFilter('ALL');
+    setStartDate('');
+    setEndDate('');
+    setAi1ValidFilter('All');
+    setGpsValidFilter('All');
+    setAltitudeValidFilter('All');
+    setSortBy('receivedUtc');
+    setSortOrder('desc');
+    setCurrentPage(1);
+  };
+
+  // Toggle column sort
+  const handleHeaderSort = (columnKey: string) => {
+    if (sortBy === columnKey) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(columnKey);
+      setSortOrder('desc');
+    }
+    setCurrentPage(1);
+  };
+
+  // Helper to render sort indicator
+  const renderSortIndicator = (columnKey: string) => {
+    if (sortBy !== columnKey) {
+      return <ArrowUpDown size={12} style={{ opacity: 0.4, marginLeft: '4px' }} />;
+    }
+    return sortOrder === 'asc' ? (
+      <ArrowUp size={12} style={{ color: '#38BDF8', marginLeft: '4px' }} />
+    ) : (
+      <ArrowDown size={12} style={{ color: '#38BDF8', marginLeft: '4px' }} />
+    );
+  };
+
+  // Render Validity Badge (Valid: green, Invalid: red, --: grey)
+  const renderValidityBadge = (status: string) => {
+    if (status === 'Valid') {
+      return (
+        <span
+          style={{
+            display: 'inline-block',
+            padding: '2px 8px',
+            borderRadius: '4px',
+            fontSize: '11px',
+            fontWeight: 600,
+            backgroundColor: '#DCFCE7',
+            color: '#15803D',
+            border: '1px solid #BBF7D0',
+            textAlign: 'center',
+            minWidth: '46px',
+          }}
+        >
+          Valid
+        </span>
+      );
+    }
+    if (status === 'Invalid') {
+      return (
+        <span
+          style={{
+            display: 'inline-block',
+            padding: '2px 8px',
+            borderRadius: '4px',
+            fontSize: '11px',
+            fontWeight: 600,
+            backgroundColor: '#FEE2E2',
+            color: '#B91C1C',
+            border: '1px solid #FECACA',
+            textAlign: 'center',
+            minWidth: '46px',
+          }}
+        >
+          Invalid
+        </span>
+      );
+    }
+    return (
+      <span
+        style={{
+          display: 'inline-block',
+          padding: '2px 8px',
+          borderRadius: '4px',
+          fontSize: '11px',
+          fontWeight: 600,
+          backgroundColor: '#F1F5F9',
+          color: '#64748B',
+          border: '1px solid #E2E8F0',
+          textAlign: 'center',
+          minWidth: '46px',
+        }}
+      >
+        --
+      </span>
+    );
+  };
+
+  // Live devices mapped strictly from registered backend database devices (for Fleet tab)
   const allDevices: DeviceTelemetry[] = useMemo(() => {
     return devices.map((d, index) => {
       const isPrimary = index === 0;
@@ -136,7 +376,9 @@ export const DevicesScreen: React.FC = () => {
 
   useEffect(() => {
     if (selectedDeviceId && allDevices.length > 0) {
-      const target = allDevices.find((d) => d.id === selectedDeviceId || d.dbId === selectedDeviceId || d.serialNumber === selectedDeviceId);
+      const target = allDevices.find(
+        (d) => d.id === selectedDeviceId || d.dbId === selectedDeviceId || d.serialNumber === selectedDeviceId
+      );
       if (target) {
         setSelectedDevice(target);
       }
@@ -165,37 +407,31 @@ export const DevicesScreen: React.FC = () => {
 
   const handleCreateDevice = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addUid.trim() || !addName.trim() || !addTrainNumber.trim() || !addCoachNumber.trim()) {
-      setFormError('Device Name, UID, Train Number, and Coach Number are mandatory.');
-      return;
-    }
-    const cleanUid = addUid.trim();
-    if (devices.some((d) => d.uid.toLowerCase() === cleanUid.toLowerCase())) {
-      setFormError(`Device with UID '${cleanUid}' already exists.`);
+    if (!addUid.trim() || !addName.trim()) {
+      setFormError('Device UID and Name are mandatory.');
       return;
     }
     try {
       await ApiClient.createDevice({
-        uid: cleanUid,
+        uid: addUid.trim(),
         name: addName.trim(),
-        train_number: addTrainNumber.trim(),
-        coach_number: addCoachNumber.trim().toUpperCase(),
-        device_type: addDeviceType,
+        deviceType: addDeviceType,
         protocol: addProtocol,
-        mqtt_client_id: addMqttClientId.trim() || `panorama-wli-${cleanUid.toLowerCase()}`,
-        mqtt_topic: addMqttTopic.trim() || `panorama/telemetry/${cleanUid}`,
-        tank_assignment: addTankAssignment,
+        mqttClientId: addMqttClientId.trim(),
+        mqttTopic: addMqttTopic.trim(),
+        trainNumber: addTrainNumber.trim(),
+        coachNumber: addCoachNumber.trim().toUpperCase(),
+        tankAssignment: addTankAssignment,
         description: addDescription.trim(),
         status: addStatus,
-        hardware_version: addDeviceType,
-        firmware_version: '2.0.0',
       });
       setIsAddModalOpen(false);
-      setActionFeedback(`Device ${cleanUid} registered successfully.`);
+      setActionFeedback(`Device ${addUid.trim()} successfully registered.`);
       setTimeout(() => setActionFeedback(null), 4000);
       await refreshData();
+      await loadTelemetryData();
     } catch (err: any) {
-      setFormError(err.message || 'Failed to create device');
+      setFormError(err.message || 'Failed to register device');
     }
   };
 
@@ -247,33 +483,41 @@ export const DevicesScreen: React.FC = () => {
       alert('Administrator privileges required to delete monitoring hardware.');
       return;
     }
-    if (!window.confirm(`Are you sure you want to delete device ${dev.name} (${dev.id})? This will also remove its configured tank entities.`)) {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete device ${dev.name} (${dev.id})? This will also remove its configured tank entities.`
+      )
+    ) {
       return;
     }
     try {
       await ApiClient.deleteDevice(dev.dbId);
-      setActionFeedback(`Device ${dev.id} removed from fleet.`);
+      setActionFeedback(`Device ${dev.id} deleted successfully.`);
       setTimeout(() => setActionFeedback(null), 4000);
-      if (selectedDevice?.id === dev.id) setSelectedDevice(null);
+      if (selectedDevice?.dbId === dev.dbId) {
+        setSelectedDevice(null);
+      }
       await refreshData();
     } catch (err: any) {
-      alert(`Delete failed: ${err.message}`);
+      alert(err.message || 'Failed to delete device');
     }
   };
 
-  // Filtering
-  const filteredDevices = useMemo(() => {
-    return allDevices.filter((dev) => {
-      if (searchQuery.trim().length > 0) {
-        const q = searchQuery.toLowerCase();
-        const matchName = dev.name.toLowerCase().includes(q);
-        const matchId = dev.id.toLowerCase().includes(q);
-        const matchLoc = dev.location.toLowerCase().includes(q);
-        if (!matchName && !matchId && !matchLoc) return false;
-      }
-      if (statusFilter !== 'All' && dev.status !== statusFilter) return false;
-      if (connFilter !== 'All' && !dev.connectionType.includes(connFilter)) return false;
-      return true;
+  // Filtered devices for Fleet Management tab
+  const filteredFleetDevices = useMemo(() => {
+    return allDevices.filter((d) => {
+      const matchSearch =
+        searchQuery === '' ||
+        d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        d.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        d.location.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchStatus = statusFilter === 'All' || d.status === statusFilter;
+      const matchConn =
+        connFilter === 'All' ||
+        (connFilter === 'LTE' && d.connectionType.includes('Cellular')) ||
+        (connFilter === 'BLE' && d.connectionType.includes('BLE')) ||
+        (connFilter === 'RS485' && d.connectionType.includes('RS485'));
+      return matchSearch && matchStatus && matchConn;
     });
   }, [allDevices, searchQuery, statusFilter, connFilter]);
 
@@ -282,303 +526,1032 @@ export const DevicesScreen: React.FC = () => {
   const offlineCount = allDevices.filter((d) => d.status === 'Offline').length;
   const warningCount = allDevices.filter((d) => d.status === 'Warning').length;
 
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalRecords);
+
+  const hasActiveFilters =
+    searchDeviceId.trim() !== '' ||
+    selectedDeviceFilter !== 'ALL' ||
+    startDate !== '' ||
+    endDate !== '' ||
+    ai1ValidFilter !== 'All' ||
+    gpsValidFilter !== 'All' ||
+    altitudeValidFilter !== 'All';
+
   return (
-    <div style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column', gap: metrics.space16 }}>
-      {/* Main Devices Container */}
+    <div style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* 1. Header Bar with Title, View Tabs & Global Actions */}
       <div
         style={{
           display: 'flex',
-          flexDirection: 'column',
-          gap: metrics.space16,
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
+          paddingBottom: '4px',
         }}
       >
-        {/* 1. Page Header with Title & Action Controls */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold', color: '#0F172A', fontFamily: typography.fontFamily }}>
-              Devices
-            </h1>
-            <p style={{ margin: '2px 0 0 0', fontSize: '14px', color: '#64748B', fontFamily: typography.fontFamily }}>
-              Manage and monitor connected water-level monitoring devices
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              onClick={handleOpenAddModal}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '6px',
-                border: 'none',
-                backgroundColor: '#2563EB',
-                color: '#FFFFFF',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                fontFamily: typography.fontFamily,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: '0 1px 2px rgba(37, 99, 235, 0.2)',
-              }}
-            >
-              <Plus size={14} />
-              <span>Add Device</span>
-            </button>
-
-            <button
-              onClick={() => refreshData()}
-              style={{
-                padding: '8px 16px',
-                borderRadius: '6px',
-                border: '1px solid #CBD5E1',
-                backgroundColor: '#FFFFFF',
-                color: '#334155',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                fontFamily: typography.fontFamily,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
-              <RefreshCw size={13} />
-              <span>Refresh</span>
-            </button>
-          </div>
-        </div>
-
-        {actionFeedback && (
-          <div
+        <div>
+          <h1
             style={{
-              backgroundColor: '#ECFDF5',
-              border: '1px solid #A7F3D0',
-              color: '#065F46',
-              borderRadius: '6px',
-              padding: '10px 14px',
-              fontSize: '13px',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
+              margin: 0,
+              fontSize: '22px',
+              fontWeight: 700,
+              color: '#0F172A',
+              fontFamily: typography.fontFamily,
+              letterSpacing: '-0.3px',
             }}
           >
-            <CheckCircle2 size={16} />
-            <span>{actionFeedback}</span>
-          </div>
-        )}
-
-        {/* 2. Search & Filter Bar */}
-        <BaseCard style={{ padding: '12px', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            <input
-              type="text"
-              placeholder="Search devices by name, ID, or location..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                flex: 1,
-                minWidth: '220px',
-                padding: '8px 12px',
-                borderRadius: '6px',
-                border: '1px solid #CBD5E1',
-                fontSize: '13px',
-                fontFamily: typography.fontFamily,
-                outline: 'none',
-              }}
-            />
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '13px', color: '#64748B', fontFamily: typography.fontFamily }}>Status:</span>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                style={{
-                  padding: '6px 10px',
-                  borderRadius: '6px',
-                  border: '1px solid #CBD5E1',
-                  fontSize: '12px',
-                  fontFamily: typography.fontFamily,
-                  backgroundColor: '#FFFFFF',
-                }}
-              >
-                <option value="All">All</option>
-                <option value="Online">Online</option>
-                <option value="Offline">Offline</option>
-                <option value="Warning">Warning</option>
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '13px', color: '#64748B', fontFamily: typography.fontFamily }}>Connection:</span>
-              <select
-                value={connFilter}
-                onChange={(e) => setConnFilter(e.target.value)}
-                style={{
-                  padding: '6px 10px',
-                  borderRadius: '6px',
-                  border: '1px solid #CBD5E1',
-                  fontSize: '12px',
-                  fontFamily: typography.fontFamily,
-                  backgroundColor: '#FFFFFF',
-                }}
-              >
-                <option value="All">All</option>
-                <option value="LTE">LTE</option>
-                <option value="BLE">BLE</option>
-                <option value="RS485">RS485</option>
-              </select>
-            </div>
-
-            {(searchQuery.length > 0 || statusFilter !== 'All' || connFilter !== 'All') && (
-              <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setStatusFilter('All');
-                  setConnFilter('All');
-                }}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #CBD5E1',
-                  backgroundColor: '#FFFFFF',
-                  color: '#64748B',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  fontFamily: typography.fontFamily,
-                }}
-              >
-                Reset
-              </button>
-            )}
-          </div>
-        </BaseCard>
-
-        {/* 3. Device Overview Metric Cards (4 Tiles) */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 155px), 1fr))', gap: metrics.space12, width: '100%' }}>
-          {/* Total Devices */}
-          <BaseCard style={{ height: '100px', padding: '14px', boxSizing: 'border-box' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B', fontFamily: typography.fontFamily }}>
-                TOTAL DEVICES
-              </span>
-              <span style={{ fontSize: '26px', fontWeight: 'bold', color: '#0F172A', fontFamily: typography.fontFamily }}>
-                {totalCount}
-              </span>
-              <span style={{ fontSize: '11px', color: '#94A3B8', fontFamily: typography.fontFamily }}>
-                Registered Monitoring Nodes
-              </span>
-            </div>
-          </BaseCard>
-
-          {/* Online Devices */}
-          <BaseCard style={{ height: '100px', padding: '14px', boxSizing: 'border-box' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B', fontFamily: typography.fontFamily }}>
-                  ONLINE
-                </span>
-                <div style={{ width: '8px', height: '8px', borderRadius: '4px', backgroundColor: '#10B981' }} />
-              </div>
-              <span style={{ fontSize: '26px', fontWeight: 'bold', color: '#059669', fontFamily: typography.fontFamily }}>
-                {onlineCount}
-              </span>
-              <span style={{ fontSize: '11px', color: '#94A3B8', fontFamily: typography.fontFamily }}>
-                Active Telemetry Uplink
-              </span>
-            </div>
-          </BaseCard>
-
-          {/* Offline Devices */}
-          <BaseCard style={{ height: '100px', padding: '14px', boxSizing: 'border-box' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B', fontFamily: typography.fontFamily }}>
-                  OFFLINE
-                </span>
-                <div style={{ width: '8px', height: '8px', borderRadius: '4px', backgroundColor: '#EF4444' }} />
-              </div>
-              <span style={{ fontSize: '26px', fontWeight: 'bold', color: offlineCount > 0 ? '#DC2626' : '#64748B', fontFamily: typography.fontFamily }}>
-                {offlineCount}
-              </span>
-              <span style={{ fontSize: '11px', color: '#94A3B8', fontFamily: typography.fontFamily }}>
-                No Signal / Link Timeout
-              </span>
-            </div>
-          </BaseCard>
-
-          {/* Warnings */}
-          <BaseCard style={{ height: '100px', padding: '14px', boxSizing: 'border-box' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B', fontFamily: typography.fontFamily }}>
-                  WARNINGS
-                </span>
-                <div style={{ width: '8px', height: '8px', borderRadius: '4px', backgroundColor: '#F59E0B' }} />
-              </div>
-              <span style={{ fontSize: '26px', fontWeight: 'bold', color: warningCount > 0 ? '#D97706' : '#64748B', fontFamily: typography.fontFamily }}>
-                {warningCount}
-              </span>
-              <span style={{ fontSize: '11px', color: '#94A3B8', fontFamily: typography.fontFamily }}>
-                Subsystem / Level Alarms
-              </span>
-            </div>
-          </BaseCard>
+            Devices
+          </h1>
+          <p style={{ margin: '2px 0 0 0', fontSize: '13px', color: '#64748B', fontFamily: typography.fontFamily }}>
+            Historical Telemetry Data & Node Fleet Management
+          </p>
         </div>
 
-        {/* 4. Device Management Table */}
-        <BaseCard style={{ padding: '16px', boxSizing: 'border-box' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {/* Table Header Bar */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#0F172A', fontFamily: typography.fontFamily }}>
-                Registered Water Monitoring Devices ({filteredDevices.length})
-              </span>
-              <span style={{ fontSize: '12px', color: '#94A3B8', fontFamily: typography.fontFamily }}>
-                Click any device row to view operational telemetry and diagnostics
-              </span>
+        {/* View Switcher Tabs (Historical Telemetry Data vs Device Fleet) */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            backgroundColor: '#F1F5F9',
+            padding: '3px',
+            borderRadius: '8px',
+            border: '1px solid #E2E8F0',
+          }}
+        >
+          <button
+            onClick={() => setViewMode('telemetry')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              borderRadius: '6px',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: viewMode === 'telemetry' ? 600 : 500,
+              backgroundColor: viewMode === 'telemetry' ? '#FFFFFF' : 'transparent',
+              color: viewMode === 'telemetry' ? '#0F172A' : '#64748B',
+              boxShadow: viewMode === 'telemetry' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <TableIcon size={14} color={viewMode === 'telemetry' ? '#2563EB' : '#64748B'} />
+            <span>Telemetry Data Table</span>
+          </button>
+
+          <button
+            onClick={() => setViewMode('fleet')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              borderRadius: '6px',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: viewMode === 'fleet' ? 600 : 500,
+              backgroundColor: viewMode === 'fleet' ? '#FFFFFF' : 'transparent',
+              color: viewMode === 'fleet' ? '#0F172A' : '#64748B',
+              boxShadow: viewMode === 'fleet' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Server size={14} color={viewMode === 'fleet' ? '#2563EB' : '#64748B'} />
+            <span>Fleet & Device Management</span>
+          </button>
+        </div>
+
+        {/* Action Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {viewMode === 'telemetry' ? (
+            <>
+              <button
+                onClick={handleExportCsv}
+                disabled={isExporting}
+                title="Export strictly 13 columns as RFC 4180 CSV"
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: '6px',
+                  border: '1px solid #CBD5E1',
+                  backgroundColor: '#FFFFFF',
+                  color: '#0F172A',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: isExporting ? 'wait' : 'pointer',
+                  fontFamily: typography.fontFamily,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                }}
+              >
+                <Download size={14} color="#2563EB" />
+                <span>{isExporting ? 'Exporting...' : 'Export CSV'}</span>
+              </button>
+
+              <button
+                onClick={() => loadTelemetryData()}
+                disabled={isLoadingTelemetry}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: '6px',
+                  border: '1px solid #CBD5E1',
+                  backgroundColor: '#FFFFFF',
+                  color: '#334155',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: typography.fontFamily,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                }}
+              >
+                <RefreshCw size={13} className={isLoadingTelemetry ? 'animate-spin' : ''} />
+                <span>Refresh</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => handleOpenAddModal()}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  backgroundColor: '#2563EB',
+                  color: '#FFFFFF',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: typography.fontFamily,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  boxShadow: '0 1px 2px rgba(37, 99, 235, 0.2)',
+                }}
+              >
+                <Plus size={14} />
+                <span>Add Device</span>
+              </button>
+
+              <button
+                onClick={() => refreshData()}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: '6px',
+                  border: '1px solid #CBD5E1',
+                  backgroundColor: '#FFFFFF',
+                  color: '#334155',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: typography.fontFamily,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <RefreshCw size={13} />
+                <span>Refresh</span>
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Action / Table Feedback Banner */}
+      {(tableFeedback || actionFeedback) && (
+        <div
+          style={{
+            backgroundColor: '#ECFDF5',
+            border: '1px solid #A7F3D0',
+            color: '#065F46',
+            borderRadius: '6px',
+            padding: '9px 14px',
+            fontSize: '13px',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <CheckCircle2 size={16} />
+          <span>{tableFeedback || actionFeedback}</span>
+        </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* VIEW MODE 1: HISTORICAL TELEMETRY DATA TABLE        */}
+      {/* ==================================================== */}
+      {viewMode === 'telemetry' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* Controls & Filters Card */}
+          <BaseCard style={{ padding: '14px', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* Row 1: Search & Dropdown Filters */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                {/* Search by Device ID */}
+                <div style={{ position: 'relative', flex: '1 1 200px', minWidth: '180px' }}>
+                  <Search
+                    size={14}
+                    color="#94A3B8"
+                    style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Search Device ID..."
+                    value={searchDeviceId}
+                    onChange={(e) => {
+                      setSearchDeviceId(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '7px 28px 7px 32px',
+                      borderRadius: '6px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '13px',
+                      fontFamily: typography.fontFamily,
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  {searchDeviceId && (
+                    <X
+                      size={13}
+                      color="#94A3B8"
+                      onClick={() => setSearchDeviceId('')}
+                      style={{
+                        position: 'absolute',
+                        right: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        cursor: 'pointer',
+                      }}
+                    />
+                  )}
+                </div>
+
+                {/* Device Selector */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>Device:</span>
+                  <select
+                    value={selectedDeviceFilter}
+                    onChange={(e) => {
+                      setSelectedDeviceFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12px',
+                      fontFamily: typography.fontFamily,
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                      maxWidth: '180px',
+                    }}
+                  >
+                    <option value="ALL">All Devices</option>
+                    {uniqueDeviceIds.map((did) => (
+                      <option key={did} value={did}>
+                        {did}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Date Range: Start Date */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>From:</span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '5px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12px',
+                      fontFamily: typography.fontFamily,
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                    }}
+                  />
+                </div>
+
+                {/* Date Range: End Date */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>To:</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '5px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12px',
+                      fontFamily: typography.fontFamily,
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: Validity Filters & Sort Selector */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                {/* AI1 Valid Filter */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>AI1 Valid:</span>
+                  <select
+                    value={ai1ValidFilter}
+                    onChange={(e) => {
+                      setAi1ValidFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '5px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12px',
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                    }}
+                  >
+                    <option value="All">All</option>
+                    <option value="Valid">Valid</option>
+                    <option value="Invalid">Invalid</option>
+                  </select>
+                </div>
+
+                {/* GPS Valid Filter */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>GPS Valid:</span>
+                  <select
+                    value={gpsValidFilter}
+                    onChange={(e) => {
+                      setGpsValidFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '5px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12px',
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                    }}
+                  >
+                    <option value="All">All</option>
+                    <option value="Valid">Valid</option>
+                    <option value="Invalid">Invalid</option>
+                  </select>
+                </div>
+
+                {/* Altitude Valid Filter */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>Alt Valid:</span>
+                  <select
+                    value={altitudeValidFilter}
+                    onChange={(e) => {
+                      setAltitudeValidFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '5px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12px',
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                    }}
+                  >
+                    <option value="All">All</option>
+                    <option value="Valid">Valid</option>
+                    <option value="Invalid">Invalid</option>
+                  </select>
+                </div>
+
+                {/* Sort Option */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#475569' }}>Sort:</span>
+                  <select
+                    value={`${sortBy}_${sortOrder}`}
+                    onChange={(e) => {
+                      const [col, ord] = e.target.value.split('_');
+                      setSortBy(col);
+                      setSortOrder(ord as 'asc' | 'desc');
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '5px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12px',
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                    }}
+                  >
+                    <option value="receivedUtc_desc">Received UTC (Newest First)</option>
+                    <option value="receivedUtc_asc">Received UTC (Oldest First)</option>
+                    <option value="recordedAt_desc">Recorded At (Newest First)</option>
+                    <option value="recordedAt_asc">Recorded At (Oldest First)</option>
+                    <option value="deviceId_asc">Device ID (A to Z)</option>
+                    <option value="deviceId_desc">Device ID (Z to A)</option>
+                    <option value="level1Percent_desc">Level 1 % (High to Low)</option>
+                    <option value="level1Percent_asc">Level 1 % (Low to High)</option>
+                    <option value="batteryPercent_desc">Battery % (High to Low)</option>
+                    <option value="batteryPercent_asc">Battery % (Low to High)</option>
+                  </select>
+                </div>
+
+                {/* Reset Filters Button */}
+                {hasActiveFilters && (
+                  <button
+                    onClick={handleResetTelemetryFilters}
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid #CBD5E1',
+                      backgroundColor: '#F8FAFC',
+                      color: '#64748B',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                    }}
+                  >
+                    Reset Filters
+                  </button>
+                )}
+              </div>
+            </div>
+          </BaseCard>
+
+          {/* 13-Column SCADA Historical Telemetry Table */}
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '8px',
+              border: '1px solid #E2E8F0',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
+              <table
+                style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontSize: '12.5px',
+                  fontFamily: typography.fontFamily,
+                  textAlign: 'left',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {/* Dark Navy Table Header */}
+                <thead>
+                  <tr
+                    style={{
+                      backgroundColor: '#0F172A',
+                      color: '#F8FAFC',
+                      fontWeight: 600,
+                      userSelect: 'none',
+                    }}
+                  >
+                    {/* 1. Device ID */}
+                    <th
+                      onClick={() => handleHeaderSort('deviceId')}
+                      style={{
+                        padding: '11px 14px',
+                        cursor: 'pointer',
+                        borderRight: '1px solid #1E293B',
+                      }}
+                    >
+                      <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        <span>Device ID</span>
+                        {renderSortIndicator('deviceId')}
+                      </div>
+                    </th>
+
+                    {/* 2. Recorded At */}
+                    <th
+                      onClick={() => handleHeaderSort('recordedAt')}
+                      style={{
+                        padding: '11px 14px',
+                        cursor: 'pointer',
+                        borderRight: '1px solid #1E293B',
+                      }}
+                    >
+                      <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        <span>Recorded At</span>
+                        {renderSortIndicator('recordedAt')}
+                      </div>
+                    </th>
+
+                    {/* 3. AI1 mA */}
+                    <th
+                      onClick={() => handleHeaderSort('ai1Ma')}
+                      style={{
+                        padding: '11px 14px',
+                        cursor: 'pointer',
+                        borderRight: '1px solid #1E293B',
+                      }}
+                    >
+                      <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        <span>AI1 mA</span>
+                        {renderSortIndicator('ai1Ma')}
+                      </div>
+                    </th>
+
+                    {/* 4. Level 1 % */}
+                    <th
+                      onClick={() => handleHeaderSort('level1Percent')}
+                      style={{
+                        padding: '11px 14px',
+                        cursor: 'pointer',
+                        borderRight: '1px solid #1E293B',
+                      }}
+                    >
+                      <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        <span>Level 1 %</span>
+                        {renderSortIndicator('level1Percent')}
+                      </div>
+                    </th>
+
+                    {/* 5. AI1 Valid */}
+                    <th style={{ padding: '11px 14px', borderRight: '1px solid #1E293B' }}>
+                      <span>AI1 Valid</span>
+                    </th>
+
+                    {/* 6. Battery V */}
+                    <th
+                      onClick={() => handleHeaderSort('batteryV')}
+                      style={{
+                        padding: '11px 14px',
+                        cursor: 'pointer',
+                        borderRight: '1px solid #1E293B',
+                      }}
+                    >
+                      <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        <span>Battery V</span>
+                        {renderSortIndicator('batteryV')}
+                      </div>
+                    </th>
+
+                    {/* 7. Battery % */}
+                    <th
+                      onClick={() => handleHeaderSort('batteryPercent')}
+                      style={{
+                        padding: '11px 14px',
+                        cursor: 'pointer',
+                        borderRight: '1px solid #1E293B',
+                      }}
+                    >
+                      <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        <span>Battery %</span>
+                        {renderSortIndicator('batteryPercent')}
+                      </div>
+                    </th>
+
+                    {/* 8. Latitude */}
+                    <th style={{ padding: '11px 14px', borderRight: '1px solid #1E293B' }}>
+                      <span>Latitude</span>
+                    </th>
+
+                    {/* 9. Longitude */}
+                    <th style={{ padding: '11px 14px', borderRight: '1px solid #1E293B' }}>
+                      <span>Longitude</span>
+                    </th>
+
+                    {/* 10. Altitude m */}
+                    <th style={{ padding: '11px 14px', borderRight: '1px solid #1E293B' }}>
+                      <span>Altitude m</span>
+                    </th>
+
+                    {/* 11. GPS Valid */}
+                    <th style={{ padding: '11px 14px', borderRight: '1px solid #1E293B' }}>
+                      <span>GPS Valid</span>
+                    </th>
+
+                    {/* 12. Altitude Valid */}
+                    <th style={{ padding: '11px 14px', borderRight: '1px solid #1E293B' }}>
+                      <span>Altitude Valid</span>
+                    </th>
+
+                    {/* 13. Received UTC */}
+                    <th
+                      onClick={() => handleHeaderSort('receivedUtc')}
+                      style={{
+                        padding: '11px 14px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        <span>Received UTC</span>
+                        {renderSortIndicator('receivedUtc')}
+                      </div>
+                    </th>
+                  </tr>
+                </thead>
+
+                {/* Table Body with Alternating Rows */}
+                <tbody>
+                  {isLoadingTelemetry ? (
+                    <tr>
+                      <td colSpan={13} style={{ padding: '36px', textAlign: 'center', color: '#64748B' }}>
+                        <RefreshCw size={20} className="animate-spin" style={{ margin: '0 auto 8px auto' }} />
+                        <div>Loading historical telemetry readings...</div>
+                      </td>
+                    </tr>
+                  ) : telemetryRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan={13} style={{ padding: '40px', textAlign: 'center', color: '#64748B' }}>
+                        <AlertCircle size={24} style={{ margin: '0 auto 8px auto', color: '#94A3B8' }} />
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#334155' }}>
+                          No Telemetry Records Found
+                        </div>
+                        <div style={{ fontSize: '12px', marginTop: '4px' }}>
+                          Try adjusting your search criteria or resetting filters.
+                        </div>
+                        {hasActiveFilters && (
+                          <button
+                            onClick={handleResetTelemetryFilters}
+                            style={{
+                              marginTop: '12px',
+                              padding: '6px 14px',
+                              borderRadius: '6px',
+                              border: '1px solid #CBD5E1',
+                              backgroundColor: '#FFFFFF',
+                              color: '#2563EB',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Reset Filters
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ) : (
+                    telemetryRecords.map((row, idx) => {
+                      // Alternating background: Row 1 White (#FFFFFF), Row 2 Very light blue (#F0F7FF)
+                      const isAlternate = idx % 2 === 1;
+                      const rowBg = isAlternate ? '#F0F7FF' : '#FFFFFF';
+
+                      return (
+                        <tr
+                          key={row.id || `${row.deviceId}-${idx}`}
+                          style={{
+                            backgroundColor: rowBg,
+                            borderBottom: '1px solid #E2E8F0',
+                            transition: 'background-color 0.1s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#E0F2FE';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = rowBg;
+                          }}
+                        >
+                          {/* 1. Device ID */}
+                          <td
+                            style={{
+                              padding: '8px 14px',
+                              fontWeight: 600,
+                              color: '#0F172A',
+                              fontFamily: 'monospace',
+                              fontSize: '12px',
+                            }}
+                          >
+                            {row.deviceId || '--'}
+                          </td>
+
+                          {/* 2. Recorded At */}
+                          <td style={{ padding: '8px 14px', color: '#334155', fontVariantNumeric: 'tabular-nums' }}>
+                            {row.recordedAt || '--'}
+                          </td>
+
+                          {/* 3. AI1 mA */}
+                          <td
+                            style={{
+                              padding: '8px 14px',
+                              fontWeight: 600,
+                              color: '#0F172A',
+                              fontVariantNumeric: 'tabular-nums',
+                            }}
+                          >
+                            {row.ai1Ma != null ? row.ai1Ma.toFixed(2) : '--'}
+                          </td>
+
+                          {/* 4. Level 1 % */}
+                          <td
+                            style={{
+                              padding: '8px 14px',
+                              fontWeight: 700,
+                              color: '#2563EB',
+                              fontVariantNumeric: 'tabular-nums',
+                            }}
+                          >
+                            {row.level1Percent || '--'}
+                          </td>
+
+                          {/* 5. AI1 Valid */}
+                          <td style={{ padding: '8px 14px' }}>{renderValidityBadge(row.ai1Valid)}</td>
+
+                          {/* 6. Battery V */}
+                          <td style={{ padding: '8px 14px', color: '#334155', fontVariantNumeric: 'tabular-nums' }}>
+                            {row.batteryV != null ? row.batteryV.toFixed(3) : '--'}
+                          </td>
+
+                          {/* 7. Battery % */}
+                          <td style={{ padding: '8px 14px', color: '#334155', fontVariantNumeric: 'tabular-nums' }}>
+                            {row.batteryPercent || '--'}
+                          </td>
+
+                          {/* 8. Latitude */}
+                          <td
+                            style={{
+                              padding: '8px 14px',
+                              color: '#334155',
+                              fontFamily: 'monospace',
+                              fontSize: '11.5px',
+                            }}
+                          >
+                            {row.latitude != null ? row.latitude.toFixed(7) : '--'}
+                          </td>
+
+                          {/* 9. Longitude */}
+                          <td
+                            style={{
+                              padding: '8px 14px',
+                              color: '#334155',
+                              fontFamily: 'monospace',
+                              fontSize: '11.5px',
+                            }}
+                          >
+                            {row.longitude != null ? row.longitude.toFixed(7) : '--'}
+                          </td>
+
+                          {/* 10. Altitude m */}
+                          <td style={{ padding: '8px 14px', color: '#334155', fontVariantNumeric: 'tabular-nums' }}>
+                            {row.altitudeM != null ? row.altitudeM.toFixed(2) : '--'}
+                          </td>
+
+                          {/* 11. GPS Valid */}
+                          <td style={{ padding: '8px 14px' }}>{renderValidityBadge(row.gpsValid)}</td>
+
+                          {/* 12. Altitude Valid */}
+                          <td style={{ padding: '8px 14px' }}>{renderValidityBadge(row.altitudeValid)}</td>
+
+                          {/* 13. Received UTC (strictly in UTC format: DD-MM-YYYY HH:mm:ss) */}
+                          <td
+                            style={{
+                              padding: '8px 14px',
+                              color: '#0F172A',
+                              fontWeight: 500,
+                              fontVariantNumeric: 'tabular-nums',
+                            }}
+                          >
+                            {row.receivedUtc || '--'}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
 
-            <div style={{ width: '100%', height: '1px', backgroundColor: '#E2E8F0' }} />
-
-            {/* Scrollable table container prevents column collision on narrow viewports */}
-            <div className="scada-table-scroll-container" style={{ border: 'none' }}>
-            <div style={{ minWidth: '940px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {/* Table Column Headers */}
+            {/* Pagination Controls Footer */}
             <div
               style={{
-                display: 'grid',
-                gridTemplateColumns: '200px 90px 130px 140px 110px 80px 1fr 130px',
-                gap: '12px',
-                padding: '0 12px',
-                fontSize: '11px',
-                fontWeight: 'bold',
-                color: '#64748B',
-                fontFamily: typography.fontFamily,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '10px 16px',
+                backgroundColor: '#F8FAFC',
+                borderTop: '1px solid #E2E8F0',
+                flexWrap: 'wrap',
+                gap: '10px',
               }}
             >
-              <div>DEVICE NAME / ID</div>
-              <div>STATUS</div>
-              <div>CONNECTION</div>
-              <div>WATER LEVEL</div>
-              <div>SENSOR HEALTH</div>
-              <div>FIRMWARE</div>
-              <div>LAST UPDATE</div>
-              <div>ACTIONS</div>
+              {/* Record Summary */}
+              <div style={{ fontSize: '13px', color: '#64748B' }}>
+                Showing{' '}
+                <strong style={{ color: '#0F172A' }}>
+                  {totalRecords > 0 ? startIndex + 1 : 0} - {endIndex}
+                </strong>{' '}
+                of <strong style={{ color: '#0F172A' }}>{totalRecords}</strong> records
+              </div>
+
+              {/* Rows Per Page Selector & Page Navigation */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', color: '#64748B' }}>Rows per page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '5px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12px',
+                      backgroundColor: '#FFFFFF',
+                      color: '#0F172A',
+                    }}
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+
+                {/* Page Navigation Buttons */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  {/* First */}
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage <= 1 || isLoadingTelemetry}
+                    title="First page"
+                    style={{
+                      padding: '5px 8px',
+                      borderRadius: '5px',
+                      border: '1px solid #CBD5E1',
+                      backgroundColor: currentPage <= 1 ? '#F1F5F9' : '#FFFFFF',
+                      color: currentPage <= 1 ? '#94A3B8' : '#334155',
+                      cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <ChevronsLeft size={14} />
+                  </button>
+
+                  {/* Previous */}
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage <= 1 || isLoadingTelemetry}
+                    title="Previous page"
+                    style={{
+                      padding: '5px 8px',
+                      borderRadius: '5px',
+                      border: '1px solid #CBD5E1',
+                      backgroundColor: currentPage <= 1 ? '#F1F5F9' : '#FFFFFF',
+                      color: currentPage <= 1 ? '#94A3B8' : '#334155',
+                      cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+
+                  {/* Current Page Pill */}
+                  <span
+                    style={{
+                      padding: '5px 12px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      backgroundColor: '#2563EB',
+                      color: '#FFFFFF',
+                      borderRadius: '5px',
+                    }}
+                  >
+                    {currentPage} / {totalPages || 1}
+                  </span>
+
+                  {/* Next */}
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage >= totalPages || isLoadingTelemetry}
+                    title="Next page"
+                    style={{
+                      padding: '5px 8px',
+                      borderRadius: '5px',
+                      border: '1px solid #CBD5E1',
+                      backgroundColor: currentPage >= totalPages ? '#F1F5F9' : '#FFFFFF',
+                      color: currentPage >= totalPages ? '#94A3B8' : '#334155',
+                      cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+
+                  {/* Last */}
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage >= totalPages || isLoadingTelemetry}
+                    title="Last page"
+                    style={{
+                      padding: '5px 8px',
+                      borderRadius: '5px',
+                      border: '1px solid #CBD5E1',
+                      backgroundColor: currentPage >= totalPages ? '#F1F5F9' : '#FFFFFF',
+                      color: currentPage >= totalPages ? '#94A3B8' : '#334155',
+                      cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <ChevronsRight size={14} />
+                  </button>
+                </div>
+              </div>
             </div>
+          </div>
+        </div>
+      )}
 
-            <div style={{ width: '100%', height: '1px', backgroundColor: '#F1F5F9' }} />
+      {/* ==================================================== */}
+      {/* VIEW MODE 2: FLEET & DEVICE MANAGEMENT              */}
+      {/* ==================================================== */}
+      {viewMode === 'fleet' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: metrics.space16 }}>
+          {/* Search & Filter Bar for Fleet */}
+          <BaseCard style={{ padding: '12px', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                placeholder="Search devices by name, ID, or location..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  flex: 1,
+                  minWidth: '220px',
+                  padding: '8px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #CBD5E1',
+                  fontSize: '13px',
+                  fontFamily: typography.fontFamily,
+                  outline: 'none',
+                }}
+              />
 
-            {/* Table Rows */}
-            {filteredDevices.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '36px 0' }}>
-                <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#0F172A', fontFamily: typography.fontFamily }}>
-                  No Devices Found Matching Query
-                </div>
-                <div style={{ fontSize: '13px', color: '#64748B', fontFamily: typography.fontFamily, marginTop: '4px' }}>
-                  Try adjusting your search query or reset the filter dropdowns.
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '13px', color: '#64748B', fontFamily: typography.fontFamily }}>Status:</span>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '12px',
+                    fontFamily: typography.fontFamily,
+                    backgroundColor: '#FFFFFF',
+                  }}
+                >
+                  <option value="All">All</option>
+                  <option value="Online">Online</option>
+                  <option value="Offline">Offline</option>
+                  <option value="Warning">Warning</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '13px', color: '#64748B', fontFamily: typography.fontFamily }}>
+                  Connection:
+                </span>
+                <select
+                  value={connFilter}
+                  onChange={(e) => setConnFilter(e.target.value)}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '12px',
+                    fontFamily: typography.fontFamily,
+                    backgroundColor: '#FFFFFF',
+                  }}
+                >
+                  <option value="All">All</option>
+                  <option value="LTE">LTE</option>
+                  <option value="BLE">BLE</option>
+                  <option value="RS485">RS485</option>
+                </select>
+              </div>
+
+              {(searchQuery.length > 0 || statusFilter !== 'All' || connFilter !== 'All') && (
                 <button
                   onClick={() => {
                     setSearchQuery('');
@@ -586,569 +1559,428 @@ export const DevicesScreen: React.FC = () => {
                     setConnFilter('All');
                   }}
                   style={{
-                    marginTop: '12px',
-                    padding: '6px 14px',
+                    padding: '6px 12px',
                     borderRadius: '6px',
                     border: '1px solid #CBD5E1',
                     backgroundColor: '#FFFFFF',
-                    color: '#334155',
+                    color: '#64748B',
                     fontSize: '12px',
                     cursor: 'pointer',
+                    fontFamily: typography.fontFamily,
                   }}
                 >
-                  Reset All Filters
+                  Reset
                 </button>
+              )}
+            </div>
+          </BaseCard>
+
+          {/* Device Overview Metric Cards (4 Tiles) */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 155px), 1fr))',
+              gap: metrics.space12,
+              width: '100%',
+            }}
+          >
+            {/* Total Devices */}
+            <BaseCard style={{ height: '90px', padding: '12px', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B' }}>TOTAL DEVICES</span>
+                <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#0F172A' }}>{totalCount}</span>
+                <span style={{ fontSize: '11px', color: '#94A3B8' }}>Registered Monitoring Nodes</span>
               </div>
-            ) : (
-              filteredDevices.map((dev, index) => {
-                const isSelected = selectedDevice?.id === dev.id;
-                return (
-                  <div
-                    key={dev.id}
-                    onClick={() => setSelectedDevice(dev)}
+            </BaseCard>
+
+            {/* Online Devices */}
+            <BaseCard style={{ height: '90px', padding: '12px', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B' }}>ONLINE</span>
+                  <span
                     style={{
-                      display: 'grid',
-                      gridTemplateColumns: '200px 90px 130px 140px 110px 80px 1fr 130px',
-                      gap: '12px',
-                      alignItems: 'center',
-                      height: '64px',
-                      padding: '0 12px',
-                      borderRadius: '8px',
-                      backgroundColor: isSelected ? '#EFF6FF' : index % 2 === 1 ? '#FAFAFA' : '#FFFFFF',
-                      border: `1px solid ${isSelected ? '#3B82F6' : '#F1F5F9'}`,
-                      cursor: 'pointer',
-                      transition: 'background-color 120ms ease, border-color 120ms ease',
-                      boxSizing: 'border-box',
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: '#10B981',
+                      boxShadow: '0 0 6px rgba(16, 185, 129, 0.6)',
                     }}
-                  >
-                    {/* Device Name & ID */}
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#0F172A', fontFamily: typography.fontFamily, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {dev.name}
-                      </span>
-                      <span style={{ fontSize: '11px', color: '#64748B', fontFamily: typography.fontFamily }}>
-                        {dev.location}
-                      </span>
-                    </div>
+                  />
+                </div>
+                <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#10B981' }}>{onlineCount}</span>
+                <span style={{ fontSize: '11px', color: '#94A3B8' }}>Active Telemetry Stream</span>
+              </div>
+            </BaseCard>
 
-                    {/* Status Badge */}
+            {/* Warning Devices */}
+            <BaseCard style={{ height: '90px', padding: '12px', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B' }}>WARNING</span>
+                  <span
+                    style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: '#F59E0B',
+                      boxShadow: '0 0 6px rgba(245, 158, 11, 0.6)',
+                    }}
+                  />
+                </div>
+                <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#F59E0B' }}>{warningCount}</span>
+                <span style={{ fontSize: '11px', color: '#94A3B8' }}>Low Level / Signal Drop</span>
+              </div>
+            </BaseCard>
+
+            {/* Offline Devices */}
+            <BaseCard style={{ height: '90px', padding: '12px', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748B' }}>OFFLINE</span>
+                  <span
+                    style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: '#EF4444',
+                      boxShadow: '0 0 6px rgba(239, 68, 68, 0.6)',
+                    }}
+                  />
+                </div>
+                <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#EF4444' }}>{offlineCount}</span>
+                <span style={{ fontSize: '11px', color: '#94A3B8' }}>Awaiting Modem Ping</span>
+              </div>
+            </BaseCard>
+          </div>
+
+          {/* Device Cards Grid */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))',
+              gap: metrics.space16,
+            }}
+          >
+            {filteredFleetDevices.map((dev) => {
+              const statusColor = dev.status === 'Online' ? '#10B981' : dev.status === 'Warning' ? '#F59E0B' : '#EF4444';
+              const statusBg = dev.status === 'Online' ? '#ECFDF5' : dev.status === 'Warning' ? '#FFFBEB' : '#FEF2F2';
+
+              return (
+                <BaseCard key={dev.dbId} style={{ padding: '16px', boxSizing: 'border-box' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                     <div>
-                      <div
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          height: '24px',
-                          padding: '0 10px',
-                          borderRadius: '12px',
-                          backgroundColor: dev.status === 'Online' ? '#ECFDF5' : dev.status === 'Warning' ? '#FFFBEB' : '#FEF2F2',
-                          border: `1px solid ${dev.status === 'Online' ? '#A7F3D0' : dev.status === 'Warning' ? '#FDE68A' : '#FECACA'}`,
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: '6px',
-                            height: '6px',
-                            borderRadius: '3px',
-                            backgroundColor: dev.status === 'Online' ? '#10B981' : dev.status === 'Warning' ? '#F59E0B' : '#EF4444',
-                          }}
-                        />
-                        <span
-                          style={{
-                            fontSize: '11px',
-                            fontWeight: 'bold',
-                            color: dev.status === 'Online' ? '#065F46' : dev.status === 'Warning' ? '#92400E' : '#991B1B',
-                            fontFamily: typography.fontFamily,
-                          }}
-                        >
-                          {dev.status}
-                        </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: statusColor }} />
+                        <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0F172A' }}>{dev.name}</h3>
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#64748B', marginTop: '2px', fontFamily: 'monospace' }}>
+                        UID: {dev.id}
                       </div>
                     </div>
-
-                    {/* Connection Type */}
-                    <span style={{ fontSize: '12px', color: '#334155', fontFamily: typography.fontFamily }}>
-                      {dev.connectionType}
-                    </span>
-
-                    {/* Water Level with Mini Progress Bar */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '12px', fontWeight: 'bold', color: colors.primary, fontFamily: typography.fontFamily }}>
-                          {dev.waterLevel != null ? `${dev.waterLevel.toFixed(1)}%` : 'N/A'}
-                        </span>
-                        <span style={{ fontSize: '11px', color: '#64748B', fontFamily: typography.fontFamily }}>
-                          {dev.waterHeightCm != null ? `(${dev.waterHeightCm.toFixed(1)} cm)` : '(-- cm)'}
-                        </span>
-                      </div>
-                      <div style={{ width: '100%', height: '5px', borderRadius: '2.5px', backgroundColor: '#E2E8F0', overflow: 'hidden' }}>
-                        <div
-                          style={{
-                            width: `${dev.waterLevel != null ? Math.max(0, Math.min(100, dev.waterLevel)) : 0}%`,
-                            height: '100%',
-                            backgroundColor: (dev.waterLevel ?? 0) >= 100.0 ? '#EF4444' : (dev.waterLevel ?? 0) < 20.0 ? '#F59E0B' : '#0878E8',
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Sensor Health */}
                     <span
                       style={{
-                        fontSize: '12px',
-                        fontWeight: 500,
-                        color: getSensorHealthColor(dev.sensorStatus),
-                        fontFamily: typography.fontFamily,
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        backgroundColor: statusBg,
+                        color: statusColor,
                       }}
                     >
-                      {formatSensorHealth(dev.sensorStatus)}
+                      {dev.status}
                     </span>
+                  </div>
 
-                    {/* Firmware Version */}
-                    <span style={{ fontSize: '12px', color: '#64748B', fontFamily: typography.fontFamily }}>
-                      {dev.firmwareVersion || 'Unknown'}
-                    </span>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '12px', marginBottom: '14px' }}>
+                    <div>
+                      <span style={{ color: '#64748B' }}>Train/Coach:</span>{' '}
+                      <strong>
+                        {dev.trainNumber}/{dev.coachNumber}
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748B' }}>Water Level:</span>{' '}
+                      <strong style={{ color: '#2563EB' }}>
+                        {dev.waterLevel != null ? `${dev.waterLevel.toFixed(1)}%` : '--'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748B' }}>Signal:</span> <span>{dev.signalQuality}</span>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748B' }}>Last Seen:</span> <span>{dev.lastUpdate}</span>
+                    </div>
+                  </div>
 
-                    {/* Last Update */}
-                    <span style={{ fontSize: '12px', color: '#64748B', fontFamily: typography.fontFamily, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {dev.lastUpdate}
-                    </span>
-
-                    {/* Action Buttons: Inspect, Edit, Delete */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'flex-end',
+                      gap: '8px',
+                      paddingTop: '10px',
+                      borderTop: '1px solid #F1F5F9',
+                    }}
+                  >
+                    <button
+                      onClick={() => setSelectedDevice(dev)}
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: '4px',
+                        border: '1px solid #CBD5E1',
+                        backgroundColor: '#FFFFFF',
+                        color: '#334155',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Diagnostics
+                    </button>
+                    <button
+                      onClick={() => handleOpenEditModal(dev)}
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: '4px',
+                        border: '1px solid #CBD5E1',
+                        backgroundColor: '#FFFFFF',
+                        color: '#334155',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      <Edit3 size={12} />
+                      <span>Edit</span>
+                    </button>
+                    {currentUser?.role === 'ADMIN' && (
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedDevice(dev);
-                        }}
-                        title="View Telemetry Diagnostics"
+                        onClick={() => handleDeleteDevice(dev)}
                         style={{
-                          padding: '5px 8px',
+                          padding: '5px 10px',
                           borderRadius: '4px',
-                          border: '1px solid #CBD5E1',
-                          backgroundColor: '#FFFFFF',
-                          color: '#2563EB',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Inspect
-                      </button>
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenEditModal(dev);
-                        }}
-                        title="Edit Device Configuration"
-                        style={{
-                          padding: '5px',
-                          borderRadius: '4px',
-                          border: '1px solid #CBD5E1',
-                          backgroundColor: '#FFFFFF',
-                          color: '#475569',
+                          border: '1px solid #FECACA',
+                          backgroundColor: '#FEF2F2',
+                          color: '#DC2626',
+                          fontSize: '12px',
+                          fontWeight: 500,
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center',
+                          gap: '4px',
                         }}
                       >
-                        <Edit3 size={13} />
+                        <Trash2 size={12} />
+                        <span>Delete</span>
                       </button>
-
-                      {currentUser?.role === 'ADMIN' && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteDevice(dev);
-                          }}
-                          title="Delete Device"
-                          style={{
-                            padding: '5px',
-                            borderRadius: '4px',
-                            border: '1px solid #FECACA',
-                            backgroundColor: '#FEF2F2',
-                            color: '#DC2626',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </div>
+                    )}
                   </div>
-                );
-              })
-            )}
-            </div>
-            </div>
+                </BaseCard>
+              );
+            })}
           </div>
-        </BaseCard>
-      </div>
+        </div>
+      )}
 
-      {/* Backdrop overlay for Device Drawer */}
+      {/* Diagnostics Drawer / Modal */}
       {selectedDevice && (
         <div
-          onClick={() => setSelectedDevice(null)}
           style={{
             position: 'fixed',
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.45)',
-            backdropFilter: 'blur(2px)',
-            zIndex: 999,
-          }}
-        />
-      )}
-
-      {/* 5. Slide-in Device Detail Drawer (Right Side Sheet, 440px) */}
-      {selectedDevice && (
-        <div
-          className="drawer-slide-in"
-          style={{
-            position: 'fixed',
-            top: 0,
-            right: 0,
-            bottom: 0,
-            width: '440px',
-            maxWidth: '100vw',
-            backgroundColor: '#FFFFFF',
-            borderLeft: '1px solid #CBD5E1',
-            boxShadow: '-6px 0 28px rgba(0,0,0,0.20)',
-            zIndex: 1000,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
             display: 'flex',
-            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+            padding: '16px',
             boxSizing: 'border-box',
           }}
         >
-          {/* Scrollable Content inside Drawer */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {/* Drawer Header Bar */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: '10px',
+              maxWidth: '560px',
+              width: '100%',
+              padding: '20px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              boxSizing: 'border-box',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
               <div>
-                <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#0F172A', fontFamily: typography.fontFamily }}>
-                  {selectedDevice.name}
-                </div>
-                <div style={{ fontSize: '12px', color: '#64748B', fontFamily: typography.fontFamily, marginTop: '2px' }}>
-                  Device ID: {selectedDevice.id}
-                </div>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0F172A' }}>
+                  Diagnostics: {selectedDevice.name}
+                </h3>
+                <span style={{ fontSize: '12px', color: '#64748B', fontFamily: 'monospace' }}>
+                  Hardware UID: {selectedDevice.id}
+                </span>
               </div>
-
               <button
                 onClick={() => setSelectedDevice(null)}
                 style={{
-                  padding: '6px 12px',
-                  borderRadius: '6px',
-                  border: '1px solid #CBD5E1',
-                  backgroundColor: '#FFFFFF',
-                  color: '#334155',
-                  fontSize: '12px',
-                  fontWeight: 600,
+                  background: 'none',
+                  border: 'none',
                   cursor: 'pointer',
-                  fontFamily: typography.fontFamily,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
+                  color: '#64748B',
+                  padding: '4px',
                 }}
               >
-                <X size={14} />
-                <span>Close</span>
+                <X size={20} />
               </button>
             </div>
 
-            <div style={{ width: '100%', height: '1px', backgroundColor: '#E2E8F0' }} />
-
-            {/* Section 1: Live Water Level & Geometry */}
-            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569', fontFamily: typography.fontFamily }}>
-              LIVE TELEMETRY & TANK LEVEL
-            </span>
-
-            <div
-              style={{
-                height: '80px',
-                borderRadius: '8px',
-                backgroundColor: '#F8FAFC',
-                border: '1px solid #E2E8F0',
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                padding: '12px',
-                boxSizing: 'border-box',
-              }}
-            >
-              <div>
-                <div style={{ fontSize: '11px', color: '#64748B', fontFamily: typography.fontFamily }}>Water Level</div>
-                <div style={{ fontSize: '22px', fontWeight: 'bold', color: colors.primary, fontFamily: typography.fontFamily }}>
-                  {selectedDevice.waterLevel != null ? `${selectedDevice.waterLevel.toFixed(2)}%` : 'N/A'}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: '11px', color: '#64748B', fontFamily: typography.fontFamily }}>Water Height</div>
-                <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#0F172A', fontFamily: typography.fontFamily }}>
-                  {selectedDevice.waterHeightCm != null ? `${selectedDevice.waterHeightCm.toFixed(1)} cm` : 'N/A'}
-                </div>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+              <InfoRow label="Assigned Location" value={selectedDevice.location} />
+              <InfoRow label="Modem Model" value={selectedDevice.modemModel} />
+              <InfoRow label="Connection Protocol" value={selectedDevice.connectionType} />
+              <InfoRow label="Signal Quality" value={selectedDevice.signalQuality} />
+              <InfoRow label="Firmware Version" value={selectedDevice.firmwareVersion} />
+              <InfoRow label="Sensor Type" value={selectedDevice.sensorType} />
+              <InfoRow label="Sensor Operating Status" value={selectedDevice.sensorStatus} />
+              <InfoRow
+                label="Water Level"
+                value={
+                  selectedDevice.waterLevel != null
+                    ? `${selectedDevice.waterLevel.toFixed(1)}% (${selectedDevice.waterHeightCm ?? '--'} cm)`
+                    : '--'
+                }
+              />
+              <InfoRow label="Operating State" value={selectedDevice.alarmState} />
+              <InfoRow label="Last Uplink Timestamp" value={selectedDevice.lastUpdate} />
             </div>
 
-            <InfoRow label="Configured Tank Height" value={`${selectedDevice.tankHeightCm.toFixed(1)} cm`} />
-            <InfoRow label="Liquid Volume" value={selectedDevice.volumeLiters != null ? `${selectedDevice.volumeLiters.toFixed(1)} L` : 'N/A'} />
-            <InfoRow label="Sensor Health Status" value={formatSensorHealth(selectedDevice.sensorStatus)} valueColor={getSensorHealthColor(selectedDevice.sensorStatus)} />
-
-            <div style={{ width: '100%', height: '1px', backgroundColor: '#F1F5F9' }} />
-
-            {/* Section 2: Environmental Telemetry */}
-            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569', fontFamily: typography.fontFamily }}>
-              ENVIRONMENTAL TELEMETRY
-            </span>
-
-            <InfoRow label="Atmospheric Pressure" value={selectedDevice.pressure != null ? `${selectedDevice.pressure.toFixed(1)} hPa` : 'N/A'} />
-            <InfoRow label="Ambient Temperature" value={selectedDevice.temperature != null ? `${selectedDevice.temperature.toFixed(1)} °C` : 'N/A'} />
-            <InfoRow label="Relative Humidity" value={selectedDevice.humidity != null ? `${selectedDevice.humidity.toFixed(1)} % RH` : 'N/A'} />
-            <InfoRow label="Environmental Sensor Status" value="Operational" />
-
-            <div style={{ width: '100%', height: '1px', backgroundColor: '#F1F5F9' }} />
-
-            {/* Section 3: Communication & System Status */}
-            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569', fontFamily: typography.fontFamily }}>
-              COMMUNICATION & SYSTEM STATUS
-            </span>
-
-            <InfoRow label="Communication Status" value={selectedDevice.status === 'Online' ? 'Active Uplink' : 'Offline'} />
-            <InfoRow label="Uplink Protocol" value={selectedDevice.connectionType} />
-            <InfoRow label="Signal Quality" value={selectedDevice.signalQuality} />
-            <InfoRow label="Firmware Version" value={selectedDevice.firmwareVersion} />
-            <InfoRow label="System Architecture" value="STM32 Processing Architecture" />
-            <InfoRow label="Telemetry Refresh Interval" value={selectedDevice.uploadInterval} />
-            <InfoRow label="Last Reported Telemetry" value={selectedDevice.lastUpdate} />
-
-            <div style={{ height: '12px' }} />
-
-            <button
-              onClick={() => setSelectedDevice(null)}
-              style={{
-                width: '100%',
-                padding: '10px 0',
-                borderRadius: '6px',
-                border: '1px solid #CBD5E1',
-                backgroundColor: '#F8FAFC',
-                color: '#334155',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: 'pointer',
-                fontFamily: typography.fontFamily,
-              }}
-            >
-              Close Device Drawer
-            </button>
+            <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setSelectedDevice(null)}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  backgroundColor: '#2563EB',
+                  color: '#FFFFFF',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Close Diagnostics
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Add Device Modal (11-Field Complete Form) */}
+      {/* Add Device Modal */}
       {isAddModalOpen && (
         <div
-          className="modal-backdrop"
           style={{
             position: 'fixed',
-            inset: 0,
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
             backgroundColor: 'rgba(15, 23, 42, 0.6)',
             display: 'flex',
-            alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1100,
+            alignItems: 'center',
+            zIndex: 1000,
             padding: '16px',
+            boxSizing: 'border-box',
           }}
         >
           <div
-            className="modal-dialog"
             style={{
               backgroundColor: '#FFFFFF',
-              borderRadius: '8px',
-              width: '560px',
-              maxWidth: '100%',
-              maxHeight: '90vh',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
-              overflowY: 'auto',
+              borderRadius: '10px',
+              maxWidth: '540px',
+              width: '100%',
+              padding: '20px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+              boxSizing: 'border-box',
             }}
           >
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, backgroundColor: '#FFFFFF', zIndex: 10 }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0F172A' }}>Register Monitoring Device</h3>
-                <span style={{ fontSize: '11px', color: '#64748B' }}>11-Field Hardware Specification & Consist Provisioning</span>
-              </div>
-              <button onClick={() => setIsAddModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
-                <X size={18} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0F172A' }}>Register New Monitoring Device</h3>
+              <button
+                onClick={() => setIsAddModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}
+              >
+                <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateDevice} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <form onSubmit={handleCreateDevice} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {formError && (
-                <div style={{ padding: '10px 14px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '6px', color: '#DC2626', fontSize: '13px' }}>
+                <div style={{ padding: '8px 12px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '6px', color: '#DC2626', fontSize: '12px' }}>
                   {formError}
                 </div>
               )}
 
-              {/* 1. Name & 2. UID */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>1. Device Display Name *</label>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Device Name *</label>
                   <input
                     type="text"
                     value={addName}
                     onChange={(e) => setAddName(e.target.value)}
-                    placeholder="e.g. Coach B1 Water Monitor"
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
                     required
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>2. Hardware UID *</label>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Hardware UID *</label>
                   <input
                     type="text"
                     value={addUid}
                     onChange={(e) => setAddUid(e.target.value)}
-                    placeholder="e.g. DEV-WLI-A9F3"
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', fontFamily: 'monospace' }}
+                    style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', fontFamily: 'monospace' }}
                     required
                   />
                 </div>
               </div>
 
-              {/* 3. Device Type & 4. Protocol */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>3. Hardware Type</label>
-                  <select
-                    value={addDeviceType}
-                    onChange={(e) => setAddDeviceType(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
-                  >
-                    <option value="Quectel EC200U 4G LTE">Quectel EC200U 4G LTE</option>
-                    <option value="ESP32-S3 WLI Edge Node">ESP32-S3 WLI Edge Node</option>
-                    <option value="Standard WLI Telemetry Node">Standard WLI Telemetry Node</option>
-                    <option value="Hydrostatic Pressure Sensor Node">Hydrostatic Pressure Sensor Node</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>4. Protocol</label>
-                  <select
-                    value={addProtocol}
-                    onChange={(e) => setAddProtocol(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
-                  >
-                    <option value="MQTT over TLS/WSS (Port 8884)">MQTT over TLS/WSS (Port 8884)</option>
-                    <option value="MQTT Standard (Port 1883)">MQTT Standard (Port 1883)</option>
-                    <option value="HTTP REST Gateway (/api/status)">HTTP REST Gateway (/api/status)</option>
-                    <option value="Modbus RTU / RS485 Industrial Loop">Modbus RTU / RS485 Industrial Loop</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* 5. MQTT Client ID & 6. MQTT Topic */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>5. MQTT Client ID</label>
-                  <input
-                    type="text"
-                    value={addMqttClientId}
-                    onChange={(e) => setAddMqttClientId(e.target.value)}
-                    placeholder="e.g. panorama-wli-a9f3"
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', boxSizing: 'border-box', fontFamily: 'monospace' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>6. Telemetry Topic</label>
-                  <input
-                    type="text"
-                    value={addMqttTopic}
-                    onChange={(e) => setAddMqttTopic(e.target.value)}
-                    placeholder="e.g. panorama/telemetry/DEV-WLI-A9F3"
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', boxSizing: 'border-box', fontFamily: 'monospace' }}
-                  />
-                </div>
-              </div>
-
-              {/* 7. Train # & 8. Coach # */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>7. Train Number *</label>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Train Number</label>
                   <input
                     type="text"
                     value={addTrainNumber}
                     onChange={(e) => setAddTrainNumber(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
-                    required
+                    placeholder="e.g. 12002"
+                    style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>8. Coach Number *</label>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Coach Number</label>
                   <input
                     type="text"
                     value={addCoachNumber}
                     onChange={(e) => setAddCoachNumber(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
-                    required
+                    placeholder="e.g. B4"
+                    style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
                   />
                 </div>
               </div>
 
-              {/* 9. Tank Assignment & 11. Status */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>9. Tank Assignment</label>
-                  <select
-                    value={addTankAssignment}
-                    onChange={(e) => setAddTankAssignment(e.target.value as any)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
-                  >
-                    <option value="BOTH">BOTH (Arrival & Departure)</option>
-                    <option value="Tank 1">Tank 1 Only (Arrival Side)</option>
-                    <option value="Tank 2">Tank 2 Only (Departure Side)</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>11. Status</label>
-                  <select
-                    value={addStatus}
-                    onChange={(e) => setAddStatus(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
-                  >
-                    <option value="AVAILABLE">AVAILABLE (In Pool)</option>
-                    <option value="IN_USE">IN_USE (Active Telemetry)</option>
-                    <option value="MAINTENANCE">MAINTENANCE (Workshop)</option>
-                    <option value="DECOMMISSIONED">DECOMMISSIONED</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* 10. Description */}
-              <div>
-                <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>10. Hardware Description & Notes</label>
-                <textarea
-                  value={addDescription}
-                  onChange={(e) => setAddDescription(e.target.value)}
-                  placeholder="e.g. Hydrostatic pressure sensor node mounted on underframe junction box"
-                  rows={2}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '12px', boxSizing: 'border-box', fontFamily: 'inherit' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px', paddingTop: '10px', borderTop: '1px solid #E2E8F0' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '13px', cursor: 'pointer' }}
+                  style={{ padding: '8px 14px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '13px', cursor: 'pointer' }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '8px 20px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 2px rgba(37,99,235,0.2)' }}
+                  style={{ padding: '8px 18px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
                 >
                   Register Device
                 </button>
@@ -1161,55 +1993,57 @@ export const DevicesScreen: React.FC = () => {
       {/* Edit Device Modal */}
       {isEditModalOpen && deviceToEdit && (
         <div
-          className="modal-backdrop"
           style={{
             position: 'fixed',
-            inset: 0,
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
             backgroundColor: 'rgba(15, 23, 42, 0.6)',
             display: 'flex',
-            alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1100,
+            alignItems: 'center',
+            zIndex: 1000,
             padding: '16px',
+            boxSizing: 'border-box',
           }}
         >
           <div
-            className="modal-dialog"
             style={{
               backgroundColor: '#FFFFFF',
-              borderRadius: '8px',
-              width: '560px',
-              maxWidth: '100%',
-              maxHeight: '90vh',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
-              overflowY: 'auto',
+              borderRadius: '10px',
+              maxWidth: '540px',
+              width: '100%',
+              padding: '20px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+              boxSizing: 'border-box',
             }}
           >
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, backgroundColor: '#FFFFFF', zIndex: 10 }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#0F172A' }}>Edit Device Assignment</h3>
-                <span style={{ fontSize: '11px', color: '#64748B' }}>UID: {deviceToEdit.id}</span>
-              </div>
-              <button onClick={() => setIsEditModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
-                <X size={18} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0F172A' }}>Edit Device: {deviceToEdit.name}</h3>
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}
+              >
+                <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleUpdateDevice} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <form onSubmit={handleUpdateDevice} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {formError && (
-                <div style={{ padding: '10px 14px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '6px', color: '#DC2626', fontSize: '13px' }}>
+                <div style={{ padding: '8px 12px', backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '6px', color: '#DC2626', fontSize: '12px' }}>
                   {formError}
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Device Name *</label>
                   <input
                     type="text"
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
                     required
                   />
                 </div>
@@ -1219,102 +2053,43 @@ export const DevicesScreen: React.FC = () => {
                     type="text"
                     value={deviceToEdit.id}
                     disabled
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', fontSize: '13px', boxSizing: 'border-box', color: '#64748B', fontFamily: 'monospace' }}
+                    style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #E2E8F0', backgroundColor: '#F8FAFC', fontSize: '13px', boxSizing: 'border-box', color: '#64748B', fontFamily: 'monospace' }}
                   />
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Train Assignment *</label>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Train Assignment</label>
                   <input
                     type="text"
                     value={editTrainNumber}
                     onChange={(e) => setEditTrainNumber(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
-                    required
+                    style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Coach Assignment *</label>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Coach Assignment</label>
                   <input
                     type="text"
                     value={editCoachNumber}
                     onChange={(e) => setEditCoachNumber(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
-                    required
+                    style={{ width: '100%', padding: '7px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box' }}
                   />
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Device Model / Type</label>
-                  <select
-                    value={editDeviceType}
-                    onChange={(e) => setEditDeviceType(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
-                  >
-                    <option value="Quectel EC200U 4G LTE">Quectel EC200U 4G LTE</option>
-                    <option value="ESP32-S3 WLI Edge Node">ESP32-S3 WLI Edge Node</option>
-                    <option value="Standard WLI Telemetry Node">Standard WLI Telemetry Node</option>
-                    <option value="Hydrostatic Pressure Sensor Node">Hydrostatic Pressure Sensor Node</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Protocol</label>
-                  <select
-                    value={editProtocol}
-                    onChange={(e) => setEditProtocol(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
-                  >
-                    <option value="MQTT over TLS/WSS (Port 8884)">MQTT over TLS/WSS (Port 8884)</option>
-                    <option value="MQTT Standard (Port 1883)">MQTT Standard (Port 1883)</option>
-                    <option value="HTTP REST Gateway (/api/status)">HTTP REST Gateway (/api/status)</option>
-                    <option value="Modbus RTU / RS485 Industrial Loop">Modbus RTU / RS485 Industrial Loop</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Tank Assignment</label>
-                  <select
-                    value={editTankAssignment}
-                    onChange={(e) => setEditTankAssignment(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
-                  >
-                    <option value="BOTH">BOTH (Arrival & Departure)</option>
-                    <option value="Tank 1">Tank 1 Only (Arrival Side)</option>
-                    <option value="Tank 2">Tank 2 Only (Departure Side)</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>Status</label>
-                  <select
-                    value={editStatus}
-                    onChange={(e) => setEditStatus(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '13px', boxSizing: 'border-box', backgroundColor: '#FFFFFF' }}
-                  >
-                    <option value="AVAILABLE">AVAILABLE (In Pool)</option>
-                    <option value="IN_USE">IN_USE (Active Telemetry)</option>
-                    <option value="MAINTENANCE">MAINTENANCE (Workshop)</option>
-                    <option value="DECOMMISSIONED">DECOMMISSIONED</option>
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '8px', paddingTop: '10px', borderTop: '1px solid #E2E8F0' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
                 <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
-                  style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '13px', cursor: 'pointer' }}
+                  style={{ padding: '8px 14px', borderRadius: '6px', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF', color: '#475569', fontSize: '13px', cursor: 'pointer' }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '8px 20px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 1px 2px rgba(37,99,235,0.2)' }}
+                  style={{ padding: '8px 18px', borderRadius: '6px', border: 'none', backgroundColor: '#2563EB', color: '#FFFFFF', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
                 >
                   Update Device
                 </button>

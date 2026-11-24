@@ -1,12 +1,17 @@
 """Devices API Router."""
-from typing import List, Optional
+from typing import List, Optional, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.repositories.device_repo import DeviceRepository
 from app.repositories.telemetry_repo import TelemetryRepository
+import csv
+import io
+from fastapi.responses import StreamingResponse
 from app.schemas.device import DeviceOut, DeviceDiagnostics, DeviceCreate, DeviceUpdate
+from app.schemas.telemetry import TelemetryTableResponse
+from datetime import datetime
 from app.api.v1.auth import get_current_admin_user, get_current_user, get_current_user_optional
 from app.models.base import utc_now
 from app.models.train import Train
@@ -60,6 +65,127 @@ async def list_devices(
         )
         results.append(out)
     return results
+
+
+@router.get("/telemetry-history", response_model=TelemetryTableResponse)
+async def get_devices_telemetry_history(
+    search: Optional[str] = Query(None, description="Search by Device ID"),
+    device_id: Optional[str] = Query(None, description="Filter by Device ID"),
+    start_date: Optional[datetime] = Query(None, description="Start date filter"),
+    end_date: Optional[datetime] = Query(None, description="End date filter"),
+    ai1_valid: Optional[str] = Query(None, description="Filter AI1 Valid: Valid, Invalid, or All"),
+    gps_valid: Optional[str] = Query(None, description="Filter GPS Valid: Valid, Invalid, or All"),
+    altitude_valid: Optional[str] = Query(None, description="Filter Altitude Valid: Valid, Invalid, or All"),
+    sort_by: str = Query("receivedUtc", description="Sort by field: receivedUtc, recordedAt, deviceId, ai1Ma, level1Percent, batteryPercent"),
+    sort_order: str = Query("desc", description="Sort order: asc or desc"),
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(25, ge=1, le=100, description="Items per page"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Retrieve historical telemetry records formatted for the 13-column SCADA table."""
+    telemetry_repo = TelemetryRepository(db)
+    total, total_pages, items = await telemetry_repo.get_paginated_telemetry_records(
+        search=search,
+        device_id=device_id,
+        start_date=start_date,
+        end_date=end_date,
+        ai1_valid=ai1_valid,
+        gps_valid=gps_valid,
+        altitude_valid=altitude_valid,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page=page,
+        limit=limit,
+    )
+    return TelemetryTableResponse(
+        total=total,
+        page=page,
+        limit=limit,
+        totalPages=total_pages,
+        items=items,
+    )
+
+
+@router.get("/telemetry-csv")
+async def export_devices_telemetry_csv(
+    search: Optional[str] = Query(None, description="Search by Device ID"),
+    device_id: Optional[str] = Query(None, description="Filter by Device ID"),
+    start_date: Optional[datetime] = Query(None, description="Start date filter"),
+    end_date: Optional[datetime] = Query(None, description="End date filter"),
+    ai1_valid: Optional[str] = Query(None, description="Filter AI1 Valid: Valid, Invalid, or All"),
+    gps_valid: Optional[str] = Query(None, description="Filter GPS Valid: Valid, Invalid, or All"),
+    altitude_valid: Optional[str] = Query(None, description="Filter Altitude Valid: Valid, Invalid, or All"),
+    sort_by: str = Query("receivedUtc", description="Sort column"),
+    sort_order: str = Query("desc", description="Sort order: asc or desc"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Export historical telemetry data formatted strictly as the 13-column RFC 4180 CSV."""
+    telemetry_repo = TelemetryRepository(db)
+    records = await telemetry_repo.get_all_telemetry_records_for_export(
+        search=search,
+        device_id=device_id,
+        start_date=start_date,
+        end_date=end_date,
+        ai1_valid=ai1_valid,
+        gps_valid=gps_valid,
+        altitude_valid=altitude_valid,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+
+    def sanitize(val: Any) -> str:
+        if val is None:
+            return ""
+        s = str(val)
+        if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+            return f"'{s}"
+        return s
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Strictly 13 columns in exact order - NO IMEI, NO SIM
+    writer.writerow([
+        "Device ID",
+        "Recorded At",
+        "AI1 mA",
+        "Level 1 %",
+        "AI1 Valid",
+        "Battery V",
+        "Battery %",
+        "Latitude",
+        "Longitude",
+        "Altitude m",
+        "GPS Valid",
+        "Altitude Valid",
+        "Received UTC"
+    ])
+
+    for r in records:
+        writer.writerow([
+            sanitize(r.get("deviceId", "--")),
+            sanitize(r.get("recordedAt", "--")),
+            f"{r['ai1Ma']:.2f}" if r.get("ai1Ma") is not None else "--",
+            sanitize(r.get("level1Percent", "--")),
+            sanitize(r.get("ai1Valid", "--")),
+            f"{r['batteryV']:.3f}" if r.get("batteryV") is not None else "--",
+            sanitize(r.get("batteryPercent", "--")),
+            f"{r['latitude']:.7f}" if r.get("latitude") is not None else "--",
+            f"{r['longitude']:.7f}" if r.get("longitude") is not None else "--",
+            f"{r['altitudeM']:.2f}" if r.get("altitudeM") is not None else "--",
+            sanitize(r.get("gpsValid", "--")),
+            sanitize(r.get("altitudeValid", "--")),
+            sanitize(r.get("receivedUtc", "--")),
+        ])
+
+    output.seek(0)
+    filename = f"telemetry_history_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
 
 
 @router.get("/{device_id}/diagnostics", response_model=DeviceDiagnostics)

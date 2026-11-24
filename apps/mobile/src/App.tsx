@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { colors, typography } from './theme';
 import { AppProvider, useApp } from './state/AppContext';
 import { Header } from './components/common/Header';
@@ -19,6 +19,7 @@ import { TrainManagementScreen } from './screens/TrainManagementScreen';
 import { CoachManagementScreen } from './screens/CoachManagementScreen';
 import { CoachDetailsScreen } from './screens/CoachDetailsScreen';
 import { WaterTankScreen } from './screens/WaterTankScreen';
+import { DevicesScreen } from './screens/DevicesScreen';
 import { DeviceMappingScreen } from './screens/DeviceMappingScreen';
 import { LocationScreen } from './screens/LocationScreen';
 import { MonitoringScreen } from './screens/MonitoringScreen';
@@ -126,7 +127,8 @@ const MainContent: React.FC = () => {
           {activeScreen === 'coaches' && <CoachManagementScreen />}
           {activeScreen === 'coach-details' && <CoachDetailsScreen />}
           {activeScreen === 'watertank' && <WaterTankScreen />}
-          {activeScreen === 'devices' && <DeviceMappingScreen />}
+          {activeScreen === 'devices' && <DevicesScreen />}
+          {activeScreen === 'device-mapping' && <DeviceMappingScreen />}
           {(activeScreen === 'raw-data' || activeScreen === 'mqtt-monitor') && (isAdmin ? <MqttMonitorScreen /> : <AccessDeniedScreen />)}
           {activeScreen === 'location' && <LocationScreen />}
           {activeScreen === 'monitoring' && <MonitoringScreen />}
@@ -153,7 +155,89 @@ const AppShell: React.FC = () => {
     alertToast,
     dismissAlertToast,
     acknowledgeAlarm,
+    isMobileNavOpen,
+    setIsMobileNavOpen,
   } = useApp();
+
+  const isMobileNavOpenRef = useRef(isMobileNavOpen);
+  isMobileNavOpenRef.current = isMobileNavOpen;
+
+  const activeScreenRef = useRef(activeScreen);
+  activeScreenRef.current = activeScreen;
+
+  const screenHistoryRef = useRef<string[]>(['dashboard']);
+  const isBackNavigatingRef = useRef(false);
+
+  // Synchronize navigation history stack
+  useEffect(() => {
+    if (!isAuthenticated || activeScreen === 'login') {
+      screenHistoryRef.current = ['login'];
+      return;
+    }
+    if (!isBackNavigatingRef.current) {
+      const hist = screenHistoryRef.current;
+      if (hist.length === 0 || hist[hist.length - 1] !== activeScreen) {
+        screenHistoryRef.current = [...hist, activeScreen];
+      }
+    }
+    isBackNavigatingRef.current = false;
+  }, [activeScreen, isAuthenticated]);
+
+  // Android Hardware Back Button listener (dispatched from nativeBridge)
+  useEffect(() => {
+    const handleHardwareBack = () => {
+      // Priority 0: If unauthenticated or on login screen, immediately exit application
+      if (!isAuthenticated || activeScreenRef.current === 'login') {
+        const AppPlugin = (window as any).Capacitor?.Plugins?.App;
+        if (AppPlugin && typeof AppPlugin.exitApp === 'function') {
+          AppPlugin.exitApp();
+        }
+        return;
+      }
+
+      // Priority 1: If mobile navigation drawer is open, close it first without navigating screens
+      if (isMobileNavOpenRef.current) {
+        setIsMobileNavOpen(false);
+        return;
+      }
+
+      // Priority 2: Close any open popups, search overlays, or dialogs
+      const dismissEvent = new CustomEvent('panorama:dismiss_popups', { cancelable: true });
+      window.dispatchEvent(dismissEvent);
+      if (dismissEvent.defaultPrevented) {
+        return;
+      }
+
+      // Priority 3: Return to previous screen in history stack
+      if (screenHistoryRef.current.length > 1) {
+        screenHistoryRef.current.pop(); // Remove current screen
+        const prev = screenHistoryRef.current[screenHistoryRef.current.length - 1];
+        if (prev && prev !== 'login') {
+          isBackNavigatingRef.current = true;
+          setActiveScreen(prev as any);
+          return;
+        }
+      }
+
+      // Priority 4: Return to dashboard if not already on dashboard
+      if (activeScreenRef.current !== 'dashboard') {
+        isBackNavigatingRef.current = true;
+        setActiveScreen('dashboard');
+        return;
+      }
+
+      // Priority 5: If on dashboard with no open drawer/dialogs, exit application
+      const AppPlugin = (window as any).Capacitor?.Plugins?.App;
+      if (AppPlugin && typeof AppPlugin.exitApp === 'function') {
+        AppPlugin.exitApp();
+      }
+    };
+
+    window.addEventListener('panorama:hardware_back', handleHardwareBack);
+    return () => {
+      window.removeEventListener('panorama:hardware_back', handleHardwareBack);
+    };
+  }, [setIsMobileNavOpen, setActiveScreen, isAuthenticated]);
 
   if (authLoading) {
     return (
