@@ -99,6 +99,8 @@ class DeviceRepository:
         tank_assignment: str = "BOTH",
         description: Optional[str] = None,
         status: str = "AVAILABLE",
+        is_online: bool = False,
+        last_seen_at: Optional[datetime] = None,
     ) -> Device:
         device = await self.get_by_uid(uid)
         if not device:
@@ -116,8 +118,8 @@ class DeviceRepository:
                 tank_assignment=tank_assignment,
                 description=description,
                 status=status,
-                is_online=True,
-                last_seen_at=datetime.now(timezone.utc)
+                is_online=is_online,
+                last_seen_at=last_seen_at
             )
             self.session.add(device)
             await self.session.flush()

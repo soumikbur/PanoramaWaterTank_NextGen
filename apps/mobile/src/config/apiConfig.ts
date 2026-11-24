@@ -58,21 +58,14 @@ export function resolveApiBaseUrl(): string {
     try {
       const custom = window.localStorage.getItem(STORAGE_KEY_API_URL);
       if (custom && custom.trim() && isValidHttpUrl(custom.trim())) {
-        const clean = custom.trim().replace(/\/+$/, '');
-        const isLoopback = clean.includes('localhost') || clean.includes('127.0.0.1') || clean.includes('10.0.2.2');
-        const isHttpsHost = typeof window !== 'undefined' && window.location && window.location.protocol === 'https:';
-        if (isLoopback && (isHttpsHost || isAndroidCapacitorApp())) {
-          window.localStorage.removeItem(STORAGE_KEY_API_URL);
-        } else {
-          return clean;
-        }
+        return custom.trim().replace(/\/+$/, '');
       }
     } catch {}
   }
 
-  // 2. Android Capacitor native environment check: always use production backend by default
+  // 2. Android Capacitor native environment check: default to local reverse proxy (8000) for development
   if (typeof window !== 'undefined' && isAndroidCapacitorApp()) {
-    return DEFAULT_PRODUCTION_API_URL;
+    return 'http://127.0.0.1:8000/api/v1';
   }
 
   // 3. Local desktop FastAPI server detection (only when the web client itself is served from port 8000)

@@ -157,6 +157,16 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
   // Rename form state
   const [renameValue, setRenameValue] = useState('');
 
+  // New Device Registration Sub-modal state
+  const [isAddDeviceModalOpen, setIsAddDeviceModalOpen] = useState(false);
+  const [newDeviceUid, setNewDeviceUid] = useState('');
+  const [newDeviceName, setNewDeviceName] = useState('');
+  const [newDeviceType, setNewDeviceType] = useState('Quectel EC200U 4G LTE');
+  const [newDeviceDescription, setNewDeviceDescription] = useState('');
+  const [assignNewDeviceToCoach, setAssignNewDeviceToCoach] = useState(true);
+  const [isRegisteringDevice, setIsRegisteringDevice] = useState(false);
+  const [registerDeviceError, setRegisterDeviceError] = useState<string | null>(null);
+
   // Status & Feedback message
   const [statusFeedback, setStatusFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -329,6 +339,94 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
       (d) => !d.trainNumber || d.trainNumber === 'UNASSIGNED' || !d.coachNumber || d.coachNumber === 'UNASSIGNED'
     );
   }, [allKnownDevices]);
+
+  const isKnownInRegistry = useMemo(() => {
+    const curUid = formData.deviceUid.trim().toUpperCase();
+    if (!curUid) return false;
+    return allKnownDevices.some((d) => d.uid === curUid);
+  }, [allKnownDevices, formData.deviceUid]);
+
+  // Open Add Device Sub-modal
+  const handleOpenAddDevice = () => {
+    if (!isAdmin) {
+      setStatusFeedback({ type: 'error', message: 'Administrator privileges required to register devices.' });
+      return;
+    }
+    const currentCoachNum = formData.coachNumber || targetCoach?.coach_number || '';
+    setNewDeviceUid(formData.deviceUid.trim().toUpperCase());
+    setNewDeviceName(currentCoachNum ? `Coach ${currentCoachNum} Water Monitor` : 'Coach Water Monitor');
+    setNewDeviceType('Quectel EC200U 4G LTE');
+    setNewDeviceDescription(`Hardware telemetry node deployed on Coach ${currentCoachNum || 'consist'}`);
+    setAssignNewDeviceToCoach(true);
+    setRegisterDeviceError(null);
+    setIsAddDeviceModalOpen(true);
+  };
+
+  // Submit Handler for New Device Registration
+  const handleRegisterNewDevice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAdmin) return;
+
+    const cleanUid = newDeviceUid.trim().toUpperCase().replace(/\s+/g, '');
+    if (!cleanUid) {
+      setRegisterDeviceError('Hardware UID is required.');
+      return;
+    }
+
+    const hexRegex = /^[0-9A-F]+$/i;
+    if (!hexRegex.test(cleanUid)) {
+      setRegisterDeviceError('Invalid UID format: Hardware UID must be hexadecimal characters (0-9, A-F).');
+      return;
+    }
+
+    if (cleanUid.length < 8) {
+      setRegisterDeviceError('Hardware UID too short: Must be at least 8 hexadecimal characters.');
+      return;
+    }
+
+    const existing = allKnownDevices.find((d) => d.uid === cleanUid);
+    if (existing) {
+      const assignedMsg = existing.trainNumber && existing.coachNumber && existing.trainNumber !== 'UNASSIGNED'
+        ? ` (currently assigned to Train ${existing.trainNumber} / Coach ${existing.coachNumber})`
+        : '';
+      setRegisterDeviceError(`Device with UID ${cleanUid} is already registered${assignedMsg}. Select it from the dropdown instead.`);
+      return;
+    }
+
+    setIsRegisteringDevice(true);
+    setRegisterDeviceError(null);
+
+    const targetCoachNum = formData.coachNumber || targetCoach?.coach_number || '';
+    const willAssign = assignNewDeviceToCoach && Boolean(targetCoachNum);
+
+    try {
+      await ApiClient.createDevice({
+        uid: cleanUid,
+        name: newDeviceName.trim() || `Node ${cleanUid.slice(-6)}`,
+        trainNumber: willAssign ? effectiveTrainNumber : '',
+        coachNumber: willAssign ? targetCoachNum : '',
+        deviceType: newDeviceType,
+        hardwareVersion: newDeviceType,
+        description: newDeviceDescription.trim() || undefined,
+        status: willAssign ? 'ENGAGED' : 'AVAILABLE',
+      });
+
+      if (willAssign) {
+        setFormData((prev) => ({ ...prev, deviceUid: cleanUid }));
+      }
+
+      await refreshData();
+      setIsAddDeviceModalOpen(false);
+      setStatusFeedback({
+        type: 'success',
+        message: `Hardware Device ${cleanUid} successfully registered into persistent registry${willAssign ? ` and assigned to Coach ${targetCoachNum}` : ''}.`,
+      });
+    } catch (err: any) {
+      setRegisterDeviceError(err?.message || 'Failed to register new device.');
+    } finally {
+      setIsRegisteringDevice(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -670,6 +768,20 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
     onClose();
   };
 
+  const thStyle: React.CSSProperties = {
+    position: 'sticky',
+    top: 0,
+    backgroundColor: '#F8FAFC',
+    zIndex: 10,
+    boxShadow: '0 1px 0 #CBD5E1',
+    color: '#475569',
+    fontSize: '11px',
+    fontWeight: 800,
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+    whiteSpace: 'nowrap',
+  };
+
   const modalContent = (
     <div
       data-testid="manage-coach-overlay"
@@ -682,7 +794,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '20px',
+        padding: '8px',
         boxSizing: 'border-box',
       }}
       role="dialog"
@@ -692,8 +804,8 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
       <div
         data-testid="manage-coach-container"
         style={{
-          width: 'min(1200px, 96vw)',
-          maxHeight: 'calc(100vh - 40px)',
+          width: 'min(1200px, calc(100% - 12px))',
+          maxHeight: 'calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 16px)',
           backgroundColor: '#FFFFFF',
           borderRadius: '10px',
           border: '1px solid #CBD5E1',
@@ -706,21 +818,22 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
         {/* Modal Header (Sticky - Restored Light SCADA Theme) */}
         <div
           style={{
-            padding: '16px 20px',
+            padding: '12px 16px',
             backgroundColor: '#FFFFFF',
             borderBottom: '1px solid #E2E8F0',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             flexShrink: 0,
-            gap: '12px',
+            gap: '10px',
+            flexWrap: 'wrap',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 auto', minWidth: 0, flexWrap: 'wrap' }}>
             <div
               style={{
-                width: '36px',
-                height: '36px',
+                width: '34px',
+                height: '34px',
                 borderRadius: '8px',
                 backgroundColor: '#EFF6FF',
                 color: '#2563EB',
@@ -730,15 +843,15 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                 flexShrink: 0,
               }}
             >
-              <Layers size={20} color="#2563EB" />
+              <Layers size={18} color="#2563EB" />
             </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <h2
                   id="manage-coach-title"
                   style={{
                     margin: 0,
-                    fontSize: '16px',
+                    fontSize: '15px',
                     fontWeight: 800,
                     letterSpacing: '0.2px',
                     color: '#0F172A',
@@ -748,9 +861,9 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                 </h2>
                 <span
                   style={{
-                    fontSize: '11px',
+                    fontSize: '10.5px',
                     fontWeight: 700,
-                    padding: '2px 8px',
+                    padding: '2px 6px',
                     borderRadius: '4px',
                     backgroundColor: isAdmin ? '#DCFCE7' : '#FEF3C7',
                     color: isAdmin ? '#15803D' : '#B45309',
@@ -761,7 +874,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                   {isAdmin ? 'ADMIN CONSOLE' : 'READ-ONLY (EMPLOYEE)'}
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginTop: '4px', fontSize: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '3px', fontSize: '11.5px' }}>
                 <span style={{ fontWeight: 700, color: '#2563EB' }}>
                   Train {effectiveTrainNumber}
                 </span>
@@ -774,33 +887,33 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                   style={{
                     backgroundColor: '#EFF6FF',
                     color: '#1D4ED8',
-                    padding: '2px 8px',
+                    padding: '1px 6px',
                     borderRadius: '4px',
-                    fontSize: '11px',
+                    fontSize: '10.5px',
                     fontWeight: 700,
                     border: '1px solid #BFDBFE',
                   }}
                 >
-                  {rawCoaches.length} Coaches Configured
+                  {rawCoaches.length} Coaches
                 </span>
                 <span
                   style={{
                     backgroundColor: '#F0FDFA',
                     color: '#0F766E',
-                    padding: '2px 8px',
+                    padding: '1px 6px',
                     borderRadius: '4px',
-                    fontSize: '11px',
+                    fontSize: '10.5px',
                     fontWeight: 700,
                     border: '1px solid #99F6E4',
                   }}
                 >
-                  {rawCoaches.length * 2} Water Tanks
+                  {rawCoaches.length * 2} Tanks
                 </span>
               </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
             <button
               onClick={onClose}
               aria-label="Back to Train Details"
@@ -852,11 +965,11 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
         {statusFeedback && (
           <div
             style={{
-              padding: '10px 20px',
+              padding: '10px 16px',
               backgroundColor: statusFeedback.type === 'success' ? '#ECFDF5' : '#FEF2F2',
               borderBottom: `1px solid ${statusFeedback.type === 'success' ? '#A7F3D0' : '#FECACA'}`,
               color: statusFeedback.type === 'success' ? '#065F46' : '#991B1B',
-              fontSize: '12.5px',
+              fontSize: '12px',
               fontWeight: 600,
               display: 'flex',
               alignItems: 'center',
@@ -873,7 +986,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
         {!isAdmin && (
           <div
             style={{
-              padding: '10px 20px',
+              padding: '10px 16px',
               backgroundColor: '#FFFBEB',
               borderBottom: '1px solid #FDE68A',
               color: '#92400E',
@@ -896,35 +1009,35 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
         {/* Toolbar: Search, Filter, Sort, Add Button (Sticky) */}
         <div
           style={{
-            padding: '12px 20px',
+            padding: '10px 16px',
             backgroundColor: '#F8FAFC',
             borderBottom: '1px solid #E2E8F0',
             display: 'flex',
             flexWrap: 'wrap',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '12px',
+            gap: '8px',
             flexShrink: 0,
           }}
         >
           {/* Search & Filter Group */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', flex: '1 1 auto' }}>
             {/* Search Input */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
+                gap: '6px',
                 backgroundColor: '#FFFFFF',
                 border: '1px solid #CBD5E1',
                 borderRadius: '6px',
-                padding: '0 10px',
-                height: '36px',
-                minWidth: '240px',
-                flex: '0 1 280px',
+                padding: '0 8px',
+                height: '34px',
+                minWidth: '160px',
+                flex: '1 1 200px',
               }}
             >
-              <Search size={16} color="#64748B" />
+              <Search size={15} color="#64748B" />
               <input
                 type="text"
                 placeholder="Search coach, type, device..."
@@ -933,7 +1046,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                 style={{
                   border: 'none',
                   outline: 'none',
-                  fontSize: '12.5px',
+                  fontSize: '12px',
                   width: '100%',
                   color: '#0F172A',
                   backgroundColor: 'transparent',
@@ -955,15 +1068,17 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
               style={{
-                height: '36px',
-                padding: '0 10px',
+                height: '34px',
+                padding: '0 8px',
                 backgroundColor: '#FFFFFF',
                 border: '1px solid #CBD5E1',
                 borderRadius: '6px',
-                fontSize: '12px',
+                fontSize: '11.5px',
                 fontWeight: 600,
                 color: '#334155',
                 cursor: 'pointer',
+                flex: '1 1 130px',
+                minWidth: '110px',
               }}
             >
               <option value="ALL">All Categories</option>
@@ -978,15 +1093,17 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
               style={{
-                height: '36px',
-                padding: '0 10px',
+                height: '34px',
+                padding: '0 8px',
                 backgroundColor: '#FFFFFF',
                 border: '1px solid #CBD5E1',
                 borderRadius: '6px',
-                fontSize: '12px',
+                fontSize: '11.5px',
                 fontWeight: 600,
                 color: '#334155',
                 cursor: 'pointer',
+                flex: '1 1 130px',
+                minWidth: '110px',
               }}
             >
               <option value="position">Sort: Consist Sequence</option>
@@ -1006,8 +1123,8 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
-                height: '36px',
-                padding: '0 14px',
+                height: '34px',
+                padding: '0 12px',
                 backgroundColor: isAdmin ? '#2563EB' : '#94A3B8',
                 color: '#FFFFFF',
                 border: 'none',
@@ -1017,9 +1134,10 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                 cursor: isAdmin ? 'pointer' : 'not-allowed',
                 boxShadow: isAdmin ? '0 1px 3px rgba(37, 99, 235, 0.25)' : 'none',
                 transition: 'background-color 0.15s ease',
+                flexShrink: 0,
               }}
             >
-              <Plus size={16} />
+              <Plus size={15} />
               <span>Add Coach</span>
             </button>
           </div>
@@ -1033,7 +1151,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
             minHeight: 0,
             overflowY: 'auto',
             overflowX: 'auto',
-            padding: '12px 20px 20px 20px',
+            padding: '8px 16px 16px 16px',
             WebkitOverflowScrolling: 'touch',
           }}
         >
@@ -1058,11 +1176,11 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
           <table
             style={{
               width: '100%',
-              minWidth: '1100px',
+              minWidth: '1000px',
               borderCollapse: 'separate',
-              borderSpacing: '0 8px',
+              borderSpacing: '0 6px',
               textAlign: 'left',
-              fontSize: '12.5px',
+              fontSize: '12px',
             }}
           >
             <thead>
@@ -1073,20 +1191,16 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                   fontWeight: 800,
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
-                  position: 'sticky',
-                  top: 0,
-                  backgroundColor: '#FFFFFF',
-                  zIndex: 2,
                 }}
               >
-                <th style={{ padding: '10px 8px', width: '75px', textAlign: 'center' }}>POS</th>
-                <th style={{ padding: '10px 10px', width: '120px' }}>COACH NO.</th>
-                <th style={{ padding: '10px 10px', width: '175px' }}>TYPE / CATEGORY</th>
-                <th style={{ padding: '10px 10px', width: '185px' }}>TANK 1 (ARRIVAL)</th>
-                <th style={{ padding: '10px 10px', width: '185px' }}>TANK 2 (DEPARTURE)</th>
-                <th style={{ padding: '10px 10px', width: '175px' }}>ASSIGNED DEVICE</th>
-                <th style={{ padding: '10px 10px', width: '105px', textAlign: 'center' }}>STATUS</th>
-                <th style={{ padding: '10px 12px', width: '225px', textAlign: 'right' }}>ACTIONS</th>
+                <th style={{ ...thStyle, width: '75px', textAlign: 'center', padding: '10px 8px' }}>POS</th>
+                <th style={{ ...thStyle, width: '120px', padding: '10px 10px' }}>COACH NO.</th>
+                <th style={{ ...thStyle, width: '175px', padding: '10px 10px' }}>TYPE / CATEGORY</th>
+                <th style={{ ...thStyle, width: '185px', padding: '10px 10px' }}>TANK 1 (ARRIVAL)</th>
+                <th style={{ ...thStyle, width: '185px', padding: '10px 10px' }}>TANK 2 (DEPARTURE)</th>
+                <th style={{ ...thStyle, width: '175px', padding: '10px 10px' }}>ASSIGNED DEVICE</th>
+                <th style={{ ...thStyle, width: '105px', textAlign: 'center', padding: '10px 10px' }}>STATUS</th>
+                <th style={{ ...thStyle, width: '225px', textAlign: 'right', padding: '10px 12px' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
@@ -1522,29 +1636,33 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '20px',
+            padding: '8px',
             boxSizing: 'border-box',
           }}
         >
           <div
             style={{
               width: '100%',
-              maxWidth: '520px',
+              maxWidth: '540px',
+              maxHeight: 'calc(100dvh - 16px)',
               backgroundColor: '#FFFFFF',
               borderRadius: '8px',
               boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              display: 'flex',
+              flexDirection: 'column',
               overflow: 'hidden',
               border: '1px solid #CBD5E1',
             }}
           >
             <div
               style={{
-                padding: '14px 18px',
+                padding: '12px 16px',
                 backgroundColor: '#FFFFFF',
                 borderBottom: '1px solid #E2E8F0',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
+                flexShrink: 0,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1611,219 +1729,238 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
               </div>
             </div>
 
-            <form onSubmit={activeSubModal === 'ADD' ? handleAddSubmit : handleEditSubmit} style={{ padding: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
-                    Coach Identifier *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    disabled={activeSubModal === 'EDIT'}
-                    placeholder="e.g. C1, B1, S4"
-                    value={formData.coachNumber}
-                    onChange={(e) => setFormData({ ...formData, coachNumber: e.target.value.toUpperCase() })}
-                    style={{
-                      width: '100%',
-                      padding: '6px 8px',
-                      borderRadius: '5px',
-                      border: '1px solid #CBD5E1',
-                      fontSize: '12px',
-                      backgroundColor: activeSubModal === 'EDIT' ? '#F1F5F9' : '#FFFFFF',
-                    }}
-                  />
-                  {activeSubModal === 'EDIT' && (
-                    <span style={{ fontSize: '10px', color: '#64748B' }}>To change number, use Rename action.</span>
-                  )}
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
-                    Coach Category / Type *
-                  </label>
-                  <select
-                    value={matchCoachCategoryOption(formData.coachCategory)}
-                    onChange={(e) => setFormData({ ...formData, coachCategory: e.target.value })}
-                    style={{
-                      width: '100%',
-                      padding: '6px 8px',
-                      borderRadius: '5px',
-                      border: '1px solid #CBD5E1',
-                      fontSize: '12px',
-                      backgroundColor: '#FFFFFF',
-                    }}
-                  >
-                    {!COACH_CATEGORIES.includes(matchCoachCategoryOption(formData.coachCategory)) && (
-                      <option value={formData.coachCategory}>{formData.coachCategory}</option>
+            <form
+              onSubmit={activeSubModal === 'ADD' ? handleAddSubmit : handleEditSubmit}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                flex: '1 1 auto',
+                minHeight: 0,
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  flex: '1 1 auto',
+                  minHeight: 0,
+                  overflowY: 'auto',
+                  WebkitOverflowScrolling: 'touch',
+                  padding: '16px',
+                }}
+              >
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                      Coach Identifier *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      disabled={activeSubModal === 'EDIT'}
+                      placeholder="e.g. C1, B1, S4"
+                      value={formData.coachNumber}
+                      onChange={(e) => setFormData({ ...formData, coachNumber: e.target.value.toUpperCase() })}
+                      style={{
+                        width: '100%',
+                        padding: '6px 8px',
+                        borderRadius: '5px',
+                        border: '1px solid #CBD5E1',
+                        fontSize: '12px',
+                        backgroundColor: activeSubModal === 'EDIT' ? '#F1F5F9' : '#FFFFFF',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    {activeSubModal === 'EDIT' && (
+                      <span style={{ fontSize: '10px', color: '#64748B' }}>To change number, use Rename action.</span>
                     )}
-                    {COACH_CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+                  </div>
 
-              {/* Tank 1 Configuration */}
-              <div
-                style={{
-                  backgroundColor: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '6px',
-                  padding: '10px',
-                  marginBottom: '10px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#1E293B' }}>
-                    Tank 1: Arrival Side (Primary)
-                  </div>
-                  <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>
-                    Height: {formData.tank1HeightCm || 50} cm &bull; {formData.tank1Geometry}
-                  </span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
-                      Name
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.tank1Name}
-                      onChange={(e) => setFormData({ ...formData, tank1Name: e.target.value })}
-                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
-                      Height (cm) *
-                    </label>
-                    <input
-                      type="number"
-                      min={10}
-                      max={500}
-                      value={formData.tank1HeightCm}
-                      onChange={(e) => {
-                        const h = parseFloat(e.target.value) || 50;
-                        setFormData({
-                          ...formData,
-                          tank1HeightCm: h,
-                        });
-                      }}
-                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
-                      Geometry
+                    <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                      Coach Category / Type *
                     </label>
                     <select
-                      value={formData.tank1Geometry}
-                      onChange={(e) => setFormData({ ...formData, tank1Geometry: e.target.value as any })}
-                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', backgroundColor: '#FFFFFF', boxSizing: 'border-box' }}
-                    >
-                      <option value="CYLINDRICAL">Cylindrical</option>
-                      <option value="RECTANGULAR">Rectangular</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
-                      Capacity (L)
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={5000}
-                      value={formData.tank1Capacity}
-                      onChange={(e) => setFormData({ ...formData, tank1Capacity: parseFloat(e.target.value) || 20 })}
-                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Tank 2 Configuration */}
-              <div
-                style={{
-                  backgroundColor: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '6px',
-                  padding: '10px',
-                  marginBottom: '10px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#1E293B' }}>
-                    Tank 2: Departure Side (Secondary)
-                  </div>
-                  <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>
-                    Height: {formData.tank2HeightCm || 50} cm &bull; {formData.tank2Geometry}
-                  </span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
-                      Name
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.tank2Name}
-                      onChange={(e) => setFormData({ ...formData, tank2Name: e.target.value })}
-                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
-                      Height (cm)
-                    </label>
-                    <input
-                      type="number"
-                      min={10}
-                      max={500}
-                      value={formData.tank2HeightCm}
-                      onChange={(e) => {
-                        const h = parseFloat(e.target.value) || 50;
-                        setFormData({
-                          ...formData,
-                          tank2HeightCm: h,
-                        });
+                      value={matchCoachCategoryOption(formData.coachCategory)}
+                      onChange={(e) => setFormData({ ...formData, coachCategory: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '6px 8px',
+                        borderRadius: '5px',
+                        border: '1px solid #CBD5E1',
+                        fontSize: '12px',
+                        backgroundColor: '#FFFFFF',
+                        boxSizing: 'border-box',
                       }}
-                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
-                      Geometry
-                    </label>
-                    <select
-                      value={formData.tank2Geometry}
-                      onChange={(e) => setFormData({ ...formData, tank2Geometry: e.target.value as any })}
-                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', backgroundColor: '#FFFFFF', boxSizing: 'border-box' }}
                     >
-                      <option value="CYLINDRICAL">Cylindrical</option>
-                      <option value="RECTANGULAR">Rectangular</option>
+                      {!COACH_CATEGORIES.includes(matchCoachCategoryOption(formData.coachCategory)) && (
+                        <option value={formData.coachCategory}>{formData.coachCategory}</option>
+                      )}
+                      {COACH_CATEGORIES.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
                     </select>
                   </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
-                      Capacity (L)
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={5000}
-                      value={formData.tank2Capacity}
-                      onChange={(e) => setFormData({ ...formData, tank2Capacity: parseFloat(e.target.value) || 20 })}
-                      style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
-                    />
+                </div>
+
+                {/* Tank 1 Configuration */}
+                <div
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '6px',
+                    padding: '10px',
+                    marginBottom: '10px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#1E293B' }}>
+                      Tank 1: Arrival Side (Primary)
+                    </div>
+                    <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>
+                      Height: {formData.tank1HeightCm || 50} cm &bull; {formData.tank1Geometry}
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
+                        Name
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.tank1Name}
+                        onChange={(e) => setFormData({ ...formData, tank1Name: e.target.value })}
+                        style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
+                        Height (cm) *
+                      </label>
+                      <input
+                        type="number"
+                        min={10}
+                        max={500}
+                        value={formData.tank1HeightCm}
+                        onChange={(e) => {
+                          const h = parseFloat(e.target.value) || 50;
+                          setFormData({
+                            ...formData,
+                            tank1HeightCm: h,
+                          });
+                        }}
+                        style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
+                        Geometry
+                      </label>
+                      <select
+                        value={formData.tank1Geometry}
+                        onChange={(e) => setFormData({ ...formData, tank1Geometry: e.target.value as any })}
+                        style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', backgroundColor: '#FFFFFF', boxSizing: 'border-box' }}
+                      >
+                        <option value="CYLINDRICAL">Cylindrical</option>
+                        <option value="RECTANGULAR">Rectangular</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
+                        Capacity (L)
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={5000}
+                        value={formData.tank1Capacity}
+                        onChange={(e) => setFormData({ ...formData, tank1Capacity: parseFloat(e.target.value) || 20 })}
+                        style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* HARDWARE DEVICE MANAGEMENT — Rendered for both ADD and EDIT */}
-              {(activeSubModal === 'ADD' || activeSubModal === 'EDIT') && (
+                {/* Tank 2 Configuration */}
+                <div
+                  style={{
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '6px',
+                    padding: '10px',
+                    marginBottom: '10px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#1E293B' }}>
+                      Tank 2: Departure Side (Secondary)
+                    </div>
+                    <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>
+                      Height: {formData.tank2HeightCm || 50} cm &bull; {formData.tank2Geometry}
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
+                        Name
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.tank2Name}
+                        onChange={(e) => setFormData({ ...formData, tank2Name: e.target.value })}
+                        style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
+                        Height (cm)
+                      </label>
+                      <input
+                        type="number"
+                        min={10}
+                        max={500}
+                        value={formData.tank2HeightCm}
+                        onChange={(e) => {
+                          const h = parseFloat(e.target.value) || 50;
+                          setFormData({
+                            ...formData,
+                            tank2HeightCm: h,
+                          });
+                        }}
+                        style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
+                        Geometry
+                      </label>
+                      <select
+                        value={formData.tank2Geometry}
+                        onChange={(e) => setFormData({ ...formData, tank2Geometry: e.target.value as any })}
+                        style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', backgroundColor: '#FFFFFF', boxSizing: 'border-box' }}
+                      >
+                        <option value="CYLINDRICAL">Cylindrical</option>
+                        <option value="RECTANGULAR">Rectangular</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
+                        Capacity (L)
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={5000}
+                        value={formData.tank2Capacity}
+                        onChange={(e) => setFormData({ ...formData, tank2Capacity: parseFloat(e.target.value) || 20 })}
+                        style={{ width: '100%', padding: '5px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', fontSize: '11.5px', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* HARDWARE DEVICE MANAGEMENT — Rendered for both ADD and EDIT */}
                 <div
                   style={{
                     backgroundColor: '#F8FAFC',
@@ -1833,7 +1970,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                     marginBottom: '14px',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Cpu size={14} color="#2563EB" />
                       <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#1E293B', letterSpacing: '0.3px', textTransform: 'uppercase' }}>
@@ -1841,55 +1978,96 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                       </span>
                     </div>
 
-                    {/* Status Pill for Selected Device */}
-                    {formData.deviceUid.trim() ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                      {/* Status Badges */}
+                      {formData.deviceUid.trim() ? (
+                        <>
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              backgroundColor: isKnownInRegistry ? '#EFF6FF' : '#FFFBEB',
+                              color: isKnownInRegistry ? '#1D4ED8' : '#B45309',
+                              border: `1px solid ${isKnownInRegistry ? '#BFDBFE' : '#FDE68A'}`,
+                            }}
+                          >
+                            {isKnownInRegistry ? 'REGISTERED' : 'UNREGISTERED'}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              backgroundColor: selectedDeviceObj?.isOnline ? '#DCFCE7' : '#F1F5F9',
+                              color: selectedDeviceObj?.isOnline ? '#16A34A' : '#64748B',
+                              border: `1px solid ${selectedDeviceObj?.isOnline ? '#86EFAC' : '#CBD5E1'}`,
+                            }}
+                          >
+                            {selectedDeviceObj?.isOnline ? 'ONLINE' : 'OFFLINE'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, deviceUid: '' })}
+                            title="Unassign this device"
+                            style={{
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              color: '#DC2626',
+                              backgroundColor: '#FEF2F2',
+                              border: '1px solid #FECACA',
+                              borderRadius: '4px',
+                              padding: '2px 6px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Unassign
+                          </button>
+                        </>
+                      ) : (
                         <span
                           style={{
                             fontSize: '10px',
-                            fontWeight: 700,
-                            padding: '1px 6px',
-                            borderRadius: '10px',
-                            backgroundColor: selectedDeviceObj?.isOnline ? '#DCFCE7' : '#F1F5F9',
-                            color: selectedDeviceObj?.isOnline ? '#16A34A' : '#64748B',
-                            border: `1px solid ${selectedDeviceObj?.isOnline ? '#86EFAC' : '#CBD5E1'}`,
+                            fontWeight: 600,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: '#F1F5F9',
+                            color: '#64748B',
+                            border: '1px solid #E2E8F0',
                           }}
                         >
-                          {selectedDeviceObj?.isOnline ? 'ONLINE' : 'OFFLINE'}
+                          NO DEVICE ASSIGNED
                         </span>
+                      )}
+
+                      {/* Add New Device Button */}
+                      {isAdmin && (
                         <button
                           type="button"
-                          onClick={() => setFormData({ ...formData, deviceUid: '' })}
-                          title="Unassign this device"
+                          onClick={handleOpenAddDevice}
+                          title="Register a new physical hardware device"
                           style={{
-                            fontSize: '10px',
-                            fontWeight: 600,
-                            color: '#DC2626',
-                            backgroundColor: '#FEF2F2',
-                            border: '1px solid #FECACA',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '2px 8px',
                             borderRadius: '4px',
-                            padding: '2px 6px',
+                            backgroundColor: '#2563EB',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            fontSize: '10.5px',
+                            fontWeight: 700,
                             cursor: 'pointer',
+                            boxShadow: '0 1px 2px rgba(37, 99, 235, 0.2)',
                           }}
                         >
-                          Unassign
+                          <Plus size={12} />
+                          <span>Add New Device</span>
                         </button>
-                      </div>
-                    ) : (
-                      <span
-                        style={{
-                          fontSize: '10px',
-                          fontWeight: 600,
-                          padding: '1px 6px',
-                          borderRadius: '10px',
-                          backgroundColor: '#F1F5F9',
-                          color: '#64748B',
-                          border: '1px solid #E2E8F0',
-                        }}
-                      >
-                        NO DEVICE ASSIGNED
-                      </span>
-                    )}
+                      )}
+                    </div>
                   </div>
 
                   {/* Dropdown Selector */}
@@ -1909,6 +2087,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                         fontFamily: 'monospace',
                         color: '#1E293B',
                         backgroundColor: '#FFFFFF',
+                        boxSizing: 'border-box',
                       }}
                     >
                       <option value="">[ No Device Assigned / Unassigned ]</option>
@@ -1941,14 +2120,37 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                   {/* Manual UID Entry & Topic Info */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '6px' }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '10.5px', color: '#64748B', marginBottom: '2px' }}>
-                        Device Hardware UID (Hexadecimal)
-                      </label>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2px' }}>
+                        <label style={{ fontSize: '10.5px', color: '#64748B' }}>
+                          Device Hardware UID (Hexadecimal)
+                        </label>
+                        {isAdmin && !isKnownInRegistry && formData.deviceUid.trim().length >= 8 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewDeviceUid(formData.deviceUid.trim().toUpperCase());
+                              handleOpenAddDevice();
+                            }}
+                            style={{
+                              border: 'none',
+                              background: 'transparent',
+                              color: '#2563EB',
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              padding: 0,
+                              textDecoration: 'underline',
+                            }}
+                          >
+                            Register This UID &rarr;
+                          </button>
+                        )}
+                      </div>
                       <input
                         type="text"
-                        placeholder="e.g. 0026004D4B42501120353332 (or blank to unassign)"
+                        placeholder="e.g. 0025004D4B42501120353335 (or blank to unassign)"
                         value={formData.deviceUid}
-                        onChange={(e) => setFormData({ ...formData, deviceUid: e.target.value.toUpperCase() })}
+                        onChange={(e) => setFormData({ ...formData, deviceUid: e.target.value.toUpperCase().replace(/\s+/g, '') })}
                         style={{
                           width: '100%',
                           padding: '5px 8px',
@@ -1985,14 +2187,24 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                     )}
 
                     <div style={{ fontSize: '10px', color: '#64748B', marginTop: '2px' }}>
-                      MQTT Telemetry Topic: <code>{formData.deviceUid ? formData.deviceUid : '0023004D4B42501120353332'}</code>
+                      MQTT Telemetry Topic: <code>panorama/telemetry/{formData.deviceUid ? formData.deviceUid : '0023004D4B42501120353332'}</code>
                     </div>
                   </div>
                 </div>
-              )}
+              </div>
 
-              {/* Action Buttons */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              {/* Action Buttons (Sticky Footer) */}
+              <div
+                style={{
+                  flexShrink: 0,
+                  padding: '12px 16px',
+                  borderTop: '1px solid #E2E8F0',
+                  backgroundColor: '#F8FAFC',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: '8px',
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => setActiveSubModal('NONE')}
@@ -2024,6 +2236,315 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                   }}
                 >
                   {isSubmitting ? 'Saving...' : activeSubModal === 'ADD' ? 'Add Coach' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* SUB-MODAL: Register New Hardware Device */}
+      {isAddDeviceModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100010,
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '8px',
+            boxSizing: 'border-box',
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '480px',
+              maxHeight: 'calc(100dvh - 16px)',
+              backgroundColor: '#FFFFFF',
+              borderRadius: '8px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              border: '1px solid #CBD5E1',
+            }}
+          >
+            <div
+              style={{
+                padding: '12px 16px',
+                backgroundColor: '#FFFFFF',
+                borderBottom: '1px solid #E2E8F0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexShrink: 0,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '6px',
+                    backgroundColor: '#EFF6FF',
+                    color: '#2563EB',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Cpu size={16} />
+                </div>
+                <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#0F172A' }}>
+                  Register New Hardware Device
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddDeviceModalOpen(false)}
+                aria-label="Close"
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '5px',
+                  backgroundColor: '#F8FAFC',
+                  border: '1px solid #E2E8F0',
+                  color: '#64748B',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleRegisterNewDevice}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                flex: '1 1 auto',
+                minHeight: 0,
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  flex: '1 1 auto',
+                  minHeight: 0,
+                  overflowY: 'auto',
+                  WebkitOverflowScrolling: 'touch',
+                  padding: '16px',
+                }}
+              >
+                {registerDeviceError && (
+                  <div
+                    style={{
+                      padding: '8px 12px',
+                      backgroundColor: '#FEF2F2',
+                      border: '1px solid #FECACA',
+                      color: '#991B1B',
+                      fontSize: '11.5px',
+                      fontWeight: 600,
+                      borderRadius: '6px',
+                      marginBottom: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                    <span>{registerDeviceError}</span>
+                  </div>
+                )}
+
+                {/* Device Name */}
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Device Name / Label *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. SLRD Coach Water Monitor"
+                    value={newDeviceName}
+                    onChange={(e) => setNewDeviceName(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      borderRadius: '5px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                {/* Hardware UID */}
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Hardware UID (Hexadecimal) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 0025004D4B42501120353335"
+                    value={newDeviceUid}
+                    onChange={(e) => {
+                      setNewDeviceUid(e.target.value.toUpperCase().replace(/\s+/g, ''));
+                      if (registerDeviceError) setRegisterDeviceError(null);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      borderRadius: '5px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12px',
+                      fontFamily: 'monospace',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <span style={{ fontSize: '10.5px', color: '#64748B', marginTop: '2px', display: 'block' }}>
+                    Enter the unique 24-character hexadecimal hardware identifier etched on the physical MCU.
+                  </span>
+                </div>
+
+                {/* Device Model / Hardware Type */}
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Hardware Model / Type
+                  </label>
+                  <select
+                    value={newDeviceType}
+                    onChange={(e) => setNewDeviceType(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      borderRadius: '5px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12px',
+                      backgroundColor: '#FFFFFF',
+                      boxSizing: 'border-box',
+                    }}
+                  >
+                    <option value="Quectel EC200U 4G LTE">Quectel EC200U 4G LTE (Production Industrial)</option>
+                    <option value="Standard WLI Node">Standard WLI Node (Level &amp; Telemetry)</option>
+                    <option value="ESP32 WLI">ESP32 WLI Edge Controller</option>
+                    <option value="STM32 WLI Node">STM32 WLI Node</option>
+                  </select>
+                </div>
+
+                {/* Description */}
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#334155', marginBottom: '4px' }}>
+                    Description / Notes (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Deployed in coach electrical cupboard"
+                    value={newDeviceDescription}
+                    onChange={(e) => setNewDeviceDescription(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      borderRadius: '5px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '12px',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+
+                {/* MQTT Telemetry Topic Preview */}
+                <div
+                  style={{
+                    padding: '8px 10px',
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '6px',
+                    marginBottom: '12px',
+                  }}
+                >
+                  <div style={{ fontSize: '10.5px', fontWeight: 700, color: '#475569', marginBottom: '2px' }}>
+                    Telemetry Ingestion Topic (Read-Only)
+                  </div>
+                  <code style={{ fontSize: '11px', color: '#0F172A', wordBreak: 'break-all' }}>
+                    panorama/telemetry/{newDeviceUid.trim().toUpperCase() || '&lt;hardware-uid&gt;'}
+                  </code>
+                </div>
+
+                {/* Assignment Option */}
+                <div
+                  style={{
+                    padding: '10px',
+                    backgroundColor: '#F0FDF4',
+                    border: '1px solid #BBF7D0',
+                    borderRadius: '6px',
+                  }}
+                >
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, color: '#166534' }}>
+                    <input
+                      type="checkbox"
+                      checked={assignNewDeviceToCoach}
+                      onChange={(e) => setAssignNewDeviceToCoach(e.target.checked)}
+                      style={{ width: '16px', height: '16px' }}
+                    />
+                    <span>
+                      Assign directly to Coach {formData.coachNumber || targetCoach?.coach_number || ''} (Train {effectiveTrainNumber})
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div
+                style={{
+                  flexShrink: 0,
+                  padding: '12px 16px',
+                  borderTop: '1px solid #E2E8F0',
+                  backgroundColor: '#F8FAFC',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: '8px',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setIsAddDeviceModalOpen(false)}
+                  style={{
+                    padding: '6px 14px',
+                    backgroundColor: '#FFFFFF',
+                    border: '1px solid #CBD5E1',
+                    borderRadius: '5px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: '#475569',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isRegisteringDevice}
+                  style={{
+                    padding: '6px 16px',
+                    backgroundColor: '#2563EB',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '5px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: isRegisteringDevice ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {isRegisteringDevice ? 'Registering...' : 'Register Device'}
                 </button>
               </div>
             </form>

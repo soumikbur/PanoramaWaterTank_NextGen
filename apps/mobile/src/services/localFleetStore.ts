@@ -730,17 +730,41 @@ export const localFleetStore = {
         modified = true;
       } else {
         state.trains[num].train = { ...existing.train, ...authTrain };
-        if (authTrain.route && Array.isArray(authTrain.route) && authTrain.route.length > 0) {
-          state.trains[num].train.route = authTrain.route;
-          state.trains[num].consist.route = authTrain.route;
-        } else if (existing.train.route) {
-          state.trains[num].consist.route = existing.train.route;
+        if (!state.trains[num].consist) {
+          state.trains[num].consist = {
+            train_number: num,
+            name: authTrain.name,
+            region: normalizeRegionCode(authTrain.region),
+            coaches_count: authTrain.coaches_count || 0,
+            tanks_count: authTrain.tanks_count || 0,
+            online_status: Boolean(authTrain.is_online),
+            active_alarms_count: authTrain.active_alarms || 0,
+            coaches: DEFAULT_INITIAL_STATE.trains[num]?.consist?.coaches || [],
+            source_station: authTrain.source_station,
+            source_code: authTrain.source_code,
+            destination_station: authTrain.destination_station,
+            destination_code: authTrain.destination_code,
+            railway_zone: authTrain.railway_zone,
+            train_type: authTrain.type,
+            running_days: authTrain.running_days,
+            total_coaches: authTrain.total_coaches,
+            has_official_composition: Boolean(authTrain.has_official_composition),
+            api_provider: authTrain.api_provider,
+            last_verified_at: authTrain.last_verified_at,
+          };
+        } else {
+          if (authTrain.route && Array.isArray(authTrain.route) && authTrain.route.length > 0) {
+            state.trains[num].train.route = authTrain.route;
+            state.trains[num].consist.route = authTrain.route;
+          } else if (existing.train.route) {
+            state.trains[num].consist.route = existing.train.route;
+          }
+          state.trains[num].consist.name = authTrain.name;
+          state.trains[num].consist.region = normalizeRegionCode(authTrain.region);
+          state.trains[num].consist.coaches_count = authTrain.coaches_count || existing.consist?.coaches_count || 0;
+          state.trains[num].consist.tanks_count = authTrain.tanks_count || existing.consist?.tanks_count || 0;
+          state.trains[num].consist.online_status = Boolean(authTrain.is_online);
         }
-        state.trains[num].consist.name = authTrain.name;
-        state.trains[num].consist.region = normalizeRegionCode(authTrain.region);
-        state.trains[num].consist.coaches_count = authTrain.coaches_count || existing.consist.coaches_count;
-        state.trains[num].consist.tanks_count = authTrain.tanks_count || existing.consist.tanks_count;
-        state.trains[num].consist.online_status = Boolean(authTrain.is_online);
       }
     }
 

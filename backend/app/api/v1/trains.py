@@ -1153,14 +1153,23 @@ async def add_coach_to_train(
     if uid:
         device = await device_repo.get_by_uid(uid)
         if not device:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Device '{uid}' not found in registry. Register the device before assigning it to a coach."
+            device = Device(
+                id=f"dev-{uuid.uuid4().hex[:8]}",
+                uid=uid,
+                train_number=tr_clean,
+                coach_number=c_clean,
+                name=f"Node {uid[-6:]}",
+                hardware_version="Standard WLI Node",
+                status="ENGAGED",
+                is_online=False,
             )
-        device.train_number = tr_clean
-        device.coach_number = c_clean
-        device.status = "ENGAGED"
-        device.updated_at = utc_now()
+            db.add(device)
+            await db.flush()
+        else:
+            device.train_number = tr_clean
+            device.coach_number = c_clean
+            device.status = "ENGAGED"
+            device.updated_at = utc_now()
 
         # Configure Dual Tanks for assigned device
         h1 = data.tank_1_height_cm or data.tank_height_cm or 50.0

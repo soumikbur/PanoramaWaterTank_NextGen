@@ -222,7 +222,7 @@ async def get_device_diagnostics(
 async def create_device(
     payload: DeviceCreate,
     upsert: bool = False,
-    current_user: User = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     """Register a new edge monitoring device and auto-provision associated tanks (Admin & Employee)."""
