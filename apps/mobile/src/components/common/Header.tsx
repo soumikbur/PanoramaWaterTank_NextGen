@@ -1176,14 +1176,18 @@ export const Header: React.FC = () => {
                   backgroundColor:
                     mqttConnectionStatus === 'CONNECTED'
                       ? '#E8F8EE'
-                      : mqttConnectionStatus === 'CONNECTING'
+                      : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
                       ? '#EFF6FF'
+                      : mqttConnectionStatus === 'STALE'
+                      ? '#FEF3E2'
                       : '#FDECEC',
                   border: `1px solid ${
                     mqttConnectionStatus === 'CONNECTED'
                       ? '#DCFCE7'
-                      : mqttConnectionStatus === 'CONNECTING'
+                      : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
                       ? '#BFDBFE'
+                      : mqttConnectionStatus === 'STALE'
+                      ? '#FEF3C7'
                       : '#FEE2E2'
                   }`,
                 }}
@@ -1196,8 +1200,10 @@ export const Header: React.FC = () => {
                     backgroundColor:
                       mqttConnectionStatus === 'CONNECTED'
                         ? '#16A34A'
-                        : mqttConnectionStatus === 'CONNECTING'
+                        : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
                         ? '#2563EB'
+                        : mqttConnectionStatus === 'STALE'
+                        ? '#D97706'
                         : '#DC2626',
                   }}
                 />
@@ -1208,12 +1214,24 @@ export const Header: React.FC = () => {
                     color:
                       mqttConnectionStatus === 'CONNECTED'
                         ? '#16A34A'
-                        : mqttConnectionStatus === 'CONNECTING'
+                        : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
                         ? '#2563EB'
+                        : mqttConnectionStatus === 'STALE'
+                        ? '#D97706'
                         : '#DC2626',
                   }}
                 >
-                  {mqttConnectionStatus === 'CONNECTED' ? 'LIVE' : 'OFF'}
+                  {mqttConnectionStatus === 'CONNECTED'
+                    ? 'LIVE'
+                    : mqttConnectionStatus === 'CONNECTING'
+                    ? 'CONN'
+                    : mqttConnectionStatus === 'RECONNECTING'
+                    ? 'RETRY'
+                    : mqttConnectionStatus === 'SUBSCRIPTION_ERROR'
+                    ? 'SUB ERR'
+                    : mqttConnectionStatus === 'STALE'
+                    ? 'STALE'
+                    : 'OFF'}
                 </span>
               </div>
 
@@ -2015,7 +2033,7 @@ export const Header: React.FC = () => {
                 ? '#E8F8EE'
                 : mqttConnectionStatus === 'STALE'
                 ? '#FEF3E2'
-                : mqttConnectionStatus === 'CONNECTING'
+                : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
                 ? '#EFF6FF'
                 : '#FDECEC',
             border: `1px solid ${
@@ -2023,7 +2041,7 @@ export const Header: React.FC = () => {
                 ? '#DCFCE7'
                 : mqttConnectionStatus === 'STALE'
                 ? '#FEF3C7'
-                : mqttConnectionStatus === 'CONNECTING'
+                : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
                 ? '#BFDBFE'
                 : '#FEE2E2'
             }`,
@@ -2040,7 +2058,7 @@ export const Header: React.FC = () => {
                   ? '#16A34A'
                   : mqttConnectionStatus === 'STALE'
                   ? '#D97706'
-                  : mqttConnectionStatus === 'CONNECTING'
+                  : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
                   ? '#2563EB'
                   : '#DC2626',
             }}
@@ -2054,7 +2072,7 @@ export const Header: React.FC = () => {
                   ? '#16A34A'
                   : mqttConnectionStatus === 'STALE'
                   ? '#D97706'
-                  : mqttConnectionStatus === 'CONNECTING'
+                  : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
                   ? '#2563EB'
                   : '#DC2626',
               letterSpacing: '0.4px',
@@ -2067,6 +2085,10 @@ export const Header: React.FC = () => {
               ? 'STALE'
               : mqttConnectionStatus === 'CONNECTING'
               ? 'CONNECTING'
+              : mqttConnectionStatus === 'RECONNECTING'
+              ? 'RECONNECTING'
+              : mqttConnectionStatus === 'SUBSCRIPTION_ERROR'
+              ? 'SUB ERROR'
               : 'OFFLINE'}
           </span>
         </div>

@@ -1817,11 +1817,11 @@ export class ApiClient {
       lastSeenAt: m.lastSeen,
       last_seen_at: m.lastSeen,
       lastHeartbeat: m.lastSeen,
-      batteryPercent: m.batteryPercent,
-      batteryVoltage: m.batteryVoltage,
+      batteryPercent: m.batteryPercent ?? undefined,
+      batteryVoltage: m.batteryVoltage ?? undefined,
       primaryLevel: m.tank1Level ?? undefined,
       secondaryLevel: m.tank2Level ?? undefined,
-      hasActiveAlarm: !m.valve1Normal || !m.valve2Normal || m.batteryPercent < 20,
+      hasActiveAlarm: m.valve1Normal === false || m.valve2Normal === false || (m.batteryPercent != null && m.batteryPercent < 20),
     }));
   }
 
@@ -1895,7 +1895,7 @@ export class ApiClient {
         firmwareVersion: payload.firmware_version,
         isOnline: registered.isOnline,
         lastSeenAt: registered.lastSeen,
-        batteryPercent: registered.batteryPercent,
+        batteryPercent: registered.batteryPercent ?? undefined,
         hasActiveAlarm: false,
     };
   }
@@ -1932,9 +1932,9 @@ export class ApiClient {
         coach_number: dev?.coachNumber || '',
         hardwareVersion: dev?.hardwareModel || 'Quectel EC200U 4G LTE',
         firmwareVersion: '2.0.0',
-        isOnline: dev?.isOnline ?? true,
+        isOnline: dev?.isOnline ?? false,
         lastSeenAt: dev?.lastSeen || null,
-        batteryPercent: dev?.batteryPercent || 85,
+        batteryPercent: dev?.batteryPercent ?? undefined,
         hasActiveAlarm: false,
       };
     }
@@ -2044,6 +2044,29 @@ export class ApiClient {
       const isOnline = d.isOnline ?? (d as any).is_online ?? false;
       const devId = (d as any).id || canonical;
 
+      const hasLiveTelemetry = Boolean(d.lastSeenTimestamp && d.lastSeenTimestamp > 0);
+      if (hasLiveTelemetry) {
+        return {
+          id: `dev-${devId}`,
+          deviceId: canonical,
+          deviceName: d.name || `Node ${canonical.slice(-6)}`,
+          trainNumber: trainNum && trainNum !== 'UNASSIGNED' ? trainNum : undefined,
+          coachNumber: coachNum && coachNum !== 'UNASSIGNED' ? coachNum : undefined,
+          recordedAt: d.lastSeen || new Date(d.lastSeenTimestamp).toLocaleTimeString(),
+          ai1Ma: null,
+          level1Percent: d.tank1Level != null ? Number(d.tank1Level).toFixed(1) : '--',
+          ai1Valid: d.tank1Level != null ? 'Valid' : '--',
+          batteryV: d.batteryVoltage ?? null,
+          batteryPercent: d.batteryPercent != null ? Number(d.batteryPercent).toFixed(1) : '--',
+          latitude: d.latitude ?? null,
+          longitude: d.longitude ?? null,
+          altitudeM: null,
+          gpsValid: d.latitude != null && d.longitude != null ? 'Valid' : '--',
+          altitudeValid: '--',
+          receivedUtc: new Date(d.lastSeenTimestamp).toISOString(),
+          isOnline,
+        };
+      }
       if (seedMatch) {
         return {
           ...seedMatch,

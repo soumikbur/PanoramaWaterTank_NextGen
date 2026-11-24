@@ -630,6 +630,8 @@ export const EmployeeDashboard: React.FC = () => {
                   ? '#16A34A'
                   : mqttConnectionStatus === 'STALE'
                   ? '#D97706'
+                  : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
+                  ? '#2563EB'
                   : '#DC2626',
             }}
           />
@@ -642,11 +644,23 @@ export const EmployeeDashboard: React.FC = () => {
                   ? '#16A34A'
                   : mqttConnectionStatus === 'STALE'
                   ? '#D97706'
+                  : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
+                  ? '#2563EB'
                   : '#DC2626',
               letterSpacing: '0.4px',
             }}
           >
-            {mqttConnectionStatus === 'CONNECTED' ? 'LIVE MQTT STREAM' : mqttConnectionStatus === 'STALE' ? 'STALE TELEMETRY' : 'DISCONNECTED'}
+            {mqttConnectionStatus === 'CONNECTED'
+              ? 'LIVE MQTT STREAM'
+              : mqttConnectionStatus === 'STALE'
+              ? 'STALE TELEMETRY'
+              : mqttConnectionStatus === 'CONNECTING'
+              ? 'CONNECTING MQTT'
+              : mqttConnectionStatus === 'RECONNECTING'
+              ? 'RECONNECTING'
+              : mqttConnectionStatus === 'SUBSCRIPTION_ERROR'
+              ? 'SUBSCRIPTION ERROR'
+              : 'DISCONNECTED'}
           </span>
         </div>
       </div>
@@ -685,9 +699,31 @@ export const EmployeeDashboard: React.FC = () => {
                 gap: '5px',
                 padding: '2px 8px',
                 borderRadius: '12px',
-                backgroundColor: mqttConnectionStatus === 'CONNECTED' ? '#DCFCE7' : '#FEE2E2',
-                color: mqttConnectionStatus === 'CONNECTED' ? '#15803D' : '#DC2626',
-                border: `1px solid ${mqttConnectionStatus === 'CONNECTED' ? '#86EFAC' : '#FCA5A5'}`,
+                backgroundColor:
+                  mqttConnectionStatus === 'CONNECTED'
+                    ? '#DCFCE7'
+                    : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
+                    ? '#EFF6FF'
+                    : mqttConnectionStatus === 'STALE'
+                    ? '#FEF3C7'
+                    : '#FEE2E2',
+                color:
+                  mqttConnectionStatus === 'CONNECTED'
+                    ? '#15803D'
+                    : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
+                    ? '#1D4ED8'
+                    : mqttConnectionStatus === 'STALE'
+                    ? '#B45309'
+                    : '#DC2626',
+                border: `1px solid ${
+                  mqttConnectionStatus === 'CONNECTED'
+                    ? '#86EFAC'
+                    : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
+                    ? '#BFDBFE'
+                    : mqttConnectionStatus === 'STALE'
+                    ? '#FDE68A'
+                    : '#FCA5A5'
+                }`,
                 fontSize: '10px',
                 fontWeight: 700,
               }}
@@ -697,10 +733,29 @@ export const EmployeeDashboard: React.FC = () => {
                   width: '6px',
                   height: '6px',
                   borderRadius: '50%',
-                  backgroundColor: mqttConnectionStatus === 'CONNECTED' ? '#16A34A' : '#DC2626',
+                  backgroundColor:
+                    mqttConnectionStatus === 'CONNECTED'
+                      ? '#16A34A'
+                      : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
+                      ? '#2563EB'
+                      : mqttConnectionStatus === 'STALE'
+                      ? '#D97706'
+                      : '#DC2626',
                 }}
               />
-              <span>{mqttConnectionStatus === 'CONNECTED' ? 'MQTT LIVE' : 'DISCONNECTED'}</span>
+              <span>
+                {mqttConnectionStatus === 'CONNECTED'
+                  ? 'MQTT LIVE'
+                  : mqttConnectionStatus === 'CONNECTING'
+                  ? 'CONNECTING'
+                  : mqttConnectionStatus === 'RECONNECTING'
+                  ? 'RECONNECTING'
+                  : mqttConnectionStatus === 'SUBSCRIPTION_ERROR'
+                  ? 'SUB ERROR'
+                  : mqttConnectionStatus === 'STALE'
+                  ? 'STALE'
+                  : 'DISCONNECTED'}
+              </span>
             </div>
           </div>
 

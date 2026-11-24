@@ -9,6 +9,7 @@ import Paho from 'paho-mqtt';
 import { Logger } from './logger';
 import { LiveTelemetryPayload, MqttConnectionStatus, MqttGpsFix } from '../types';
 import { deviceProfileService } from './deviceProfileService';
+import { nativeBridge } from './nativeBridge';
 
 export interface ParsedMqttGps {
   lat: number | null;
@@ -47,9 +48,9 @@ export function parseValidGps(parsed: Record<string, any>): ParsedMqttGps {
   return { lat: rawLat, long: rawLon, alt, sats, accuracy, gpsFix: true };
 }
 
-export const DEFAULT_MQTT_TOPIC = '002F00654B42501320353332';
-export const DEFAULT_DEVICE_UID = '002F00654B42501320353332';
-export const LEGACY_DEFAULT_MQTT_TOPIC = '0023004D4B42501120353332';
+export const DEFAULT_MQTT_TOPIC = '0023004D4B42501120353332';
+export const DEFAULT_DEVICE_UID = '0023004D4B42501120353332';
+export const LEGACY_DEFAULT_MQTT_TOPIC = '';
 export const DEFAULT_STALE_TIMEOUT_MS = 180000; // 180 seconds (nominal 90s upload task + jitter headroom)
 export const STALE_TIMEOUT_MS = 30000; // Fast watchdog timeout for local/test runner
 
@@ -272,6 +273,31 @@ export type MqttStatusCallback = (status: MqttConnectionStatus) => void;
 
 export type { MqttGpsFix } from '../types/telemetry';
 
+export type MqttStatusDisplay =
+  | 'Connecting'
+  | 'Online'
+  | 'Offline'
+  | 'Reconnecting'
+  | 'Subscription Error'
+  | 'Stale';
+
+export function getMqttStatusDisplay(status: MqttConnectionStatus): MqttStatusDisplay {
+  switch (status) {
+    case 'CONNECTED':
+      return 'Online';
+    case 'CONNECTING':
+      return 'Connecting';
+    case 'RECONNECTING':
+      return 'Reconnecting';
+    case 'SUBSCRIPTION_ERROR':
+      return 'Subscription Error';
+    case 'STALE':
+      return 'Stale';
+    default:
+      return 'Offline';
+  }
+}
+
 export interface MqttBrokerDiagnostics {
   brokerName: string;
   host: string;
@@ -286,6 +312,7 @@ export interface MqttBrokerDiagnostics {
   keepAliveSeconds?: number;
   connectionUptimeMs?: number | null;
   reconnectAttempts?: number;
+  reconnectCount?: number;
   messagesReceivedTotal?: number;
   messagesSentTotal?: number;
   lastError?: string | null;
@@ -300,6 +327,16 @@ export interface MqttBrokerDiagnostics {
   autoReconnect?: boolean;
   totalBrokerMessages?: number;
   useSSL?: boolean;
+  status?: MqttConnectionStatus;
+  statusDisplay?: MqttStatusDisplay;
+  subscribedTopics?: string[];
+  subscriptionAck?: boolean;
+  subscriptionAckAt?: number | null;
+  subscriptionError?: string | null;
+  lastMessageAt?: number | null;
+  lastParsingError?: string | null;
+  parseErrorCount?: number;
+  lastUidMismatch?: string | null;
 }
 
 export class MqttService {
@@ -320,8 +357,12 @@ export class MqttService {
   private rawMessageListeners: Set<(frame: RawMqttFrame) => void> = new Set();
   private rawMessageHistory: RawMqttFrame[] = [];
   private dynamicSubscriptions: Map<string, number> = new Map();
+  private registeredDeviceUids: Set<string> = new Set([DEFAULT_DEVICE_UID]);
+  private confirmedSubscriptions: Set<string> = new Set();
   private seenSyncEventIds: Map<string, number> = new Map();
   private reconnectTimer: any = null;
+  private connectTimeoutTimer: any = null;
+  private reconfigureTimer: any = null;
   private staleTimer: any = null;
   private reconnectAttempts = 0;
   private lastTelemetry: LiveTelemetryPayload | null = null;
@@ -331,11 +372,24 @@ export class MqttService {
   private trainGpsWaypoints: Map<string, MqttGpsFix[]> = new Map();
   private lastPayloadSignature = '';
   private lastMessageReceivedTime = 0;
+  private messagesReceivedTotal = 0;
+  private messagesSentTotal = 0;
+  private lastError: string | null = null;
+  private lastConnectedAt: number | null = null;
+  private lastDisconnectedAt: number | null = null;
+  private connectionLatencyMs = 0;
+  private subscriptionAck = false;
+  private subscriptionAckAt: number | null = null;
+  private subscriptionError: string | null = null;
+  private lastParsingError: string | null = null;
+  private parseErrorCount = 0;
+  private lastUidMismatch: string | null = null;
   private historyBuffer: LiveTelemetryPayload[] = [];
   private isDestroyed = false;
   private isConnecting = false;
   private intentionalDisconnect = false;
   private networkListenersBound = false;
+  private unsubscribeNativeNetwork: (() => void) | null = null;
 
   private brokerHost: string = 'broker.hivemq.com';
   private brokerPort: number = 8884;
@@ -353,33 +407,83 @@ export class MqttService {
     if (this.networkListenersBound || typeof window === 'undefined') return;
     this.networkListenersBound = true;
 
-    window.addEventListener('online', () => {
+    const triggerImmediateReconnect = (reason: string) => {
       if (this.intentionalDisconnect || this.isDestroyed) return;
-      if (this.client && this.client.isConnected && this.client.isConnected()) return;
-      console.info('[MQTT] Browser online — restoring MQTT broker connection...');
+      if (this.client && this.client.isConnected && this.client.isConnected() && this.status === 'CONNECTED') return;
+      console.info(`[MQTT] ${reason} — restoring MQTT broker connection...`);
       this.reconnectAttempts = 0;
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
+      this.cleanupClient();
       this.connect();
+    };
+
+    const handleNetworkDrop = (reason: string) => {
+      clearTimeout(this.reconnectTimer);
+      clearTimeout(this.connectTimeoutTimer);
+      this.reconnectTimer = null;
+      this.connectTimeoutTimer = null;
+      this.topicSubscribed = false;
+      this.subscriptionAck = false;
+      this.confirmedSubscriptions.clear();
+      this.clearStaleTimer();
+      this.isConnecting = false;
+      this.cleanupClient();
+      this.lastDisconnectedAt = Date.now();
+      this.lastError = reason;
+      this.setStatus('DISCONNECTED');
+    };
+
+    window.addEventListener('online', () => {
+      triggerImmediateReconnect('Browser network online');
     });
 
     window.addEventListener('offline', () => {
+      handleNetworkDrop('Network connection lost (offline)');
+    });
+
+    window.addEventListener('panorama:app_resumed', () => {
+      if (this.intentionalDisconnect || this.isDestroyed) return;
+      if (this.client && this.client.isConnected && this.client.isConnected() && this.status === 'CONNECTED') {
+        this.restoreSubscriptions(this.client);
+      } else {
+        triggerImmediateReconnect('Capacitor app resumed in foreground');
+      }
+    });
+
+    window.addEventListener('panorama:app_paused', () => {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
-      this.topicSubscribed = false;
-      this.clearStaleTimer();
-      this.isConnecting = false;
-      this.setStatus('DISCONNECTED');
+    });
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          triggerImmediateReconnect('Document became visible');
+        }
+      });
+    }
+
+    this.unsubscribeNativeNetwork = nativeBridge.onNetworkChange((netStatus) => {
+      if (netStatus.connected) {
+        triggerImmediateReconnect(`Capacitor network restored (${netStatus.connectionType})`);
+      } else {
+        handleNetworkDrop('Mobile network offline');
+      }
     });
 
     window.addEventListener('beforeunload', () => {
+      this.unsubscribeNativeNetwork?.();
       this.disconnect();
     });
   }
 
   private cleanupClient(): void {
+    clearTimeout(this.connectTimeoutTimer);
+    this.connectTimeoutTimer = null;
     const oldClient = this.client;
     this.client = null;
+    this.confirmedSubscriptions.clear();
     if (!oldClient) return;
     try {
       oldClient.onConnectionLost = () => {};
@@ -403,22 +507,164 @@ export class MqttService {
     if (typeof window !== 'undefined' && window.localStorage) {
       const savedHost = localStorage.getItem('panorama_mqtt_host');
       const savedPort = localStorage.getItem('panorama_mqtt_port');
+      const savedPath = localStorage.getItem('panorama_mqtt_path');
       const savedTopic = localStorage.getItem('panorama_mqtt_topic');
       const savedSsl = localStorage.getItem('panorama_mqtt_ssl');
 
-      if (savedHost) this.brokerHost = savedHost;
-      if (savedPort) this.brokerPort = parseInt(savedPort, 10);
-      if (savedTopic && savedTopic !== LEGACY_DEFAULT_MQTT_TOPIC) {
-        this.topic = savedTopic;
+      if (savedHost) this.brokerHost = savedHost.trim();
+      if (savedPort) {
+        const parsedPort = parseInt(savedPort, 10);
+        if (Number.isFinite(parsedPort) && parsedPort > 0 && parsedPort <= 65535) {
+          this.brokerPort = parsedPort;
+        }
+      }
+      if (savedPath) this.brokerPath = savedPath.startsWith('/') ? savedPath : `/${savedPath}`;
+      if (savedSsl !== null) this.useSSL = savedSsl === 'true';
+
+      // Browser/WebView Paho requires MQTT over WebSockets; normalize raw TCP HiveMQ ports if previously saved
+      if (this.brokerHost === 'broker.hivemq.com' && (this.brokerPort === 8883 || this.brokerPort === 1883)) {
+        this.brokerPort = this.brokerPort === 1883 && !this.useSSL ? 8000 : 8884;
+        this.useSSL = this.brokerPort === 8884;
+        this.brokerPath = '/mqtt';
+      }
+
+      if (savedTopic) {
+        this.topic = savedTopic.trim();
       } else {
         this.topic = DEFAULT_MQTT_TOPIC;
       }
-      if (savedSsl !== null) this.useSSL = savedSsl === 'true';
+
+      // Seed registered device UIDs from localStorage without creating circular imports
+      try {
+        const regRaw = localStorage.getItem('panorama_device_registry');
+        if (regRaw) {
+          const arr = JSON.parse(regRaw);
+          if (Array.isArray(arr)) {
+            arr.forEach((d: any) => {
+              const uid = typeof d?.uid === 'string' ? d.uid.trim() : '';
+              if (/^[0-9A-Fa-f]{24}$/.test(uid) && d?.registrationStatus !== 'DISCOVERED') {
+                this.registeredDeviceUids.add(uid);
+              }
+            });
+          }
+        }
+      } catch {
+        // ignore storage parse failure
+      }
     }
     this.dynamicSubscriptions.set(DEFAULT_MQTT_TOPIC, 0);
     if (this.topic && this.topic !== DEFAULT_MQTT_TOPIC) {
       this.dynamicSubscriptions.set(this.topic, 0);
     }
+  }
+
+  private isInternalSyncTopic(topic: string): boolean {
+    return (
+      topic === SYNC_EVENTS_TOPIC ||
+      topic.startsWith('panorama/sync/') ||
+      topic === CENTRAL_FLEET_TOPIC ||
+      topic === CENTRAL_DEVICES_TOPIC ||
+      topic === CENTRAL_SETTINGS_TOPIC ||
+      topic === CENTRAL_USERS_TOPIC ||
+      topic === CENTRAL_DELTA_SYNC_TOPIC ||
+      topic === 'panorama/fleet/sync' ||
+      topic === 'panorama/devices/sync'
+    );
+  }
+
+  private subscribeWithAck(client: any, topic: string, qos: number, isRetry: boolean = false): void {
+    if (!client || !client.isConnected || !client.isConnected()) return;
+    const clean = topic.trim();
+    if (!clean) return;
+    const isTelemetryTarget = !this.isInternalSyncTopic(clean);
+
+    try {
+      client.subscribe(clean, {
+        qos,
+        timeout: 10,
+        onSuccess: () => {
+          if (this.client !== client) return;
+          this.confirmedSubscriptions.add(clean);
+          if (isTelemetryTarget) {
+            this.topicSubscribed = true;
+            this.subscriptionAck = true;
+            this.subscriptionAckAt = Date.now();
+            this.subscriptionError = null;
+            if (this.status === 'SUBSCRIPTION_ERROR') {
+              this.setStatus('CONNECTED');
+            }
+          }
+          console.info(`[MQTT] SUBACK confirmed for topic: ${clean} (QoS ${qos})`);
+        },
+        onFailure: (err: any) => {
+          if (this.client !== client) return;
+          const errMsg = err?.errorMessage || 'Broker rejected subscription';
+          if (isTelemetryTarget) {
+            this.subscriptionError = `Topic "${clean}": ${errMsg}`;
+            this.lastError = this.subscriptionError;
+            console.warn(`[MQTT] Subscription rejected for ${clean}:`, errMsg);
+            const hasConfirmedTelemetry = Array.from(this.confirmedSubscriptions).some(
+              (t) => !this.isInternalSyncTopic(t)
+            );
+            if (!hasConfirmedTelemetry) {
+              this.topicSubscribed = false;
+              this.subscriptionAck = false;
+              this.setStatus('SUBSCRIPTION_ERROR');
+            }
+            if (!isRetry && clean === DEFAULT_MQTT_TOPIC) {
+              setTimeout(() => {
+                if (this.client === client && client.isConnected?.() && !this.confirmedSubscriptions.has(clean)) {
+                  this.subscribeWithAck(client, clean, 0, true);
+                }
+              }, 3000);
+            }
+          }
+        },
+      });
+    } catch (subErr: any) {
+      if (isTelemetryTarget) {
+        this.subscriptionError = `Topic "${clean}": ${subErr?.message || 'Subscribe exception'}`;
+        this.lastError = this.subscriptionError;
+        this.setStatus('SUBSCRIPTION_ERROR');
+      }
+    }
+  }
+
+  private buildSubscriptionMap(): Map<string, number> {
+    const subs = new Map<string, number>();
+    subs.set(SYNC_EVENTS_TOPIC, 1);
+    subs.set(SYNC_WILDCARD_TOPIC, 1);
+    subs.set(CENTRAL_FLEET_TOPIC, 1);
+    subs.set(CENTRAL_DEVICES_TOPIC, 1);
+    subs.set(CENTRAL_SETTINGS_TOPIC, 1);
+    subs.set(CENTRAL_USERS_TOPIC, 1);
+    subs.set(CENTRAL_DELTA_SYNC_TOPIC, 1);
+    subs.set('panorama/fleet/sync', 1);
+    subs.set('panorama/devices/sync', 1);
+    subs.set('panorama/telemetry/#', 0);
+
+    if (DEFAULT_MQTT_TOPIC) {
+      subs.set(DEFAULT_MQTT_TOPIC, 0);
+    }
+    this.registeredDeviceUids.forEach((uid) => {
+      if (uid) subs.set(uid, 0);
+    });
+    if (this.topic) {
+      subs.set(this.topic, 0);
+    }
+    this.dynamicSubscriptions.forEach((qos, top) => {
+      if (top) subs.set(top, qos);
+    });
+    return subs;
+  }
+
+  private restoreSubscriptions(client: any): void {
+    const subs = this.buildSubscriptionMap();
+    subs.forEach((qos, top) => {
+      if (!this.confirmedSubscriptions.has(top)) {
+        this.subscribeWithAck(client, top, qos);
+      }
+    });
   }
 
   connect(): void {
@@ -433,27 +679,34 @@ export class MqttService {
     this.intentionalDisconnect = false;
 
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      this.lastError = 'Device network offline';
       this.setStatus('DISCONNECTED');
       return;
     }
 
     clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
+    clearTimeout(this.connectTimeoutTimer);
+    this.connectTimeoutTimer = null;
 
     // Clean up any stale client instance before creating a fresh one (prevents duplicate clients/ghost disconnects)
     this.cleanupClient();
 
     this.isConnecting = true;
+    this.subscriptionAck = false;
+    this.topicSubscribed = false;
+    this.subscriptionError = null;
     this.setStatus('CONNECTING');
 
+    const connectStartedAt = Date.now();
     const clientId = `panorama-web-${Math.random().toString(16).substring(2, 10)}`;
 
     try {
       const ClientConstructor = (Paho && (Paho.Client || (Paho as any).default?.Client)) || (window as any).Paho?.MQTT?.Client;
       if (!ClientConstructor) {
         this.isConnecting = false;
+        this.lastError = 'MQTT WebSocket client unavailable in runtime';
         console.warn('[MQTT] Paho.Client constructor not available in runtime.');
-        this.setStatus('DISCONNECTED');
         this.scheduleReconnect();
         return;
       }
@@ -469,16 +722,22 @@ export class MqttService {
       client.onConnectionLost = (responseObject: any) => {
         // Ignore callbacks from stale/replaced client instances or intentional disconnects
         if (this.client !== client) return;
+        clearTimeout(this.connectTimeoutTimer);
+        this.connectTimeoutTimer = null;
         this.isConnecting = false;
         this.topicSubscribed = false;
+        this.subscriptionAck = false;
+        this.confirmedSubscriptions.clear();
         this.clearStaleTimer();
-        this.setStatus('DISCONNECTED');
+        this.lastDisconnectedAt = Date.now();
 
         if (this.intentionalDisconnect || this.isDestroyed || responseObject?.errorCode === 0) {
+          this.setStatus('DISCONNECTED');
           return;
         }
 
-        const errorMsg = responseObject?.errorMessage || 'Socket closed unexpectedly';
+        const errorMsg = responseObject?.errorMessage || 'WebSocket connection lost unexpectedly';
+        this.lastError = errorMsg;
         console.info('[MQTT] Connection lost, scheduling reconnect:', errorMsg);
         this.cleanupClient();
         this.scheduleReconnect();
@@ -492,10 +751,17 @@ export class MqttService {
           const retained = Boolean(message.retained);
           const receivedDate = new Date();
           const receivedAt = receivedDate.getTime();
+          this.messagesReceivedTotal += 1;
+          this.lastMessageReceivedTime = receivedAt;
           const receivedAtFormatted = formatMqttTimestamp(receivedDate);
 
           // Step 1 & 2: Safely decode & classify payload (JSON | TEXT | BINARY | INVALID)
           const classified = classifyMqttPayload(message);
+          if (classified.payloadType === 'INVALID') {
+            this.parseErrorCount += 1;
+            this.lastParsingError = `${destination}: ${classified.error || 'Invalid JSON payload'}`;
+            console.warn('[MQTT] JSON syntax error:', this.lastParsingError);
+          }
 
           let deviceTimestamp: string | null = null;
           let uid: string | null = null;
@@ -510,7 +776,7 @@ export class MqttService {
 
           if (!uid && destination) {
             const parts = destination.split('/');
-            uid = parts[0] || parts[parts.length - 1] || null;
+            uid = parts.find((seg: string) => /^[0-9A-Fa-f]{24}$/.test(seg)) || parts[0] || parts[parts.length - 1] || null;
           }
 
           const frame: RawMqttFrame = {
@@ -547,7 +813,7 @@ export class MqttService {
             }
           });
 
-          // Step 4: Only pass valid JSON payloads to sync & telemetry interpreters (plain text / empty / binary stop cleanly here)
+          // Step 4: Only pass valid JSON payloads to sync & telemetry interpreters
           if (classified.payloadType !== 'JSON') {
             return;
           }
@@ -594,6 +860,17 @@ export class MqttService {
         }
       };
 
+      this.connectTimeoutTimer = setTimeout(() => {
+        if (this.client === client && this.isConnecting) {
+          this.isConnecting = false;
+          this.lastError = `Connection timeout to ${this.brokerHost}:${this.brokerPort}${this.brokerPath}`;
+          this.lastDisconnectedAt = Date.now();
+          console.warn('[MQTT]', this.lastError);
+          this.cleanupClient();
+          this.scheduleReconnect();
+        }
+      }, 12000);
+
       const connectOptions: any = {
         useSSL: this.useSSL,
         timeout: 10,
@@ -601,68 +878,40 @@ export class MqttService {
         cleanSession: true,
         onSuccess: () => {
           if (this.client !== client || this.intentionalDisconnect) return;
+          clearTimeout(this.connectTimeoutTimer);
+          this.connectTimeoutTimer = null;
           this.isConnecting = false;
           this.reconnectAttempts = 0;
+          this.lastConnectedAt = Date.now();
+          this.connectionLatencyMs = Math.max(1, this.lastConnectedAt - connectStartedAt);
+          this.lastError = null;
           this.setStatus('CONNECTED');
-          console.info(`[MQTT] Connected to ${this.brokerHost}:${this.brokerPort}. Restoring subscriptions...`);
-          try {
-            // Deduplicate all subscriptions into a single map (avoids redundant overlapping SUBSCRIBE packets that can trip broker limits)
-            const subs = new Map<string, number>();
-            subs.set(SYNC_EVENTS_TOPIC, 1);
-            subs.set(SYNC_WILDCARD_TOPIC, 1);
-            subs.set(CENTRAL_FLEET_TOPIC, 1);
-            subs.set(CENTRAL_DEVICES_TOPIC, 1);
-            subs.set(CENTRAL_SETTINGS_TOPIC, 1);
-            subs.set(CENTRAL_USERS_TOPIC, 1);
-            subs.set(CENTRAL_DELTA_SYNC_TOPIC, 1);
-            subs.set('panorama/fleet/sync', 1);
-            subs.set('panorama/devices/sync', 1);
-            subs.set('panorama/telemetry/#', 0);
-
-            if (this.topic) {
-              subs.set(this.topic, 0);
-              subs.set(`${this.topic}/s`, 0);
-            }
-            if (DEFAULT_MQTT_TOPIC) {
-              subs.set(DEFAULT_MQTT_TOPIC, 0);
-              subs.set(`${DEFAULT_MQTT_TOPIC}/s`, 0);
-            }
-
-            // User-selected dynamic subscriptions take precedence with exact chosen topic & QoS
-            this.dynamicSubscriptions.forEach((qos, top) => {
-              subs.set(top, qos);
-            });
-
-            subs.forEach((qos, top) => {
-              try {
-                client.subscribe(top, { qos });
-              } catch (subItemErr) {
-                console.warn(`[MQTT] Failed to subscribe to ${top}:`, subItemErr);
-              }
-            });
-
-            this.topicSubscribed = true;
-          } catch (subErr) {
-            this.topicSubscribed = false;
-            console.error('[MQTT] Failed to restore subscriptions:', subErr);
-          }
+          console.info(`[MQTT] Connected (${this.useSSL ? 'wss' : 'ws'}://${this.brokerHost}:${this.brokerPort}${this.brokerPath}) in ${this.connectionLatencyMs}ms. Subscribing...`);
+          this.restoreSubscriptions(client);
         },
         onFailure: (err: any) => {
           if (this.client !== client) return;
+          clearTimeout(this.connectTimeoutTimer);
+          this.connectTimeoutTimer = null;
           this.isConnecting = false;
           this.topicSubscribed = false;
-          console.info('[MQTT] Connection attempt failed, will retry with backoff:', err?.errorMessage || err);
-          this.setStatus('DISCONNECTED');
+          this.subscriptionAck = false;
+          this.lastDisconnectedAt = Date.now();
+          this.lastError = err?.errorMessage || 'Broker TLS/WebSocket connection failed';
+          console.info('[MQTT] Connection attempt failed, will retry with backoff:', this.lastError);
           this.cleanupClient();
           this.scheduleReconnect();
         },
       };
 
       client.connect(connectOptions);
-    } catch (err) {
+    } catch (err: any) {
+      clearTimeout(this.connectTimeoutTimer);
+      this.connectTimeoutTimer = null;
       this.isConnecting = false;
+      this.lastDisconnectedAt = Date.now();
+      this.lastError = err?.message || 'Exception starting MQTT connection';
       console.error('[MQTT] Exception starting MQTT connection:', err);
-      this.setStatus('DISCONNECTED');
       this.cleanupClient();
       this.scheduleReconnect();
     }
@@ -701,45 +950,110 @@ export class MqttService {
       return lastProcessed;
     }
 
-    // Validate and sanitize required fields according to contract (supports both STM32 compact keys & WLI HTTPS keys):
-    const topicUid = topicName ? topicName.split('/')[0].trim() : '';
-    const uid = String(parsed.uid || parsed.deviceId || parsed.device_id || topicUid || DEFAULT_DEVICE_UID).trim();
-    const trno = String(parsed.trno || parsed.trainNumber || parsed.train_number || '').trim();
-    const chno = String(parsed.chno || parsed.coachNumber || parsed.coach_id || '').trim();
+    // Non-telemetry config/control packets (e.g. {"wak":180,"wtrhig":100,"ser":"0"}) belong in Raw Monitor only
+    const telemetryMetricKeys = [
+      'cm1', 'cm2', 'wlp1', 'wlp2', 'wlv1', 'wlv2', 'bat', 'temp', 'press',
+      'lat', 'long', 'lon', 'speed', 'water_level_cm', 'water_level_percentage',
+      'primaryHeight', 'secondaryHeight', 'primaryLevel', 'secondaryLevel',
+      'battery_voltage', 'batteryPercent',
+    ];
+    if (!telemetryMetricKeys.some((k) => parsed[k] !== undefined)) {
+      return null;
+    }
+
+    const validationErrors: string[] = [];
+    const readFiniteNumber = (keys: string[], fieldLabel: string, min?: number, max?: number): number | null => {
+      for (const k of keys) {
+        if (parsed[k] !== undefined && parsed[k] !== null) {
+          const v = parsed[k];
+          if (typeof v !== 'number' || !Number.isFinite(v)) {
+            validationErrors.push(`${fieldLabel}: expected number, got ${typeof v}`);
+            return null;
+          }
+          if (min !== undefined && v < min) {
+            validationErrors.push(`${fieldLabel}: value ${v} below ${min}`);
+            return null;
+          }
+          if (max !== undefined && v > max) {
+            return Math.min(max, v);
+          }
+          return v;
+        }
+      }
+      return null;
+    };
+
+    const readStrictBoolean = (keys: string[], fieldLabel: string): boolean | null => {
+      for (const k of keys) {
+        if (parsed[k] !== undefined && parsed[k] !== null) {
+          const v = parsed[k];
+          if (typeof v !== 'boolean') {
+            validationErrors.push(`${fieldLabel}: expected boolean, got ${typeof v}`);
+            return null;
+          }
+          return v;
+        }
+      }
+      return null;
+    };
+
+    // Validate and extract UID, compare topic UID vs payload UID without silently discarding valid messages
+    const topicSegments = topicName ? topicName.split('/').map((s) => s.trim()).filter(Boolean) : [];
+    const topicUid = topicSegments.find((s) => /^[0-9A-Fa-f]{24}$/.test(s)) || (topicSegments.length === 1 ? topicSegments[0] : '');
+    const rawPayloadUid = parsed.uid ?? parsed.deviceId ?? parsed.device_id;
+    const payloadUid = rawPayloadUid != null && typeof rawPayloadUid === 'string' ? rawPayloadUid.trim() : '';
+    if (rawPayloadUid !== undefined && rawPayloadUid !== null && typeof rawPayloadUid !== 'string') {
+      validationErrors.push(`uid: expected string, got ${typeof rawPayloadUid}`);
+    }
+
+    const uidMismatch = Boolean(
+      payloadUid &&
+      topicUid &&
+      /^[0-9A-Fa-f]{24}$/.test(topicUid) &&
+      payloadUid.toUpperCase() !== topicUid.toUpperCase()
+    );
+    if (uidMismatch) {
+      this.lastUidMismatch = `Topic UID (${topicUid}) != Payload UID (${payloadUid}) at ${formatMqttTimestamp()}`;
+      console.warn('[MQTT]', this.lastUidMismatch);
+    }
+
+    const uid = payloadUid || topicUid || DEFAULT_DEVICE_UID;
+    const trno = String(parsed.trno ?? parsed.trainNumber ?? parsed.train_number ?? '').trim();
+    const chno = String(parsed.chno ?? parsed.coachNumber ?? parsed.coach_id ?? '').trim();
 
     const gps = parseValidGps(parsed);
-    const speed = typeof parsed.speed === 'number' && Number.isFinite(parsed.speed) && parsed.speed >= 0 ? parsed.speed : 0;
+    const speed = readFiniteNumber(['speed'], 'speed', 0);
     const time = typeof parsed.time === 'string'
       ? parsed.time
       : parsed.timestamp != null
         ? String(parsed.timestamp)
         : new Date().toLocaleTimeString('en-US', { hour12: false });
 
-    const cm1 = typeof parsed.cm1 === 'number' && parsed.cm1 >= 0
-      ? parsed.cm1
-      : typeof parsed.water_level_cm === 'number' && parsed.water_level_cm >= 0
-        ? parsed.water_level_cm
-        : (typeof parsed.primaryHeight === 'number' ? parsed.primaryHeight : 0);
-    const cm2 = typeof parsed.cm2 === 'number' && parsed.cm2 >= 0 ? parsed.cm2 : (typeof parsed.secondaryHeight === 'number' ? parsed.secondaryHeight : 0);
+    const cm1 = readFiniteNumber(['cm1', 'water_level_cm', 'primaryHeight'], 'cm1', 0);
+    const cm2 = readFiniteNumber(['cm2', 'secondaryHeight'], 'cm2', 0);
+    const wlp1 = readFiniteNumber(['wlp1', 'water_level_percentage', 'primaryLevel'], 'wlp1', 0, 100);
+    const wlp2 = readFiniteNumber(['wlp2', 'secondaryLevel'], 'wlp2', 0, 100);
+    const wlv1 = readStrictBoolean(['wlv1', 'wlvl'], 'wlv1');
+    const wlv2 = readStrictBoolean(['wlv2'], 'wlv2');
+    const bat = readFiniteNumber(['bat', 'battery_voltage', 'batteryPercent'], 'bat', 0, 100);
+    const temp = readFiniteNumber(['temp', 'temperature', 'temperature_c'], 'temp');
+    const press = readFiniteNumber(['press', 'pressure', 'atmPressure'], 'press');
 
-    const wlp1 = typeof parsed.wlp1 === 'number'
-      ? Math.max(0, Math.min(100, parsed.wlp1))
-      : typeof parsed.water_level_percentage === 'number'
-        ? Math.max(0, Math.min(100, parsed.water_level_percentage))
-        : (typeof parsed.primaryLevel === 'number' ? parsed.primaryLevel : 0);
-    const wlp2 = typeof parsed.wlp2 === 'number' ? Math.max(0, Math.min(100, parsed.wlp2)) : (typeof parsed.secondaryLevel === 'number' ? parsed.secondaryLevel : 0);
+    if (validationErrors.length > 0) {
+      this.parseErrorCount += 1;
+      this.lastParsingError = `${topicName || uid}: ${validationErrors.join('; ')}`;
+      console.warn('[MQTT] Telemetry field validation warning:', this.lastParsingError);
+    }
 
-    const wlv1 = typeof parsed.wlv1 === 'boolean' ? parsed.wlv1 : (typeof parsed.wlvl === 'boolean' ? parsed.wlvl : true);
-    const wlv2 = typeof parsed.wlv2 === 'boolean' ? parsed.wlv2 : true;
-
-    const bat = typeof parsed.bat === 'number'
-      ? Math.max(0, Math.min(100, parsed.bat))
-      : typeof parsed.battery_voltage === 'number'
-        ? Math.max(0, Math.min(100, parsed.battery_voltage))
-        : (typeof parsed.batteryPercent === 'number' ? parsed.batteryPercent : 85);
+    const hasAnySensorReading =
+      cm1 !== null || cm2 !== null || wlp1 !== null || wlp2 !== null ||
+      bat !== null || temp !== null || press !== null || gps.gpsFix;
+    if (!hasAnySensorReading) {
+      return null;
+    }
 
     // Duplicate message detection
-    const signature = `${uid}-${trno}-${chno}-${gps.lat}-${gps.long}-${speed}-${gps.gpsFix}-${cm1}-${cm2}-${wlp1}-${wlp2}-${bat}-${time}`;
+    const signature = `${uid}-${trno}-${chno}-${gps.lat}-${gps.long}-${speed}-${gps.gpsFix}-${cm1}-${cm2}-${wlp1}-${wlp2}-${wlv1}-${wlv2}-${bat}-${temp}-${press}-${time}`;
     const now = Date.now();
     if (signature === this.lastPayloadSignature && now - this.lastMessageReceivedTime < 1000) {
       return this.lastTelemetry;
@@ -764,10 +1078,15 @@ export class MqttService {
       wlv1,
       wlv2,
       bat,
+      temp,
+      press,
       chno,
       trno,
       receivedAt: now,
       isStale: false,
+      topic: topicName || undefined,
+      topicUid: topicUid || undefined,
+      uidMismatch,
     };
 
     if (gps.gpsFix && gps.lat !== null && gps.long !== null) {
@@ -880,12 +1199,19 @@ export class MqttService {
   }
 
   private scheduleReconnect(): void {
-    if (this.isDestroyed || this.intentionalDisconnect) return;
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    if (this.isDestroyed || this.intentionalDisconnect) {
+      this.setStatus('DISCONNECTED');
+      return;
+    }
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      this.setStatus('DISCONNECTED');
+      return;
+    }
 
     this.reconnectAttempts++;
     // Exponential backoff: 1s -> 2s -> 4s -> 8s -> 16s -> max 30s
     const delay = Math.min(1000 * Math.pow(2, Math.min(this.reconnectAttempts - 1, 5)), 30000);
+    this.setStatus('RECONNECTING');
 
     clearTimeout(this.reconnectTimer);
     this.reconnectTimer = setTimeout(() => {
@@ -1343,30 +1669,61 @@ export class MqttService {
     return p1;
   }
 
+  public syncRegisteredDeviceUids(uids: string[]): void {
+    const next = new Set<string>([DEFAULT_DEVICE_UID]);
+    uids.forEach((raw) => {
+      const clean = typeof raw === 'string' ? raw.trim() : '';
+      if (/^[0-9A-Fa-f]{24}$/.test(clean)) {
+        next.add(clean);
+      }
+    });
+
+    const isConnected = Boolean(this.client && this.client.isConnected && this.client.isConnected());
+    next.forEach((uid) => {
+      if (!this.registeredDeviceUids.has(uid) || (isConnected && !this.confirmedSubscriptions.has(uid))) {
+        this.registeredDeviceUids.add(uid);
+        if (isConnected) {
+          this.subscribeWithAck(this.client, uid, 0);
+        }
+      }
+    });
+
+    this.registeredDeviceUids.forEach((oldUid) => {
+      if (!next.has(oldUid)) {
+        this.registeredDeviceUids.delete(oldUid);
+        if (isConnected && oldUid !== this.topic && !this.dynamicSubscriptions.has(oldUid)) {
+          try {
+            this.client.unsubscribe(oldUid);
+            this.confirmedSubscriptions.delete(oldUid);
+          } catch {}
+        }
+      }
+    });
+  }
+
   public subscribeTopic(topic: string, qos: number = 0): boolean {
     const cleanTopic = topic.trim();
     if (!cleanTopic) return false;
     this.dynamicSubscriptions.set(cleanTopic, qos);
     if (this.client && this.client.isConnected && this.client.isConnected()) {
-      try {
-        this.client.subscribe(cleanTopic, { qos });
-        console.info(`[MQTT] Subscribed to topic: ${cleanTopic} (QoS ${qos})`);
-        return true;
-      } catch (err) {
-        console.error(`[MQTT] Failed to subscribe to ${cleanTopic}:`, err);
-        return false;
-      }
+      this.subscribeWithAck(this.client, cleanTopic, qos);
+      return true;
     }
     return true;
   }
 
-  public unsubscribeTopic(topic: string): boolean {
+  public unsubscribeTopic(topic: string, forceUnsubscribeRegistered: boolean = false): boolean {
     const cleanTopic = topic.trim();
     if (!cleanTopic) return false;
     this.dynamicSubscriptions.delete(cleanTopic);
+    // Keep core registered hardware topics subscribed in background unless forced
+    if (!forceUnsubscribeRegistered && this.registeredDeviceUids.has(cleanTopic)) {
+      return true;
+    }
     if (this.client && this.client.isConnected && this.client.isConnected()) {
       try {
         this.client.unsubscribe(cleanTopic);
+        this.confirmedSubscriptions.delete(cleanTopic);
         console.info(`[MQTT] Unsubscribed from topic: ${cleanTopic}`);
         return true;
       } catch (err) {
@@ -1378,7 +1735,16 @@ export class MqttService {
   }
 
   public getSubscribedTopics(): string[] {
-    return Array.from(this.dynamicSubscriptions.keys());
+    const merged = new Set<string>([
+      ...this.confirmedSubscriptions,
+      ...this.registeredDeviceUids,
+      ...this.dynamicSubscriptions.keys(),
+    ]);
+    return Array.from(merged).filter((t) => !this.isInternalSyncTopic(t));
+  }
+
+  public getRegisteredTelemetryTopics(): string[] {
+    return Array.from(new Set<string>([...this.registeredDeviceUids, ...this.dynamicSubscriptions.keys()]));
   }
 
   public onRawMessage(callback: (frame: RawMqttFrame) => void): () => void {
@@ -1480,20 +1846,77 @@ export class MqttService {
     };
   }
 
+  public getBrokerDiagnostics(): MqttBrokerDiagnostics {
+    const now = Date.now();
+    const isConnected = this.status === 'CONNECTED' || this.status === 'STALE';
+    return {
+      brokerName: this.brokerHost === 'broker.hivemq.com' ? 'HiveMQ Public Broker' : this.brokerHost,
+      host: this.brokerHost,
+      port: this.brokerPort,
+      path: this.brokerPath,
+      protocol: this.useSSL ? 'wss' : 'ws',
+      mqttVersion: '3.1.1',
+      transportSecurity: this.useSSL ? 'TLS 1.2+ (WSS)' : 'Unencrypted WebSocket (WS)',
+      websocketConnected: Boolean(this.client && this.client.isConnected && this.client.isConnected()),
+      mqttSessionConnected: isConnected,
+      cleanSession: true,
+      keepAliveSeconds: 30,
+      connectionUptimeMs: isConnected && this.lastConnectedAt ? Math.max(0, now - this.lastConnectedAt) : null,
+      reconnectAttempts: this.reconnectAttempts,
+      reconnectCount: this.reconnectAttempts,
+      messagesReceivedTotal: this.messagesReceivedTotal,
+      messagesSentTotal: this.messagesSentTotal,
+      totalBrokerMessages: this.messagesReceivedTotal,
+      lastError: this.lastError,
+      lastConnectedAt: this.lastConnectedAt,
+      lastDisconnectedAt: this.lastDisconnectedAt,
+      connectedAt: this.lastConnectedAt,
+      disconnectedAt: this.lastDisconnectedAt,
+      authMode: 'Anonymous',
+      certValidation: this.useSSL ? 'Enabled (Platform TLS CA)' : 'N/A (WS)',
+      brokerReachable: isConnected ? 'Reachable' : this.status === 'CONNECTING' || this.status === 'RECONNECTING' ? 'Probing' : 'Unreachable',
+      connectionLatencyMs: this.connectionLatencyMs,
+      autoReconnect: true,
+      useSSL: this.useSSL,
+      status: this.status,
+      statusDisplay: getMqttStatusDisplay(this.status),
+      subscribedTopics: this.getSubscribedTopics(),
+      subscriptionAck: this.subscriptionAck,
+      subscriptionAckAt: this.subscriptionAckAt,
+      subscriptionError: this.subscriptionError,
+      lastMessageAt: this.lastMessageReceivedTime || null,
+      lastParsingError: this.lastParsingError,
+      parseErrorCount: this.parseErrorCount,
+      lastUidMismatch: this.lastUidMismatch,
+    };
+  }
+
+  public getStatusDisplay(): MqttStatusDisplay {
+    return getMqttStatusDisplay(this.status);
+  }
+
   public reconfigureBroker(host: string, port: number, path: string = '/mqtt', useSSL: boolean = true): void {
+    const cleanHost = host.trim() || 'broker.hivemq.com';
+    const cleanPath = (path.trim() || '/mqtt').startsWith('/') ? (path.trim() || '/mqtt') : `/${path.trim()}`;
     if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.setItem('panorama_mqtt_host', host);
+      localStorage.setItem('panorama_mqtt_host', cleanHost);
       localStorage.setItem('panorama_mqtt_port', String(port));
+      localStorage.setItem('panorama_mqtt_path', cleanPath);
       localStorage.setItem('panorama_mqtt_ssl', String(useSSL));
     }
-    this.brokerHost = host;
+    clearTimeout(this.reconfigureTimer);
+    this.brokerHost = cleanHost;
     this.brokerPort = port;
-    this.brokerPath = path;
+    this.brokerPath = cleanPath;
     this.useSSL = useSSL;
     this.disconnect();
-    setTimeout(() => {
+    this.reconfigureTimer = setTimeout(() => {
+      this.reconfigureTimer = null;
+      this.isDestroyed = false;
+      this.intentionalDisconnect = false;
+      this.reconnectAttempts = 0;
       this.connect();
-    }, 500);
+    }, 250);
   }
 
   disconnect(): void {
@@ -1501,10 +1924,16 @@ export class MqttService {
     this.isDestroyed = true;
     this.isConnecting = false;
     this.topicSubscribed = false;
+    this.subscriptionAck = false;
+    clearTimeout(this.connectTimeoutTimer);
     clearTimeout(this.reconnectTimer);
+    clearTimeout(this.reconfigureTimer);
+    this.connectTimeoutTimer = null;
     this.reconnectTimer = null;
+    this.reconfigureTimer = null;
     this.clearStaleTimer();
     this.cleanupClient();
+    this.lastDisconnectedAt = Date.now();
     this.setStatus('DISCONNECTED');
   }
 }

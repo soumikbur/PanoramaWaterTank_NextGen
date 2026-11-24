@@ -29,6 +29,7 @@ export interface Device {
   batteryPercent?: number;
   batteryVoltage?: number;
   temperature?: number;
+  pressure?: number;
   primaryLevel?: number;
   secondaryLevel?: number;
   hasActiveAlarm: boolean;

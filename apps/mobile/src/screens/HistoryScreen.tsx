@@ -126,9 +126,9 @@ export const HistoryScreen: React.FC = () => {
           coachNumber: item.chno,
           arrivalLevel: arr,
           departureLevel: dep,
-          batteryPercent: item.bat,
+          batteryPercent: item.bat ?? 0,
           deviceStatus: !item.isStale ? 'Online' : 'Offline',
-          isAnomaly: !item.wlv1 || !item.wlv2 || (dep != null && dep < 10),
+          isAnomaly: item.wlv1 === false || item.wlv2 === false || (dep != null && dep < 10),
         };
       });
     }
@@ -144,9 +144,9 @@ export const HistoryScreen: React.FC = () => {
           coachNumber: liveTelemetry.chno,
           arrivalLevel: arr,
           departureLevel: dep,
-          batteryPercent: liveTelemetry.bat,
+          batteryPercent: liveTelemetry.bat ?? 0,
           deviceStatus: !liveTelemetry.isStale ? 'Online' : 'Offline',
-          isAnomaly: !liveTelemetry.wlv1 || !liveTelemetry.wlv2 || (dep != null && dep < 10),
+          isAnomaly: liveTelemetry.wlv1 === false || liveTelemetry.wlv2 === false || (dep != null && dep < 10),
         },
       ];
     }

@@ -301,7 +301,12 @@ export const LocationScreen: React.FC = () => {
   // Subscribe to live MQTT telemetry without creating duplicate connections
   useEffect(() => {
     const unsubTelemetry = mqttService.onTelemetry((payload: LiveTelemetryPayload) => {
-      const trno = (payload.trno || '').trim();
+      const mapped = deviceRegistry.getDeviceByUid(payload.uid);
+      const trno = (
+        (mapped?.assignmentStatus === 'ENGAGED' && mapped.trainNumber)
+          ? mapped.trainNumber
+          : (payload.trno || '')
+      ).trim();
       if (!trno) return;
 
       // Update MQTT train fixes in state
@@ -310,7 +315,7 @@ export const LocationScreen: React.FC = () => {
           lat: payload.lat,
           long: payload.long,
           alt: payload.alt ?? null,
-          speed: payload.speed,
+          speed: payload.speed ?? 0,
           sats: payload.sats ?? null,
           accuracy: payload.accuracy ?? null,
           time: payload.time,
@@ -1406,25 +1411,31 @@ export const LocationScreen: React.FC = () => {
                     ? '#ECFDF5'
                     : mqttConnectionStatus === 'STALE'
                     ? '#FEF3C7'
+                    : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
+                    ? '#EFF6FF'
                     : '#FEE2E2',
                 color:
                   mqttConnectionStatus === 'CONNECTED'
                     ? '#16A34A'
                     : mqttConnectionStatus === 'STALE'
                     ? '#D97706'
+                    : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
+                    ? '#2563EB'
                     : '#DC2626',
                 border: `1px solid ${
                   mqttConnectionStatus === 'CONNECTED'
                     ? '#A7F3D0'
                     : mqttConnectionStatus === 'STALE'
                     ? '#FDE68A'
+                    : mqttConnectionStatus === 'CONNECTING' || mqttConnectionStatus === 'RECONNECTING'
+                    ? '#BFDBFE'
                     : '#FECACA'
                 }`,
               }}
             >
               <Radio size={12} className={mqttConnectionStatus === 'CONNECTED' ? 'animate-pulse' : ''} />
               <span>
-                MQTT: {mqttConnectionStatus === 'CONNECTED' ? 'BROKER LIVE' : mqttConnectionStatus}
+                MQTT: {mqttConnectionStatus === 'CONNECTED' ? 'BROKER LIVE' : mqttConnectionStatus === 'RECONNECTING' ? 'RECONNECTING' : mqttConnectionStatus === 'SUBSCRIPTION_ERROR' ? 'SUBSCRIPTION ERROR' : mqttConnectionStatus}
               </span>
             </div>
           </div>

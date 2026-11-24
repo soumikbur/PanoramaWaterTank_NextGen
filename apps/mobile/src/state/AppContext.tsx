@@ -177,11 +177,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       lastSeenAt: m.lastSeen,
       last_seen_at: m.lastSeen,
       lastHeartbeat: m.lastSeen,
-      batteryPercent: m.batteryPercent,
-      batteryVoltage: m.batteryVoltage,
+      batteryPercent: m.batteryPercent ?? undefined,
+      batteryVoltage: m.batteryVoltage ?? undefined,
+      temperature: m.temperature ?? undefined,
+      pressure: m.pressure ?? undefined,
       primaryLevel: m.tank1Level ?? undefined,
       secondaryLevel: m.tank2Level ?? undefined,
-      hasActiveAlarm: !m.valve1Normal || !m.valve2Normal || m.batteryPercent < 20,
+      hasActiveAlarm: m.valve1Normal === false || m.valve2Normal === false || (m.batteryPercent != null && m.batteryPercent < 20),
     }))
   );
   const [activeAlarms, setActiveAlarms] = useState<AlarmItem[]>([]);
@@ -721,8 +723,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Subscribe to persistent device registry updates
   useEffect(() => {
+    mqttService.syncRegisteredDeviceUids(
+      deviceRegistry.getRegisteredDevices().map((d) => d.uid)
+    );
     const unsub = deviceRegistry.subscribe((list) => {
       setManagedDevices(list);
+      mqttService.syncRegisteredDeviceUids(
+        list.filter((d) => d.registrationStatus === 'REGISTERED').map((d) => d.uid)
+      );
       setDevices(
         list.map((m) => ({
           id: m.uid,
@@ -741,11 +749,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           lastSeenAt: m.lastSeen,
           last_seen_at: m.lastSeen,
           lastHeartbeat: m.lastSeen,
-          batteryPercent: m.batteryPercent,
-          batteryVoltage: m.batteryVoltage,
+          batteryPercent: m.batteryPercent ?? undefined,
+          batteryVoltage: m.batteryVoltage ?? undefined,
+          temperature: m.temperature ?? undefined,
+          pressure: m.pressure ?? undefined,
           primaryLevel: m.tank1Level ?? undefined,
           secondaryLevel: m.tank2Level ?? undefined,
-          hasActiveAlarm: !m.valve1Normal || !m.valve2Normal || m.batteryPercent < 20,
+          hasActiveAlarm: m.valve1Normal === false || m.valve2Normal === false || (m.batteryPercent != null && m.batteryPercent < 20),
         }))
       );
     });
@@ -1161,9 +1171,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         // Real-time synchronization reconciliation on initial connect / reconnect
         refreshRegions();
         refreshData();
-      } else if (st === 'CONNECTING') {
+      } else if (st === 'CONNECTING' || st === 'RECONNECTING') {
         mqttAttemptedRef.current = true;
         setConnectionStatus('RECONNECTING');
+      } else if (st === 'SUBSCRIPTION_ERROR') {
+        setMqttBrokerStatus('DISCONNECTED');
+        if (mqttAttemptedRef.current) {
+          alertNotificationService.evaluateBrokerConnectivity({
+            isConnected: false,
+            reason: mqttService.getBrokerDiagnostics().subscriptionError || 'MQTT topic subscription rejected by broker.',
+          });
+        }
       } else if (st === 'DISCONNECTED') {
         setMqttBrokerStatus('DISCONNECTED');
         if (mqttAttemptedRef.current && !mqttService.isIntentionalDisconnect()) {
@@ -1609,29 +1627,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           ? mappedDev.trainNumber
           : (telemetry.trno || '')
       ).trim();
+      const activeChno = (mappedDev?.coachNumber || telemetry.chno || '').trim();
 
-      // Reject or ignore telemetry for unconfigured or deleted trains (never recreate deleted trains/coaches)
-      if (!activeTrno || !configuredTrainSetRef.current.has(activeTrno)) {
-        console.info('[AppContext] Ignoring telemetry for unconfigured/deleted train:', activeTrno || '<none>');
-        return;
-      }
-
+      // Always persist and propagate verified MQTT telemetry to Live Store, GPS, and Device Registry
       setLiveTelemetry(telemetry);
       setLastValidGps(mqttService.getLastValidGps());
       setGpsWaypoints(mqttService.getGpsWaypoints());
       setMqttBrokerStatus('CONNECTED');
       setConnectionStatus('CONNECTED');
-
-      // Record / update discovered hardware device only for verified configured trains
       deviceRegistry.recordDiscoveredDevice(telemetry);
-      const activeChno = (mappedDev?.coachNumber || telemetry.chno || '').trim();
 
-      // 1. Calculate water level percentages based on configured maximum height and capacity
-      const trainItem = configuredTrainsRef.current.find((t) => t.train_number.trim() === activeTrno);
-      const configuredMaxHeightCm = (activeConsistRef.current && activeConsistRef.current.train_number.trim() === activeTrno && activeConsistRef.current.tank_height_cm)
+      const trainItem = activeTrno
+        ? configuredTrainsRef.current.find((t) => t.train_number.trim() === activeTrno)
+        : undefined;
+      const isConfiguredTrain = Boolean(activeTrno && configuredTrainSetRef.current.has(activeTrno));
+      const configuredMaxHeightCm = (isConfiguredTrain && activeConsistRef.current && activeConsistRef.current.train_number.trim() === activeTrno && activeConsistRef.current.tank_height_cm)
         ? activeConsistRef.current.tank_height_cm
         : (trainItem?.tank_height_cm ?? 50.0);
-      const configuredCapacityLiters = (activeConsistRef.current && activeConsistRef.current.train_number.trim() === activeTrno && activeConsistRef.current.tank_capacity_liters)
+      const configuredCapacityLiters = (isConfiguredTrain && activeConsistRef.current && activeConsistRef.current.train_number.trim() === activeTrno && activeConsistRef.current.tank_capacity_liters)
         ? activeConsistRef.current.tank_capacity_liters
         : (trainItem?.tank_capacity_liters ?? 20.0);
 
@@ -1642,6 +1655,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const departureLevelPct = telemetry.cm2 != null && configuredMaxHeightCm > 0
         ? Number(Math.min(100, Math.max(0, (telemetry.cm2 / configuredMaxHeightCm) * 100)).toFixed(1))
         : (telemetry.wlp2 != null ? Number(telemetry.wlp2.toFixed(1)) : null);
+
+      const batVal = telemetry.bat;
+      const tankBatteryVoltage = batVal != null ? Number((3.2 + (batVal / 100) * 1.0).toFixed(2)) : undefined;
+
+      // Update Device Management cards even when device is unassigned to a configured train
+      setDevices((prev) => {
+        const updatedDevice: Device = {
+          id: telemetry.uid,
+          uid: telemetry.uid,
+          name: mappedDev?.name || `WLI-${activeChno || telemetry.uid.slice(-6)}`,
+          trainNumber: activeTrno,
+          coachNumber: activeChno,
+          isOnline: !telemetry.isStale,
+          batteryPercent: batVal ?? undefined,
+          batteryVoltage: tankBatteryVoltage,
+          temperature: telemetry.temp ?? undefined,
+          pressure: telemetry.press ?? undefined,
+          primaryLevel: arrivalLevelPct ?? telemetry.wlp1 ?? undefined,
+          secondaryLevel: departureLevelPct ?? telemetry.wlp2 ?? undefined,
+          lastSeenAt: new Date(telemetry.receivedAt).toISOString(),
+          lastHeartbeat: new Date(telemetry.receivedAt).toISOString(),
+          hasActiveAlarm: telemetry.wlv1 === false || telemetry.wlv2 === false || (arrivalLevelPct != null && arrivalLevelPct < 15),
+          firmwareVersion: '2.2.0-prod',
+          hardwareVersion: mappedDev?.hardwareModel || 'WLI-EC200U',
+        };
+        const exists = prev.find((d) => d.uid === telemetry.uid);
+        if (exists) {
+          return prev.map((d) => (d.uid === telemetry.uid ? { ...d, ...updatedDevice } : d));
+        }
+        return [updatedDevice, ...prev];
+      });
+
+      // Only populate train consist tanks/alarms when associated with a configured train
+      if (!isConfiguredTrain) {
+        return;
+      }
 
       const arrivalVolume = arrivalLevelPct != null ? Number(((arrivalLevelPct / 100) * configuredCapacityLiters).toFixed(1)) : null;
       const departureVolume = departureLevelPct != null ? Number(((departureLevelPct / 100) * configuredCapacityLiters).toFixed(1)) : null;
@@ -1656,15 +1705,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         trainNumber: activeTrno,
         coachNumber: activeChno,
         levelPercent: arrivalLevelPct,
-        rawLevelPercent: telemetry.wlp1,
+        rawLevelPercent: telemetry.wlp1 ?? undefined,
         volumeLiters: arrivalVolume,
-        heightCm: telemetry.cm1,
+        heightCm: telemetry.cm1 ?? undefined,
         capacityLiters: configuredCapacityLiters,
         maxHeightCm: configuredMaxHeightCm,
         crossSectionalAreaM2: 0.33,
         rank: arrivalLevelPct && arrivalLevelPct > 70 ? 'GOOD' : arrivalLevelPct && arrivalLevelPct > 30 ? 'MODERATE' : 'LOW',
-        alarmStatus: !telemetry.wlv1 ? 'VALVE_ALERT' : arrivalLevelPct != null && arrivalLevelPct < 10 ? 'CRITICAL_LOW' : arrivalLevelPct != null && arrivalLevelPct < 20 ? 'WARNING_LOW' : 'NORMAL',
-        batteryVoltage: Number((3.2 + (telemetry.bat / 100) * 1.0).toFixed(2)),
+        alarmStatus: telemetry.wlv1 === false ? 'VALVE_ALERT' : arrivalLevelPct != null && arrivalLevelPct < 10 ? 'CRITICAL_LOW' : arrivalLevelPct != null && arrivalLevelPct < 20 ? 'WARNING_LOW' : 'NORMAL',
+        batteryVoltage: tankBatteryVoltage,
+        temperature: telemetry.temp ?? null,
+        pressure: telemetry.press ?? null,
         isOnline: !telemetry.isStale,
         hasTelemetry: true,
         isStale: !!telemetry.isStale,
@@ -1682,15 +1733,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         trainNumber: activeTrno,
         coachNumber: activeChno,
         levelPercent: departureLevelPct,
-        rawLevelPercent: telemetry.wlp2,
+        rawLevelPercent: telemetry.wlp2 ?? undefined,
         volumeLiters: departureVolume,
-        heightCm: telemetry.cm2,
+        heightCm: telemetry.cm2 ?? undefined,
         capacityLiters: configuredCapacityLiters,
         maxHeightCm: configuredMaxHeightCm,
         crossSectionalAreaM2: 0.33,
         rank: departureLevelPct && departureLevelPct > 70 ? 'GOOD' : departureLevelPct && departureLevelPct > 30 ? 'MODERATE' : 'LOW',
-        alarmStatus: !telemetry.wlv2 ? 'VALVE_ALERT' : departureLevelPct != null && departureLevelPct < 10 ? 'CRITICAL_LOW' : departureLevelPct != null && departureLevelPct < 20 ? 'WARNING_LOW' : 'NORMAL',
-        batteryVoltage: Number((3.2 + (telemetry.bat / 100) * 1.0).toFixed(2)),
+        alarmStatus: telemetry.wlv2 === false ? 'VALVE_ALERT' : departureLevelPct != null && departureLevelPct < 10 ? 'CRITICAL_LOW' : departureLevelPct != null && departureLevelPct < 20 ? 'WARNING_LOW' : 'NORMAL',
+        batteryVoltage: tankBatteryVoltage,
+        temperature: telemetry.temp ?? null,
+        pressure: telemetry.press ?? null,
         isOnline: !telemetry.isStale,
         hasTelemetry: true,
         isStale: !!telemetry.isStale,
@@ -1842,36 +1895,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }));
       }
 
-      // 2. Dynamic Device registration from UID
-      setDevices((prev) => {
-        const updatedDevice: Device = {
-          id: telemetry.uid,
-          uid: telemetry.uid,
-          name: `WLI-${telemetry.chno} (${telemetry.trno})`,
-          trainNumber: telemetry.trno,
-          coachNumber: telemetry.chno,
-          isOnline: !telemetry.isStale,
-          batteryPercent: telemetry.bat,
-          batteryVoltage: Number((3.2 + (telemetry.bat / 100) * 1.0).toFixed(2)),
-          temperature: 28.5,
-          primaryLevel: arrivalLevelPct ?? telemetry.wlp1,
-          secondaryLevel: departureLevelPct ?? telemetry.wlp2,
-          lastSeenAt: new Date(telemetry.receivedAt).toISOString(),
-          lastHeartbeat: new Date(telemetry.receivedAt).toISOString(),
-          hasActiveAlarm: !telemetry.wlv1 || !telemetry.wlv2 || (arrivalLevelPct != null && arrivalLevelPct < 15),
-          firmwareVersion: '2.2.0-prod',
-          hardwareVersion: 'WLI-EC200U',
-        };
-        const exists = prev.find((d) => d.uid === telemetry.uid);
-        if (exists) {
-          return prev.map((d) => (d.uid === telemetry.uid ? updatedDevice : d));
-        }
-        return [updatedDevice, ...prev];
-      });
-
-      // 3. Select train & coach only if not already set to a valid configured train
+      // 2. Select train & coach only if not already set to a valid configured train
       setSelectedTrainNumber((prev) => (prev && configuredTrainSetRef.current.has(prev) ? prev : activeTrno));
-      setSelectedCoachNumber((prev) => (prev || telemetry.chno));
+      setSelectedCoachNumber((prev) => (prev || activeChno));
     });
 
     return () => {

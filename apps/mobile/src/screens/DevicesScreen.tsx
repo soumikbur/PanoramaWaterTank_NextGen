@@ -363,19 +363,21 @@ export const DevicesScreen: React.FC = () => {
         return true;
       })
       .map((d, index) => {
-        const isPrimary = index === 0;
-        const liveLevel = isPrimary ? (liveTank?.levelPercent ?? d.primaryLevel ?? null) : (d.primaryLevel ?? null);
-        const liveHeight = isPrimary ? (liveTank?.heightCm ?? null) : null;
-        const liveMaxHeight = isPrimary ? (liveTank?.maxHeightCm ?? 50.0) : 50.0;
-        const liveVol = isPrimary ? (liveTank?.volumeLiters ?? null) : null;
-        const liveCap = isPrimary ? (liveTank?.capacityLiters ?? 20.0) : 20.0;
+        const canonicalUid = getCanonicalUid(d.uid);
+        const isLiveDevice =
+          (liveTank?.deviceUid && getCanonicalUid(liveTank.deviceUid) === canonicalUid) ||
+          index === 0 && !liveTank?.deviceUid;
+        const liveLevel = isLiveDevice ? (liveTank?.levelPercent ?? d.primaryLevel ?? null) : (d.primaryLevel ?? null);
+        const liveHeight = isLiveDevice ? (liveTank?.heightCm ?? null) : null;
+        const liveMaxHeight = isLiveDevice ? (liveTank?.maxHeightCm ?? 50.0) : 50.0;
+        const liveVol = isLiveDevice ? (liveTank?.volumeLiters ?? null) : null;
+        const liveCap = isLiveDevice ? (liveTank?.capacityLiters ?? 20.0) : 20.0;
         const status: 'Online' | 'Offline' | 'Warning' = !d.isOnline
           ? 'Offline'
           : d.hasActiveAlarm || (liveLevel != null && (liveLevel < 20.0 || liveLevel >= 100.0))
           ? 'Warning'
           : 'Online';
 
-        const canonicalUid = getCanonicalUid(d.uid);
         return {
           dbId: d.id,
           name: d.name || `Water Monitor (${d.trainNumber}/${d.coachNumber})`,
@@ -383,7 +385,7 @@ export const DevicesScreen: React.FC = () => {
           trainNumber: d.trainNumber || 'UNASSIGNED',
           coachNumber: d.coachNumber || 'UNASSIGNED',
           serialNumber: canonicalUid,
-          location: `Coach ${d.coachNumber} (Train ${d.trainNumber})`,
+          location: d.trainNumber ? `Coach ${d.coachNumber || '—'} (Train ${d.trainNumber})` : 'Unassigned Hardware Node',
           status,
           connectionType: 'Cellular / MQTT',
           modemModel: 'Wireless Link / MQTT',
@@ -397,8 +399,8 @@ export const DevicesScreen: React.FC = () => {
           sensorStatus: d.isOnline ? 'Operational' : 'Offline',
           sensorType: 'Hydrostatic Pressure (4-20mA)',
           gain: 'Standard Operating Range',
-          temperature: liveTank?.temperature ?? null,
-          pressure: liveTank?.pressure ?? null,
+          temperature: isLiveDevice ? (liveTank?.temperature ?? d.temperature ?? null) : (d.temperature ?? null),
+          pressure: isLiveDevice ? (liveTank?.pressure ?? d.pressure ?? null) : (d.pressure ?? null),
           humidity: null,
           firmwareVersion: d.firmwareVersion || '2.0.0',
           runtime: 'FreeRTOS / CMSIS',
@@ -406,9 +408,9 @@ export const DevicesScreen: React.FC = () => {
           airBaseline: 0,
           deadband: '0.5 cm',
           alarmState: d.hasActiveAlarm ? 'ALERT_ACTIVE' : 'NORMAL',
-          lastUpdate: d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleTimeString() : 'Awaiting Data',
+          lastUpdate: d.lastSeenAt ? (Number.isNaN(Date.parse(d.lastSeenAt)) ? d.lastSeenAt : new Date(d.lastSeenAt).toLocaleTimeString()) : 'Awaiting Data',
           uploadInterval: '3 seconds',
-          isPrimary,
+          isPrimary: isLiveDevice,
         };
       });
   }, [devices, liveTank, connectionStatus]);

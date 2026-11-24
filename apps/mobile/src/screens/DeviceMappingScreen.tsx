@@ -843,7 +843,9 @@ export const DeviceMappingScreen: React.FC = () => {
                           <Battery
                             size={16}
                             color={
-                              dev.batteryPercent > 50
+                              dev.batteryPercent == null
+                                ? '#94A3B8'
+                                : dev.batteryPercent > 50
                                 ? '#16A34A'
                                 : dev.batteryPercent > 20
                                 ? '#D97706'
@@ -851,7 +853,7 @@ export const DeviceMappingScreen: React.FC = () => {
                             }
                           />
                           <span style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A' }}>
-                            {dev.batteryPercent.toFixed(1)}%
+                            {dev.batteryPercent != null ? `${dev.batteryPercent.toFixed(1)}%` : '—'}
                           </span>
                         </div>
                         <div
@@ -866,10 +868,12 @@ export const DeviceMappingScreen: React.FC = () => {
                         >
                           <div
                             style={{
-                              width: `${Math.min(100, Math.max(0, dev.batteryPercent))}%`,
+                              width: `${dev.batteryPercent != null ? Math.min(100, Math.max(0, dev.batteryPercent)) : 0}%`,
                               height: '100%',
                               backgroundColor:
-                                dev.batteryPercent > 50
+                                dev.batteryPercent == null
+                                  ? '#94A3B8'
+                                  : dev.batteryPercent > 50
                                   ? '#16A34A'
                                   : dev.batteryPercent > 20
                                   ? '#D97706'

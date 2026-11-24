@@ -30,19 +30,24 @@ export interface LiveTelemetryPayload {
   sats?: number | null;
   accuracy?: number | null;
   gpsFix?: boolean;
-  speed: number;
+  speed: number | null;
   time: string;
-  cm1: number;
-  cm2: number;
-  wlp1: number;
-  wlp2: number;
-  wlv1: boolean;
-  wlv2: boolean;
-  bat: number;
+  cm1: number | null;
+  cm2: number | null;
+  wlp1: number | null;
+  wlp2: number | null;
+  wlv1: boolean | null;
+  wlv2: boolean | null;
+  bat: number | null;
+  temp?: number | null;
+  press?: number | null;
   chno: string;
   trno: string;
   receivedAt: number;
   isStale?: boolean;
+  topic?: string;
+  topicUid?: string;
+  uidMismatch?: boolean;
 }
 
 export interface MqttGpsFix {
@@ -101,7 +106,13 @@ export interface TelemetryTableResponse {
 }
 
 
-export type MqttConnectionStatus = 'CONNECTED' | 'CONNECTING' | 'STALE' | 'DISCONNECTED';
+export type MqttConnectionStatus =
+  | 'CONNECTED'
+  | 'CONNECTING'
+  | 'RECONNECTING'
+  | 'SUBSCRIPTION_ERROR'
+  | 'STALE'
+  | 'DISCONNECTED';
 
 export interface MqttLatestTopicRecord {
   id?: string;

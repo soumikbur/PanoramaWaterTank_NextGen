@@ -33,9 +33,7 @@ export type DeviceOperationalStatus = 'DISCOVERED' | 'REGISTERED' | 'ENGAGED' | 
 const HEX_24_RE = /^[0-9A-Fa-f]{24}$/;
 const TEST_PATTERNS = /TEST|AUDIT|DUMMY|DEMO|SEED|PLACEHOLDER|ROGUE|MOCK/i;
 
-export const CANONICAL_UID_MAP: Record<string, string> = {
-  '0023004D4B42501120353332': '0026004D4B42501120353332',
-};
+export const CANONICAL_UID_MAP: Record<string, string> = {};
 
 export function isGenuineHardwareUid(uid: string | null | undefined): boolean {
   if (!uid || typeof uid !== 'string') return false;
@@ -58,14 +56,16 @@ export interface ManagedDevice {
   registrationStatus: DeviceRegistrationStatus;
   assignmentStatus: DeviceAssignmentStatus;
   isOnline: boolean;
-  batteryPercent: number;
-  batteryVoltage?: number;
+  batteryPercent: number | null;
+  batteryVoltage?: number | null;
   tank1Level: number | null;
   tank1HeightCm: number | null;
   tank2Level: number | null;
   tank2HeightCm: number | null;
-  valve1Normal: boolean;
-  valve2Normal: boolean;
+  valve1Normal: boolean | null;
+  valve2Normal: boolean | null;
+  temperature?: number | null;
+  pressure?: number | null;
   latitude: number | null;
   longitude: number | null;
   speedKmh: number | null;
@@ -145,6 +145,37 @@ class DeviceRegistryService {
             });
           });
         }
+      }
+
+      // 0. Verified WLI Field Hardware Node (primary physical unit)
+      if (!this.devices.has('0023004D4B42501120353332') && !this.deletedUids.has('0023004D4B42501120353332')) {
+        this.devices.set('0023004D4B42501120353332', {
+          uid: '0023004D4B42501120353332',
+          name: 'WLI Hardware Node 0023004D4B42501120353332',
+          trainNumber: null,
+          coachNumber: null,
+          registrationStatus: 'REGISTERED',
+          assignmentStatus: 'AVAILABLE',
+          isOnline: false,
+          batteryPercent: null,
+          batteryVoltage: null,
+          tank1Level: null,
+          tank1HeightCm: null,
+          tank2Level: null,
+          tank2HeightCm: null,
+          valve1Normal: null,
+          valve2Normal: null,
+          temperature: null,
+          pressure: null,
+          latitude: null,
+          longitude: null,
+          speedKmh: null,
+          lastSeen: 'Awaiting MQTT Telemetry',
+          lastSeenTimestamp: 0,
+          firstDiscovered: '2026-10-28T12:41:43.000Z',
+          registeredAt: '2026-10-28T12:41:43.000Z',
+          hardwareModel: 'WLI EC200U-CN',
+        });
       }
 
       // Ensure genuine hardware devices exist in registry (Source of Truth)
@@ -532,24 +563,29 @@ class DeviceRegistryService {
     const existing = this.devices.get(uid);
 
     const timeStr = telemetry.time || new Date().toLocaleTimeString('en-US', { hour12: false });
-    const batteryVoltage = Number((3.2 + (telemetry.bat / 100) * 1.0).toFixed(2));
+    const batteryPercent = telemetry.bat != null ? telemetry.bat : (existing?.batteryPercent ?? null);
+    const batteryVoltage = telemetry.bat != null
+      ? Number((3.2 + (telemetry.bat / 100) * 1.0).toFixed(2))
+      : (existing?.batteryVoltage ?? null);
 
     if (existing) {
       // Update telemetry while strictly maintaining administrator registration and mapping
       const updated: ManagedDevice = {
         ...existing,
         isOnline: !telemetry.isStale,
-        batteryPercent: telemetry.bat,
+        batteryPercent,
         batteryVoltage,
-        tank1Level: telemetry.wlp1,
-        tank1HeightCm: telemetry.cm1,
-        tank2Level: telemetry.wlp2,
-        tank2HeightCm: telemetry.cm2,
-        valve1Normal: telemetry.wlv1,
-        valve2Normal: telemetry.wlv2,
+        tank1Level: telemetry.wlp1 ?? existing.tank1Level,
+        tank1HeightCm: telemetry.cm1 ?? existing.tank1HeightCm,
+        tank2Level: telemetry.wlp2 ?? existing.tank2Level,
+        tank2HeightCm: telemetry.cm2 ?? existing.tank2HeightCm,
+        valve1Normal: telemetry.wlv1 ?? existing.valve1Normal,
+        valve2Normal: telemetry.wlv2 ?? existing.valve2Normal,
+        temperature: telemetry.temp ?? existing.temperature ?? null,
+        pressure: telemetry.press ?? existing.pressure ?? null,
         latitude: telemetry.lat !== null && telemetry.long !== null ? telemetry.lat : existing.latitude,
         longitude: telemetry.lat !== null && telemetry.long !== null ? telemetry.long : existing.longitude,
-        speedKmh: telemetry.speed,
+        speedKmh: telemetry.speed ?? existing.speedKmh,
         lastSeen: timeStr,
         lastSeenTimestamp: now,
         payloadTrno: telemetry.trno || existing.payloadTrno,
@@ -570,7 +606,7 @@ class DeviceRegistryService {
       coachNumber: null,
       registrationStatus: 'DISCOVERED',
       assignmentStatus: 'AVAILABLE',
-      isOnline: true,
+      isOnline: !telemetry.isStale,
       batteryPercent: telemetry.bat,
       batteryVoltage,
       tank1Level: telemetry.wlp1,
@@ -579,6 +615,8 @@ class DeviceRegistryService {
       tank2HeightCm: telemetry.cm2,
       valve1Normal: telemetry.wlv1,
       valve2Normal: telemetry.wlv2,
+      temperature: telemetry.temp ?? null,
+      pressure: telemetry.press ?? null,
       latitude: telemetry.lat,
       longitude: telemetry.long,
       speedKmh: telemetry.speed,
