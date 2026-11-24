@@ -111,8 +111,25 @@ export type MqttConnectionStatus =
   | 'CONNECTING'
   | 'RECONNECTING'
   | 'SUBSCRIPTION_ERROR'
+  | 'CONNECTION_ERROR'
   | 'STALE'
   | 'DISCONNECTED';
+
+export interface MqttClientConfiguration {
+  host: string;
+  port: number;
+  protocol: 'ws' | 'wss';
+  path: string;
+  clientId: string;
+  username: string;
+  hasPassword?: boolean;
+  keepAliveSeconds: number;
+  connectionTimeoutSeconds: number;
+  defaultQos: 0 | 1 | 2;
+  autoReconnect: boolean;
+  useSSL: boolean;
+  topic?: string;
+}
 
 export interface MqttLatestTopicRecord {
   id?: string;

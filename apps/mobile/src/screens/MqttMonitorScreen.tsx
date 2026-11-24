@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { typography } from '../theme';
 import { useApp } from '../state/AppContext';
 import {
@@ -550,10 +551,22 @@ export const MqttMonitorScreen: React.FC = () => {
   const [brokerInfo, setBrokerInfo] = useState(() => mqttService.getBrokerInfo());
   const [diagnostics, setDiagnostics] = useState<MqttBrokerDiagnostics>(() => mqttService.getBrokerDiagnostics());
   const [isConfigModalOpen, setIsConfigModalOpen] = useState<boolean>(false);
-  const [configHost, setConfigHost] = useState<string>(() => brokerInfo.host);
-  const [configPort, setConfigPort] = useState<number>(() => brokerInfo.port);
-  const [configPath, setConfigPath] = useState<string>(() => brokerInfo.path);
-  const [configSsl, setConfigSsl] = useState<boolean>(() => brokerInfo.useSSL);
+  const [configHost, setConfigHost] = useState<string>(() => mqttService.getConfiguration().host);
+  const [configPort, setConfigPort] = useState<number>(() => mqttService.getConfiguration().port);
+  const [configProtocol, setConfigProtocol] = useState<'ws' | 'wss'>(() => mqttService.getConfiguration().protocol);
+  const [configPath, setConfigPath] = useState<string>(() => mqttService.getConfiguration().path);
+  const [configClientId, setConfigClientId] = useState<string>(() => mqttService.getConfiguration().clientId);
+  const [configUsername, setConfigUsername] = useState<string>(() => mqttService.getConfiguration().username);
+  const [configPassword, setConfigPassword] = useState<string>('');
+  const [hasSavedPassword, setHasSavedPassword] = useState<boolean>(() => Boolean(mqttService.getConfiguration().hasPassword));
+  const [clearSavedPassword, setClearSavedPassword] = useState<boolean>(false);
+  const [configKeepAlive, setConfigKeepAlive] = useState<number>(() => mqttService.getConfiguration().keepAliveSeconds);
+  const [configTimeout, setConfigTimeout] = useState<number>(() => mqttService.getConfiguration().connectionTimeoutSeconds);
+  const [configDefaultQos, setConfigDefaultQos] = useState<0 | 1 | 2>(() => mqttService.getConfiguration().defaultQos);
+  const [configAutoReconnect, setConfigAutoReconnect] = useState<boolean>(() => mqttService.getConfiguration().autoReconnect);
+  const [configSsl, setConfigSsl] = useState<boolean>(() => mqttService.getConfiguration().useSSL);
+  const [configValidationErrors, setConfigValidationErrors] = useState<string[]>([]);
+  const [testResult, setTestResult] = useState<{ running: boolean; ok?: boolean; latencyMs?: number; error?: string | null } | null>(null);
 
   // Dynamic Statistics
   const [messagesPerMinute, setMessagesPerMinute] = useState<number>(0);
@@ -1006,13 +1019,113 @@ export const MqttMonitorScreen: React.FC = () => {
     showToast(`Downloaded ${messages.length} log(s)`);
   }, [activeTopic, messages, totalMessagesCount, showToast]);
 
-  // Apply reconfigured broker settings
-  const handleApplyBrokerConfig = useCallback(() => {
-    mqttService.reconfigureBroker(configHost.trim(), configPort, configPath.trim(), configSsl);
-    setIsConfigModalOpen(false);
+  const openConfigModal = useCallback(() => {
+    const cfg = mqttService.getConfiguration();
+    setConfigHost(cfg.host);
+    setConfigPort(cfg.port);
+    setConfigProtocol(cfg.protocol);
+    setConfigPath(cfg.path);
+    setConfigClientId(cfg.clientId);
+    setConfigUsername(cfg.username);
+    setConfigPassword('');
+    setHasSavedPassword(Boolean(cfg.hasPassword));
+    setClearSavedPassword(false);
+    setConfigKeepAlive(cfg.keepAliveSeconds);
+    setConfigTimeout(cfg.connectionTimeoutSeconds);
+    setConfigDefaultQos(cfg.defaultQos);
+    setConfigAutoReconnect(cfg.autoReconnect);
+    setConfigSsl(cfg.useSSL);
+    setConfigValidationErrors([]);
+    setTestResult(null);
+    setIsConfigModalOpen(true);
+  }, []);
+
+  const buildDraftConfig = useCallback(
+    () => ({
+      host: configHost.trim(),
+      port: Number(configPort),
+      protocol: configProtocol,
+      path: configPath.trim(),
+      clientId: configClientId.trim(),
+      username: configUsername.trim(),
+      password: configPassword.length > 0 ? configPassword : undefined,
+      clearPassword: clearSavedPassword,
+      keepAliveSeconds: Number(configKeepAlive),
+      connectionTimeoutSeconds: Number(configTimeout),
+      defaultQos: configDefaultQos,
+      autoReconnect: configAutoReconnect,
+      useSSL: configSsl,
+      topic: topicInput.trim(),
+    }),
+    [
+      configHost,
+      configPort,
+      configProtocol,
+      configPath,
+      configClientId,
+      configUsername,
+      configPassword,
+      clearSavedPassword,
+      configKeepAlive,
+      configTimeout,
+      configDefaultQos,
+      configAutoReconnect,
+      configSsl,
+      topicInput,
+    ]
+  );
+
+  const handleSaveBrokerConfig = useCallback(
+    (reconnectAfterSave: boolean = false) => {
+      const res = mqttService.saveConfiguration({ ...buildDraftConfig(), reconnect: reconnectAfterSave });
+      if (!res.ok) {
+        setConfigValidationErrors(res.errors);
+        return;
+      }
+      setConfigValidationErrors([]);
+      setQosInput(configDefaultQos);
+      setHasSavedPassword(Boolean(mqttService.getConfiguration().hasPassword));
+      setConfigPassword('');
+      setClearSavedPassword(false);
+      setBrokerInfo(mqttService.getBrokerInfo());
+      setDiagnostics(mqttService.getBrokerDiagnostics());
+      if (reconnectAfterSave) {
+        setIsConfigModalOpen(false);
+        showToast(`Saved MQTT config; connecting to ${configHost.trim()}:${configPort}...`);
+      } else {
+        showToast('MQTT configuration saved');
+      }
+    },
+    [buildDraftConfig, configDefaultQos, configHost, configPort, showToast]
+  );
+
+  const handleTestConnection = useCallback(async () => {
+    setConfigValidationErrors([]);
+    setTestResult({ running: true });
+    const res = await mqttService.testConnection(buildDraftConfig());
+    setTestResult({ running: false, ok: res.ok, latencyMs: res.latencyMs, error: res.error });
+  }, [buildDraftConfig]);
+
+  const handleConnect = useCallback(() => {
+    mqttService.connect();
     setBrokerInfo(mqttService.getBrokerInfo());
-    showToast(`Reconnecting to ${configHost}:${configPort}...`);
-  }, [configHost, configPort, configPath, configSsl, showToast]);
+    setDiagnostics(mqttService.getBrokerDiagnostics());
+    showToast('Connecting to MQTT broker...');
+  }, [showToast]);
+
+  const handleDisconnect = useCallback(() => {
+    mqttService.disconnect();
+    setBrokerInfo(mqttService.getBrokerInfo());
+    setDiagnostics(mqttService.getBrokerDiagnostics());
+    showToast('Disconnected from MQTT broker');
+  }, [showToast]);
+
+  const handleReconnect = useCallback(() => {
+    mqttService.reconnect();
+    setBrokerInfo(mqttService.getBrokerInfo());
+    setDiagnostics(mqttService.getBrokerDiagnostics());
+    showToast('Reconnecting to MQTT broker...');
+  }, [showToast]);
 
   // Filtered messages list
   const filteredMessages = useMemo(() => {
@@ -1145,10 +1258,56 @@ export const MqttMonitorScreen: React.FC = () => {
             {isBrokerConnected ? <Wifi size={13} /> : <WifiOff size={13} />}
             {getMqttStatusDisplay(liveStatus)}
           </span>
+          {!isBrokerConnected && (
+            <button
+              type="button"
+              id="mqtt-monitor-connect-btn"
+              onClick={handleConnect}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '6px 10px',
+                borderRadius: '8px',
+                border: 'none',
+                backgroundColor: '#16A34A',
+                color: '#FFFFFF',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              <Play size={12} />
+              Connect
+            </button>
+          )}
+          {isBrokerConnected && (
+            <button
+              type="button"
+              id="mqtt-monitor-disconnect-btn"
+              onClick={handleDisconnect}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '6px 10px',
+                borderRadius: '8px',
+                border: '1px solid #FECACA',
+                backgroundColor: '#FEF2F2',
+                color: '#DC2626',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              <WifiOff size={12} />
+              Disconnect
+            </button>
+          )}
           <button
             type="button"
             id="mqtt-monitor-reconnect-btn"
-            onClick={() => mqttService.connect()}
+            onClick={handleReconnect}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -1169,23 +1328,23 @@ export const MqttMonitorScreen: React.FC = () => {
           <button
             type="button"
             id="mqtt-monitor-config-btn"
-            onClick={() => setIsConfigModalOpen(true)}
+            onClick={openConfigModal}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '5px',
               padding: '6px 10px',
               borderRadius: '8px',
-              border: '1px solid #CBD5E1',
-              backgroundColor: '#FFFFFF',
-              color: '#0F172A',
+              border: '1px solid #BFDBFE',
+              backgroundColor: '#EFF6FF',
+              color: '#1D4ED8',
               fontSize: '11px',
               fontWeight: 700,
               cursor: 'pointer',
             }}
           >
             <Sliders size={12} />
-            Broker Config
+            MQTT Configuration
           </button>
         </div>
       </div>
@@ -1348,7 +1507,7 @@ export const MqttMonitorScreen: React.FC = () => {
               TOPIC / SUBACK
             </div>
             <div style={{ fontSize: '11px', fontWeight: 700, color: '#0F172A', fontFamily: 'monospace', marginTop: '3px', wordBreak: 'break-all' }}>
-              {activeTopic} &bull; {diagnostics.subscriptionAck ? 'SUBACK OK' : diagnostics.subscriptionError ? 'SUB ERROR' : 'PENDING'}
+              {activeTopic} &bull; {diagnostics.subscriptionAck ? 'SUBACK OK' : diagnostics.subscriptionError ? 'Subscription Failed' : 'PENDING'}
             </div>
           </div>
 
@@ -1812,119 +1971,439 @@ export const MqttMonitorScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* Broker Configuration Modal */}
-      {isConfigModalOpen && (
+      {/* MQTT Configuration Modal */}
+      {isConfigModalOpen && typeof document !== 'undefined' && createPortal(
         <div
+          id="mqtt-config-modal-backdrop"
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.5)',
+            backgroundColor: 'rgba(15, 23, 42, 0.55)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '16px',
-            zIndex: 1000,
+            padding: '12px',
+            zIndex: 99999,
+            boxSizing: 'border-box',
           }}
         >
           <div
+            id="mqtt-config-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mqtt-config-modal-title"
             style={{
               width: '100%',
-              maxWidth: '420px',
+              maxWidth: '560px',
+              maxHeight: '88vh',
+              overflowY: 'auto',
               backgroundColor: '#FFFFFF',
-              borderRadius: '12px',
+              borderRadius: '14px',
               border: '1px solid #E2E8F0',
               padding: '16px',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+              boxSizing: 'border-box',
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)',
               display: 'flex',
               flexDirection: 'column',
               gap: '12px',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0F172A' }}>
-                MQTT WebSocket Broker Settings
-              </h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sliders size={16} color="#2563EB" />
+                <h3 id="mqtt-config-modal-title" style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#0F172A' }}>
+                  MQTT Configuration
+                </h3>
+              </div>
               <button
                 type="button"
+                aria-label="Close MQTT Configuration"
                 onClick={() => setIsConfigModalOpen(false)}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748B' }}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748B', padding: '4px' }}
               >
-                <X size={16} />
+                <X size={18} />
               </button>
             </div>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569' }}>
-              Broker Hostname
-              <input
-                type="text"
-                value={configHost}
-                onChange={(e) => setConfigHost(e.target.value)}
-                style={{ padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '12px' }}
-              />
-            </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+
+            {/* Live Connection Banner */}
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px',
+                padding: '8px 10px',
+                borderRadius: '8px',
+                backgroundColor: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                fontSize: '11px',
+              }}
+            >
+              <div>
+                <span style={{ color: '#64748B', fontWeight: 600 }}>State: </span>
+                <strong style={{ color: isBrokerConnected ? '#15803D' : '#DC2626' }}>
+                  {getMqttStatusDisplay(liveStatus)}
+                </strong>
+                <span style={{ color: '#94A3B8', marginLeft: '8px', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                  {configProtocol}://{configHost}:{configPort}{configPath}
+                </span>
+              </div>
+              <div style={{ color: '#475569', fontWeight: 600 }}>
+                {diagnostics.subscriptionAck ? 'SUBACK OK' : diagnostics.subscriptionError ? 'Subscription Failed' : 'Awaiting SUBACK'}
+              </div>
+            </div>
+
+            {(diagnostics.lastError || diagnostics.subscriptionError) && (
+              <div
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  backgroundColor: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  color: '#991B1B',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                }}
+              >
+                {diagnostics.subscriptionError || diagnostics.lastError}
+              </div>
+            )}
+
+            {configValidationErrors.length > 0 && (
+              <div
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  backgroundColor: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  color: '#991B1B',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                }}
+              >
+                {configValidationErrors.map((err, i) => (
+                  <div key={i}>&bull; {err}</div>
+                ))}
+              </div>
+            )}
+
+            {testResult && !testResult.running && (
+              <div
+                id="mqtt-test-connection-result"
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  backgroundColor: testResult.ok ? '#ECFDF5' : '#FEF2F2',
+                  border: `1px solid ${testResult.ok ? '#A7F3D0' : '#FECACA'}`,
+                  color: testResult.ok ? '#15803D' : '#991B1B',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                }}
+              >
+                {testResult.ok
+                  ? `Connection test succeeded in ${testResult.latencyMs}ms.`
+                  : `Connection test failed: ${testResult.error || 'Unknown error'}`}
+              </div>
+            )}
+
+            {/* Responsive Configuration Grid */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(195px, 1fr))',
+                gap: '10px',
+              }}
+            >
               <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569' }}>
-                WebSocket Port
+                Broker Host
                 <input
-                  type="number"
-                  value={configPort}
-                  onChange={(e) => setConfigPort(Number(e.target.value) || 8884)}
-                  style={{ padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '12px' }}
+                  id="mqtt-cfg-host"
+                  type="text"
+                  value={configHost}
+                  onChange={(e) => setConfigHost(e.target.value)}
+                  placeholder="broker.hivemq.com"
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '12px' }}
                 />
               </label>
+
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569' }}>
+                Broker Port
+                <input
+                  id="mqtt-cfg-port"
+                  type="number"
+                  value={configPort}
+                  onChange={(e) => setConfigPort(Number(e.target.value))}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '12px' }}
+                />
+              </label>
+
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569' }}>
+                Transport Protocol
+                <select
+                  id="mqtt-cfg-protocol"
+                  value={configProtocol}
+                  onChange={(e) => {
+                    const nextProto = e.target.value === 'ws' ? 'ws' : 'wss';
+                    setConfigProtocol(nextProto);
+                    const nextSsl = nextProto === 'wss';
+                    setConfigSsl(nextSsl);
+                    if (nextSsl && configPort === 8000) setConfigPort(8884);
+                    if (!nextSsl && configPort === 8884) setConfigPort(8000);
+                  }}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '12px', backgroundColor: '#FFFFFF' }}
+                >
+                  <option value="wss">Secure WebSocket (WSS)</option>
+                  <option value="ws">WebSocket (WS)</option>
+                </select>
+              </label>
+
               <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569' }}>
                 WebSocket Path
                 <input
+                  id="mqtt-cfg-path"
                   type="text"
                   value={configPath}
                   onChange={(e) => setConfigPath(e.target.value)}
-                  style={{ padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '12px' }}
+                  placeholder="/mqtt"
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '12px', fontFamily: 'monospace' }}
+                />
+              </label>
+
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569' }}>
+                Client ID
+                <input
+                  id="mqtt-cfg-clientid"
+                  type="text"
+                  value={configClientId}
+                  onChange={(e) => setConfigClientId(e.target.value)}
+                  placeholder="Auto-generated if blank"
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '12px', fontFamily: 'monospace' }}
+                />
+              </label>
+
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569' }}>
+                QoS
+                <select
+                  id="mqtt-cfg-qos"
+                  value={configDefaultQos}
+                  onChange={(e) => setConfigDefaultQos(Number(e.target.value) as 0 | 1 | 2)}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '12px', backgroundColor: '#FFFFFF' }}
+                >
+                  <option value={0}>QoS 0 (At most once)</option>
+                  <option value={1}>QoS 1 (At least once)</option>
+                  <option value={2}>QoS 2 (Exactly once)</option>
+                </select>
+              </label>
+
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569' }}>
+                Username
+                <input
+                  id="mqtt-cfg-username"
+                  type="text"
+                  autoComplete="off"
+                  value={configUsername}
+                  onChange={(e) => setConfigUsername(e.target.value)}
+                  placeholder="Optional (leave blank if anonymous)"
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '12px' }}
+                />
+              </label>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Password</span>
+                  {hasSavedPassword && !clearSavedPassword && (
+                    <button
+                      type="button"
+                      onClick={() => setClearSavedPassword(true)}
+                      style={{ border: 'none', background: 'transparent', color: '#DC2626', fontSize: '10px', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                    >
+                      Clear saved
+                    </button>
+                  )}
+                </div>
+                <input
+                  id="mqtt-cfg-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={configPassword}
+                  onChange={(e) => {
+                    setConfigPassword(e.target.value);
+                    if (e.target.value) setClearSavedPassword(false);
+                  }}
+                  placeholder={clearSavedPassword ? 'Password will be cleared on save' : hasSavedPassword ? 'Configured (hidden) — enter to replace' : 'Optional'}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '12px' }}
+                />
+              </div>
+
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569' }}>
+                Keep Alive (seconds)
+                <input
+                  id="mqtt-cfg-keepalive"
+                  type="number"
+                  min={5}
+                  max={3600}
+                  value={configKeepAlive}
+                  onChange={(e) => setConfigKeepAlive(Number(e.target.value))}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '12px' }}
+                />
+              </label>
+
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569' }}>
+                Connection Timeout (seconds)
+                <input
+                  id="mqtt-cfg-timeout"
+                  type="number"
+                  min={3}
+                  max={120}
+                  value={configTimeout}
+                  onChange={(e) => setConfigTimeout(Number(e.target.value))}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '12px' }}
                 />
               </label>
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: 600, color: '#0F172A' }}>
-              <input
-                type="checkbox"
-                checked={configSsl}
-                onChange={(e) => setConfigSsl(e.target.checked)}
-              />
-              Use Secure TLS WebSocket (WSS)
-            </label>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '4px' }}>
-              <button
-                type="button"
-                onClick={() => setIsConfigModalOpen(false)}
-                style={{
-                  padding: '7px 12px',
-                  borderRadius: '8px',
-                  border: '1px solid #CBD5E1',
-                  backgroundColor: '#FFFFFF',
-                  color: '#475569',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleApplyBrokerConfig}
-                style={{
-                  padding: '7px 14px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  backgroundColor: '#2563EB',
-                  color: '#FFFFFF',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                }}
-              >
-                Apply &amp; Connect
-              </button>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', paddingTop: '2px' }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#0F172A' }}>
+                <input
+                  id="mqtt-cfg-tls"
+                  type="checkbox"
+                  checked={configSsl}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setConfigSsl(checked);
+                    setConfigProtocol(checked ? 'wss' : 'ws');
+                    if (checked && configPort === 8000) setConfigPort(8884);
+                    if (!checked && configPort === 8884) setConfigPort(8000);
+                  }}
+                />
+                TLS Enabled (WSS)
+              </label>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: '#0F172A' }}>
+                <input
+                  id="mqtt-cfg-autoreconnect"
+                  type="checkbox"
+                  checked={configAutoReconnect}
+                  onChange={(e) => setConfigAutoReconnect(e.target.checked)}
+                />
+                Automatic Reconnect
+              </label>
+            </div>
+
+            {/* Connection Control & Save Actions */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'space-between', paddingTop: '6px', borderTop: '1px solid #E2E8F0' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                <button
+                  type="button"
+                  id="mqtt-modal-connect-btn"
+                  onClick={handleConnect}
+                  style={{
+                    padding: '7px 10px',
+                    borderRadius: '8px',
+                    border: '1px solid #BBF7D0',
+                    backgroundColor: '#F0FDF4',
+                    color: '#15803D',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Connect
+                </button>
+                <button
+                  type="button"
+                  id="mqtt-modal-disconnect-btn"
+                  onClick={handleDisconnect}
+                  style={{
+                    padding: '7px 10px',
+                    borderRadius: '8px',
+                    border: '1px solid #FECACA',
+                    backgroundColor: '#FEF2F2',
+                    color: '#DC2626',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Disconnect
+                </button>
+                <button
+                  type="button"
+                  id="mqtt-modal-reconnect-btn"
+                  onClick={handleReconnect}
+                  style={{
+                    padding: '7px 10px',
+                    borderRadius: '8px',
+                    border: '1px solid #CBD5E1',
+                    backgroundColor: '#FFFFFF',
+                    color: '#0F172A',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Reconnect
+                </button>
+                <button
+                  type="button"
+                  id="mqtt-modal-test-btn"
+                  disabled={Boolean(testResult?.running)}
+                  onClick={handleTestConnection}
+                  style={{
+                    padding: '7px 10px',
+                    borderRadius: '8px',
+                    border: '1px solid #BFDBFE',
+                    backgroundColor: '#EFF6FF',
+                    color: '#1D4ED8',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    cursor: testResult?.running ? 'wait' : 'pointer',
+                  }}
+                >
+                  {testResult?.running ? 'Testing...' : 'Test Connection'}
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                <button
+                  type="button"
+                  id="mqtt-modal-save-btn"
+                  onClick={() => handleSaveBrokerConfig(false)}
+                  style={{
+                    padding: '7px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #CBD5E1',
+                    backgroundColor: '#FFFFFF',
+                    color: '#0F172A',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Save Configuration
+                </button>
+                <button
+                  type="button"
+                  id="mqtt-modal-save-reconnect-btn"
+                  onClick={() => handleSaveBrokerConfig(true)}
+                  style={{
+                    padding: '7px 12px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    backgroundColor: '#2563EB',
+                    color: '#FFFFFF',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Save &amp; Reconnect
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* SECTION 4: FOOTER */}

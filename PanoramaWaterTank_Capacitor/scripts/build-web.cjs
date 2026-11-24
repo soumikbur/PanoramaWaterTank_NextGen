@@ -56,11 +56,17 @@ async function buildWebForCapacitor() {
     target: ['es2020', 'chrome100'],
   });
 
-  // Copy public directory from apps/mobile if present
+  // Copy public directory from apps/mobile if present (exclude .apk to avoid recursive nesting)
   const publicDir = path.join(mobileAppDir, 'public');
   if (fs.existsSync(publicDir)) {
-    fs.cpSync(publicDir, wwwDir, { recursive: true, force: true });
+    fs.cpSync(publicDir, wwwDir, {
+      recursive: true,
+      force: true,
+      filter: (src) => !src.toLowerCase().endsWith('.apk'),
+    });
   }
+  const staleWwwApk = path.join(wwwDir, 'downloads/panorama-water-tank-monitor.apk');
+  if (fs.existsSync(staleWwwApk)) fs.unlinkSync(staleWwwApk);
 
   // Generate mobile-optimized index.html
   const htmlContent = `<!DOCTYPE html>

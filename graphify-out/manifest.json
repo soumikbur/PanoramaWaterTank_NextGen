@@ -396,9 +396,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/components/common/Header.tsx": {
-    "mtime": 1795559065.9213176,
-    "seen": 1795559639.8657756,
-    "ast_hash": "63fcf7625791d65f8f7ce818070550be",
+    "mtime": 1795560165.0004213,
+    "seen": 1795561068.5043347,
+    "ast_hash": "7cebc674a9eae8699d76c0e13bfe657d",
     "semantic_hash": ""
   },
   "apps/mobile/src/components/common/InfoRow.tsx": {
@@ -480,9 +480,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/screens/LocationScreen.tsx": {
-    "mtime": 1795559072.1688023,
-    "seen": 1795559639.8702927,
-    "ast_hash": "e7252d38a27d8b0698993d6286f9586a",
+    "mtime": 1795560166.8870373,
+    "seen": 1795561068.5113492,
+    "ast_hash": "1711878e0e4e4350b9812de5fd1ab6bf",
     "semantic_hash": ""
   },
   "apps/mobile/src/screens/LogsScreen.tsx": {
@@ -528,9 +528,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/state/AppContext.tsx": {
-    "mtime": 1795559130.4763567,
-    "seen": 1795559639.8712997,
-    "ast_hash": "99dd97743d6e4df2257b09fddc129d2e",
+    "mtime": 1795560161.6613722,
+    "seen": 1795561068.5204818,
+    "ast_hash": "9a9ab5bf7299a6e9a1ad5cf7cf9f7f39",
     "semantic_hash": ""
   },
   "apps/mobile/src/theme/colors.ts": {
@@ -600,9 +600,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/types/telemetry.ts": {
-    "mtime": 1795558713.3517907,
-    "seen": 1795559639.872304,
-    "ast_hash": "24eec3cd3c0d764710d25e2fe2a61e81",
+    "mtime": 1795560059.013489,
+    "seen": 1795561068.5244815,
+    "ast_hash": "15461b24f953826872d3030494a77b9d",
     "semantic_hash": ""
   },
   "apps/mobile/src/types/train.ts": {
@@ -2490,9 +2490,9 @@
     "semantic_hash": ""
   },
   "backend/static/assets/index.js": {
-    "mtime": 1795559493.8837838,
-    "seen": 1795559639.880803,
-    "ast_hash": "e44edafee7208a08eda9c91d49d15b09",
+    "mtime": 1795560739.9665568,
+    "seen": 1795561068.5496507,
+    "ast_hash": "d5ea97bc85fbf78af74e403798ee636c",
     "semantic_hash": ""
   },
   "scripts/verify_react_production_app.cjs": {
@@ -2502,9 +2502,9 @@
     "semantic_hash": ""
   },
   "backend/static/index.html": {
-    "mtime": 1795559493.9067693,
-    "seen": 1795559639.9421575,
-    "ast_hash": "ddd67ab0c8f83140d0695d2c8a6c31cc",
+    "mtime": 1795560739.974658,
+    "seen": 1795561068.729839,
+    "ast_hash": "182eb10e311eb0416f375cdd821e7443",
     "semantic_hash": ""
   },
   "apps/mobile/scripts/comprehensive_e2e_audit.cjs": {
@@ -2814,9 +2814,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/screens/EmployeeDashboard.tsx": {
-    "mtime": 1795559069.198769,
-    "seen": 1795559639.8702927,
-    "ast_hash": "e95f962124086fc8c99446414625c6a9",
+    "mtime": 1795560203.841726,
+    "seen": 1795561068.510345,
+    "ast_hash": "ef362746e28d8044a9c7fa576a0ce60b",
     "semantic_hash": ""
   },
   "apps/mobile/src/screens/MonitoringScreen.tsx": {
@@ -2832,8 +2832,8 @@
     "semantic_hash": ""
   },
   "backend/static/404.html": {
-    "mtime": 1795559493.9067693,
-    "seen": 1795559639.9421575,
+    "mtime": 1795560739.975658,
+    "seen": 1795561068.729839,
     "ast_hash": "428ecfd8ac04dbed543894a9d68f1dae",
     "semantic_hash": ""
   },
@@ -2910,9 +2910,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/services/mqttService.ts": {
-    "mtime": 1795559469.6208537,
-    "seen": 1795559639.8712997,
-    "ast_hash": "e4f66e1a906d0e6e597fcb493eeb29a1",
+    "mtime": 1795560728.017376,
+    "seen": 1795561068.5184798,
+    "ast_hash": "798ce16acc4c2b10a3da4fd47d11b34d",
     "semantic_hash": ""
   },
   "apps/mobile/scripts/run_live_verify.cjs": {
@@ -3660,8 +3660,8 @@
     "semantic_hash": ""
   },
   "PanoramaWaterTank_Capacitor/android/app/capacitor.build.gradle": {
-    "mtime": 1795505217.0,
-    "seen": 1795559639.8470852,
+    "mtime": 1795560840.9959972,
+    "seen": 1795561068.452047,
     "ast_hash": "6c198b1057147b9db1f01b76ba13b543",
     "semantic_hash": ""
   },
@@ -3690,8 +3690,8 @@
     "semantic_hash": ""
   },
   "PanoramaWaterTank_Capacitor/android/capacitor.settings.gradle": {
-    "mtime": 1795505217.0,
-    "seen": 1795559639.8470852,
+    "mtime": 1795560840.9959972,
+    "seen": 1795561068.4530468,
     "ast_hash": "c5505af308b0b6e5ba76df18b1572f46",
     "semantic_hash": ""
   },
@@ -3738,9 +3738,9 @@
     "semantic_hash": ""
   },
   "PanoramaWaterTank_Capacitor/scripts/build-web.cjs": {
-    "mtime": 1795525175.0,
-    "seen": 1795559639.8480926,
-    "ast_hash": "d00541a5e9afb42d8f987420d799c326",
+    "mtime": 1795560569.5290093,
+    "seen": 1795561068.456047,
+    "ast_hash": "93468d006c8ac904f031bdf8d18ca925",
     "semantic_hash": ""
   },
   "PanoramaWaterTank_Capacitor/scripts/copy-apk.cjs": {
@@ -5046,9 +5046,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/screens/MqttMonitorScreen.tsx": {
-    "mtime": 1795559197.6656146,
-    "seen": 1795559639.8702927,
-    "ast_hash": "791a2862c6f8d907567f5a871ac2e516",
+    "mtime": 1795560441.173708,
+    "seen": 1795561068.5119708,
+    "ast_hash": "164491337f7a9126529c248081385522",
     "semantic_hash": ""
   },
   "apps/mobile/src/screens/RawDataScreen.tsx": {

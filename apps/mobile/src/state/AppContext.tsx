@@ -1174,12 +1174,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } else if (st === 'CONNECTING' || st === 'RECONNECTING') {
         mqttAttemptedRef.current = true;
         setConnectionStatus('RECONNECTING');
-      } else if (st === 'SUBSCRIPTION_ERROR') {
+      } else if (st === 'SUBSCRIPTION_ERROR' || st === 'CONNECTION_ERROR') {
         setMqttBrokerStatus('DISCONNECTED');
         if (mqttAttemptedRef.current) {
+          const diag = mqttService.getBrokerDiagnostics();
           alertNotificationService.evaluateBrokerConnectivity({
             isConnected: false,
-            reason: mqttService.getBrokerDiagnostics().subscriptionError || 'MQTT topic subscription rejected by broker.',
+            reason:
+              st === 'SUBSCRIPTION_ERROR'
+                ? diag.subscriptionError || 'MQTT topic subscription failed.'
+                : diag.lastError || 'MQTT broker connection error.',
           });
         }
       } else if (st === 'DISCONNECTED') {

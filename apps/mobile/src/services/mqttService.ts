@@ -7,7 +7,7 @@
 // @ts-ignore
 import Paho from 'paho-mqtt';
 import { Logger } from './logger';
-import { LiveTelemetryPayload, MqttConnectionStatus, MqttGpsFix } from '../types';
+import { LiveTelemetryPayload, MqttClientConfiguration, MqttConnectionStatus, MqttGpsFix } from '../types';
 import { deviceProfileService } from './deviceProfileService';
 import { nativeBridge } from './nativeBridge';
 
@@ -275,26 +275,29 @@ export type { MqttGpsFix } from '../types/telemetry';
 
 export type MqttStatusDisplay =
   | 'Connecting'
-  | 'Online'
-  | 'Offline'
+  | 'Connected'
+  | 'Disconnected'
   | 'Reconnecting'
-  | 'Subscription Error'
+  | 'Subscription Failed'
+  | 'Connection Error'
   | 'Stale';
 
 export function getMqttStatusDisplay(status: MqttConnectionStatus): MqttStatusDisplay {
   switch (status) {
     case 'CONNECTED':
-      return 'Online';
+      return 'Connected';
     case 'CONNECTING':
       return 'Connecting';
     case 'RECONNECTING':
       return 'Reconnecting';
     case 'SUBSCRIPTION_ERROR':
-      return 'Subscription Error';
+      return 'Subscription Failed';
+    case 'CONNECTION_ERROR':
+      return 'Connection Error';
     case 'STALE':
       return 'Stale';
     default:
-      return 'Offline';
+      return 'Disconnected';
   }
 }
 
@@ -337,6 +340,10 @@ export interface MqttBrokerDiagnostics {
   lastParsingError?: string | null;
   parseErrorCount?: number;
   lastUidMismatch?: string | null;
+  clientId?: string;
+  defaultQos?: 0 | 1 | 2;
+  connectionTimeoutSeconds?: number;
+  hasPassword?: boolean;
 }
 
 export class MqttService {
@@ -395,6 +402,13 @@ export class MqttService {
   private brokerPort: number = 8884;
   private brokerPath: string = '/mqtt';
   private useSSL: boolean = true;
+  private clientId: string = '';
+  private username: string = '';
+  private password: string = '';
+  private keepAliveSeconds: number = 30;
+  private connectionTimeoutSeconds: number = 12;
+  private defaultQos: 0 | 1 | 2 = 0;
+  private autoReconnect: boolean = true;
   private topic: string = DEFAULT_MQTT_TOPIC;
   private watchdogTimeoutMs: number = STALE_TIMEOUT_MS;
 
@@ -407,8 +421,9 @@ export class MqttService {
     if (this.networkListenersBound || typeof window === 'undefined') return;
     this.networkListenersBound = true;
 
+    let lastNativeConnected: boolean | null = null;
     const triggerImmediateReconnect = (reason: string) => {
-      if (this.intentionalDisconnect || this.isDestroyed) return;
+      if (this.intentionalDisconnect || this.isDestroyed || this.isConnecting) return;
       if (this.client && this.client.isConnected && this.client.isConnected() && this.status === 'CONNECTED') return;
       console.info(`[MQTT] ${reason} — restoring MQTT broker connection...`);
       this.reconnectAttempts = 0;
@@ -466,8 +481,14 @@ export class MqttService {
 
     this.unsubscribeNativeNetwork = nativeBridge.onNetworkChange((netStatus) => {
       if (netStatus.connected) {
+        const wasOffline = lastNativeConnected === false;
+        lastNativeConnected = true;
+        if (!wasOffline && (this.isConnecting || (this.client?.isConnected?.() && this.status === 'CONNECTED'))) {
+          return;
+        }
         triggerImmediateReconnect(`Capacitor network restored (${netStatus.connectionType})`);
       } else {
+        lastNativeConnected = false;
         handleNetworkDrop('Mobile network offline');
       }
     });
@@ -481,6 +502,7 @@ export class MqttService {
   private cleanupClient(): void {
     clearTimeout(this.connectTimeoutTimer);
     this.connectTimeoutTimer = null;
+    this.isConnecting = false;
     const oldClient = this.client;
     this.client = null;
     this.confirmedSubscriptions.clear();
@@ -510,6 +532,12 @@ export class MqttService {
       const savedPath = localStorage.getItem('panorama_mqtt_path');
       const savedTopic = localStorage.getItem('panorama_mqtt_topic');
       const savedSsl = localStorage.getItem('panorama_mqtt_ssl');
+      const savedClientId = localStorage.getItem('panorama_mqtt_client_id');
+      const savedUsername = localStorage.getItem('panorama_mqtt_username');
+      const savedKeepAlive = localStorage.getItem('panorama_mqtt_keepalive');
+      const savedTimeout = localStorage.getItem('panorama_mqtt_timeout');
+      const savedQos = localStorage.getItem('panorama_mqtt_qos');
+      const savedAutoReconnect = localStorage.getItem('panorama_mqtt_auto_reconnect');
 
       if (savedHost) this.brokerHost = savedHost.trim();
       if (savedPort) {
@@ -520,6 +548,31 @@ export class MqttService {
       }
       if (savedPath) this.brokerPath = savedPath.startsWith('/') ? savedPath : `/${savedPath}`;
       if (savedSsl !== null) this.useSSL = savedSsl === 'true';
+      if (savedClientId) this.clientId = savedClientId.trim();
+      if (savedUsername) this.username = savedUsername;
+      if (savedKeepAlive) {
+        const ka = parseInt(savedKeepAlive, 10);
+        if (Number.isFinite(ka) && ka >= 5 && ka <= 3600) this.keepAliveSeconds = ka;
+      }
+      if (savedTimeout) {
+        const to = parseInt(savedTimeout, 10);
+        if (Number.isFinite(to) && to >= 3 && to <= 120) this.connectionTimeoutSeconds = to;
+      }
+      if (savedQos === '0' || savedQos === '1' || savedQos === '2') {
+        this.defaultQos = Number(savedQos) as 0 | 1 | 2;
+      }
+      if (savedAutoReconnect !== null) {
+        this.autoReconnect = savedAutoReconnect !== 'false';
+      }
+
+      try {
+        if (typeof window.sessionStorage !== 'undefined') {
+          const sec = window.sessionStorage.getItem('panorama_mqtt_session_secret');
+          if (sec) this.password = sec;
+        }
+      } catch {
+        // ignore restricted sessionStorage
+      }
 
       // Browser/WebView Paho requires MQTT over WebSockets; normalize raw TCP HiveMQ ports if previously saved
       if (this.brokerHost === 'broker.hivemq.com' && (this.brokerPort === 8883 || this.brokerPort === 1883)) {
@@ -552,9 +605,9 @@ export class MqttService {
         // ignore storage parse failure
       }
     }
-    this.dynamicSubscriptions.set(DEFAULT_MQTT_TOPIC, 0);
+    this.dynamicSubscriptions.set(DEFAULT_MQTT_TOPIC, this.defaultQos);
     if (this.topic && this.topic !== DEFAULT_MQTT_TOPIC) {
-      this.dynamicSubscriptions.set(this.topic, 0);
+      this.dynamicSubscriptions.set(this.topic, this.defaultQos);
     }
   }
 
@@ -644,13 +697,13 @@ export class MqttService {
     subs.set('panorama/telemetry/#', 0);
 
     if (DEFAULT_MQTT_TOPIC) {
-      subs.set(DEFAULT_MQTT_TOPIC, 0);
+      subs.set(DEFAULT_MQTT_TOPIC, this.defaultQos);
     }
     this.registeredDeviceUids.forEach((uid) => {
-      if (uid) subs.set(uid, 0);
+      if (uid) subs.set(uid, this.defaultQos);
     });
     if (this.topic) {
-      subs.set(this.topic, 0);
+      subs.set(this.topic, this.defaultQos);
     }
     this.dynamicSubscriptions.forEach((qos, top) => {
       if (top) subs.set(top, qos);
@@ -699,7 +752,7 @@ export class MqttService {
     this.setStatus('CONNECTING');
 
     const connectStartedAt = Date.now();
-    const clientId = `panorama-web-${Math.random().toString(16).substring(2, 10)}`;
+    const clientId = this.clientId.trim() || `panorama-web-${Math.random().toString(16).substring(2, 10)}`;
 
     try {
       const ClientConstructor = (Paho && (Paho.Client || (Paho as any).default?.Client)) || (window as any).Paho?.MQTT?.Client;
@@ -860,22 +913,29 @@ export class MqttService {
         }
       };
 
+      const timeoutMs = Math.max(3, this.connectionTimeoutSeconds) * 1000;
       this.connectTimeoutTimer = setTimeout(() => {
         if (this.client === client && this.isConnecting) {
           this.isConnecting = false;
-          this.lastError = `Connection timeout to ${this.brokerHost}:${this.brokerPort}${this.brokerPath}`;
+          this.lastError = `Connection timeout after ${this.connectionTimeoutSeconds}s to ${this.brokerHost}:${this.brokerPort}${this.brokerPath}`;
           this.lastDisconnectedAt = Date.now();
           console.warn('[MQTT]', this.lastError);
           this.cleanupClient();
           this.scheduleReconnect();
         }
-      }, 12000);
+      }, timeoutMs);
 
       const connectOptions: any = {
         useSSL: this.useSSL,
-        timeout: 10,
-        keepAliveInterval: 30,
+        timeout: this.connectionTimeoutSeconds,
+        keepAliveInterval: this.keepAliveSeconds,
         cleanSession: true,
+        ...(this.username.trim()
+          ? {
+              userName: this.username.trim(),
+              ...(this.password.length > 0 ? { password: this.password } : {}),
+            }
+          : {}),
         onSuccess: () => {
           if (this.client !== client || this.intentionalDisconnect) return;
           clearTimeout(this.connectTimeoutTimer);
@@ -897,8 +957,9 @@ export class MqttService {
           this.topicSubscribed = false;
           this.subscriptionAck = false;
           this.lastDisconnectedAt = Date.now();
-          this.lastError = err?.errorMessage || 'Broker TLS/WebSocket connection failed';
-          console.info('[MQTT] Connection attempt failed, will retry with backoff:', this.lastError);
+          const rawErr = err?.errorMessage || 'Broker TLS/WebSocket connection failed';
+          this.lastError = this.password ? rawErr.split(this.password).join('[REDACTED]') : rawErr;
+          console.info('[MQTT] Connection attempt failed:', this.lastError);
           this.cleanupClient();
           this.scheduleReconnect();
         },
@@ -1205,6 +1266,10 @@ export class MqttService {
     }
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       this.setStatus('DISCONNECTED');
+      return;
+    }
+    if (!this.autoReconnect) {
+      this.setStatus(this.lastError ? 'CONNECTION_ERROR' : 'DISCONNECTED');
       return;
     }
 
@@ -1860,7 +1925,8 @@ export class MqttService {
       websocketConnected: Boolean(this.client && this.client.isConnected && this.client.isConnected()),
       mqttSessionConnected: isConnected,
       cleanSession: true,
-      keepAliveSeconds: 30,
+      keepAliveSeconds: this.keepAliveSeconds,
+      connectionTimeoutSeconds: this.connectionTimeoutSeconds,
       connectionUptimeMs: isConnected && this.lastConnectedAt ? Math.max(0, now - this.lastConnectedAt) : null,
       reconnectAttempts: this.reconnectAttempts,
       reconnectCount: this.reconnectAttempts,
@@ -1872,11 +1938,11 @@ export class MqttService {
       lastDisconnectedAt: this.lastDisconnectedAt,
       connectedAt: this.lastConnectedAt,
       disconnectedAt: this.lastDisconnectedAt,
-      authMode: 'Anonymous',
+      authMode: this.username.trim() ? 'Username/Password' : 'Anonymous',
       certValidation: this.useSSL ? 'Enabled (Platform TLS CA)' : 'N/A (WS)',
       brokerReachable: isConnected ? 'Reachable' : this.status === 'CONNECTING' || this.status === 'RECONNECTING' ? 'Probing' : 'Unreachable',
       connectionLatencyMs: this.connectionLatencyMs,
-      autoReconnect: true,
+      autoReconnect: this.autoReconnect,
       useSSL: this.useSSL,
       status: this.status,
       statusDisplay: getMqttStatusDisplay(this.status),
@@ -1888,6 +1954,9 @@ export class MqttService {
       lastParsingError: this.lastParsingError,
       parseErrorCount: this.parseErrorCount,
       lastUidMismatch: this.lastUidMismatch,
+      clientId: this.clientId.trim() || '(auto-generated)',
+      defaultQos: this.defaultQos,
+      hasPassword: Boolean(this.password),
     };
   }
 
@@ -1895,20 +1964,142 @@ export class MqttService {
     return getMqttStatusDisplay(this.status);
   }
 
-  public reconfigureBroker(host: string, port: number, path: string = '/mqtt', useSSL: boolean = true): void {
-    const cleanHost = host.trim() || 'broker.hivemq.com';
-    const cleanPath = (path.trim() || '/mqtt').startsWith('/') ? (path.trim() || '/mqtt') : `/${path.trim()}`;
-    if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.setItem('panorama_mqtt_host', cleanHost);
-      localStorage.setItem('panorama_mqtt_port', String(port));
-      localStorage.setItem('panorama_mqtt_path', cleanPath);
-      localStorage.setItem('panorama_mqtt_ssl', String(useSSL));
+  public getConfiguration(): MqttClientConfiguration {
+    return {
+      host: this.brokerHost,
+      port: this.brokerPort,
+      protocol: this.useSSL ? 'wss' : 'ws',
+      path: this.brokerPath,
+      clientId: this.clientId,
+      username: this.username,
+      hasPassword: Boolean(this.password),
+      keepAliveSeconds: this.keepAliveSeconds,
+      connectionTimeoutSeconds: this.connectionTimeoutSeconds,
+      defaultQos: this.defaultQos,
+      autoReconnect: this.autoReconnect,
+      useSSL: this.useSSL,
+      topic: this.topic,
+    };
+  }
+
+  public validateConfiguration(
+    cfg: Partial<MqttClientConfiguration> & { password?: string; clearPassword?: boolean }
+  ): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+    const host = (cfg.host ?? this.brokerHost).trim();
+    const port = Number(cfg.port ?? this.brokerPort);
+    const rawPath = (cfg.path ?? this.brokerPath).trim();
+    const username = (cfg.username ?? this.username).trim();
+    const effectivePwd = cfg.clearPassword
+      ? ''
+      : (typeof cfg.password === 'string' && cfg.password.length > 0 ? cfg.password : this.password);
+    const ka = Number(cfg.keepAliveSeconds ?? this.keepAliveSeconds);
+    const to = Number(cfg.connectionTimeoutSeconds ?? this.connectionTimeoutSeconds);
+    const qos = Number(cfg.defaultQos ?? this.defaultQos);
+
+    if (!host) {
+      errors.push('Broker Host is required.');
+    } else if (/^https?:\/\/|^wss?:\/\/|^mqtts?:\/\//i.test(host) || /[\s/]/.test(host)) {
+      errors.push('Broker Host must be a hostname or IP without protocol scheme or spaces.');
     }
-    clearTimeout(this.reconfigureTimer);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      errors.push('Broker Port must be an integer between 1 and 65535.');
+    }
+    if (!rawPath || !rawPath.startsWith('/')) {
+      errors.push('WebSocket Path must start with "/" (e.g. /mqtt).');
+    }
+    if (effectivePwd && !username) {
+      errors.push('Username is required when a password is specified (MQTT 3.1.1).');
+    }
+    if (!Number.isFinite(ka) || ka < 5 || ka > 3600) {
+      errors.push('Keep Alive must be between 5 and 3600 seconds.');
+    }
+    if (!Number.isFinite(to) || to < 3 || to > 120) {
+      errors.push('Connection Timeout must be between 3 and 120 seconds.');
+    }
+    if (qos !== 0 && qos !== 1 && qos !== 2) {
+      errors.push('QoS must be 0, 1, or 2.');
+    }
+    return { valid: errors.length === 0, errors };
+  }
+
+  public saveConfiguration(
+    cfg: Partial<MqttClientConfiguration> & { password?: string; clearPassword?: boolean; reconnect?: boolean }
+  ): { ok: boolean; errors: string[] } {
+    const validation = this.validateConfiguration(cfg);
+    if (!validation.valid) {
+      return { ok: false, errors: validation.errors };
+    }
+
+    const useSSL = cfg.useSSL ?? (cfg.protocol ? cfg.protocol === 'wss' : this.useSSL);
+    const cleanHost = (cfg.host ?? this.brokerHost).trim();
+    const cleanPort = Number(cfg.port ?? this.brokerPort);
+    const rawPath = (cfg.path ?? this.brokerPath).trim() || '/mqtt';
+    const cleanPath = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+    const cleanClientId = (cfg.clientId ?? this.clientId).trim();
+    const cleanUsername = (cfg.username ?? this.username).trim();
+    const cleanKeepAlive = Math.round(Number(cfg.keepAliveSeconds ?? this.keepAliveSeconds));
+    const cleanTimeout = Math.round(Number(cfg.connectionTimeoutSeconds ?? this.connectionTimeoutSeconds));
+    const cleanQos = Number(cfg.defaultQos ?? this.defaultQos) as 0 | 1 | 2;
+    const cleanAutoReconnect = cfg.autoReconnect ?? this.autoReconnect;
+    const cleanTopic = (cfg.topic ?? this.topic).trim();
+
     this.brokerHost = cleanHost;
-    this.brokerPort = port;
+    this.brokerPort = cleanPort;
     this.brokerPath = cleanPath;
     this.useSSL = useSSL;
+    this.clientId = cleanClientId;
+    this.username = cleanUsername;
+    if (cfg.clearPassword) {
+      this.password = '';
+    } else if (typeof cfg.password === 'string' && cfg.password.length > 0) {
+      this.password = cfg.password;
+    }
+    this.keepAliveSeconds = cleanKeepAlive;
+    this.connectionTimeoutSeconds = cleanTimeout;
+    this.defaultQos = cleanQos;
+    this.autoReconnect = cleanAutoReconnect;
+    if (cleanTopic) {
+      this.topic = cleanTopic;
+      this.dynamicSubscriptions.set(cleanTopic, cleanQos);
+    }
+
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem('panorama_mqtt_host', cleanHost);
+      localStorage.setItem('panorama_mqtt_port', String(cleanPort));
+      localStorage.setItem('panorama_mqtt_path', cleanPath);
+      localStorage.setItem('panorama_mqtt_ssl', String(useSSL));
+      localStorage.setItem('panorama_mqtt_client_id', cleanClientId);
+      localStorage.setItem('panorama_mqtt_username', cleanUsername);
+      localStorage.setItem('panorama_mqtt_keepalive', String(cleanKeepAlive));
+      localStorage.setItem('panorama_mqtt_timeout', String(cleanTimeout));
+      localStorage.setItem('panorama_mqtt_qos', String(cleanQos));
+      localStorage.setItem('panorama_mqtt_auto_reconnect', String(cleanAutoReconnect));
+      if (cleanTopic) {
+        localStorage.setItem('panorama_mqtt_topic', cleanTopic);
+      }
+      try {
+        if (typeof window.sessionStorage !== 'undefined') {
+          if (this.password) {
+            window.sessionStorage.setItem('panorama_mqtt_session_secret', this.password);
+          } else {
+            window.sessionStorage.removeItem('panorama_mqtt_session_secret');
+          }
+        }
+      } catch {
+        // ignore restricted sessionStorage
+      }
+    }
+
+    if (cfg.reconnect) {
+      this.reconnect();
+    }
+    return { ok: true, errors: [] };
+  }
+
+  public reconnect(): void {
+    clearTimeout(this.reconfigureTimer);
+    this.reconfigureTimer = null;
     this.disconnect();
     this.reconfigureTimer = setTimeout(() => {
       this.reconfigureTimer = null;
@@ -1916,7 +2107,113 @@ export class MqttService {
       this.intentionalDisconnect = false;
       this.reconnectAttempts = 0;
       this.connect();
-    }, 250);
+    }, 200);
+  }
+
+  public testConnection(
+    cfg?: Partial<MqttClientConfiguration> & { password?: string; clearPassword?: boolean }
+  ): Promise<{ ok: boolean; latencyMs: number; error: string | null }> {
+    const validation = this.validateConfiguration(cfg || {});
+    if (!validation.valid) {
+      return Promise.resolve({ ok: false, latencyMs: 0, error: validation.errors.join(' ') });
+    }
+
+    const host = (cfg?.host ?? this.brokerHost).trim();
+    const port = Number(cfg?.port ?? this.brokerPort);
+    const rawPath = (cfg?.path ?? this.brokerPath).trim() || '/mqtt';
+    const path = rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
+    const useSSL = cfg?.useSSL ?? (cfg?.protocol ? cfg.protocol === 'wss' : this.useSSL);
+    const username = (cfg?.username ?? this.username).trim();
+    const password = cfg?.clearPassword
+      ? ''
+      : (typeof cfg?.password === 'string' && cfg.password.length > 0 ? cfg.password : this.password);
+    const timeoutSec = Math.round(Number(cfg?.connectionTimeoutSeconds ?? this.connectionTimeoutSeconds));
+    const keepAliveSec = Math.round(Number(cfg?.keepAliveSeconds ?? this.keepAliveSeconds));
+    const baseClientId = (cfg?.clientId ?? this.clientId).trim() || 'panorama-probe';
+
+    const matchesCurrent =
+      host === this.brokerHost &&
+      port === this.brokerPort &&
+      path === this.brokerPath &&
+      useSSL === this.useSSL &&
+      username === this.username &&
+      !(cfg?.password) &&
+      !cfg?.clearPassword;
+
+    if (matchesCurrent && this.client && this.client.isConnected && this.client.isConnected()) {
+      return Promise.resolve({ ok: true, latencyMs: this.connectionLatencyMs || 1, error: null });
+    }
+
+    const ClientConstructor = (Paho && (Paho.Client || (Paho as any).default?.Client)) || (window as any).Paho?.MQTT?.Client;
+    if (!ClientConstructor) {
+      return Promise.resolve({ ok: false, latencyMs: 0, error: 'MQTT WebSocket client unavailable' });
+    }
+
+    const start = Date.now();
+    return new Promise((resolve) => {
+      let settled = false;
+      const probeClient = new ClientConstructor(
+        host,
+        port,
+        path,
+        `${baseClientId}-probe-${Math.random().toString(16).substring(2, 6)}`
+      );
+      const cleanupProbe = () => {
+        try {
+          probeClient.onConnectionLost = () => {};
+          probeClient.onMessageArrived = () => {};
+          if (probeClient.isConnected && probeClient.isConnected()) {
+            probeClient.disconnect();
+          }
+        } catch {
+          // ignore
+        }
+      };
+      const done = (result: { ok: boolean; latencyMs: number; error: string | null }) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        cleanupProbe();
+        resolve(result);
+      };
+      const timer = setTimeout(() => {
+        done({ ok: false, latencyMs: Date.now() - start, error: `Connection test timed out after ${timeoutSec}s` });
+      }, Math.min(timeoutSec, 15) * 1000);
+
+      try {
+        const sanitizeProbeErr = (msg: string) => (password ? msg.split(password).join('[REDACTED]') : msg);
+        probeClient.onConnectionLost = (res: any) => {
+          if (!settled && res?.errorCode) {
+            done({ ok: false, latencyMs: Date.now() - start, error: sanitizeProbeErr(res?.errorMessage || 'Broker closed connection') });
+          }
+        };
+        probeClient.connect({
+          useSSL,
+          timeout: Math.min(timeoutSec, 15),
+          keepAliveInterval: keepAliveSec,
+          cleanSession: true,
+          ...(username
+            ? {
+                userName: username,
+                ...(password ? { password } : {}),
+              }
+            : {}),
+          onSuccess: () => done({ ok: true, latencyMs: Math.max(1, Date.now() - start), error: null }),
+          onFailure: (err: any) => done({
+            ok: false,
+            latencyMs: Date.now() - start,
+            error: sanitizeProbeErr(err?.errorMessage || 'Broker TLS/WebSocket handshake failed'),
+          }),
+        });
+      } catch (err: any) {
+        const msg = err?.message || 'Probe exception';
+        done({ ok: false, latencyMs: Date.now() - start, error: password ? msg.split(password).join('[REDACTED]') : msg });
+      }
+    });
+  }
+
+  public reconfigureBroker(host: string, port: number, path: string = '/mqtt', useSSL: boolean = true): void {
+    this.saveConfiguration({ host, port, path, useSSL, protocol: useSSL ? 'wss' : 'ws', reconnect: true });
   }
 
   disconnect(): void {

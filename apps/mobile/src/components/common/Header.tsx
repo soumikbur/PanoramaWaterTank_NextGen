@@ -1229,6 +1229,8 @@ export const Header: React.FC = () => {
                     ? 'RETRY'
                     : mqttConnectionStatus === 'SUBSCRIPTION_ERROR'
                     ? 'SUB ERR'
+                    : mqttConnectionStatus === 'CONNECTION_ERROR'
+                    ? 'ERR'
                     : mqttConnectionStatus === 'STALE'
                     ? 'STALE'
                     : 'OFF'}
@@ -2089,6 +2091,8 @@ export const Header: React.FC = () => {
               ? 'RECONNECTING'
               : mqttConnectionStatus === 'SUBSCRIPTION_ERROR'
               ? 'SUB ERROR'
+              : mqttConnectionStatus === 'CONNECTION_ERROR'
+              ? 'CONN ERROR'
               : 'OFFLINE'}
           </span>
         </div>

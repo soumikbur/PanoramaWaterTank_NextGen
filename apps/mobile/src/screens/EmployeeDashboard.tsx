@@ -659,7 +659,9 @@ export const EmployeeDashboard: React.FC = () => {
               : mqttConnectionStatus === 'RECONNECTING'
               ? 'RECONNECTING'
               : mqttConnectionStatus === 'SUBSCRIPTION_ERROR'
-              ? 'SUBSCRIPTION ERROR'
+              ? 'SUBSCRIPTION FAILED'
+              : mqttConnectionStatus === 'CONNECTION_ERROR'
+              ? 'CONNECTION ERROR'
               : 'DISCONNECTED'}
           </span>
         </div>
@@ -751,7 +753,9 @@ export const EmployeeDashboard: React.FC = () => {
                   : mqttConnectionStatus === 'RECONNECTING'
                   ? 'RECONNECTING'
                   : mqttConnectionStatus === 'SUBSCRIPTION_ERROR'
-                  ? 'SUB ERROR'
+                  ? 'SUB FAILED'
+                  : mqttConnectionStatus === 'CONNECTION_ERROR'
+                  ? 'CONN ERROR'
                   : mqttConnectionStatus === 'STALE'
                   ? 'STALE'
                   : 'DISCONNECTED'}
