@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { colors, metrics, typography } from '../../theme';
 import { TankLiveStatus } from '../../types';
+import { formatTelemetryTime } from '../../services/tankStatusService';
 import { BaseCard } from '../common/BaseCard';
 import { StatusBadge } from '../common/StatusBadge';
 import { useDisplayPreferences } from '../../context/DisplayPreferencesContext';
@@ -52,34 +53,29 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({
 
   // 2. Calibrated Physical Tank Geometry
   const tankHeightCm = tank?.maxHeightCm && tank.maxHeightCm > 0 ? tank.maxHeightCm : 50.0;
-  const capacityLiters = tank?.capacityLiters && tank.capacityLiters > 0 ? tank.capacityLiters : 20.0;
 
-  // 3. Mathematical Height, Fill Percentage & Volume Calculations
+  // 3. Mathematical Height & Fill Percentage Calculations
   let fillPercentage = 0.0;
   let waterHeightCm: number | null = null;
-  let waterVolumeLiters: number | null = null;
   let isOverflow = false;
 
   if (state === 'VALID_READING' || state === 'STALE') {
-    if (tank?.levelPercent != null) {
-      fillPercentage = Math.max(0, Math.min(100, tank.levelPercent));
-      waterHeightCm = tank?.heightCm != null ? tank.heightCm : (fillPercentage / 100.0) * tankHeightCm;
-    } else if (tank?.heightCm != null) {
+    if (tank?.heightCm != null && tankHeightCm > 0) {
       waterHeightCm = tank.heightCm;
       fillPercentage = Math.max(0, Math.min(100, (waterHeightCm / tankHeightCm) * 100));
+    } else if (tank?.levelPercent != null) {
+      fillPercentage = Math.max(0, Math.min(100, tank.levelPercent));
+      waterHeightCm = (fillPercentage / 100.0) * tankHeightCm;
     }
-    waterVolumeLiters = tank?.volumeLiters != null ? tank.volumeLiters : (fillPercentage / 100.0) * capacityLiters;
     isOverflow = fillPercentage >= 100.0;
   } else if (state === 'VALID_ZERO') {
     fillPercentage = 0.0;
     waterHeightCm = 0.0;
-    waterVolumeLiters = 0.0;
     isOverflow = false;
   } else {
     // NO_TELEMETRY (State A)
     fillPercentage = 0.0;
     waterHeightCm = null;
-    waterVolumeLiters = null;
     isOverflow = false;
   }
 
@@ -97,13 +93,6 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({
       : state === 'STALE'
       ? `${waterHeightCm!.toFixed(2)} cm (Stale)`
       : `${waterHeightCm!.toFixed(2)} cm`;
-
-  const volumeDisplay =
-    state === 'NO_TELEMETRY'
-      ? 'Awaiting Data'
-      : state === 'STALE'
-      ? `${waterVolumeLiters!.toFixed(2)} L (Stale)`
-      : `${waterVolumeLiters!.toFixed(2)} L`;
 
   const severity: 'Critical' | 'Warning' | 'Normal' | 'Neutral' =
     state === 'NO_TELEMETRY'
@@ -135,9 +124,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({
       ? 'Low Warning Alert'
       : 'Receiving Data';
 
-  const lastUpdated = tank?.lastUpdate
-    ? new Date(tank.lastUpdate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-    : 'Awaiting Telemetry';
+  const lastUpdated = formatTelemetryTime(tank?.lastUpdate, 'Awaiting Telemetry');
 
   // 5. Animation Control (Only animate wave if valid live telemetry reading exists and enabled by performance profile)
   const { activePerformanceConfig } = useDisplayPreferences();
@@ -728,7 +715,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({
               </span>
             </div>
 
-            {/* 2. Tank Volume Card Block */}
+            {/* 2. Configured Tank Height Card Block */}
             <div
               style={{
                 backgroundColor: '#F8FAFC',
@@ -759,7 +746,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({
                     color: colors.textSecondary,
                   }}
                 >
-                  Tank Volume
+                  Water Level
                 </span>
               </div>
               <span
@@ -770,7 +757,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({
                   color: colors.textPrimary,
                 }}
               >
-                {volumeDisplay}
+                {levelDisplay}
               </span>
               <span
                 style={{
@@ -779,7 +766,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({
                   color: colors.textSecondary,
                 }}
               >
-                of {capacityLiters.toFixed(2)} L
+                Max Height: {tankHeightCm.toFixed(2)} cm
               </span>
             </div>
 
@@ -877,7 +864,7 @@ export const TankVisualization: React.FC<TankVisualizationProps> = ({
               color: '#1E40AF',
             }}
           >
-            Tank Capacity: {capacityLiters.toFixed(2)} L
+            Level: {levelDisplay}
           </span>
         </div>
       </div>

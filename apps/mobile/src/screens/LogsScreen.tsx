@@ -64,7 +64,7 @@ export const LogsScreen: React.FC = () => {
         time: now,
         level,
         module: 'panorama.telemetry',
-        msg: `Telemetry frame received for Train ${data.trainNumber || 'N/A'} Coach ${data.coachNumber || 'N/A'} (Level: ${data.primaryLevel != null ? `${data.primaryLevel.toFixed(1)}%` : 'N/A'}, Vol: ${data.primaryVolume != null ? `${data.primaryVolume.toFixed(1)}L` : 'N/A'})`,
+        msg: `Telemetry frame received for Train ${data.trainNumber || 'N/A'} Coach ${data.coachNumber || 'N/A'} (Level: ${data.primaryLevel != null ? `${data.primaryLevel.toFixed(1)}%` : 'N/A'}, Height: ${data.primaryHeightCm != null ? `${data.primaryHeightCm.toFixed(1)} cm` : 'N/A'})`,
       };
       setLogs((prev) => [newEntry, ...prev.slice(0, 99)]);
     });

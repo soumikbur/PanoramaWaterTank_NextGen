@@ -103,3 +103,70 @@ async def test_coach_management_crud_lifecycle():
         # 9. Clean up test train
         await client.delete(f"/api/v1/trains/{test_train}", headers=admin_headers)
 
+
+@pytest.mark.asyncio
+async def test_coach_height_only_independent_tanks_and_settings():
+    """Height-only coach add/edit persists independent per-tank heights without requiring capacity."""
+    await init_db()
+    test_train = "88992"
+
+    async with AsyncSessionLocal() as db:
+        await db.execute(delete(Train).where(Train.train_number == test_train))
+        await db.commit()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        login = await client.post("/api/v1/auth/login", json={"username": "@admin", "password": "Admin@123"})
+        assert login.status_code == 200
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+        try:
+            c_res = await client.post(
+                "/api/v1/trains",
+                headers=headers,
+                json={"train_number": test_train, "name": "Height Only Express", "region": "NORTH", "coach_number": "C1"},
+            )
+            assert c_res.status_code == 201
+
+            # Add Coach C2 without capacity fields, with independent tank heights
+            add_res = await client.post(
+                f"/api/v1/trains/{test_train}/coaches",
+                headers=headers,
+                json={
+                    "coach_number": "C2",
+                    "tank_1_name": "Arrival Custom",
+                    "tank_2_name": "Departure Tall",
+                    "tank_1_height_cm": 50.0,
+                    "tank_2_height_cm": 100.0,
+                    "tank_1_geometry": "CYLINDRICAL",
+                    "tank_2_geometry": "RECTANGULAR",
+                },
+            )
+            assert add_res.status_code == 201
+
+            # Partial update (name only) must NOT reset custom heights back to 50.0
+            patch_res = await client.put(
+                f"/api/v1/trains/{test_train}/coaches/C2",
+                headers=headers,
+                json={"tank_2_name": "Departure Tall Renamed"},
+            )
+            assert patch_res.status_code == 200
+
+            consist_res = await client.get(f"/api/v1/trains/{test_train}/consist", headers=headers)
+            assert consist_res.status_code == 200
+            c2 = next(c for c in consist_res.json()["coaches"] if c["coach_number"] == "C2")
+            assert c2["tanks"][0]["height_cm"] == 50.0
+            assert c2["tanks"][1]["height_cm"] == 100.0
+            assert c2["tanks"][1]["name"] == "Departure Tall Renamed"
+            assert c2["tanks"][1]["geometry"] == "RECTANGULAR"
+
+            # Settings endpoint accepts height-only updates without tank_capacity_liters
+            cfg_res = await client.post(
+                "/api/v1/settings/apply",
+                headers=headers,
+                json={"tank_height_cm": 50.0},
+            )
+            assert cfg_res.status_code == 200
+        finally:
+            await client.delete(f"/api/v1/trains/{test_train}", headers=headers)
+

@@ -77,7 +77,7 @@ class UnifiedSettingsPayload(BaseModel):
     tank_shape: str = "CYLINDRICAL"
     tank_height_cm: float = 50.0
     tank_diameter_cm: float = 22.56
-    tank_capacity_liters: float = 20.0
+    tank_capacity_liters: Optional[float] = 20.0
     tank_area_m2: float = 0.04
 
     # Calibration
@@ -205,8 +205,9 @@ async def apply_unified_config(
             status_code=400,
             detail=f"Warning threshold ({payload.alarm_warning_percent}%) must be lower than overflow threshold ({payload.alarm_overflow_percent}%)."
         )
-    if payload.tank_height_cm <= 0 or payload.tank_capacity_liters <= 0:
-        raise HTTPException(status_code=400, detail="Tank dimensions and capacity must be positive numbers.")
+    if payload.tank_height_cm <= 0:
+        raise HTTPException(status_code=400, detail="Tank height must be a positive number.")
+    effective_capacity = payload.tank_capacity_liters if (payload.tank_capacity_liters and payload.tank_capacity_liters > 0) else 20.0
 
     repo = SettingsRepository(db)
     tank_repo = TankRepository(db)
@@ -226,7 +227,7 @@ async def apply_unified_config(
         "tank.shape": payload.tank_shape,
         "tank.height_cm": payload.tank_height_cm,
         "tank.diameter_cm": payload.tank_diameter_cm,
-        "tank.capacity_liters": payload.tank_capacity_liters,
+        "tank.capacity_liters": effective_capacity,
         "tank.area_m2": payload.tank_area_m2,
         "sensor.type": payload.sensor_type,
         "sensor.zero_offset_cm": payload.sensor_zero_offset_cm,
@@ -258,7 +259,7 @@ async def apply_unified_config(
     primary_tank = await tank_repo.get_first_primary()
     if primary_tank:
         primary_tank.height_cm = payload.tank_height_cm
-        primary_tank.capacity_liters = payload.tank_capacity_liters
+        primary_tank.capacity_liters = effective_capacity
         primary_tank.area_m2 = payload.tank_area_m2
         primary_tank.warning_threshold_percent = payload.alarm_warning_percent
         primary_tank.critical_threshold_percent = payload.alarm_critical_percent
@@ -275,7 +276,7 @@ async def apply_unified_config(
         "parameters": {
             "refresh_interval": payload.device_refresh_interval,
             "tank_height_cm": payload.tank_height_cm,
-            "tank_capacity_liters": payload.tank_capacity_liters,
+            "tank_capacity_liters": effective_capacity,
             "alarm_warning_percent": payload.alarm_warning_percent,
             "alarm_critical_percent": payload.alarm_critical_percent,
             "alarm_overflow_percent": payload.alarm_overflow_percent,

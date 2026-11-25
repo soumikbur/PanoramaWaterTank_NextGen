@@ -6,10 +6,9 @@ import {
   AlertTriangle,
   Clock,
   AlertCircle,
-  Database,
   Gauge,
 } from 'lucide-react';
-import { ConsistTankItem } from '../../services/tankStatusService';
+import { ConsistTankItem, computeLevelPercentFromHeight } from '../../services/tankStatusService';
 
 export interface WaterTankStatusCardProps {
   coachNumber: string;
@@ -47,28 +46,18 @@ export const WaterTankStatusCard: React.FC<WaterTankStatusCardProps> = ({
   departureHeightCm,
 }) => {
   // 1. Resolve Tank 1 (Arrival Side) Parameters
-  const t1Capacity = tank1Obj?.capacityLiters && tank1Obj.capacityLiters > 0 ? tank1Obj.capacityLiters : 500;
-  const t1MaxHeight = tank1Obj?.maxHeightCm && tank1Obj.maxHeightCm > 0 ? tank1Obj.maxHeightCm : 150;
-  const t1Level = tank1Obj?.levelPercent != null ? tank1Obj.levelPercent : arrivalLevel;
+  const t1MaxHeight = tank1Obj?.maxHeightCm && tank1Obj.maxHeightCm > 0 ? tank1Obj.maxHeightCm : 50;
   const t1Height = tank1Obj?.heightCm != null ? tank1Obj.heightCm : arrivalHeightCm;
-  const t1Volume =
-    tank1Obj?.volumeLiters != null
-      ? tank1Obj.volumeLiters
-      : t1Level != null
-      ? Number(((t1Level / 100) * t1Capacity).toFixed(0))
-      : null;
+  const t1Level =
+    computeLevelPercentFromHeight(t1Height, t1MaxHeight) ??
+    (tank1Obj?.levelPercent != null ? tank1Obj.levelPercent : arrivalLevel);
 
   // 2. Resolve Tank 2 (Departure Side) Parameters
-  const t2Capacity = tank2Obj?.capacityLiters && tank2Obj.capacityLiters > 0 ? tank2Obj.capacityLiters : 500;
-  const t2MaxHeight = tank2Obj?.maxHeightCm && tank2Obj.maxHeightCm > 0 ? tank2Obj.maxHeightCm : 150;
-  const t2Level = tank2Obj?.levelPercent != null ? tank2Obj.levelPercent : departureLevel;
+  const t2MaxHeight = tank2Obj?.maxHeightCm && tank2Obj.maxHeightCm > 0 ? tank2Obj.maxHeightCm : 50;
   const t2Height = tank2Obj?.heightCm != null ? tank2Obj.heightCm : departureHeightCm;
-  const t2Volume =
-    tank2Obj?.volumeLiters != null
-      ? tank2Obj.volumeLiters
-      : t2Level != null
-      ? Number(((t2Level / 100) * t2Capacity).toFixed(0))
-      : null;
+  const t2Level =
+    computeLevelPercentFromHeight(t2Height, t2MaxHeight) ??
+    (tank2Obj?.levelPercent != null ? tank2Obj.levelPercent : departureLevel);
 
   // 3. Telemetry State Resolution (Active, Stale, Awaiting, Offline)
   const resolveTankTelemetryState = (
@@ -101,32 +90,29 @@ export const WaterTankStatusCard: React.FC<WaterTankStatusCardProps> = ({
   const t1Telemetry = resolveTankTelemetryState(tank1Obj, t1Level);
   const t2Telemetry = resolveTankTelemetryState(tank2Obj, t2Level);
 
-  // 4. Total Water Summary Calculations
-  const totalCapacity = t1Capacity + t2Capacity;
-  const t1HasValidData = (t1Telemetry.state === 'ACTIVE' || t1Telemetry.state === 'STALE') && t1Volume != null;
-  const t2HasValidData = (t2Telemetry.state === 'ACTIVE' || t2Telemetry.state === 'STALE') && t2Volume != null;
+  // 4. Total Water Summary Calculations (Height-driven)
+  const t1HasValidData = (t1Telemetry.state === 'ACTIVE' || t1Telemetry.state === 'STALE') && (t1Level != null || t1Height != null);
+  const t2HasValidData = (t2Telemetry.state === 'ACTIVE' || t2Telemetry.state === 'STALE') && (t2Level != null || t2Height != null);
 
-  let totalVolume: number | null = null;
   let overallFill: number | null = null;
   let overallFillType: 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE' = 'UNAVAILABLE';
   let partialLabel = '';
 
-  if (t1HasValidData && t2HasValidData) {
-    totalVolume = t1Volume! + t2Volume!;
-    overallFill = Number(((totalVolume / totalCapacity) * 100).toFixed(1));
+  const t1EffHeight = t1Height != null ? t1Height : (t1Level != null ? (t1Level / 100) * t1MaxHeight : null);
+  const t2EffHeight = t2Height != null ? t2Height : (t2Level != null ? (t2Level / 100) * t2MaxHeight : null);
+
+  if (t1HasValidData && t2HasValidData && t1EffHeight != null && t2EffHeight != null && t1MaxHeight + t2MaxHeight > 0) {
+    overallFill = computeLevelPercentFromHeight(t1EffHeight + t2EffHeight, t1MaxHeight + t2MaxHeight);
     overallFillType = 'COMPLETE';
-  } else if (t1HasValidData) {
-    totalVolume = t1Volume!;
-    overallFill = Number(((totalVolume / t1Capacity) * 100).toFixed(1));
+  } else if (t1HasValidData && t1Level != null) {
+    overallFill = Number(Math.min(100, Math.max(0, t1Level)).toFixed(1));
     overallFillType = 'PARTIAL';
     partialLabel = 'Tank 1 only';
-  } else if (t2HasValidData) {
-    totalVolume = t2Volume!;
-    overallFill = Number(((totalVolume / t2Capacity) * 100).toFixed(1));
+  } else if (t2HasValidData && t2Level != null) {
+    overallFill = Number(Math.min(100, Math.max(0, t2Level)).toFixed(1));
     overallFillType = 'PARTIAL';
     partialLabel = 'Tank 2 only';
   } else {
-    totalVolume = null;
     overallFill = null;
     overallFillType = 'UNAVAILABLE';
   }
@@ -441,7 +427,7 @@ export const WaterTankStatusCard: React.FC<WaterTankStatusCardProps> = ({
             Water Tank Status (Coach {coachNumber})
           </h3>
           <span style={{ fontSize: '11px', color: '#64748B', fontWeight: 500 }}>
-            Real-time calibrated reservoir monitoring and volumetric telemetry
+            Real-time calibrated height monitoring and ultrasonic level telemetry
           </span>
         </div>
       </div>
@@ -487,7 +473,7 @@ export const WaterTankStatusCard: React.FC<WaterTankStatusCardProps> = ({
           </div>
 
           {/* Body: Tank Vessel + Reading Panel */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
             {/* Left: SVG Tank Body with Ruler */}
             {renderTankSvg(t1Level, t1MaxHeight, t1Telemetry.state, 'tank1')}
 
@@ -499,7 +485,7 @@ export const WaterTankStatusCard: React.FC<WaterTankStatusCardProps> = ({
                 backgroundColor: '#F0F7FF',
                 border: '1px solid #DBEAFE',
                 borderRadius: '8px',
-                padding: '12px 14px',
+                padding: '10px 10px',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '8px',
@@ -507,10 +493,10 @@ export const WaterTankStatusCard: React.FC<WaterTankStatusCardProps> = ({
               }}
             >
               {/* Fill Percentage & Badge */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px' }}>
                 <span
                   style={{
-                    fontSize: '24px',
+                    fontSize: '20px',
                     fontWeight: 900,
                     color: t1Level != null ? (t1Level < 10 ? '#DC2626' : t1Level < 20 ? '#D97706' : '#0F172A') : '#64748B',
                     lineHeight: 1.1,
@@ -563,23 +549,23 @@ export const WaterTankStatusCard: React.FC<WaterTankStatusCardProps> = ({
                 </span>
               </div>
 
-              {/* Height in cm */}
+              {/* Measured Water Height */}
               <div>
                 <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', letterSpacing: '0.4px', textTransform: 'uppercase', display: 'block' }}>
-                  Level
+                  Water Height
                 </span>
                 <span style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
                   {t1Height != null ? `${t1Height.toFixed(1)} cm` : '— cm'}
                 </span>
               </div>
 
-              {/* Volume */}
+              {/* Configured Tank Height */}
               <div>
                 <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', letterSpacing: '0.4px', textTransform: 'uppercase', display: 'block' }}>
-                  Volume
+                  Tank Height
                 </span>
                 <span style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
-                  {t1Volume != null ? `${t1Volume.toLocaleString()} L / ${t1Capacity.toLocaleString()} L` : `— / ${t1Capacity.toLocaleString()} L`}
+                  {t1MaxHeight.toFixed(0)} cm max
                 </span>
               </div>
             </div>
@@ -628,7 +614,7 @@ export const WaterTankStatusCard: React.FC<WaterTankStatusCardProps> = ({
           </div>
 
           {/* Body: Tank Vessel + Reading Panel */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
             {/* Left: SVG Tank Body with Ruler */}
             {renderTankSvg(t2Level, t2MaxHeight, t2Telemetry.state, 'tank2')}
 
@@ -640,7 +626,7 @@ export const WaterTankStatusCard: React.FC<WaterTankStatusCardProps> = ({
                 backgroundColor: '#F0F7FF',
                 border: '1px solid #DBEAFE',
                 borderRadius: '8px',
-                padding: '12px 14px',
+                padding: '10px 10px',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '8px',
@@ -648,10 +634,10 @@ export const WaterTankStatusCard: React.FC<WaterTankStatusCardProps> = ({
               }}
             >
               {/* Fill Percentage & Badge */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '4px' }}>
                 <span
                   style={{
-                    fontSize: '24px',
+                    fontSize: '20px',
                     fontWeight: 900,
                     color: t2Level != null ? (t2Level < 10 ? '#DC2626' : t2Level < 20 ? '#D97706' : '#0F172A') : '#64748B',
                     lineHeight: 1.1,
@@ -704,23 +690,23 @@ export const WaterTankStatusCard: React.FC<WaterTankStatusCardProps> = ({
                 </span>
               </div>
 
-              {/* Height in cm */}
+              {/* Measured Water Height */}
               <div>
                 <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', letterSpacing: '0.4px', textTransform: 'uppercase', display: 'block' }}>
-                  Level
+                  Water Height
                 </span>
                 <span style={{ fontSize: '14px', fontWeight: 700, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
                   {t2Height != null ? `${t2Height.toFixed(1)} cm` : '— cm'}
                 </span>
               </div>
 
-              {/* Volume */}
+              {/* Configured Tank Height */}
               <div>
                 <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', letterSpacing: '0.4px', textTransform: 'uppercase', display: 'block' }}>
-                  Volume
+                  Tank Height
                 </span>
                 <span style={{ fontSize: '12px', fontWeight: 700, color: '#0F172A', fontVariantNumeric: 'tabular-nums' }}>
-                  {t2Volume != null ? `${t2Volume.toLocaleString()} L / ${t2Capacity.toLocaleString()} L` : `— / ${t2Capacity.toLocaleString()} L`}
+                  {t2MaxHeight.toFixed(0)} cm max
                 </span>
               </div>
             </div>
@@ -732,7 +718,7 @@ export const WaterTankStatusCard: React.FC<WaterTankStatusCardProps> = ({
       </div>
 
       {/* ============================================================== */}
-      {/* TOTAL WATER SUMMARY PANEL (3 Sections) */}
+      {/* TOTAL WATER SUMMARY PANEL (3 Sections — Height Focused)        */}
       {/* ============================================================== */}
       <div
         className="summary-stats-grid scada-total-water-summary-panel"
@@ -743,7 +729,7 @@ export const WaterTankStatusCard: React.FC<WaterTankStatusCardProps> = ({
           padding: '10px 14px',
         }}
       >
-        {/* Section 1: Total Capacity */}
+        {/* Section 1: Arrival Tank Height */}
         <div className="scada-total-summary-col" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div
             style={{
@@ -763,15 +749,15 @@ export const WaterTankStatusCard: React.FC<WaterTankStatusCardProps> = ({
           </div>
           <div style={{ minWidth: 0 }}>
             <span style={{ fontSize: '10px', fontWeight: 600, color: '#64748B', display: 'block', whiteSpace: 'nowrap' }}>
-              Total Capacity
+              Arrival Height
             </span>
             <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', whiteSpace: 'nowrap' }}>
-              {totalCapacity.toLocaleString()} L
+              {t1Height != null ? `${t1Height.toFixed(1)}` : '—'} / {t1MaxHeight.toFixed(0)} cm
             </span>
           </div>
         </div>
 
-        {/* Section 2: Total Volume */}
+        {/* Section 2: Departure Tank Height */}
         <div
           className="scada-total-summary-col"
           style={{
@@ -796,14 +782,14 @@ export const WaterTankStatusCard: React.FC<WaterTankStatusCardProps> = ({
               flexShrink: 0,
             }}
           >
-            <Database size={14} />
+            <CheckCircle2 size={14} />
           </div>
           <div style={{ minWidth: 0 }}>
             <span style={{ fontSize: '10px', fontWeight: 600, color: '#64748B', display: 'block', whiteSpace: 'nowrap' }}>
-              Total Volume
+              Departure Height
             </span>
             <span style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', whiteSpace: 'nowrap' }}>
-              {totalVolume != null ? `${totalVolume.toLocaleString()} L` : '— L'}
+              {t2Height != null ? `${t2Height.toFixed(1)}` : '—'} / {t2MaxHeight.toFixed(0)} cm
             </span>
           </div>
         </div>

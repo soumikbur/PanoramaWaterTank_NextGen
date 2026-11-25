@@ -878,8 +878,8 @@ const AdminSystemSettings: React.FC = () => {
               </h3>
               <span style={{ fontSize: '11px', color: colors.textMuted }}>
                 {isAdmin
-                  ? 'Gateway REST endpoints, physical tank geometry, sensor types & calibration.'
-                  : 'Physical tank geometry, sensor profile & capacity calibration.'}
+                  ? 'Gateway REST endpoints, physical tank height, geometry, sensor types & calibration.'
+                  : 'Physical tank height, geometry & sensor calibration.'}
               </span>
             </div>
 
@@ -1026,30 +1026,6 @@ const AdminSystemSettings: React.FC = () => {
                   borderRadius: '6px',
                   border: `1px solid ${colors.borderStrong}`,
                   fontSize: '13px',
-                }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
-                Capacity (Liters)
-              </label>
-              <input
-                type="number"
-                disabled={!isAdmin}
-                step="0.1"
-                value={tankCapacity}
-                onChange={(e) => {
-                  setTankCapacity(parseFloat(e.target.value) || 0);
-                  setHasUnsavedChanges(true);
-                }}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  border: `1px solid ${colors.borderStrong}`,
-                  fontSize: '13px',
-                  backgroundColor: '#F8FAFC',
                 }}
               />
             </div>
@@ -2073,7 +2049,7 @@ const AdminSystemSettings: React.FC = () => {
             </div>
 
             <p style={{ margin: 0, fontSize: '13px', color: '#334155', lineHeight: 1.5 }}>
-              Are you sure you want to reset all parameters to default factory specifications? This will reset the tank capacity to <strong>20.0 Liters</strong>, height to <strong>50.0 cm</strong>, and threshold alarms to standard setpoints.
+              Are you sure you want to reset all parameters to default factory specifications? This will reset the tank height to <strong>50.0 cm</strong>, and threshold alarms to standard setpoints.
             </p>
 
             <div style={{ display: 'flex', flexDirection: isMobile ? 'column-reverse' : 'row', justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>

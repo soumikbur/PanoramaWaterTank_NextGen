@@ -39,7 +39,7 @@ export const APP_DISTRIBUTION: AppDistributionConfig = {
     'Integrated Coach Editing & Consist Editor with admin authorization.'
   ],
   features: [
-    'Real-time Tank 1 & Tank 2 Level Monitoring (Liters & %)',
+    'Real-time Tank 1 & Tank 2 Level Monitoring (Height cm & %)',
     'Full Consist & Coach Editing (Add, Edit, Rename, Reorder)',
     'Multi-Train Live Map Tracking with Offline Fallback',
     'Audible & Visual Push Alerts for Critical Water Depletion',

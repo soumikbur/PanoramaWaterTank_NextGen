@@ -30,6 +30,7 @@ import { deviceRegistry, ManagedDevice } from '../services/deviceRegistry';
 import { localFleetStore, FLEET_STORAGE_KEY, FLEET_UPDATED_EVENT } from '../services/localFleetStore';
 import {
   computeConsistData,
+  computeLevelPercentFromHeight,
   getTelemetryTimeoutSeconds,
   setTelemetryTimeoutSeconds,
   ConsistMetrics,
@@ -1680,20 +1681,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         ? configuredTrainsRef.current.find((t) => t.train_number.trim() === activeTrno)
         : undefined;
       const isConfiguredTrain = Boolean(activeTrno && configuredTrainSetRef.current.has(activeTrno));
+      const matchedConsistCoach = (isConfiguredTrain && activeConsistRef.current && activeConsistRef.current.train_number.trim() === activeTrno)
+        ? activeConsistRef.current.coaches?.find((c) => c.coach_number?.trim().toUpperCase() === activeChno.toUpperCase())
+        : undefined;
+      const t1Spec = matchedConsistCoach?.tanks?.find((t) => t.tank_index === 1) || matchedConsistCoach?.tanks?.[0];
+      const t2Spec = matchedConsistCoach?.tanks?.find((t) => t.tank_index === 2) || matchedConsistCoach?.tanks?.[1];
       const configuredMaxHeightCm = (isConfiguredTrain && activeConsistRef.current && activeConsistRef.current.train_number.trim() === activeTrno && activeConsistRef.current.tank_height_cm)
         ? activeConsistRef.current.tank_height_cm
         : (trainItem?.tank_height_cm ?? 50.0);
+      const tank1MaxHeightCm = t1Spec?.height_cm && t1Spec.height_cm > 0 ? t1Spec.height_cm : configuredMaxHeightCm;
+      const tank2MaxHeightCm = t2Spec?.height_cm && t2Spec.height_cm > 0 ? t2Spec.height_cm : configuredMaxHeightCm;
       const configuredCapacityLiters = (isConfiguredTrain && activeConsistRef.current && activeConsistRef.current.train_number.trim() === activeTrno && activeConsistRef.current.tank_capacity_liters)
         ? activeConsistRef.current.tank_capacity_liters
         : (trainItem?.tank_capacity_liters ?? 20.0);
 
-      const arrivalLevelPct = telemetry.cm1 != null && configuredMaxHeightCm > 0
-        ? Number(Math.min(100, Math.max(0, (telemetry.cm1 / configuredMaxHeightCm) * 100)).toFixed(1))
-        : (telemetry.wlp1 != null ? Number(telemetry.wlp1.toFixed(1)) : null);
+      const arrivalLevelPct =
+        computeLevelPercentFromHeight(telemetry.cm1, tank1MaxHeightCm) ??
+        (telemetry.wlp1 != null ? Number(telemetry.wlp1.toFixed(1)) : null);
 
-      const departureLevelPct = telemetry.cm2 != null && configuredMaxHeightCm > 0
-        ? Number(Math.min(100, Math.max(0, (telemetry.cm2 / configuredMaxHeightCm) * 100)).toFixed(1))
-        : (telemetry.wlp2 != null ? Number(telemetry.wlp2.toFixed(1)) : null);
+      const departureLevelPct =
+        computeLevelPercentFromHeight(telemetry.cm2, tank2MaxHeightCm) ??
+        (telemetry.wlp2 != null ? Number(telemetry.wlp2.toFixed(1)) : null);
 
       const batVal = telemetry.bat;
       const tankBatteryVoltage = batVal != null ? Number((3.2 + (batVal / 100) * 1.0).toFixed(2)) : undefined;
@@ -1749,7 +1757,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         volumeLiters: arrivalVolume,
         heightCm: telemetry.cm1 ?? undefined,
         capacityLiters: configuredCapacityLiters,
-        maxHeightCm: configuredMaxHeightCm,
+        maxHeightCm: tank1MaxHeightCm,
         crossSectionalAreaM2: 0.33,
         rank: arrivalLevelPct && arrivalLevelPct > 70 ? 'GOOD' : arrivalLevelPct && arrivalLevelPct > 30 ? 'MODERATE' : 'LOW',
         alarmStatus: telemetry.wlv1 === false ? 'VALVE_ALERT' : arrivalLevelPct != null && arrivalLevelPct < 10 ? 'CRITICAL_LOW' : arrivalLevelPct != null && arrivalLevelPct < 20 ? 'WARNING_LOW' : 'NORMAL',
@@ -1777,7 +1785,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         volumeLiters: departureVolume,
         heightCm: telemetry.cm2 ?? undefined,
         capacityLiters: configuredCapacityLiters,
-        maxHeightCm: configuredMaxHeightCm,
+        maxHeightCm: tank2MaxHeightCm,
         crossSectionalAreaM2: 0.33,
         rank: departureLevelPct && departureLevelPct > 70 ? 'GOOD' : departureLevelPct && departureLevelPct > 30 ? 'MODERATE' : 'LOW',
         alarmStatus: telemetry.wlv2 === false ? 'VALVE_ALERT' : departureLevelPct != null && departureLevelPct < 10 ? 'CRITICAL_LOW' : departureLevelPct != null && departureLevelPct < 20 ? 'WARNING_LOW' : 'NORMAL',

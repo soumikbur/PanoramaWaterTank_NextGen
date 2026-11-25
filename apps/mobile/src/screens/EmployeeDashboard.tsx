@@ -476,7 +476,7 @@ export const EmployeeDashboard: React.FC = () => {
         name: newTrainName.trim(),
         region: newTrainRegion,
         coach_number: newInitialCoach.trim() || 'C1',
-        tank_capacity: 20.0,
+        tank_height_cm: 50.0,
       });
 
       setIsAddModalOpen(false);
@@ -2128,12 +2128,25 @@ export const EmployeeDashboard: React.FC = () => {
             </div>
 
             {/* Device */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-secondary, #475569)', fontSize: '13px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-secondary, #475569)', fontSize: '13px', flexShrink: 0 }}>
                 <Cpu size={16} color="var(--color-primary, #2563EB)" />
                 <span>Device</span>
               </div>
-              <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--color-text-primary, #0F172A)' }}>
+              <span
+                title={selectedCoach.deviceId}
+                style={{
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  color: 'var(--color-text-primary, #0F172A)',
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  textAlign: 'right',
+                  fontFamily: 'monospace',
+                }}
+              >
                 {selectedCoach.deviceId}
               </span>
             </div>
@@ -2470,7 +2483,7 @@ export const EmployeeDashboard: React.FC = () => {
               {selectedCoach.arrivalHeightCm != null ? `${selectedCoach.arrivalHeightCm.toFixed(1)} cm` : '— cm'}
             </div>
             <div style={{ fontSize: '10px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Volume: {selectedCoach.arrivalLevel != null ? `${((selectedCoach.arrivalLevel / 100) * 500).toFixed(0)} L` : '— L'}</span>
+              <span>Max Height: {selectedConsistCoach?.tanks?.[0]?.maxHeightCm?.toFixed(0) ?? 50} cm</span>
               <span style={{ color: '#15803D', fontWeight: 700 }}>
                 {selectedCoach.arrivalLevel != null ? `${selectedCoach.arrivalLevel.toFixed(0)}%` : '—'}
               </span>
@@ -2484,7 +2497,7 @@ export const EmployeeDashboard: React.FC = () => {
               {selectedCoach.departureHeightCm != null ? `${selectedCoach.departureHeightCm.toFixed(1)} cm` : '— cm'}
             </div>
             <div style={{ fontSize: '10px', color: '#475569', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Volume: {selectedCoach.departureLevel != null ? `${((selectedCoach.departureLevel / 100) * 500).toFixed(0)} L` : '— L'}</span>
+              <span>Max Height: {selectedConsistCoach?.tanks?.[1]?.maxHeightCm?.toFixed(0) ?? 50} cm</span>
               <span style={{ color: selectedCoach.departureLevel != null && selectedCoach.departureLevel < 10 ? '#DC2626' : '#15803D', fontWeight: 700 }}>
                 {selectedCoach.departureLevel != null ? `${selectedCoach.departureLevel.toFixed(0)}%` : '—'}
               </span>

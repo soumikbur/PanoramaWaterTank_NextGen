@@ -25,6 +25,37 @@ import { ManagedDevice } from './deviceRegistry';
 export const DEFAULT_TELEMETRY_TIMEOUT_SECONDS = 180;
 export const TIMEOUT_STORAGE_KEY = 'panorama_telemetry_timeout_sec';
 
+/** Format an ISO datetime or preformatted HH:mm:ss telemetry string without producing "Invalid Date". */
+export function formatTelemetryTime(raw?: string | null, fallback = 'Awaiting Telemetry'): string {
+  if (!raw || !String(raw).trim()) return fallback;
+  const trimmed = String(raw).trim();
+  const parsed = new Date(trimmed);
+  return Number.isNaN(parsed.getTime())
+    ? trimmed
+    : parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+/**
+ * Calculate water level percentage from measured water height and configured tank height
+ * with division-by-zero protection and [0, 100] clamping.
+ */
+export function computeLevelPercentFromHeight(
+  measuredHeightCm: number | null | undefined,
+  configuredHeightCm: number | null | undefined
+): number | null {
+  if (
+    typeof measuredHeightCm !== 'number' ||
+    !Number.isFinite(measuredHeightCm) ||
+    typeof configuredHeightCm !== 'number' ||
+    !Number.isFinite(configuredHeightCm) ||
+    configuredHeightCm <= 0
+  ) {
+    return null;
+  }
+  const raw = (Math.max(0, measuredHeightCm) / configuredHeightCm) * 100;
+  return Number(Math.min(100, Math.max(0, raw)).toFixed(1));
+}
+
 export type OfflineReason =
   | 'UNMAPPED'
   | 'NO_TELEMETRY'
@@ -210,11 +241,12 @@ export function computeConsistData(params: {
     const t1Obj = consistCoach?.tanks?.find((t) => t.tank_index === 1) || consistCoach?.tanks?.[0];
     const t2Obj = consistCoach?.tanks?.find((t) => t.tank_index === 2) || consistCoach?.tanks?.[1];
 
-    const coachHeightCm =
-      t1Obj?.height_cm ||
-      consistForTrain?.tank_height_cm ||
-      matchedTrain?.tank_height_cm ||
+    const trainDefaultHeightCm =
+      (consistForTrain?.tank_height_cm && consistForTrain.tank_height_cm > 0 ? consistForTrain.tank_height_cm : null) ||
+      (matchedTrain?.tank_height_cm && matchedTrain.tank_height_cm > 0 ? matchedTrain.tank_height_cm : null) ||
       50.0;
+    const tank1MaxHeightCm = t1Obj?.height_cm && t1Obj.height_cm > 0 ? t1Obj.height_cm : trainDefaultHeightCm;
+    const tank2MaxHeightCm = t2Obj?.height_cm && t2Obj.height_cm > 0 ? t2Obj.height_cm : trainDefaultHeightCm;
 
     const coachCapacityLiters =
       t1Obj?.capacity_liters ||
@@ -271,12 +303,8 @@ export function computeConsistData(params: {
       valve2Normal = mappedDevice.valve2Normal ?? true;
       tank1HeightCm = mappedDevice.tank1HeightCm ?? null;
       tank2HeightCm = mappedDevice.tank2HeightCm ?? null;
-      tank1Level = tank1HeightCm != null && coachHeightCm > 0
-        ? Number(Math.min(100, Math.max(0, (tank1HeightCm / coachHeightCm) * 100)).toFixed(1))
-        : (mappedDevice.tank1Level ?? null);
-      tank2Level = tank2HeightCm != null && coachHeightCm > 0
-        ? Number(Math.min(100, Math.max(0, (tank2HeightCm / coachHeightCm) * 100)).toFixed(1))
-        : (mappedDevice.tank2Level ?? null);
+      tank1Level = computeLevelPercentFromHeight(tank1HeightCm, tank1MaxHeightCm) ?? (mappedDevice.tank1Level ?? null);
+      tank2Level = computeLevelPercentFromHeight(tank2HeightCm, tank2MaxHeightCm) ?? (mappedDevice.tank2Level ?? null);
       latitude = mappedDevice.latitude ?? null;
       longitude = mappedDevice.longitude ?? null;
     }
@@ -294,12 +322,8 @@ export function computeConsistData(params: {
       valve2Normal = liveTelemetry.wlv2;
       tank1HeightCm = liveTelemetry.cm1;
       tank2HeightCm = liveTelemetry.cm2;
-      tank1Level = liveTelemetry.cm1 != null && coachHeightCm > 0
-        ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm1 / coachHeightCm) * 100)).toFixed(1))
-        : liveTelemetry.wlp1;
-      tank2Level = liveTelemetry.cm2 != null && coachHeightCm > 0
-        ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm2 / coachHeightCm) * 100)).toFixed(1))
-        : liveTelemetry.wlp2;
+      tank1Level = computeLevelPercentFromHeight(liveTelemetry.cm1, tank1MaxHeightCm) ?? liveTelemetry.wlp1;
+      tank2Level = computeLevelPercentFromHeight(liveTelemetry.cm2, tank2MaxHeightCm) ?? liveTelemetry.wlp2;
       latitude = liveTelemetry.lat;
       longitude = liveTelemetry.long;
     }
@@ -351,7 +375,7 @@ export function computeConsistData(params: {
       volumeLiters: tank1Volume,
       heightCm: tank1HeightCm,
       capacityLiters: coachCapacityLiters,
-      maxHeightCm: coachHeightCm,
+      maxHeightCm: tank1MaxHeightCm,
       crossSectionalAreaM2: 0.33,
       rank: tank1Level && tank1Level > 70 ? 'GOOD' : tank1Level && tank1Level > 30 ? 'MODERATE' : 'LOW',
       alarmStatus: !valve1Normal ? 'VALVE_ALERT' : tank1Level != null && tank1Level < 10 ? 'CRITICAL_LOW' : 'NORMAL',
@@ -386,7 +410,7 @@ export function computeConsistData(params: {
       volumeLiters: tank2Volume,
       heightCm: tank2HeightCm,
       capacityLiters: coachCapacityLiters,
-      maxHeightCm: coachHeightCm,
+      maxHeightCm: tank2MaxHeightCm,
       crossSectionalAreaM2: 0.33,
       rank: tank2Level && tank2Level > 70 ? 'GOOD' : tank2Level && tank2Level > 30 ? 'MODERATE' : 'LOW',
       alarmStatus: !valve2Normal ? 'VALVE_ALERT' : tank2Level != null && tank2Level < 10 ? 'CRITICAL_LOW' : 'NORMAL',

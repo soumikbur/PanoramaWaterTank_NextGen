@@ -54,7 +54,6 @@ export const TankInfoCard: React.FC<TankInfoCardProps> = ({
   const sensorStatus = formatSensorHealth(rawSensorStatus);
 
   const tankHeight = `${(tank?.maxHeightCm ?? 50.0).toFixed(2)} cm`;
-  const capacity = `${(tank?.capacityLiters ?? 20.0).toFixed(2)} L`;
 
   const realMqttStatus = mqttStatus || (!isTelemetryAvailable
     ? 'Awaiting Telemetry'
@@ -132,9 +131,6 @@ export const TankInfoCard: React.FC<TankInfoCardProps> = ({
         <Divider />
 
         <InfoRow label="Tank Height" value={tankHeight} />
-        <Divider />
-
-        <InfoRow label="Tank Capacity" value={capacity} />
       </div>
     </BaseCard>
   );

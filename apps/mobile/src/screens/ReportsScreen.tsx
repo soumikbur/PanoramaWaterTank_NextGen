@@ -42,7 +42,7 @@ export const ReportsScreen: React.FC = () => {
       id: 'coach_water',
       label: 'Coach Water Level Report',
       icon: Layers,
-      desc: 'Coach-by-coach Arrival vs Departure reservoir levels and capacity breakdown',
+      desc: 'Coach-by-coach Arrival vs Departure reservoir water height and fill percentage breakdown',
     },
     {
       id: 'battery_status',
@@ -72,9 +72,6 @@ export const ReportsScreen: React.FC = () => {
         const configuredHeight = (activeConsist && activeConsist.train_number.trim() === liveTelemetry.trno.trim() && activeConsist.tank_height_cm)
           ? activeConsist.tank_height_cm
           : (trainItem?.tank_height_cm ?? 50.0);
-        const configuredCap = (activeConsist && activeConsist.train_number.trim() === liveTelemetry.trno.trim() && activeConsist.tank_capacity_liters)
-          ? activeConsist.tank_capacity_liters
-          : (trainItem?.tank_capacity_liters ?? 20.0);
 
         const arrPct = typeof liveTelemetry.cm1 === 'number' && configuredHeight > 0
           ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm1 / configuredHeight) * 100)).toFixed(1))
@@ -82,18 +79,14 @@ export const ReportsScreen: React.FC = () => {
         const depPct = typeof liveTelemetry.cm2 === 'number' && configuredHeight > 0
           ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm2 / configuredHeight) * 100)).toFixed(1))
           : liveTelemetry.wlp2;
-        const volArr = ((arrPct / 100) * configuredCap);
-        const volDep = ((depPct / 100) * configuredCap);
-        const totalVol = volArr + volDep;
-        const totalCap = configuredCap * 2;
-        const avgPct = ((arrPct + depPct) / 2).toFixed(1);
+        const avgPct = arrPct != null && depPct != null ? ((arrPct + depPct) / 2).toFixed(1) : '—';
         return [
           {
             train: liveTelemetry.trno,
             name: `Special Express (${liveTelemetry.trno})`,
             region: 'Eastern',
-            totalCapacity: `${totalCap.toFixed(0)} L`,
-            currentVolume: `${totalVol.toFixed(1)} L`,
+            configuredHeight: `${configuredHeight.toFixed(0)} cm`,
+            measuredHeights: `${liveTelemetry.cm1 != null ? liveTelemetry.cm1.toFixed(1) : '—'} / ${liveTelemetry.cm2 != null ? liveTelemetry.cm2.toFixed(1) : '—'} cm`,
             avgLevel: `${avgPct}%`,
             status: !liveTelemetry.isStale ? 'Active' : 'Stale',
           },
@@ -104,8 +97,8 @@ export const ReportsScreen: React.FC = () => {
           train: selectedTrain,
           name: `Train ${selectedTrain}`,
           region: 'Eastern',
-          totalCapacity: '—',
-          currentVolume: '—',
+          configuredHeight: '50 cm',
+          measuredHeights: '—',
           avgLevel: '—',
           status: 'Awaiting Telemetry',
         },

@@ -4,6 +4,7 @@ import { CoachDualTankCard } from '../components/tank/CoachDualTankCard';
 import { CoachMiniMap } from '../components/location/CoachMiniMap';
 import { ManageCoachModal } from '../components/coach/ManageCoachModal';
 import { AddDeviceModal } from '../components/device/AddDeviceModal';
+import { computeLevelPercentFromHeight } from '../services/tankStatusService';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -135,26 +136,30 @@ export const CoachDetailsScreen: React.FC = () => {
   const batteryPercent = hasLiveTelemetry && liveTelemetry ? liveTelemetry.bat : (matchingDevice?.batteryPercent ?? null);
   const isBatteryLow = batteryPercent != null && batteryPercent < 40;
 
-  // Configured tank geometry dynamically derived from train / consist settings
-  const configuredMaxHeight = (activeConsist?.train_number === trainNum && activeConsist?.tank_height_cm) || matchedConfiguredTrain?.tank_height_cm || 50.0;
-  const configuredMaxCapacity = (activeConsist?.train_number === trainNum && activeConsist?.tank_capacity_liters) || matchedConfiguredTrain?.tank_capacity_liters || 20.0;
+  // Configured tank heights dynamically derived per tank (fallback to train/default 50.0 cm)
+  const consistCoach =
+    activeConsist?.train_number === trainNum
+      ? activeConsist.coaches?.find((c) => c.coach_number?.trim().toUpperCase() === coachNum)
+      : undefined;
+  const tank1Spec = consistCoach?.tanks?.find((t) => t.tank_index === 1) || consistCoach?.tanks?.[0];
+  const tank2Spec = consistCoach?.tanks?.find((t) => t.tank_index === 2) || consistCoach?.tanks?.[1];
+  const trainDefaultHeight =
+    (activeConsist?.train_number === trainNum && activeConsist?.tank_height_cm) ||
+    matchedConfiguredTrain?.tank_height_cm ||
+    50.0;
+  const tank1MaxHeight = tank1Spec?.height_cm && tank1Spec.height_cm > 0 ? tank1Spec.height_cm : trainDefaultHeight;
+  const tank2MaxHeight = tank2Spec?.height_cm && tank2Spec.height_cm > 0 ? tank2Spec.height_cm : trainDefaultHeight;
 
-  // Dual Tank Telemetry values: formula (heightCm / configuredMaxHeight) * 100
+  // Dual Tank Telemetry values: Water Level (%) = (Measured Water Height / Configured Tank Height) * 100
   const fallbackLevel1 = matchingDevice?.tank1Level ?? matchingDevice?.primaryLevel ?? null;
-  const fallbackHeight1 = matchingDevice?.tank1HeightCm ?? (fallbackLevel1 != null ? (fallbackLevel1 / 100) * configuredMaxHeight : null);
-  const arrivalPercent = hasLiveTelemetry && liveTelemetry && typeof liveTelemetry.cm1 === 'number' && configuredMaxHeight > 0
-    ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm1 / configuredMaxHeight) * 100)).toFixed(1))
-    : fallbackLevel1;
+  const fallbackHeight1 = matchingDevice?.tank1HeightCm ?? (fallbackLevel1 != null ? (fallbackLevel1 / 100) * tank1MaxHeight : null);
   const arrivalHeight = hasLiveTelemetry && liveTelemetry ? liveTelemetry.cm1 : fallbackHeight1;
-  const arrivalVolume = arrivalPercent != null ? Number(((arrivalPercent / 100) * configuredMaxCapacity).toFixed(1)) : null;
+  const arrivalPercent = computeLevelPercentFromHeight(arrivalHeight, tank1MaxHeight) ?? fallbackLevel1;
 
   const fallbackLevel2 = matchingDevice?.tank2Level ?? matchingDevice?.secondaryLevel ?? null;
-  const fallbackHeight2 = matchingDevice?.tank2HeightCm ?? (fallbackLevel2 != null ? (fallbackLevel2 / 100) * configuredMaxHeight : null);
-  const departurePercent = hasLiveTelemetry && liveTelemetry && typeof liveTelemetry.cm2 === 'number' && configuredMaxHeight > 0
-    ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm2 / configuredMaxHeight) * 100)).toFixed(1))
-    : fallbackLevel2;
+  const fallbackHeight2 = matchingDevice?.tank2HeightCm ?? (fallbackLevel2 != null ? (fallbackLevel2 / 100) * tank2MaxHeight : null);
   const departureHeight = hasLiveTelemetry && liveTelemetry ? liveTelemetry.cm2 : fallbackHeight2;
-  const departureVolume = departurePercent != null ? Number(((departurePercent / 100) * configuredMaxCapacity).toFixed(1)) : null;
+  const departurePercent = computeLevelPercentFromHeight(departureHeight, tank2MaxHeight) ?? fallbackLevel2;
 
   const availableCoaches = useMemo(() => {
     if (activeConsist?.train_number === trainNum && activeConsist.coaches?.length) {
@@ -724,13 +729,11 @@ export const CoachDetailsScreen: React.FC = () => {
           <CoachDualTankCard
             tankId={`tank-${trainNum}-${coachNum}-arr`}
             tankIndex={1}
-            tankName="Arrival Side (Tank 1)"
+            tankName={tank1Spec?.name || 'Arrival Side (Tank 1)'}
             sensorLabel="Sensor 1"
-            capacityLiters={configuredMaxCapacity}
-            maxHeightCm={configuredMaxHeight}
+            maxHeightCm={tank1MaxHeight}
             fillPercent={arrivalPercent}
             waterHeightCm={arrivalHeight}
-            volumeLiters={arrivalVolume}
             isOnline={isOnline}
             hasTelemetry={arrivalPercent != null}
             isStale={false}
@@ -744,13 +747,11 @@ export const CoachDetailsScreen: React.FC = () => {
           <CoachDualTankCard
             tankId={`tank-${trainNum}-${coachNum}-dep`}
             tankIndex={2}
-            tankName="Departure Side (Tank 2)"
+            tankName={tank2Spec?.name || 'Departure Side (Tank 2)'}
             sensorLabel="Sensor 2"
-            capacityLiters={configuredMaxCapacity}
-            maxHeightCm={configuredMaxHeight}
+            maxHeightCm={tank2MaxHeight}
             fillPercent={departurePercent}
             waterHeightCm={departureHeight}
-            volumeLiters={departureVolume}
             isOnline={isOnline}
             hasTelemetry={departurePercent != null}
             isStale={false}

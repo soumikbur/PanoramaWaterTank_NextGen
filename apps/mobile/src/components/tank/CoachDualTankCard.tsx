@@ -7,11 +7,11 @@ export interface CoachDualTankCardProps {
   tankIndex: 1 | 2;
   tankName: string;
   sensorLabel: string;
-  capacityLiters: number;
+  capacityLiters?: number;
   maxHeightCm: number;
   fillPercent: number | null;
   waterHeightCm: number | null;
-  volumeLiters: number | null;
+  volumeLiters?: number | null;
   isOnline: boolean;
   hasTelemetry: boolean;
   isStale?: boolean;
@@ -25,11 +25,9 @@ export const CoachDualTankCard: React.FC<CoachDualTankCardProps> = ({
   tankIndex,
   tankName,
   sensorLabel,
-  capacityLiters,
   maxHeightCm,
   fillPercent,
   waterHeightCm,
-  volumeLiters,
   isOnline,
   hasTelemetry,
   isStale = false,
@@ -309,7 +307,6 @@ export const CoachDualTankCard: React.FC<CoachDualTankCardProps> = ({
 
   const displayPercent = fillPercent != null ? `${clampedPercent.toFixed(1)}%` : 'Awaiting';
   const displayHeight = waterHeightCm != null ? `${waterHeightCm.toFixed(1)} cm` : '--';
-  const displayVolume = volumeLiters != null ? `${volumeLiters.toFixed(1)} L` : (fillPercent != null ? `${((clampedPercent / 100) * capacityLiters).toFixed(1)} L` : '--');
   const displayTime = lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : (hasTelemetry ? new Date().toLocaleTimeString() : 'Awaiting');
 
   return (
@@ -504,7 +501,7 @@ export const CoachDualTankCard: React.FC<CoachDualTankCardProps> = ({
                 {displayPercent}
               </span>
               <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 500 }}>
-                {maxHeightCm.toFixed(1)} cm &bull; {capacityLiters.toFixed(0)} L Max
+                {maxHeightCm.toFixed(1)} cm Max
               </span>
             </div>
           </div>
@@ -533,7 +530,7 @@ export const CoachDualTankCard: React.FC<CoachDualTankCardProps> = ({
               <div style={{ fontSize: '9px', color: '#94A3B8' }}>of {maxHeightCm.toFixed(1)} cm</div>
             </div>
 
-            {/* 2. Estimated Volume */}
+            {/* 2. Configured Tank Height */}
             <div
               style={{
                 backgroundColor: '#F8FAFC',
@@ -542,11 +539,11 @@ export const CoachDualTankCard: React.FC<CoachDualTankCardProps> = ({
                 padding: '6px 8px',
               }}
             >
-              <div style={{ fontSize: '9.5px', color: '#64748B', fontWeight: 600 }}>ESTIMATED VOL</div>
+              <div style={{ fontSize: '9.5px', color: '#64748B', fontWeight: 600 }}>TANK HEIGHT</div>
               <div style={{ fontSize: '13px', fontWeight: 800, color: '#0F172A', marginTop: '1px' }}>
-                {displayVolume}
+                {maxHeightCm.toFixed(1)} cm
               </div>
-              <div style={{ fontSize: '9px', color: '#94A3B8' }}>of {capacityLiters.toFixed(0)} L</div>
+              <div style={{ fontSize: '9px', color: '#94A3B8' }}>Configured Height</div>
             </div>
 
             {/* 3. Sensor Status */}

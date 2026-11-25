@@ -1191,7 +1191,7 @@ export const CoachManagementScreen: React.FC = () => {
                     Arrival Water Tank
                   </h4>
                 </div>
-                <span style={{ fontSize: '11px', color: '#64748B' }}>50 cm / 20 L Capacity</span>
+                <span style={{ fontSize: '11px', color: '#64748B' }}>50 cm Height</span>
               </div>
               <TankVisualization
                 tank={arrivalTankData}
@@ -1220,7 +1220,7 @@ export const CoachManagementScreen: React.FC = () => {
                     Departure Water Tank
                   </h4>
                 </div>
-                <span style={{ fontSize: '11px', color: '#64748B' }}>50 cm / 20 L Capacity</span>
+                <span style={{ fontSize: '11px', color: '#64748B' }}>50 cm Height</span>
               </div>
               <TankVisualization
                 tank={departureTankData}

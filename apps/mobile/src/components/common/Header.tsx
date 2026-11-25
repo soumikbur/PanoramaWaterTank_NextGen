@@ -381,13 +381,13 @@ export const Header: React.FC = () => {
 
       if (matchId || matchName || matchCoach || matchTrain || matchDevice) {
         const levelStr = t.levelPercent != null ? `${t.levelPercent}%` : '—';
-        const volStr = t.volumeLiters != null ? `${t.volumeLiters} L` : '—';
+        const hStr = t.heightCm != null ? `${t.heightCm.toFixed(1)} cm` : '—';
         matches.push({
           id: `tank-${t.tankId}`,
           type: 'TANK',
           name: t.tankName || `Tank ${t.tankId.slice(0, 8)}`,
           identifier: t.tankId.length > 16 ? `${t.tankId.slice(0, 8)}...` : t.tankId,
-          subtitle: `Coach ${t.coachNumber || '—'} • Train ${t.trainNumber || '—'} • Level: ${levelStr} (${volStr}) • Cap: ${t.capacityLiters || 20}L`,
+          subtitle: `Coach ${t.coachNumber || '—'} • Train ${t.trainNumber || '—'} • Level: ${levelStr} (${hStr}) • Max Height: ${t.maxHeightCm || 50} cm`,
           status: t.isOnline ? (t.alarmStatus || 'NORMAL') : 'OFFLINE',
           isOnline: t.isOnline,
           onClick: () => {

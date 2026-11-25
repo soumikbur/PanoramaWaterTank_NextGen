@@ -80,7 +80,6 @@ export const TrainManagementScreen: React.FC = () => {
   const [newTrainName, setNewTrainName] = useState('');
   const [newTrainRegion, setNewTrainRegion] = useState('NORTH');
   const [newCoachNumber, setNewCoachNumber] = useState('B1');
-  const [newCapacity, setNewCapacity] = useState('20.0');
 
   // Edit Train Form State
   const [editTrainNumber, setEditTrainNumber] = useState('');
@@ -237,7 +236,7 @@ export const TrainManagementScreen: React.FC = () => {
         name: newTrainName.trim(),
         region: newTrainRegion,
         coach_number: newCoachNumber.trim() || 'B1',
-        tank_capacity: parseFloat(newCapacity) || 20.0,
+        tank_height_cm: 50.0,
       });
 
       setIsAddModalOpen(false);
@@ -1263,7 +1262,7 @@ export const TrainManagementScreen: React.FC = () => {
                           </span>
                         </div>
 
-                        {/* Level & Volume digits */}
+                        {/* Level & Height digits */}
                         <div
                           style={{
                             display: 'flex',
@@ -1277,7 +1276,7 @@ export const TrainManagementScreen: React.FC = () => {
                               {tank.current_level_percent}%
                             </span>
                             <span style={{ fontSize: '11px', color: '#64748B', marginLeft: '6px' }}>
-                              ({tank.current_volume_liters} L / {tank.capacity_liters} L)
+                              ({(tank.current_height_cm ?? Number((((tank.current_level_percent || 0) / 100) * (tank.height_cm || 50)).toFixed(1)))} cm / {tank.height_cm || 50} cm)
                             </span>
                           </div>
                         </div>

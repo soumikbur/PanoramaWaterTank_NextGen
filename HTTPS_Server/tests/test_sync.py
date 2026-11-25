@@ -153,3 +153,47 @@ def test_sync_optimistic_version_conflict_and_ws_origin_guard(tmp_path, monkeypa
             ws.receive_text()
 
     isolated.close()
+
+
+def test_shared_state_height_only_coaches_preserve_legacy_records(tmp_path):
+    """Height-only coach add/update persists independent tank heights and preserves legacy capacity rows."""
+    svc = SharedStateService(db_path=tmp_path / "height_only.db")
+    # Default seed train exists (or create one with legacy capacity_liters)
+    svc.create_train(
+        {
+            "train_number": "77881",
+            "name": "Height Express",
+            "region": "EAST",
+            "tank_height_cm": 50.0,
+            "coaches": [{"coach_number": "C1"}],
+        }
+    )
+    svc.add_coach(
+        "77881",
+        {
+            "coach_number": "C2",
+            "tank_1_name": "Arrival Side",
+            "tank_2_name": "Departure Tall",
+            "tank_1_height_cm": 50.0,
+            "tank_2_height_cm": 100.0,
+            "tank_1_geometry": "CYLINDRICAL",
+            "tank_2_geometry": "RECTANGULAR",
+        },
+    )
+    consist = svc.get_train_consist("77881")
+    c2 = next(c for c in consist["coaches"] if c["coach_number"] == "C2")
+    assert c2["tanks"][0]["height_cm"] == 50.0
+    assert c2["tanks"][1]["height_cm"] == 100.0
+    assert c2["tanks"][1]["geometry"] == "RECTANGULAR"
+
+    # Partial height update keeps Tank 1 intact and updates Tank 2
+    svc.update_coach("77881", "C2", {"tank_2_height_cm": 120.0})
+    consist_after = svc.get_train_consist("77881")
+    c2_after = next(c for c in consist_after["coaches"] if c["coach_number"] == "C2")
+    assert c2_after["tanks"][0]["height_cm"] == 50.0
+    assert c2_after["tanks"][1]["height_cm"] == 120.0
+    # Legacy C1 row still loads cleanly
+    c1 = next(c for c in consist_after["coaches"] if c["coach_number"] == "C1")
+    assert c1["tanks"][0]["height_cm"] == 50.0
+    assert "capacity_liters" in c1["tanks"][0]
+    svc.close()

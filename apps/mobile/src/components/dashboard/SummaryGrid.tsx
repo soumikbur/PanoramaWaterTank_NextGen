@@ -15,27 +15,23 @@ export const SummaryGrid: React.FC<SummaryGridProps> = ({ tank, compact = false,
   const isZero = isTelemetryAvailable && (tank!.levelPercent === 0 || (tank!.heightCm !== null && tank!.heightCm === 0));
 
   const tankHeightCm = tank?.maxHeightCm && tank.maxHeightCm > 0 ? tank.maxHeightCm : 50.0;
-  const capacityLiters = tank?.capacityLiters && tank.capacityLiters > 0 ? tank.capacityLiters : 20.0;
 
   // Level & Water Geometry
   let fillPercentage = 0.0;
   let waterHeightCm: number | null = null;
-  let waterVolumeLiters: number | null = null;
 
   if (isTelemetryAvailable) {
     if (isZero) {
       fillPercentage = 0.0;
       waterHeightCm = 0.0;
-      waterVolumeLiters = 0.0;
     } else {
-      if (tank?.heightCm != null) {
+      if (tank?.heightCm != null && tankHeightCm > 0) {
         waterHeightCm = tank.heightCm;
         fillPercentage = Math.max(0, Math.min(100, (waterHeightCm / tankHeightCm) * 100));
       } else {
         fillPercentage = Math.max(0, Math.min(100, tank!.levelPercent!));
         waterHeightCm = (fillPercentage / 100.0) * tankHeightCm;
       }
-      waterVolumeLiters = tank?.volumeLiters != null ? tank.volumeLiters : (fillPercentage / 100.0) * capacityLiters;
     }
   }
 
@@ -97,13 +93,13 @@ export const SummaryGrid: React.FC<SummaryGridProps> = ({ tank, compact = false,
     ? `(-- cm / ${tankHeightCm.toFixed(2)} cm)`
     : `(${waterHeightCm!.toFixed(2)} cm / ${tankHeightCm.toFixed(2)} cm)`;
 
-  const volumeValue = !isTelemetryAvailable
+  const heightValue = !isTelemetryAvailable
     ? 'Awaiting Data'
     : isStale
-    ? `${waterVolumeLiters!.toFixed(2)} L (Stale)`
-    : `${waterVolumeLiters!.toFixed(2)} L`;
+    ? `${waterHeightCm!.toFixed(2)} cm (Stale)`
+    : `${waterHeightCm!.toFixed(2)} cm`;
 
-  const volumeSubtitle = `(of ${capacityLiters.toFixed(2)} L)`;
+  const heightSubtitle = `(of ${tankHeightCm.toFixed(2)} cm max)`;
 
   const tempValue = temperature != null ? `${temperature.toFixed(2)} °C` : 'Awaiting Data';
 
@@ -126,14 +122,14 @@ export const SummaryGrid: React.FC<SummaryGridProps> = ({ tank, compact = false,
         subtitle={levelSubtitle}
       />
 
-      {/* 2. Tank Volume */}
+      {/* 2. Measured Water Height */}
       <SummaryCard
         iconGlyph="volume"
         iconColor={colors.primary}
         valueColor={colors.textPrimary}
-        title="Tank Volume"
-        value={volumeValue}
-        subtitle={volumeSubtitle}
+        title="Water Height"
+        value={heightValue}
+        subtitle={heightSubtitle}
       />
 
       {/* 3. Status */}

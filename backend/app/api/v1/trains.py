@@ -1096,8 +1096,8 @@ class CoachAddRequest(BaseModel):
     coach_type: Optional[str] = None
     tank_1_name: Optional[str] = "Arrival Side (Tank 1)"
     tank_2_name: Optional[str] = "Departure Side (Tank 2)"
-    tank_1_capacity: Optional[float] = 500.0
-    tank_2_capacity: Optional[float] = 500.0
+    tank_1_capacity: Optional[float] = None
+    tank_2_capacity: Optional[float] = None
     tank_1_height_cm: Optional[float] = 50.0
     tank_2_height_cm: Optional[float] = 50.0
     tank_1_geometry: Optional[str] = "CYLINDRICAL"
@@ -1203,25 +1203,27 @@ async def add_coach_to_train(
             device.updated_at = utc_now()
         await device_repo.sync_exclusive_assignment(uid, tr_clean, c_clean)
 
-        # Configure Dual Tanks for assigned device
-        h1 = data.tank_1_height_cm or data.tank_height_cm or 50.0
-        h2 = data.tank_2_height_cm or data.tank_height_cm or 50.0
-        geom1 = (data.tank_1_geometry or "CYLINDRICAL").upper()
-        geom2 = (data.tank_2_geometry or "CYLINDRICAL").upper()
+    # Configure Dual Tanks & Composition Specs
+    h1 = data.tank_1_height_cm or data.tank_height_cm or 50.0
+    h2 = data.tank_2_height_cm or data.tank_height_cm or 50.0
+    geom1 = (data.tank_1_geometry or "CYLINDRICAL").upper()
+    geom2 = (data.tank_2_geometry or "CYLINDRICAL").upper()
 
+    if device:
         t1 = await tank_repo.get_by_device_and_index(device.id, 1)
         if not t1:
             t1 = await tank_repo.create(
                 device_id=device.id,
                 tank_index=1,
                 name=data.tank_1_name or "Arrival Side (Tank 1)",
-                capacity_liters=data.tank_1_capacity or 500.0,
+                capacity_liters=data.tank_1_capacity or 20.0,
                 height_cm=h1,
                 tank_type=geom1,
             )
         else:
             t1.name = data.tank_1_name or t1.name
-            t1.capacity_liters = data.tank_1_capacity or t1.capacity_liters
+            if data.tank_1_capacity:
+                t1.capacity_liters = data.tank_1_capacity
             t1.height_cm = h1
             t1.tank_type = geom1
 
@@ -1231,26 +1233,54 @@ async def add_coach_to_train(
                 device_id=device.id,
                 tank_index=2,
                 name=data.tank_2_name or "Departure Side (Tank 2)",
-                capacity_liters=data.tank_2_capacity or 500.0,
+                capacity_liters=data.tank_2_capacity or 20.0,
                 height_cm=h2,
                 tank_type=geom2,
             )
         else:
             t2.name = data.tank_2_name or t2.name
-            t2.capacity_liters = data.tank_2_capacity or t2.capacity_liters
+            if data.tank_2_capacity:
+                t2.capacity_liters = data.tank_2_capacity
             t2.height_cm = h2
             t2.tank_type = geom2
 
-    # Update Train official composition JSON if present
+    # Update Train official composition JSON cleanly (seed from Coach rows first if empty)
     comp_len = 1
     if db_train:
         comp = _safe_json_loads(db_train.coach_configuration_json, [])
+        if not comp:
+            existing_coaches = (
+                await db.execute(
+                    select(Coach)
+                    .where(Coach.train_number == tr_clean, Coach.is_deleted == False)
+                    .order_by(Coach.position.asc())
+                )
+            ).scalars().all()
+            comp = [
+                {
+                    "position": idx,
+                    "coach_number": ec.coach_number,
+                    "coach_name": ec.coach_name,
+                    "coach_category": ec.coach_category,
+                    "coach_type": ec.coach_type,
+                    "device_uid": ec.device_uid,
+                }
+                for idx, ec in enumerate(existing_coaches, 1)
+            ]
         if not any(c.get("coach_number", "").upper() == c_clean for c in comp):
             comp.append({
                 "position": len(comp) + 1,
                 "coach_number": c_clean,
+                "coach_name": data.coach_name or f"Coach {c_clean}",
                 "coach_category": data.coach_category or "Coach",
                 "coach_type": data.coach_type or data.coach_category or "Coach",
+                "tank_1_name": data.tank_1_name or "Arrival Side (Tank 1)",
+                "tank_2_name": data.tank_2_name or "Departure Side (Tank 2)",
+                "arrival_tank_height_cm": h1,
+                "departure_tank_height_cm": h2,
+                "tank_1_geometry": geom1,
+                "tank_2_geometry": geom2,
+                "device_uid": uid or None,
             })
             db_train.coach_configuration_json = json.dumps(comp)
             db_train.total_coaches = len(comp)
@@ -1436,6 +1466,9 @@ async def update_coach_details(
     comp = _safe_json_loads(db_train.coach_configuration_json, []) if db_train else []
     coach_in_comp = any(c.get("coach_number", "").upper() == c_clean for c in comp)
 
+    coach_repo = CoachRepository(db)
+    db_coach = await coach_repo.get_by_train_and_coach_number(tr_clean, c_clean)
+
     dev = (
         await db.execute(
             select(Device).where(
@@ -1445,63 +1478,74 @@ async def update_coach_details(
         )
     ).scalars().first()
 
-    if not dev and not coach_in_comp:
+    if not dev and not coach_in_comp and not db_coach:
         raise HTTPException(
             status_code=404,
             detail=f"Coach {c_clean} not found on Train {tr_clean}.",
         )
 
-    h1 = data.tank_1_height_cm or data.tank_height_cm or 50.0
-    h2 = data.tank_2_height_cm or data.tank_height_cm or 50.0
+    req_h1 = (
+        data.tank_1_height_cm
+        if (data.tank_1_height_cm is not None and data.tank_1_height_cm > 0)
+        else (data.tank_height_cm if (data.tank_height_cm is not None and data.tank_height_cm > 0) else None)
+    )
+    req_h2 = (
+        data.tank_2_height_cm
+        if (data.tank_2_height_cm is not None and data.tank_2_height_cm > 0)
+        else (data.tank_height_cm if (data.tank_height_cm is not None and data.tank_height_cm > 0) else None)
+    )
+
+    async def _sync_device_tanks(target_device_id: str) -> None:
+        tank_repo = TankRepository(db)
+        specs = (
+            (1, data.tank_1_name, "Arrival Side (Tank 1)", data.tank_1_capacity, req_h1, data.tank_1_geometry),
+            (2, data.tank_2_name, "Departure Side (Tank 2)", data.tank_2_capacity, req_h2, data.tank_2_geometry),
+        )
+        for idx, name, default_name, cap, ht, geom in specs:
+            existing = await tank_repo.get_by_device_and_index(target_device_id, idx)
+            if existing:
+                if name:
+                    existing.name = name.strip()
+                if cap and cap > 0:
+                    existing.capacity_liters = cap
+                if ht and ht > 0:
+                    existing.height_cm = ht
+                if geom:
+                    existing.tank_type = geom.strip().upper()
+            else:
+                await tank_repo.create(
+                    device_id=target_device_id,
+                    tank_index=idx,
+                    name=name or default_name,
+                    capacity_liters=cap or 500.0,
+                    height_cm=ht or 50.0,
+                    tank_type=(geom or "CYLINDRICAL").upper(),
+                )
 
     if dev:
-        tank_repo = TankRepository(db)
-        t1 = await tank_repo.get_by_device_and_index(dev.id, 1)
-        if t1:
-            if data.tank_1_name:
-                t1.name = data.tank_1_name.strip()
-            if data.tank_1_capacity and data.tank_1_capacity > 0:
-                t1.capacity_liters = data.tank_1_capacity
-            if h1 and h1 > 0:
-                t1.height_cm = h1
-            if data.tank_1_geometry:
-                t1.tank_type = data.tank_1_geometry.strip().upper()
-        else:
-            t1 = await tank_repo.create(
-                device_id=dev.id,
-                tank_index=1,
-                name=data.tank_1_name or "Arrival Side (Tank 1)",
-                capacity_liters=data.tank_1_capacity or 500.0,
-                height_cm=h1,
-                tank_type=(data.tank_1_geometry or "CYLINDRICAL").upper(),
-            )
+        await _sync_device_tanks(dev.id)
 
-        t2 = await tank_repo.get_by_device_and_index(dev.id, 2)
-        if t2:
-            if data.tank_2_name:
-                t2.name = data.tank_2_name.strip()
-            if data.tank_2_capacity and data.tank_2_capacity > 0:
-                t2.capacity_liters = data.tank_2_capacity
-            if h2 and h2 > 0:
-                t2.height_cm = h2
-            if data.tank_2_geometry:
-                t2.tank_type = data.tank_2_geometry.strip().upper()
-        else:
-            t2 = await tank_repo.create(
-                device_id=dev.id,
-                tank_index=2,
-                name=data.tank_2_name or "Departure Side (Tank 2)",
-                capacity_liters=data.tank_2_capacity or 500.0,
-                height_cm=h2,
-                tank_type=(data.tank_2_geometry or "CYLINDRICAL").upper(),
-            )
-
-    # Update coach category, type and name in train configuration JSON if present
-    db_train = (
-        await db.execute(select(Train).where(Train.train_number == tr_clean))
-    ).scalar_one_or_none()
+    # Update coach category, type, tank heights, and name in train configuration JSON
     if db_train:
-        comp = _safe_json_loads(db_train.coach_configuration_json, [])
+        if not comp:
+            existing_coaches = (
+                await db.execute(
+                    select(Coach)
+                    .where(Coach.train_number == tr_clean, Coach.is_deleted == False)
+                    .order_by(Coach.position.asc())
+                )
+            ).scalars().all()
+            comp = [
+                {
+                    "position": idx,
+                    "coach_number": ec.coach_number,
+                    "coach_name": ec.coach_name,
+                    "coach_category": ec.coach_category,
+                    "coach_type": ec.coach_type,
+                    "device_uid": ec.device_uid,
+                }
+                for idx, ec in enumerate(existing_coaches, 1)
+            ]
         for c in comp:
             if c.get("coach_number", "").upper() == c_clean:
                 if data.coach_category:
@@ -1518,10 +1562,10 @@ async def update_coach_details(
                     c["tank_1_geometry"] = data.tank_1_geometry
                 if data.tank_2_geometry:
                     c["tank_2_geometry"] = data.tank_2_geometry
-                if h1 and h1 > 0:
-                    c["arrival_tank_height_cm"] = h1
-                if h2 and h2 > 0:
-                    c["departure_tank_height_cm"] = h2
+                if req_h1:
+                    c["arrival_tank_height_cm"] = req_h1
+                if req_h2:
+                    c["departure_tank_height_cm"] = req_h2
                 if data.tank_1_capacity and data.tank_1_capacity > 0:
                     c["arrival_tank_capacity_liters"] = data.tank_1_capacity
                 if data.tank_2_capacity and data.tank_2_capacity > 0:
@@ -1564,28 +1608,7 @@ async def update_coach_details(
                     )
                     db.add(new_dev)
                     await db.flush()
-                # Ensure dual tanks for newly assigned device
-                tank_repo = TankRepository(db)
-                t1 = await tank_repo.get_by_device_and_index(new_dev.id, 1)
-                if not t1:
-                    await tank_repo.create(
-                        device_id=new_dev.id,
-                        tank_index=1,
-                        name=data.tank_1_name or "Arrival Side (Tank 1)",
-                        capacity_liters=data.tank_1_capacity or 500.0,
-                        height_cm=h1,
-                        tank_type=(data.tank_1_geometry or "CYLINDRICAL").upper(),
-                    )
-                t2 = await tank_repo.get_by_device_and_index(new_dev.id, 2)
-                if not t2:
-                    await tank_repo.create(
-                        device_id=new_dev.id,
-                        tank_index=2,
-                        name=data.tank_2_name or "Departure Side (Tank 2)",
-                        capacity_liters=data.tank_2_capacity or 500.0,
-                        height_cm=h2,
-                        tank_type=(data.tank_2_geometry or "CYLINDRICAL").upper(),
-                    )
+                await _sync_device_tanks(new_dev.id)
             dev_repo = DeviceRepository(db)
             if new_uid:
                 await dev_repo.sync_exclusive_assignment(new_uid, tr_clean, c_clean)
@@ -1593,8 +1616,6 @@ async def update_coach_details(
                 await dev_repo.sync_exclusive_assignment(current_uid, "UNASSIGNED", "UNASSIGNED")
 
     # Update relational coach entity
-    coach_repo = CoachRepository(db)
-    db_coach = await coach_repo.get_by_train_and_coach_number(tr_clean, c_clean)
     if db_coach:
         if data.coach_name:
             db_coach.coach_name = data.coach_name
@@ -1628,10 +1649,10 @@ async def update_coach_details(
         "coach_type": data.coach_type,
         "tank_1_name": data.tank_1_name,
         "tank_2_name": data.tank_2_name,
-        "tank_1_capacity": float(data.tank_1_capacity) if data.tank_1_capacity else 500.0,
-        "tank_2_capacity": float(data.tank_2_capacity) if data.tank_2_capacity else 500.0,
-        "tank_1_height_cm": float(h1) if h1 else 50.0,
-        "tank_2_height_cm": float(h2) if h2 else 50.0,
+        "tank_1_capacity": float(data.tank_1_capacity) if data.tank_1_capacity else None,
+        "tank_2_capacity": float(data.tank_2_capacity) if data.tank_2_capacity else None,
+        "tank_1_height_cm": float(req_h1) if req_h1 else None,
+        "tank_2_height_cm": float(req_h2) if req_h2 else None,
         "tank_1_geometry": data.tank_1_geometry,
         "tank_2_geometry": data.tank_2_geometry,
     }

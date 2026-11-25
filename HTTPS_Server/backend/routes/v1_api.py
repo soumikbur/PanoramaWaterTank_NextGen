@@ -67,8 +67,19 @@ class TrainUpdateRequest(BaseModel):
 
 class CoachCreateRequest(BaseModel):
     coach_number: str
+    coach_name: Optional[str] = None
     coach_category: Optional[str] = "PASSENGER"
     coach_type: Optional[str] = "AC_CHAIR_CAR"
+    tank_1_name: Optional[str] = "Arrival Side (Tank 1)"
+    tank_2_name: Optional[str] = "Departure Side (Tank 2)"
+    tank_1_height_cm: Optional[float] = 50.0
+    tank_2_height_cm: Optional[float] = 50.0
+    tank_1_geometry: Optional[str] = "CYLINDRICAL"
+    tank_2_geometry: Optional[str] = "CYLINDRICAL"
+    tank_height_cm: Optional[float] = None
+    device_uid: Optional[str] = None
+
+    model_config = {"extra": "ignore"}
 
 
 class CoachRenameRequest(BaseModel):

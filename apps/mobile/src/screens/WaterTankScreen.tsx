@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { colors, metrics, typography } from '../theme';
 import { useApp } from '../state/AppContext';
 import { TankLiveStatus } from '../types';
-import { filterConsistTanks, CoachTankFilterMode } from '../services/tankStatusService';
+import { filterConsistTanks, formatTelemetryTime, CoachTankFilterMode } from '../services/tankStatusService';
 import { TankVisualization } from '../components/tank/TankVisualization';
 import { LevelTrendCard } from '../components/charts/LevelTrendCard';
 import { BaseCard } from '../components/common/BaseCard';
@@ -379,8 +379,6 @@ export const WaterTankScreen: React.FC = () => {
               const level = tank.levelPercent ?? null;
               const height = tank.heightCm ?? null;
               const maxHeight = tank.maxHeightCm || 50.0;
-              const volume = tank.volumeLiters ?? null;
-              const capacity = tank.capacityLiters || 20.0;
               const isSelected = selectedTankId === tank.tankId;
 
               // Color for level bar
@@ -425,7 +423,7 @@ export const WaterTankScreen: React.FC = () => {
                     <ChevronRight size={16} color="#94A3B8" />
                   </div>
 
-                  {/* Level & Vessel Volume Readout (Matching Qt TankCard.qml and Image 2) */}
+                  {/* Level & Height Readout */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '6px 0' }}>
                     <div
                       style={{
@@ -449,9 +447,6 @@ export const WaterTankScreen: React.FC = () => {
                       </span>
                       <span style={{ fontSize: '11px', color: !tank.isOnline ? '#94A3B8' : '#64748B' }}>
                         {hasData && tank.isOnline && height != null ? `${height.toFixed(1)} cm / ${maxHeight.toFixed(1)} cm` : `-- / ${maxHeight.toFixed(1)} cm`}
-                      </span>
-                      <span style={{ fontSize: '11px', color: !tank.isOnline ? '#94A3B8' : '#64748B' }}>
-                        {hasData && tank.isOnline && volume != null ? `${volume.toFixed(1)} L / ${capacity.toFixed(2)} L` : `-- / ${capacity.toFixed(2)} L`}
                       </span>
                     </div>
                   </div>
@@ -508,9 +503,8 @@ export const WaterTankScreen: React.FC = () => {
                     <th style={{ padding: '12px 16px' }}>Coach &amp; Train</th>
                     <th style={{ padding: '12px 16px' }}>Status</th>
                     <th style={{ padding: '12px 16px' }}>Level (%)</th>
-                    <th style={{ padding: '12px 16px' }}>Height (cm)</th>
-                    <th style={{ padding: '12px 16px' }}>Volume (L)</th>
-                    <th style={{ padding: '12px 16px' }}>Capacity</th>
+                    <th style={{ padding: '12px 16px' }}>Water Height (cm)</th>
+                    <th style={{ padding: '12px 16px' }}>Tank Height (cm)</th>
                     <th style={{ padding: '12px 16px' }}>Last Telemetry</th>
                     <th style={{ padding: '12px 16px', textAlign: 'right' }}>Action</th>
                   </tr>
@@ -569,14 +563,11 @@ export const WaterTankScreen: React.FC = () => {
                         <td style={{ padding: '12px 16px', color: '#334155' }}>
                           {tank.heightCm != null ? `${tank.heightCm.toFixed(1)} cm` : '—'}
                         </td>
-                        <td style={{ padding: '12px 16px', color: '#334155' }}>
-                          {tank.volumeLiters != null ? `${tank.volumeLiters.toFixed(1)} L` : '—'}
-                        </td>
                         <td style={{ padding: '12px 16px', color: '#64748B' }}>
-                          {tank.capacityLiters.toFixed(0)} L
+                          {(tank.maxHeightCm || 50).toFixed(1)} cm
                         </td>
                         <td style={{ padding: '12px 16px', fontSize: '12px', color: '#64748B' }}>
-                          {tank.lastUpdate ? new Date(tank.lastUpdate).toLocaleTimeString() : 'Awaiting Telemetry'}
+                          {formatTelemetryTime(tank.lastUpdate)}
                         </td>
                         <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                           <button
@@ -687,20 +678,19 @@ export const WaterTankScreen: React.FC = () => {
             {/* Interactive Real-Time Gauge Visualization */}
             <TankVisualization tank={selectedTank} />
 
-            {/* Geometry & Vessel Parameters */}
-            <BaseCard title="Configured Geometry & Capacity">
+            {/* Geometry & Height Parameters */}
+            <BaseCard title="Configured Geometry & Height">
               <InfoRow label="Vessel Shape" value={selectedTank.crossSectionalAreaM2 > 0.03 ? 'Cylindrical Reservoir' : 'Rectangular'} />
-              <InfoRow label="Total Height" value={`${selectedTank.maxHeightCm.toFixed(1)} cm`} />
-              <InfoRow label="Rated Capacity" value={`${selectedTank.capacityLiters.toFixed(1)} Litres`} />
-              <InfoRow label="Cross-Sectional Area" value={`${selectedTank.crossSectionalAreaM2.toFixed(4)} m²`} />
-              <InfoRow
-                label="Current Water Volume"
-                value={selectedTank.volumeLiters != null ? `${selectedTank.volumeLiters.toFixed(2)} Litres` : '— (No Telemetry)'}
-                highlight={selectedTank.volumeLiters != null}
-              />
+              <InfoRow label="Configured Tank Height" value={`${selectedTank.maxHeightCm.toFixed(1)} cm`} />
               <InfoRow
                 label="Current Water Height"
-                value={selectedTank.heightCm != null ? `${selectedTank.heightCm.toFixed(2)} cm` : '—'}
+                value={selectedTank.heightCm != null ? `${selectedTank.heightCm.toFixed(2)} cm` : '— (No Telemetry)'}
+                highlight={selectedTank.heightCm != null}
+              />
+              <InfoRow
+                label="Water Level (%)"
+                value={selectedTank.levelPercent != null ? `${selectedTank.levelPercent.toFixed(1)}%` : '—'}
+                highlight={selectedTank.levelPercent != null}
               />
             </BaseCard>
 
@@ -720,8 +710,7 @@ export const WaterTankScreen: React.FC = () => {
             <BaseCard title="Device Communication & Diagnostics">
               <InfoRow label="Connection Status" value={selectedTank.isOnline ? 'Online Link' : 'Device Offline'} />
               <InfoRow label="Battery Voltage" value={selectedTank.batteryVoltage != null ? `${selectedTank.batteryVoltage.toFixed(2)} V` : 'Not Reported'} />
-              <InfoRow label="Capacity Rank" value={selectedTank.rank} />
-              <InfoRow label="Last Telemetry Received" value={selectedTank.lastUpdate ? new Date(selectedTank.lastUpdate).toLocaleString() : 'Awaiting Data'} />
+              <InfoRow label="Last Telemetry Received" value={formatTelemetryTime(selectedTank.lastUpdate, 'Awaiting Data')} />
             </BaseCard>
 
             {/* Level Trend Card */}

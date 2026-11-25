@@ -441,6 +441,8 @@ class SharedStateService:
                         "id": tk["id"],
                         "tank_index": tk["tank_index"],
                         "name": tk["name"],
+                        "tank_type": tk["tank_type"] or "CYLINDRICAL",
+                        "geometry": tk["tank_type"] or "CYLINDRICAL",
                         "capacity_liters": tk["capacity_liters"],
                         "height_cm": tk["height_cm"],
                         "current_level_percent": tk["current_level_percent"],
@@ -872,6 +874,8 @@ class SharedStateService:
                         "id": tk["id"],
                         "tank_index": tk["tank_index"],
                         "name": tk["name"],
+                        "tank_type": tk["tank_type"] or "CYLINDRICAL",
+                        "geometry": tk["tank_type"] or "CYLINDRICAL",
                         "capacity_liters": tk["capacity_liters"],
                         "height_cm": tk["height_cm"],
                         "current_level_percent": tk["current_level_percent"],
@@ -1089,24 +1093,36 @@ class SharedStateService:
 
             pos = conn.execute("SELECT COUNT(*) FROM coaches WHERE train_number = ?", (clean_tr,)).fetchone()[0] + 1
             c_id = f"coach-{clean_tr}-{c_num}"
+            c_name = str(payload.get("coach_name") or f"Coach {c_num}").strip()
+            c_cat = str(payload.get("coach_category") or "PASSENGER").strip()
+            c_type = str(payload.get("coach_type") or c_cat or "AC_CHAIR_CAR").strip()
+            dev_uid = str(payload.get("device_uid") or "").strip()
             conn.execute(
                 """
                 INSERT INTO coaches (id, train_number, coach_number, coach_name, coach_category, coach_type, position, device_uid, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 'PASSENGER', 'AC_CHAIR_CAR', ?, '', ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (c_id, clean_tr, c_num, f"Coach {c_num}", pos, now_iso, now_iso),
+                (c_id, clean_tr, c_num, c_name, c_cat, c_type, pos, dev_uid, now_iso, now_iso),
             )
-            tank_h = tr["tank_height_cm"] or 50.0
+            default_h = float(payload.get("tank_height_cm") or tr["tank_height_cm"] or 50.0)
             tank_c = tr["tank_capacity_liters"] or 20.0
-            for t_idx in (1, 2):
+            for t_idx, name_k, h_k, g_k, default_name in (
+                (1, "tank_1_name", "tank_1_height_cm", "tank_1_geometry", "Arrival Side (Tank 1)"),
+                (2, "tank_2_name", "tank_2_height_cm", "tank_2_geometry", "Departure Side (Tank 2)"),
+            ):
                 t_id = f"tank-{clean_tr}-{c_num}-{t_idx}"
+                t_name = str(payload.get(name_k) or default_name).strip()
+                t_h = float(payload.get(h_k) or default_h or 50.0)
+                t_geom = str(payload.get(g_k) or "CYLINDRICAL").strip().upper()
                 conn.execute(
                     """
                     INSERT INTO tanks (id, train_number, coach_number, tank_index, name, tank_type, capacity_liters, height_cm, area_m2, current_level_percent, current_volume_liters, status, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, 'CYLINDRICAL', ?, ?, 0.04, 0.0, 0.0, 'NORMAL', ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.04, 0.0, 0.0, 'NORMAL', ?, ?)
                     """,
-                    (t_id, clean_tr, c_num, t_idx, f"Tank {t_idx}", tank_c * 25.0, tank_h, now_iso, now_iso),
+                    (t_id, clean_tr, c_num, t_idx, t_name, t_geom, tank_c * 25.0, t_h, now_iso, now_iso),
                 )
+            if dev_uid and is_genuine_hardware_uid(dev_uid):
+                self._sync_exclusive_assignment_unlocked(conn, dev_uid, clean_tr, c_num, now_iso)
             conn.commit()
             self._rebuild_fleet_state_snapshot_unlocked(conn)
 
