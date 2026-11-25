@@ -174,12 +174,12 @@ class DeviceRegistryService {
           lastSeenTimestamp: 0,
           firstDiscovered: '2026-10-28T12:41:43.000Z',
           registeredAt: '2026-10-28T12:41:43.000Z',
-          hardwareModel: 'WLI EC200U-CN',
+          hardwareModel: 'Cellular WLI Unit',
         });
       }
 
-      // Ensure genuine hardware devices exist in registry (Source of Truth)
-      // 1. Shatabdi Coach B4 Water System (canonical registered physical hardware, currently offline)
+      // Ensure registered units exist in registry (Source of Truth)
+      // 1. Shatabdi Coach B4 Water System (canonical registered unit, currently offline)
       if (!this.devices.has('0026004D4B42501120353332') && !this.deletedUids.has('0026004D4B42501120353332')) {
         this.devices.set('0026004D4B42501120353332', {
           uid: '0026004D4B42501120353332',
@@ -204,11 +204,11 @@ class DeviceRegistryService {
           lastSeenTimestamp: 0,
           firstDiscovered: '2026-10-28T12:41:43.000Z',
           registeredAt: '2026-10-28T12:41:43.000Z',
-          hardwareModel: 'Quectel EC200U 4G LTE',
+          hardwareModel: 'Cellular WLI Unit',
         });
       }
 
-      // 2. Coach 01 WLI Node (genuine hardware node, online)
+      // 2. Coach 01 WLI Node (seeded offline until live MQTT telemetry arrives)
       if (!this.devices.has('002F00654B42501320353332') && !this.deletedUids.has('002F00654B42501320353332')) {
         this.devices.set('002F00654B42501320353332', {
           uid: '002F00654B42501320353332',
@@ -217,27 +217,27 @@ class DeviceRegistryService {
           coachNumber: null,
           registrationStatus: 'REGISTERED',
           assignmentStatus: 'AVAILABLE',
-          isOnline: true,
-          batteryPercent: 97,
-          batteryVoltage: 3.7,
-          tank1Level: 45.5,
-          tank1HeightCm: 22.75,
-          tank2Level: 0,
-          tank2HeightCm: 0,
+          isOnline: false,
+          batteryPercent: null,
+          batteryVoltage: null,
+          tank1Level: null,
+          tank1HeightCm: null,
+          tank2Level: null,
+          tank2HeightCm: null,
           valve1Normal: true,
           valve2Normal: true,
-          latitude: 22.556949,
-          longitude: 88.352447,
-          speedKmh: 0.9,
-          lastSeen: 'Active Link',
-          lastSeenTimestamp: Date.now(),
+          latitude: null,
+          longitude: null,
+          speedKmh: null,
+          lastSeen: 'Awaiting Telemetry Signal',
+          lastSeenTimestamp: 0,
           firstDiscovered: '2026-11-16T09:46:06.000Z',
           registeredAt: '2026-11-16T09:46:06.000Z',
-          hardwareModel: 'Rev 2.1 Verified',
+          hardwareModel: 'Cellular WLI Unit',
         });
       }
 
-      // 3. WLI Node Sensor 31 (genuine hardware node, online)
+      // 3. WLI Node Sensor 31 (seeded offline until live MQTT telemetry arrives)
       if (!this.devices.has('0023004D4B42501120353331') && !this.deletedUids.has('0023004D4B42501120353331')) {
         this.devices.set('0023004D4B42501120353331', {
           uid: '0023004D4B42501120353331',
@@ -246,23 +246,23 @@ class DeviceRegistryService {
           coachNumber: null,
           registrationStatus: 'REGISTERED',
           assignmentStatus: 'AVAILABLE',
-          isOnline: true,
-          batteryPercent: 92,
-          batteryVoltage: 3.9,
-          tank1Level: 0,
-          tank1HeightCm: 0,
-          tank2Level: 0,
-          tank2HeightCm: 0,
+          isOnline: false,
+          batteryPercent: null,
+          batteryVoltage: null,
+          tank1Level: null,
+          tank1HeightCm: null,
+          tank2Level: null,
+          tank2HeightCm: null,
           valve1Normal: true,
           valve2Normal: true,
           latitude: null,
           longitude: null,
-          speedKmh: 0,
-          lastSeen: 'Active Link',
-          lastSeenTimestamp: Date.now(),
+          speedKmh: null,
+          lastSeen: 'Awaiting Telemetry Signal',
+          lastSeenTimestamp: 0,
           firstDiscovered: '2026-11-14T08:26:58.000Z',
           registeredAt: '2026-11-14T08:26:58.000Z',
-          hardwareModel: 'WLI EC200U-CN',
+          hardwareModel: 'Cellular WLI Unit',
         });
       }
 
@@ -291,7 +291,7 @@ class DeviceRegistryService {
           lastSeenTimestamp: 0,
           firstDiscovered: '2026-11-24T10:46:54.000Z',
           registeredAt: '2026-11-24T10:46:54.000Z',
-          hardwareModel: 'WLI EC200U-CN',
+          hardwareModel: 'Cellular WLI Unit',
         });
       }
 
@@ -459,7 +459,7 @@ class DeviceRegistryService {
         coachNumber: chno,
         registrationStatus: 'REGISTERED',
         assignmentStatus: isAssigned ? 'ENGAGED' : 'AVAILABLE',
-        hardwareModel: payload.hardware_version || 'ESP32-S3',
+        hardwareModel: payload.hardware_version || 'Cellular WLI Unit',
         firmwareVersion: payload.firmware_version || 'v2.1.0',
         protocol: payload.protocol || 'MQTT',
         isOnline: false,
@@ -623,7 +623,7 @@ class DeviceRegistryService {
       lastSeen: timeStr,
       lastSeenTimestamp: now,
       firstDiscovered: new Date().toISOString(),
-      hardwareModel: 'WLI EC200U-CN',
+      hardwareModel: 'Cellular WLI Unit',
       payloadTrno: telemetry.trno,
       payloadChno: telemetry.chno,
     };
@@ -674,7 +674,7 @@ class DeviceRegistryService {
         lastSeen: new Date().toLocaleTimeString('en-US', { hour12: false }),
         lastSeenTimestamp: now,
         firstDiscovered: new Date().toISOString(),
-        hardwareModel: d.hardwareVersion || d.hardware_version || 'Quectel EC200U 4G LTE',
+        hardwareModel: d.hardwareVersion || d.hardware_version || 'Cellular WLI Unit',
       };
       this.devices.set(canonicalUid, {
         ...base,
@@ -720,21 +720,21 @@ class DeviceRegistryService {
       coachNumber: coach,
       registrationStatus: 'REGISTERED',
       assignmentStatus: isEngaged ? 'ENGAGED' : 'AVAILABLE',
-      isOnline: true,
-      batteryPercent: 85,
-      tank1Level: 0,
-      tank1HeightCm: 0,
-      tank2Level: 0,
-      tank2HeightCm: 0,
+      isOnline: false,
+      batteryPercent: null,
+      tank1Level: null,
+      tank1HeightCm: null,
+      tank2Level: null,
+      tank2HeightCm: null,
       valve1Normal: true,
       valve2Normal: true,
       latitude: null,
       longitude: null,
-      speedKmh: 0,
-      lastSeen: new Date().toLocaleTimeString('en-US', { hour12: false }),
-      lastSeenTimestamp: now,
-      firstDiscovered: new Date().toISOString(),
-      hardwareModel: options?.hardwareModel || 'WLI EC200U-CN',
+      speedKmh: null,
+      lastSeen: 'Awaiting Telemetry Signal',
+      lastSeenTimestamp: 0,
+      firstDiscovered: new Date(now).toISOString(),
+      hardwareModel: options?.hardwareModel || 'Cellular WLI Unit',
     };
 
     const registered: ManagedDevice = {

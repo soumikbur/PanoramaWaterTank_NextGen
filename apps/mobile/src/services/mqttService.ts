@@ -1200,12 +1200,14 @@ export class MqttService {
     return telemetry;
   }
 
-  private pendingDispatchTelemetry: LiveTelemetryPayload | null = null;
+  // Map by UID so concurrent telemetry bursts from multiple devices never overwrite each other.
+  private pendingDispatchTelemetry: Map<string, LiveTelemetryPayload> = new Map();
   private dispatchTimer: any = null;
   private lastDispatchTime: number = 0;
 
   private scheduleTelemetryDispatch(telemetry: LiveTelemetryPayload): void {
-    this.pendingDispatchTelemetry = telemetry;
+    const uidKey = telemetry.uid?.trim().toUpperCase() || telemetry.topic || 'UNKNOWN';
+    this.pendingDispatchTelemetry.set(uidKey, telemetry);
     const interval = deviceProfileService.getActiveProfile().mqttBatchIntervalMs || 100;
     const now = Date.now();
     const elapsed = now - this.lastDispatchTime;
@@ -1224,17 +1226,19 @@ export class MqttService {
   }
 
   private flushTelemetryDispatch(): void {
-    if (!this.pendingDispatchTelemetry) return;
-    const t = this.pendingDispatchTelemetry;
-    this.pendingDispatchTelemetry = null;
+    if (this.pendingDispatchTelemetry.size === 0) return;
+    const batch = Array.from(this.pendingDispatchTelemetry.values());
+    this.pendingDispatchTelemetry.clear();
     this.lastDispatchTime = Date.now();
 
-    this.telemetryListeners.forEach((listener) => {
-      try {
-        listener(t);
-      } catch (listenerErr) {
-        console.error('[MQTT] Error in telemetry listener:', listenerErr);
-      }
+    batch.forEach((t) => {
+      this.telemetryListeners.forEach((listener) => {
+        try {
+          listener(t);
+        } catch (listenerErr) {
+          console.error('[MQTT] Error in telemetry listener:', listenerErr);
+        }
+      });
     });
   }
 
@@ -2225,9 +2229,12 @@ export class MqttService {
     clearTimeout(this.connectTimeoutTimer);
     clearTimeout(this.reconnectTimer);
     clearTimeout(this.reconfigureTimer);
+    clearTimeout(this.dispatchTimer);
     this.connectTimeoutTimer = null;
     this.reconnectTimer = null;
     this.reconfigureTimer = null;
+    this.dispatchTimer = null;
+    this.pendingDispatchTelemetry.clear();
     this.clearStaleTimer();
     this.cleanupClient();
     this.lastDisconnectedAt = Date.now();

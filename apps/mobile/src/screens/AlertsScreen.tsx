@@ -528,7 +528,7 @@ export const AlertsScreen: React.FC = () => {
               Active Alerts ({activeAlertsList.length})
             </span>
             <span style={{ fontSize: '12px', color: '#94A3B8', fontFamily: typography.fontFamily }}>
-              Firmware logic: &lt;10% Critical, &lt;20% Warning, ≥20% Normal
+              Threshold logic: &lt;10% Critical, &lt;20% Warning, ≥20% Normal
             </span>
           </div>
 

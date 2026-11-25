@@ -1836,7 +1836,7 @@ export class ApiClient {
       name,
       trainNumber: trainNumber || null,
       coachNumber: coachNumber || null,
-      hardwareModel: data.deviceType || data.hardwareVersion || data.hardware_version || 'Quectel EC200U 4G LTE',
+      hardwareModel: data.deviceType || data.hardwareVersion || data.hardware_version || 'Cellular WLI Unit',
     });
 
     const payload = {
@@ -1846,7 +1846,7 @@ export class ApiClient {
       coach_number: coachNumber,
       hardware_version: data.hardwareVersion || data.hardware_version || 'Standard WLI Node',
       firmware_version: data.firmwareVersion || data.firmware_version || '2.0.0',
-      device_type: data.deviceType || data.device_type || 'Quectel EC200U 4G LTE',
+      device_type: data.deviceType || data.device_type || 'Cellular WLI Unit',
       protocol: data.protocol || 'MQTT over TLS/WSS',
       mqtt_client_id: data.mqttClientId || data.mqtt_client_id || `panorama-wli-${uid}`,
       mqtt_topic: data.mqttTopic || data.mqtt_topic || `panorama/telemetry/${uid}`,
@@ -1930,7 +1930,7 @@ export class ApiClient {
         coachNumber: dev?.coachNumber || '',
         train_number: dev?.trainNumber || '',
         coach_number: dev?.coachNumber || '',
-        hardwareVersion: dev?.hardwareModel || 'Quectel EC200U 4G LTE',
+        hardwareVersion: dev?.hardwareModel || 'Cellular WLI Unit',
         firmwareVersion: '2.0.0',
         isOnline: dev?.isOnline ?? false,
         lastSeenAt: dev?.lastSeen || null,

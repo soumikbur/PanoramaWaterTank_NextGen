@@ -32,14 +32,12 @@ export const AlertToastBanner: React.FC<AlertToastBannerProps> = ({
       data-testid="alert-toast-banner"
       style={{
         position: 'fixed',
-        top: '16px',
-        left: '50%',
-        transform: 'translateX(-50%)',
+        bottom: '20px',
+        right: '20px',
         zIndex: 99999,
-        width: '100%',
-        maxWidth: 'calc(100vw - 24px)',
+        width: 'min(440px, calc(100vw - 24px))',
         boxSizing: 'border-box',
-        pointerEvents: 'auto',
+        pointerEvents: 'none',
       }}
     >
       <div
@@ -57,6 +55,7 @@ export const AlertToastBanner: React.FC<AlertToastBannerProps> = ({
           alignItems: 'flex-start',
           gap: '10px',
           animation: 'slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+          pointerEvents: 'auto',
         }}
       >
         <div style={{ flexShrink: 0, marginTop: '2px', color: iconColor }}>

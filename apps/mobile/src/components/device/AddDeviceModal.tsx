@@ -24,7 +24,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
   // 11 Form Fields
   const [name, setName] = useState('Coach Water Monitor');
   const [uid, setUid] = useState('');
-  const [deviceType, setDeviceType] = useState('Quectel EC200U 4G LTE');
+  const [deviceType, setDeviceType] = useState('Cellular WLI Unit');
   const [protocol, setProtocol] = useState('MQTT over TLS/WSS (Port 8884)');
   const [mqttClientId, setMqttClientId] = useState('');
   const [mqttTopic, setMqttTopic] = useState('');
@@ -47,7 +47,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
 
       setUid(generatedUid);
       setName(`Coach ${ch} Water Monitor`);
-      setDeviceType('Quectel EC200U 4G LTE');
+      setDeviceType('Cellular WLI Unit');
       setProtocol('MQTT over TLS/WSS (Port 8884)');
       setMqttClientId(`panorama-wli-${generatedUid.toLowerCase()}`);
       setMqttTopic(`panorama/telemetry/${generatedUid}`);
@@ -325,9 +325,9 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                   backgroundColor: '#FFFFFF',
                 }}
               >
-                <option value="Quectel EC200U 4G LTE">Quectel EC200U 4G LTE</option>
-                <option value="ESP32-S3 WLI Edge Node">ESP32-S3 WLI Edge Node</option>
-                <option value="STM32 Dual-Sensor Modbus Node">STM32 Dual-Sensor Modbus Node</option>
+                <option value="Cellular WLI Unit">Cellular WLI Unit</option>
+                <option value="Compact WLI Unit">Compact WLI Unit</option>
+                <option value="Dual-Sensor WLI Unit">Dual-Sensor WLI Unit</option>
                 <option value="Standard WLI Telemetry Node">Standard WLI Telemetry Node</option>
                 <option value="Hydrostatic Pressure Sensor Node">Hydrostatic Pressure Sensor Node</option>
               </select>
@@ -349,10 +349,10 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
                   backgroundColor: '#FFFFFF',
                 }}
               >
-                <option value="MQTT over TLS/WSS (Port 8884)">MQTT over TLS/WSS (Port 8884)</option>
-                <option value="MQTT Standard (Port 1883)">MQTT Standard (Port 1883)</option>
-                <option value="HTTP REST Gateway (/api/status)">HTTP REST Gateway (/api/status)</option>
-                <option value="Modbus RTU / RS485 Industrial Loop">Modbus RTU / RS485 Industrial Loop</option>
+                <option value="MQTT over TLS/WSS (Port 8884)">Secure Wireless Telemetry</option>
+                <option value="MQTT Standard (Port 1883)">Standard Telemetry Link</option>
+                <option value="HTTP REST Gateway (/api/status)">Cloud HTTP Sync</option>
+                <option value="Cellular Telemetry Loop">Industrial Telemetry Loop</option>
               </select>
             </div>
           </div>

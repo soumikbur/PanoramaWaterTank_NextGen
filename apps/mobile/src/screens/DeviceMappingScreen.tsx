@@ -56,14 +56,14 @@ export const DeviceMappingScreen: React.FC = () => {
   const [trainNumberInput, setTrainNumberInput] = useState('');
   const [coachNumberInput, setCoachNumberInput] = useState('');
   const [deviceNameInput, setDeviceNameInput] = useState('');
-  const [hardwareModelInput, setHardwareModelInput] = useState('WLI EC200U-CN');
+  const [hardwareModelInput, setHardwareModelInput] = useState('Cellular WLI Unit');
 
   // Form states for Manual Register Modal
   const [manualUid, setManualUid] = useState('');
   const [manualName, setManualName] = useState('');
   const [manualTrain, setManualTrain] = useState('');
   const [manualCoach, setManualCoach] = useState('');
-  const [manualModel, setManualModel] = useState('WLI EC200U-CN');
+  const [manualModel, setManualModel] = useState('Cellular WLI Unit');
 
   const now = Date.now();
   const timeoutMs = (telemetryTimeoutSeconds || 120) * 1000;
@@ -123,7 +123,7 @@ export const DeviceMappingScreen: React.FC = () => {
     setTrainNumberInput(initialTrain);
     setCoachNumberInput(initialCoach);
     setDeviceNameInput(dev.name || `Coach ${initialCoach} Sensor`);
-    setHardwareModelInput(dev.hardwareModel || 'WLI EC200U-CN');
+    setHardwareModelInput(dev.hardwareModel || 'Cellular WLI Unit');
     setIsMapModalOpen(true);
   };
 

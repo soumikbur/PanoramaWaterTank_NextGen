@@ -187,7 +187,7 @@ export const Header: React.FC = () => {
     },
     devices: {
       title: 'Devices',
-      subtitle: 'Industrial IoT Hardware & Telemetry',
+      subtitle: 'Telemetry Unit Registry & Link Status',
     },
     'raw-data': {
       title: 'Raw Data',
@@ -410,7 +410,7 @@ export const Header: React.FC = () => {
           type: 'DEVICE',
           name: d.name || `Device ${d.uid.slice(0, 8)}`,
           identifier: d.uid.length > 16 ? `${d.uid.slice(0, 10)}...` : d.uid,
-          subtitle: `${d.coachNumber ? 'Coach ' + d.coachNumber + ' • ' : ''}${d.trainNumber ? 'Train ' + d.trainNumber + ' • ' : ''}Firmware: ${d.firmwareVersion || '2.0.0'}`,
+          subtitle: `${d.coachNumber ? 'Coach ' + d.coachNumber + ' • ' : ''}${d.trainNumber ? 'Train ' + d.trainNumber : 'Registered Unit'}`.replace(/ • $/, ''),
           status: d.isOnline ? 'ONLINE' : 'OFFLINE',
           isOnline: d.isOnline,
           onClick: () => {

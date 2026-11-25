@@ -54,7 +54,7 @@ export const ReportsScreen: React.FC = () => {
       id: 'device_status',
       label: 'Device Status Report',
       icon: Cpu,
-      desc: 'Hardware operational status, link reliability, engaged coach assignments, and uptime',
+      desc: 'Unit operational status, link reliability, engaged coach assignments, and uptime',
     },
     {
       id: 'gps_history',

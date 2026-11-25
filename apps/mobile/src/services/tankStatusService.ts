@@ -219,21 +219,27 @@ export function computeConsistData(params: {
       matchedTrain?.tank_capacity_liters ||
       20.0;
 
-    // Check if live telemetry matches this specific train & coach
-    const isLiveMatch = Boolean(
-      liveTelemetry &&
-      isMqttActive &&
-      !liveTelemetry.isStale &&
-      liveTelemetry.trno?.trim().toLowerCase() === cleanTrainNumber.toLowerCase() &&
-      liveTelemetry.chno?.trim().toLowerCase() === coachNum.toLowerCase()
-    );
-
     // Check if this coach has a mapped device in the registry
     const mappedDevice = engagedDevices.find(
       (d) => d.coachNumber?.trim().toLowerCase() === coachNum.toLowerCase()
     );
+    const mappedUid = mappedDevice?.uid?.trim().toUpperCase() ||
+      (consistCoach?.device_uid && !consistCoach.device_uid.startsWith('PANORAMA-')
+        ? consistCoach.device_uid.trim().toUpperCase()
+        : null);
 
-    // Determine device mapping (use mapped hardware UID or configured node UID when present)
+    // Match live telemetry strictly by mapped UID first so multi-device payloads never cross-contaminate.
+    const isLiveMatch = Boolean(
+      liveTelemetry &&
+      isMqttActive &&
+      !liveTelemetry.isStale &&
+      (mappedUid
+        ? liveTelemetry.uid?.trim().toUpperCase() === mappedUid
+        : (liveTelemetry.trno?.trim().toLowerCase() === cleanTrainNumber.toLowerCase() &&
+            liveTelemetry.chno?.trim().toLowerCase() === coachNum.toLowerCase()))
+    );
+
+    // Determine device mapping (use mapped UID or configured node UID when present)
     let deviceUid: string | null = consistCoach?.device_uid || null;
     let isMapped = Boolean(mappedDevice || (consistCoach?.device_uid && !consistCoach.device_uid.startsWith('PANORAMA-')));
     let hasTelemetry = false;
@@ -260,10 +266,14 @@ export function computeConsistData(params: {
       batteryVoltage = mappedDevice.batteryVoltage ?? null;
       valve1Normal = mappedDevice.valve1Normal ?? true;
       valve2Normal = mappedDevice.valve2Normal ?? true;
-      tank1Level = mappedDevice.tank1Level ?? null;
       tank1HeightCm = mappedDevice.tank1HeightCm ?? null;
-      tank2Level = mappedDevice.tank2Level ?? null;
       tank2HeightCm = mappedDevice.tank2HeightCm ?? null;
+      tank1Level = tank1HeightCm != null && coachHeightCm > 0
+        ? Number(Math.min(100, Math.max(0, (tank1HeightCm / coachHeightCm) * 100)).toFixed(1))
+        : (mappedDevice.tank1Level ?? null);
+      tank2Level = tank2HeightCm != null && coachHeightCm > 0
+        ? Number(Math.min(100, Math.max(0, (tank2HeightCm / coachHeightCm) * 100)).toFixed(1))
+        : (mappedDevice.tank2Level ?? null);
       latitude = mappedDevice.latitude ?? null;
       longitude = mappedDevice.longitude ?? null;
     }

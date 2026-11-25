@@ -1682,7 +1682,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           lastHeartbeat: new Date(telemetry.receivedAt).toISOString(),
           hasActiveAlarm: telemetry.wlv1 === false || telemetry.wlv2 === false || (arrivalLevelPct != null && arrivalLevelPct < 15),
           firmwareVersion: '2.2.0-prod',
-          hardwareVersion: mappedDev?.hardwareModel || 'WLI-EC200U',
+          hardwareVersion: mappedDev?.hardwareModel || 'Cellular WLI Unit',
         };
         const exists = prev.find((d) => d.uid === telemetry.uid);
         if (exists) {

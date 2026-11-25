@@ -778,7 +778,7 @@ export const EmployeeDashboard: React.FC = () => {
             </div>
             <div style={{ padding: '6px 8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
               <div style={{ color: '#64748B', fontSize: '10.5px', fontWeight: 600 }}>Cloud Telemetry</div>
-              <strong style={{ color: '#0F172A', fontSize: '12px' }}>Ubidots Synced</strong>
+              <strong style={{ color: '#0F172A', fontSize: '12px' }}>Live Synced</strong>
             </div>
             <div style={{ padding: '6px 8px', backgroundColor: '#F8FAFC', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
               <div style={{ color: '#64748B', fontSize: '10.5px', fontWeight: 600 }}>Last Stream Sync</div>
@@ -867,7 +867,7 @@ export const EmployeeDashboard: React.FC = () => {
               <strong style={{ color: '#0F172A', fontSize: '12px' }}>{selectedCoach.coachNumber}</strong>
             </div>
             <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Hardware Sensor UID</span>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Sensor UID</span>
               <code style={{ fontSize: '10px', color: '#475569', backgroundColor: '#F1F5F9', padding: '2px 6px', borderRadius: '4px', wordBreak: 'break-all' }}>
                 {selectedCoach.deviceId}
               </code>
@@ -891,7 +891,7 @@ export const EmployeeDashboard: React.FC = () => {
               </strong>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ color: '#64748B', fontSize: '10.5px' }}>MQTT Broker State</span>
+              <span style={{ color: '#64748B', fontSize: '10.5px' }}>Telemetry Link</span>
               <strong style={{ color: mqttConnectionStatus === 'CONNECTED' ? '#16A34A' : '#DC2626', fontSize: '12px' }}>
                 {mqttConnectionStatus}
               </strong>
@@ -1360,7 +1360,7 @@ export const EmployeeDashboard: React.FC = () => {
               </div>
 
               <div style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', marginTop: '4px' }}>
-                Train {liveTelemetry.trno} &bull; Express Fleet (Live Hardware)
+                Train {liveTelemetry.trno} &bull; Express Fleet (Live Telemetry)
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', color: '#475569', marginTop: '6px' }}>

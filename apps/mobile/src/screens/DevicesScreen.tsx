@@ -120,7 +120,7 @@ export const DevicesScreen: React.FC = () => {
   // Add Device Form
   const [addName, setAddName] = useState('Coach Water Monitor');
   const [addUid, setAddUid] = useState('');
-  const [addDeviceType, setAddDeviceType] = useState('Quectel EC200U 4G LTE');
+  const [addDeviceType, setAddDeviceType] = useState('Cellular WLI Unit');
   const [addProtocol, setAddProtocol] = useState('MQTT over TLS/WSS (Port 8884)');
   const [addMqttClientId, setAddMqttClientId] = useState('');
   const [addMqttTopic, setAddMqttTopic] = useState('');
@@ -134,7 +134,7 @@ export const DevicesScreen: React.FC = () => {
   const [editName, setEditName] = useState('');
   const [editTrainNumber, setEditTrainNumber] = useState('');
   const [editCoachNumber, setEditCoachNumber] = useState('');
-  const [editDeviceType, setEditDeviceType] = useState('Quectel EC200U 4G LTE');
+  const [editDeviceType, setEditDeviceType] = useState('Cellular WLI Unit');
   const [editProtocol, setEditProtocol] = useState('MQTT over TLS/WSS (Port 8884)');
   const [editMqttClientId, setEditMqttClientId] = useState('');
   const [editMqttTopic, setEditMqttTopic] = useState('');
@@ -385,7 +385,7 @@ export const DevicesScreen: React.FC = () => {
           trainNumber: d.trainNumber || 'UNASSIGNED',
           coachNumber: d.coachNumber || 'UNASSIGNED',
           serialNumber: canonicalUid,
-          location: d.trainNumber ? `Coach ${d.coachNumber || '—'} (Train ${d.trainNumber})` : 'Unassigned Hardware Node',
+          location: d.trainNumber ? `Coach ${d.coachNumber || '—'} (Train ${d.trainNumber})` : 'Unassigned WLI Unit',
           status,
           connectionType: 'Cellular / MQTT',
           modemModel: 'Wireless Link / MQTT',
@@ -434,7 +434,7 @@ export const DevicesScreen: React.FC = () => {
     const ch = presetCoach || selectedCoachNumber || '';
     setAddUid(newUid);
     setAddName(`Coach ${ch} Water Monitor`);
-    setAddDeviceType('Quectel EC200U 4G LTE');
+    setAddDeviceType('Cellular WLI Unit');
     setAddProtocol('MQTT over TLS/WSS (Port 8884)');
     setAddMqttClientId(`panorama-wli-${newUid.toLowerCase()}`);
     setAddMqttTopic(`panorama/telemetry/${newUid}`);
@@ -482,7 +482,7 @@ export const DevicesScreen: React.FC = () => {
     setEditName(dev.name);
     setEditTrainNumber(dev.trainNumber);
     setEditCoachNumber(dev.coachNumber);
-    setEditDeviceType(dev.sensorType || 'Quectel EC200U 4G LTE');
+    setEditDeviceType(dev.sensorType || 'Cellular WLI Unit');
     setEditProtocol(dev.connectionType || 'MQTT over TLS/WSS (Port 8884)');
     setEditMqttClientId(`panorama-wli-${dev.id.toLowerCase()}`);
     setEditMqttTopic(`panorama/telemetry/${dev.id}`);
@@ -1756,9 +1756,9 @@ export const DevicesScreen: React.FC = () => {
                   }}
                 >
                   <option value="All">All</option>
-                  <option value="LTE">LTE</option>
-                  <option value="BLE">BLE</option>
-                  <option value="RS485">RS485</option>
+                  <option value="LTE">Cellular / MQTT</option>
+                  <option value="BLE">Short-Range Telemetry</option>
+                  <option value="RS485">Wired Sensor Bus</option>
                 </select>
               </div>
 
@@ -1860,7 +1860,7 @@ export const DevicesScreen: React.FC = () => {
                   />
                 </div>
                 <span style={{ fontSize: '24px', fontWeight: 'bold', color: '#EF4444' }}>{offlineCount}</span>
-                <span style={{ fontSize: '11px', color: '#94A3B8' }}>Awaiting Modem Ping</span>
+                <span style={{ fontSize: '11px', color: '#94A3B8' }}>Awaiting Telemetry Signal</span>
               </div>
             </BaseCard>
           </div>
@@ -2050,10 +2050,14 @@ export const DevicesScreen: React.FC = () => {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
               <InfoRow label="Assigned Location" value={selectedDevice.location} />
-              <InfoRow label="Modem Model" value={selectedDevice.modemModel} />
+              {currentUser?.role === 'ADMIN' && (
+                <InfoRow label="Unit Type" value={selectedDevice.modemModel} />
+              )}
               <InfoRow label="Connection Protocol" value={selectedDevice.connectionType} />
               <InfoRow label="Signal Quality" value={selectedDevice.signalQuality} />
-              <InfoRow label="Firmware Version" value={selectedDevice.firmwareVersion} />
+              {currentUser?.role === 'ADMIN' && (
+                <InfoRow label="Firmware Version" value={selectedDevice.firmwareVersion} />
+              )}
               <InfoRow label="Sensor Type" value={selectedDevice.sensorType} />
               <InfoRow label="Sensor Operating Status" value={selectedDevice.sensorStatus} />
               <InfoRow

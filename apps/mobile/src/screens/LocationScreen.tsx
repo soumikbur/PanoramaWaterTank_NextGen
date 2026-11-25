@@ -16,6 +16,7 @@ import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
 import { TrainLocation, CorridorStation, LiveTelemetryPayload } from '../types';
 import { mqttService, MqttGpsFix } from '../services/mqttService';
+import { deviceRegistry } from '../services/deviceRegistry';
 import { RouteConfigModal } from '../components/location/RouteConfigModal';
 import {
   Maximize2,
@@ -1435,7 +1436,7 @@ export const LocationScreen: React.FC = () => {
             >
               <Radio size={12} className={mqttConnectionStatus === 'CONNECTED' ? 'animate-pulse' : ''} />
               <span>
-                MQTT: {mqttConnectionStatus === 'CONNECTED' ? 'BROKER LIVE' : mqttConnectionStatus === 'RECONNECTING' ? 'RECONNECTING' : mqttConnectionStatus === 'SUBSCRIPTION_ERROR' ? 'SUBSCRIPTION FAILED' : mqttConnectionStatus === 'CONNECTION_ERROR' ? 'CONNECTION ERROR' : mqttConnectionStatus}
+                MQTT: {mqttConnectionStatus === 'CONNECTED' ? 'STREAM LIVE' : mqttConnectionStatus === 'RECONNECTING' ? 'RECONNECTING' : mqttConnectionStatus === 'SUBSCRIPTION_ERROR' ? 'SUBSCRIPTION FAILED' : mqttConnectionStatus === 'CONNECTION_ERROR' ? 'CONNECTION ERROR' : mqttConnectionStatus}
               </span>
             </div>
           </div>

@@ -485,7 +485,7 @@ const AdminSystemSettings: React.FC = () => {
             System Settings & Architecture
           </h2>
           <span style={{ fontSize: '11px', color: colors.textMuted }}>
-            {systemName} • {isAdmin ? 'Administrator Access' : 'Operator Access (Read-Only Hardware)'}
+            {systemName} • {isAdmin ? 'Administrator Access' : 'Operator View'}
           </span>
         </div>
 
@@ -520,28 +520,30 @@ const AdminSystemSettings: React.FC = () => {
             </span>
           )}
 
-          <button
-            onClick={handleReadFromDevice}
-            disabled={loading}
-            style={{
-              flex: isMobile ? '1 1 calc(50% - 8px)' : 'none',
-              minHeight: '44px',
-              backgroundColor: colors.surfaceAlt,
-              border: `1px solid ${colors.borderStrong}`,
-              color: colors.textPrimary,
-              padding: '8px 14px',
-              borderRadius: '6px',
-              fontSize: '12px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-            }}
-          >
-            <RefreshCw size={13} /> <span>Read Device</span>
-          </button>
+          {isAdmin && (
+            <button
+              onClick={handleReadFromDevice}
+              disabled={loading}
+              style={{
+                flex: isMobile ? '1 1 calc(50% - 8px)' : 'none',
+                minHeight: '44px',
+                backgroundColor: colors.surfaceAlt,
+                border: `1px solid ${colors.borderStrong}`,
+                color: colors.textPrimary,
+                padding: '8px 14px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+              }}
+            >
+              <RefreshCw size={13} /> <span>Read Device</span>
+            </button>
+          )}
 
           <button
             onClick={loadConfig}
@@ -875,82 +877,90 @@ const AdminSystemSettings: React.FC = () => {
                 3. Device Configuration & Calibration
               </h3>
               <span style={{ fontSize: '11px', color: colors.textMuted }}>
-                Edge gateway REST endpoints, physical tank geometry, sensor types & hydrostatic calibration.
+                {isAdmin
+                  ? 'Gateway REST endpoints, physical tank geometry, sensor types & calibration.'
+                  : 'Physical tank geometry, sensor profile & capacity calibration.'}
               </span>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                onClick={handleTestDevice}
-                style={{
-                  backgroundColor: colors.surfaceAlt,
-                  border: `1px solid ${colors.borderStrong}`,
-                  padding: '5px 12px',
-                  borderRadius: '6px',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}
-              >
-                <Cpu size={12} /> Test REST Endpoint
-              </button>
-            </div>
+            {isAdmin && (
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={handleTestDevice}
+                  style={{
+                    backgroundColor: colors.surfaceAlt,
+                    border: `1px solid ${colors.borderStrong}`,
+                    padding: '5px 12px',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <Cpu size={12} /> Test REST Endpoint
+                </button>
+              </div>
+            )}
           </div>
 
-          {deviceTestResult && (
+          {isAdmin && deviceTestResult && (
             <div style={{ padding: '8px 12px', borderRadius: '6px', backgroundColor: '#F8FAFC', border: '1px solid #CBD5E1', fontSize: '11px', color: '#334155' }}>
               {deviceTestResult}
             </div>
           )}
 
-          {/* Device REST Connection */}
+          {/* Device REST Connection (Admin Only) & Tank Geometry */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '14px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
-                Device Host / IP
-              </label>
-              <input
-                type="text"
-                disabled={!isAdmin}
-                value={deviceHost}
-                onChange={(e) => {
-                  setDeviceHost(e.target.value);
-                  setHasUnsavedChanges(true);
-                }}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  border: `1px solid ${colors.borderStrong}`,
-                  fontSize: '13px',
-                }}
-              />
-            </div>
+            {isAdmin && (
+              <>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
+                    Device Host / IP
+                  </label>
+                  <input
+                    type="text"
+                    disabled={!isAdmin}
+                    value={deviceHost}
+                    onChange={(e) => {
+                      setDeviceHost(e.target.value);
+                      setHasUnsavedChanges(true);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: `1px solid ${colors.borderStrong}`,
+                      fontSize: '13px',
+                    }}
+                  />
+                </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
-                Device Port
-              </label>
-              <input
-                type="number"
-                disabled={!isAdmin}
-                value={devicePort}
-                onChange={(e) => {
-                  setDevicePort(parseInt(e.target.value) || 80);
-                  setHasUnsavedChanges(true);
-                }}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  borderRadius: '6px',
-                  border: `1px solid ${colors.borderStrong}`,
-                  fontSize: '13px',
-                }}
-              />
-            </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
+                    Device Port
+                  </label>
+                  <input
+                    type="number"
+                    disabled={!isAdmin}
+                    value={devicePort}
+                    onChange={(e) => {
+                      setDevicePort(parseInt(e.target.value) || 80);
+                      setHasUnsavedChanges(true);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: `1px solid ${colors.borderStrong}`,
+                      fontSize: '13px',
+                    }}
+                  />
+                </div>
+              </>
+            )}
 
             <div>
               <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: colors.textSecondary, marginBottom: '6px' }}>
@@ -1087,7 +1097,7 @@ const AdminSystemSettings: React.FC = () => {
                 }}
               >
                 <option value="HYDROSTATIC_4_20MA">Hydrostatic 4-20mA Pressure</option>
-                <option value="ULTRASONIC_RS485">Ultrasonic Modbus RS485</option>
+                <option value="ULTRASONIC_RS485">Ultrasonic Level Sensor</option>
                 <option value="SUBMERSIBLE_PRESSURE">Submersible Level Probe</option>
               </select>
             </div>
@@ -1478,9 +1488,9 @@ const AdminSystemSettings: React.FC = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: '10px' }}>
               {[
                 { key: 'lowWater', label: 'Low Water Level Alert', desc: 'Trigger on <10% (Critical) and <20% (Warning)', checked: alarmLowWaterEnabled, set: setAlarmLowWaterEnabled },
-                { key: 'sensorFault', label: 'Sensor Fault & Disconnect', desc: 'Trigger on invalid ADC reading or unseated probe', checked: alarmSensorFaultEnabled, set: setAlarmSensorFaultEnabled },
+                { key: 'sensorFault', label: 'Sensor Fault & Disconnect', desc: 'Trigger on invalid sensor reading or unseated probe', checked: alarmSensorFaultEnabled, set: setAlarmSensorFaultEnabled },
                 { key: 'deviceOffline', label: 'Device Offline Detection', desc: 'Trigger on missing telemetry heartbeats', checked: alarmDeviceOfflineEnabled, set: setAlarmDeviceOfflineEnabled },
-                { key: 'modemFailure', label: 'Modem & Cellular Failure', desc: 'Trigger on carrier network disconnect', checked: alarmModemFailureEnabled, set: setAlarmModemFailureEnabled },
+                { key: 'modemFailure', label: 'Cellular Link Failure', desc: 'Trigger on carrier network disconnect', checked: alarmModemFailureEnabled, set: setAlarmModemFailureEnabled },
                 { key: 'overflow', label: 'Tank Overflow Protection', desc: 'Trigger when fill level reaches >=100%', checked: alarmOverflowEnabled, set: setAlarmOverflowEnabled },
                 { key: 'voltage', label: 'Low Voltage & Power Bus', desc: 'Trigger when battery < 40% or bus < 10.5V', checked: alarmVoltageEnabled, set: setAlarmVoltageEnabled },
               ].map((cat) => (

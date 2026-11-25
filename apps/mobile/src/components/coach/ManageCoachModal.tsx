@@ -161,7 +161,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
   const [isAddDeviceModalOpen, setIsAddDeviceModalOpen] = useState(false);
   const [newDeviceUid, setNewDeviceUid] = useState('');
   const [newDeviceName, setNewDeviceName] = useState('');
-  const [newDeviceType, setNewDeviceType] = useState('Quectel EC200U 4G LTE');
+  const [newDeviceType, setNewDeviceType] = useState('Cellular WLI Unit');
   const [newDeviceDescription, setNewDeviceDescription] = useState('');
   const [assignNewDeviceToCoach, setAssignNewDeviceToCoach] = useState(true);
   const [isRegisteringDevice, setIsRegisteringDevice] = useState(false);
@@ -355,8 +355,8 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
     const currentCoachNum = formData.coachNumber || targetCoach?.coach_number || '';
     setNewDeviceUid(formData.deviceUid.trim().toUpperCase());
     setNewDeviceName(currentCoachNum ? `Coach ${currentCoachNum} Water Monitor` : 'Coach Water Monitor');
-    setNewDeviceType('Quectel EC200U 4G LTE');
-    setNewDeviceDescription(`Hardware telemetry node deployed on Coach ${currentCoachNum || 'consist'}`);
+    setNewDeviceType('Cellular WLI Unit');
+    setNewDeviceDescription(`Water tank telemetry unit deployed on Coach ${currentCoachNum || 'consist'}`);
     setAssignNewDeviceToCoach(true);
     setRegisterDeviceError(null);
     setIsAddDeviceModalOpen(true);
@@ -2433,10 +2433,10 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                       boxSizing: 'border-box',
                     }}
                   >
-                    <option value="Quectel EC200U 4G LTE">Quectel EC200U 4G LTE (Production Industrial)</option>
+                    <option value="Cellular WLI Unit">Cellular WLI Unit (Production Industrial)</option>
                     <option value="Standard WLI Node">Standard WLI Node (Level &amp; Telemetry)</option>
-                    <option value="ESP32 WLI">ESP32 WLI Edge Controller</option>
-                    <option value="STM32 WLI Node">STM32 WLI Node</option>
+                    <option value="Compact WLI Unit">Compact WLI Unit</option>
+                    <option value="Dual-Sensor WLI Unit">Dual-Sensor WLI Unit</option>
                   </select>
                 </div>
 
