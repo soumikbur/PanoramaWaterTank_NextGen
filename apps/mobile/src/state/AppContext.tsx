@@ -26,7 +26,7 @@ import { centralStateSync } from '../services/centralStateSync';
 import { DisplayPreferencesService, ScalePreset } from '../services/displayPreferencesService';
 import { AuthStorageService } from '../services/authStorageService';
 import { AppRouter } from '../services/router';
-import { deviceRegistry, ManagedDevice } from '../services/deviceRegistry';
+import { deviceRegistry, getCanonicalUid, ManagedDevice } from '../services/deviceRegistry';
 import { localFleetStore, FLEET_STORAGE_KEY, FLEET_UPDATED_EVENT } from '../services/localFleetStore';
 import {
   computeConsistData,
@@ -748,10 +748,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           firmwareVersion: 'v2.2.0',
           firmware_version: 'v2.2.0',
           isOnline: m.isOnline,
+          isStale: m.isStale,
+          connectivityState: m.connectivityState || (m.isOnline ? 'ONLINE' : 'OFFLINE'),
           is_online: m.isOnline,
           lastSeenAt: m.lastSeen,
           last_seen_at: m.lastSeen,
           lastHeartbeat: m.lastSeen,
+          lastSeenTimestamp: m.lastSeenTimestamp,
           batteryPercent: m.batteryPercent ?? undefined,
           batteryVoltage: m.batteryVoltage ?? undefined,
           temperature: m.temperature ?? undefined,
@@ -849,10 +852,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       if (Array.isArray(devList)) {
-        const mergedDevs = devList.map((d) => ({
-          ...d,
-          isOnline: Boolean(deviceRegistry.getDeviceByUid(d.uid)?.isOnline ?? d.isOnline),
-        }));
+        const mergedDevs = devList.map((d) => {
+          const live = deviceRegistry.getDeviceByUid(d.uid);
+          const remoteTs = d.lastSeenAt ? Date.parse(d.lastSeenAt) : (d.last_seen_at ? Date.parse(d.last_seen_at) : 0);
+          const localNewer = Boolean(live?.lastSeenTimestamp && (!Number.isFinite(remoteTs) || remoteTs <= 0 || live.lastSeenTimestamp >= remoteTs));
+          const resolvedOnline = Boolean(live?.isOnline ?? d.isOnline);
+          return {
+            ...d,
+            isOnline: resolvedOnline,
+            isStale: Boolean(live?.isStale ?? false),
+            connectivityState: live?.connectivityState || (resolvedOnline ? 'ONLINE' : 'OFFLINE'),
+            lastSeenTimestamp: localNewer ? live!.lastSeenTimestamp : (Number.isFinite(remoteTs) && remoteTs > 0 ? remoteTs : undefined),
+            lastSeenAt: localNewer && live?.lastSeen ? live.lastSeen : (d.lastSeenAt || d.last_seen_at || live?.lastSeen || null),
+            batteryPercent: localNewer && live?.batteryPercent != null ? live.batteryPercent : d.batteryPercent,
+            batteryVoltage: localNewer && live?.batteryVoltage != null ? live.batteryVoltage : d.batteryVoltage,
+            primaryLevel: localNewer && live?.tank1Level != null ? live.tank1Level : d.primaryLevel,
+            secondaryLevel: localNewer && live?.tank2Level != null ? live.tank2Level : d.secondaryLevel,
+            temperature: localNewer && live?.temperature != null ? live.temperature : d.temperature,
+            pressure: localNewer && live?.pressure != null ? live.pressure : d.pressure,
+          };
+        });
         setDevices(mergedDevs);
         mqttService.syncRegisteredDeviceUids(
           deviceRegistry.getDevices().map((d) => d.uid).concat(mergedDevs.map((d) => d.uid))
@@ -1197,10 +1216,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (st === 'CONNECTED') {
         mqttAttemptedRef.current = true;
         setMqttBrokerStatus('CONNECTED');
+        deviceRegistry.markBrokerConnected();
         alertNotificationService.evaluateBrokerConnectivity({ isConnected: true });
         // Real-time synchronization reconciliation on initial connect / reconnect
         refreshRegions();
         refreshData();
+      } else if (st === 'STALE') {
+        deviceRegistry.evaluateLivenessStates();
       } else if (st === 'CONNECTING' || st === 'RECONNECTING') {
         mqttAttemptedRef.current = true;
         setMqttBrokerStatus('DISCONNECTED');
@@ -1208,7 +1230,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setMqttBrokerStatus('DISCONNECTED');
         setLiveTelemetry(null);
         deviceRegistry.markAllOffline();
-        setDevices((prev) => prev.map((d) => ({ ...d, isOnline: false })));
+        setDevices((prev) => prev.map((d) => ({ ...d, isOnline: false, isStale: false, connectivityState: 'OFFLINE' })));
         if (mqttAttemptedRef.current) {
           const diag = mqttService.getBrokerDiagnostics();
           alertNotificationService.evaluateBrokerConnectivity({
@@ -1223,7 +1245,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setMqttBrokerStatus('DISCONNECTED');
         setLiveTelemetry(null);
         deviceRegistry.markAllOffline();
-        setDevices((prev) => prev.map((d) => ({ ...d, isOnline: false })));
+        setDevices((prev) => prev.map((d) => ({ ...d, isOnline: false, isStale: false, connectivityState: 'OFFLINE' })));
         if (mqttAttemptedRef.current && !mqttService.isIntentionalDisconnect()) {
           alertNotificationService.evaluateBrokerConnectivity({
             isConnected: false,
@@ -1657,13 +1679,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
 
     const unsubMqttTelemetry = mqttService.onTelemetry((telemetry) => {
-      const mappedDev = deviceRegistry.getDeviceByUid(telemetry.uid);
-      const activeTrno = (
-        (mappedDev?.assignmentStatus === 'ENGAGED' && mappedDev.trainNumber)
-          ? mappedDev.trainNumber
-          : (telemetry.trno || '')
-      ).trim();
-      const activeChno = (mappedDev?.coachNumber || telemetry.chno || '').trim();
+      const canonicalUid = getCanonicalUid(telemetry.uid || '');
+      const mappedDev = deviceRegistry.getDeviceByUid(canonicalUid);
+      let activeTrno = (mappedDev?.assignmentStatus === 'ENGAGED' && mappedDev.trainNumber)
+        ? mappedDev.trainNumber.trim()
+        : '';
+      let activeChno = mappedDev?.coachNumber ? mappedDev.coachNumber.trim() : '';
+
+      // Hydration race fallback: resolve train & coach via assigned device_uid before falling back to payload trno
+      if (!activeTrno && canonicalUid) {
+        const consistCoachMatch = activeConsistRef.current?.coaches?.find(
+          (c) => getCanonicalUid(c.device_uid || '') === canonicalUid
+        );
+        if (consistCoachMatch && activeConsistRef.current?.train_number) {
+          activeTrno = activeConsistRef.current.train_number.trim();
+          activeChno = (consistCoachMatch.coach_number || activeChno).trim();
+        } else {
+          for (const tr of configuredTrainsRef.current) {
+            const cached = localFleetStore.getTrainConsist(tr.train_number);
+            const coachMatch = cached?.coaches?.find(
+              (c) => getCanonicalUid(c.device_uid || '') === canonicalUid
+            );
+            if (coachMatch) {
+              activeTrno = cached!.train_number.trim();
+              activeChno = (coachMatch.coach_number || activeChno).trim();
+              break;
+            }
+          }
+        }
+      }
+
+      if (!activeTrno) {
+        activeTrno = (telemetry.trno || '').trim();
+      }
+      if (!activeChno) {
+        activeChno = (telemetry.chno || '').trim();
+      }
 
       // Always persist and propagate verified MQTT telemetry to Live Store, GPS, and Device Registry
       setLiveTelemetry({
@@ -1675,25 +1726,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setGpsWaypoints(mqttService.getGpsWaypoints());
       setMqttBrokerStatus('CONNECTED');
       setConnectionStatus('CONNECTED');
-      deviceRegistry.recordDiscoveredDevice(telemetry);
 
       const trainItem = activeTrno
         ? configuredTrainsRef.current.find((t) => t.train_number.trim() === activeTrno)
         : undefined;
       const isConfiguredTrain = Boolean(activeTrno && configuredTrainSetRef.current.has(activeTrno));
-      const matchedConsistCoach = (isConfiguredTrain && activeConsistRef.current && activeConsistRef.current.train_number.trim() === activeTrno)
-        ? activeConsistRef.current.coaches?.find((c) => c.coach_number?.trim().toUpperCase() === activeChno.toUpperCase())
+      const sourceConsist =
+        isConfiguredTrain && activeConsistRef.current && activeConsistRef.current.train_number.trim() === activeTrno
+          ? activeConsistRef.current
+          : isConfiguredTrain
+          ? localFleetStore.getTrainConsist(activeTrno)
+          : null;
+      const matchedConsistCoach = sourceConsist
+        ? sourceConsist.coaches?.find((c) => c.coach_number?.trim().toUpperCase() === activeChno.toUpperCase())
         : undefined;
       const t1Spec = matchedConsistCoach?.tanks?.find((t) => t.tank_index === 1) || matchedConsistCoach?.tanks?.[0];
       const t2Spec = matchedConsistCoach?.tanks?.find((t) => t.tank_index === 2) || matchedConsistCoach?.tanks?.[1];
-      const configuredMaxHeightCm = (isConfiguredTrain && activeConsistRef.current && activeConsistRef.current.train_number.trim() === activeTrno && activeConsistRef.current.tank_height_cm)
-        ? activeConsistRef.current.tank_height_cm
-        : (trainItem?.tank_height_cm ?? 50.0);
+      const configuredMaxHeightCm =
+        sourceConsist?.tank_height_cm || trainItem?.tank_height_cm || 50.0;
       const tank1MaxHeightCm = t1Spec?.height_cm && t1Spec.height_cm > 0 ? t1Spec.height_cm : configuredMaxHeightCm;
       const tank2MaxHeightCm = t2Spec?.height_cm && t2Spec.height_cm > 0 ? t2Spec.height_cm : configuredMaxHeightCm;
-      const configuredCapacityLiters = (isConfiguredTrain && activeConsistRef.current && activeConsistRef.current.train_number.trim() === activeTrno && activeConsistRef.current.tank_capacity_liters)
-        ? activeConsistRef.current.tank_capacity_liters
-        : (trainItem?.tank_capacity_liters ?? 20.0);
+      const configuredCapacityLiters =
+        sourceConsist?.tank_capacity_liters || trainItem?.tank_capacity_liters || 20.0;
 
       const arrivalLevelPct =
         computeLevelPercentFromHeight(telemetry.cm1, tank1MaxHeightCm) ??
@@ -1703,32 +1757,53 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         computeLevelPercentFromHeight(telemetry.cm2, tank2MaxHeightCm) ??
         (telemetry.wlp2 != null ? Number(telemetry.wlp2.toFixed(1)) : null);
 
+      deviceRegistry.recordDiscoveredDevice(
+        isConfiguredTrain
+          ? {
+              ...telemetry,
+              wlp1: arrivalLevelPct ?? telemetry.wlp1,
+              wlp2: departureLevelPct ?? telemetry.wlp2,
+            }
+          : telemetry
+      );
+
       const batVal = telemetry.bat;
       const tankBatteryVoltage = batVal != null ? Number((3.2 + (batVal / 100) * 1.0).toFixed(2)) : undefined;
 
       // Update Device Management cards even when device is unassigned to a configured train
+      const isOfflineTimeout = Boolean((telemetry as any).isOfflineTimeout);
+      const nextConnState = !telemetry.isStale ? 'ONLINE' : (isOfflineTimeout ? 'OFFLINE' : 'STALE');
+      const resolvedDeviceRecord = deviceRegistry.getDeviceByUid(canonicalUid);
       setDevices((prev) => {
+        const exists = prev.find((d) => (d.uid || '').trim().toUpperCase() === canonicalUid);
         const updatedDevice: Device = {
-          id: telemetry.uid,
-          uid: telemetry.uid,
-          name: mappedDev?.name || `WLI-${activeChno || telemetry.uid.slice(-6)}`,
+          id: canonicalUid || telemetry.uid,
+          uid: canonicalUid || telemetry.uid,
+          name: resolvedDeviceRecord?.name || mappedDev?.name || `WLI-${activeChno || telemetry.uid.slice(-6)}`,
           trainNumber: activeTrno,
           coachNumber: activeChno,
-          isOnline: !telemetry.isStale,
+          isOnline: nextConnState === 'ONLINE',
+          isStale: nextConnState === 'STALE',
+          connectivityState: nextConnState,
           batteryPercent: batVal ?? undefined,
           batteryVoltage: tankBatteryVoltage,
           temperature: telemetry.temp ?? undefined,
           pressure: telemetry.press ?? undefined,
           primaryLevel: arrivalLevelPct ?? telemetry.wlp1 ?? undefined,
           secondaryLevel: departureLevelPct ?? telemetry.wlp2 ?? undefined,
-          lastSeenAt: new Date(telemetry.receivedAt).toISOString(),
-          lastHeartbeat: new Date(telemetry.receivedAt).toISOString(),
+          lastSeenAt: !telemetry.isStale
+            ? new Date(telemetry.receivedAt).toISOString()
+            : (exists?.lastSeenAt || resolvedDeviceRecord?.lastSeen || new Date(telemetry.receivedAt).toISOString()),
+          lastHeartbeat: !telemetry.isStale
+            ? new Date(telemetry.receivedAt).toISOString()
+            : (exists?.lastHeartbeat || resolvedDeviceRecord?.lastSeen || new Date(telemetry.receivedAt).toISOString()),
+          lastSeenTimestamp: !telemetry.isStale
+            ? telemetry.receivedAt
+            : (exists?.lastSeenTimestamp || resolvedDeviceRecord?.lastSeenTimestamp || telemetry.receivedAt),
           hasActiveAlarm: telemetry.wlv1 === false || telemetry.wlv2 === false || (arrivalLevelPct != null && arrivalLevelPct < 15),
           firmwareVersion: '2.2.0-prod',
-          hardwareVersion: mappedDev?.hardwareModel || 'Cellular WLI Unit',
+          hardwareVersion: resolvedDeviceRecord?.hardwareModel || mappedDev?.hardwareModel || 'Cellular WLI Unit',
         };
-        const canonicalUid = (telemetry.uid || '').trim().toUpperCase();
-        const exists = prev.find((d) => (d.uid || '').trim().toUpperCase() === canonicalUid);
         if (exists) {
           return prev.map((d) => ((d.uid || '').trim().toUpperCase() === canonicalUid ? { ...d, ...updatedDevice } : d));
         }

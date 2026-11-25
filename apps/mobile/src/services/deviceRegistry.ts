@@ -29,6 +29,23 @@ const API_BASE = resolveApiBaseUrl();
 export type DeviceRegistrationStatus = 'DISCOVERED' | 'REGISTERED';
 export type DeviceAssignmentStatus = 'ENGAGED' | 'AVAILABLE';
 export type DeviceOperationalStatus = 'DISCOVERED' | 'REGISTERED' | 'ENGAGED' | 'AVAILABLE' | 'OFFLINE';
+export type DeviceConnectivityState = 'ONLINE' | 'STALE' | 'OFFLINE';
+
+export function resolveDeviceConnectivityState(
+  lastSeenTimestamp: number | undefined | null,
+  timeoutMs: number,
+  isBrokerDisconnected: boolean = false,
+  now: number = Date.now()
+): DeviceConnectivityState {
+  if (isBrokerDisconnected || !lastSeenTimestamp || lastSeenTimestamp <= 0) {
+    return 'OFFLINE';
+  }
+  const safeTimeout = Math.max(1000, timeoutMs);
+  const elapsed = Math.max(0, now - lastSeenTimestamp);
+  if (elapsed <= safeTimeout) return 'ONLINE';
+  if (elapsed <= safeTimeout * 2) return 'STALE';
+  return 'OFFLINE';
+}
 
 const HEX_24_RE = /^[0-9A-Fa-f]{24}$/;
 const TEST_PATTERNS = /TEST|AUDIT|DUMMY|DEMO|SEED|PLACEHOLDER|ROGUE|MOCK/i;
@@ -57,6 +74,8 @@ export interface ManagedDevice {
   registrationStatus: DeviceRegistrationStatus;
   assignmentStatus: DeviceAssignmentStatus;
   isOnline: boolean;
+  isStale?: boolean;
+  connectivityState?: DeviceConnectivityState;
   batteryPercent: number | null;
   batteryVoltage?: number | null;
   tank1Level: number | null;
@@ -108,6 +127,8 @@ class DeviceRegistryService {
   private version: number = 1;
   private updatedAt: number = 1700000000000;
   private suppressRemoteOnlineUntilTelemetry: boolean = false;
+  private isBrokerDisconnected: boolean = false;
+  private livenessTimer: any = null;
 
   private constructor() {
     this.loadFromStorage();
@@ -118,6 +139,12 @@ class DeviceRegistryService {
           this.notify();
         }
       });
+      this.livenessTimer = setInterval(() => {
+        this.evaluateLivenessStates();
+      }, 2000);
+      if (this.livenessTimer && typeof this.livenessTimer.unref === 'function') {
+        this.livenessTimer.unref();
+      }
     }
   }
 
@@ -153,11 +180,13 @@ class DeviceRegistryService {
             if (seenCanonical.has(canonical)) return;
             seenCanonical.add(canonical);
 
-            const isOnline = d.lastSeenTimestamp ? (now - d.lastSeenTimestamp) < getRegistryTimeoutMs() : false;
+            const nextState = resolveDeviceConnectivityState(d.lastSeenTimestamp, getRegistryTimeoutMs(), this.isBrokerDisconnected, now);
             this.devices.set(canonical, {
               ...d,
               uid: canonical,
-              isOnline: d.isOnline && isOnline,
+              isOnline: nextState === 'ONLINE',
+              isStale: nextState === 'STALE',
+              connectivityState: nextState,
             });
           });
         }
@@ -259,7 +288,15 @@ class DeviceRegistryService {
           assignmentStatus: remoteDev.assignmentStatus || existing.assignmentStatus,
           hardwareModel: remoteDev.hardwareModel || existing.hardwareModel,
           // Telemetry
-          isOnline: useLocalTelemetry ? existing.isOnline : ((remoteDev.lastSeenTimestamp ? (now - remoteDev.lastSeenTimestamp) < getRegistryTimeoutMs() : false)),
+          isOnline: useLocalTelemetry
+            ? existing.isOnline
+            : (resolveDeviceConnectivityState(remoteDev.lastSeenTimestamp, getRegistryTimeoutMs(), this.isBrokerDisconnected, now) === 'ONLINE'),
+          isStale: useLocalTelemetry
+            ? existing.isStale
+            : (resolveDeviceConnectivityState(remoteDev.lastSeenTimestamp, getRegistryTimeoutMs(), this.isBrokerDisconnected, now) === 'STALE'),
+          connectivityState: useLocalTelemetry
+            ? (existing.connectivityState || (existing.isStale ? 'STALE' : (existing.isOnline ? 'ONLINE' : 'OFFLINE')))
+            : resolveDeviceConnectivityState(remoteDev.lastSeenTimestamp, getRegistryTimeoutMs(), this.isBrokerDisconnected, now),
           batteryPercent: useLocalTelemetry ? existing.batteryPercent : remoteDev.batteryPercent,
           batteryVoltage: useLocalTelemetry ? existing.batteryVoltage : remoteDev.batteryVoltage,
           tank1Level: useLocalTelemetry ? existing.tank1Level : remoteDev.tank1Level,
@@ -273,11 +310,13 @@ class DeviceRegistryService {
           lastSeenTimestamp: Math.max(existing.lastSeenTimestamp || 0, remoteDev.lastSeenTimestamp || 0),
         });
       } else {
-        const isOnline = remoteDev.lastSeenTimestamp ? (now - remoteDev.lastSeenTimestamp) < getRegistryTimeoutMs() : false;
+        const nextState = resolveDeviceConnectivityState(remoteDev.lastSeenTimestamp, getRegistryTimeoutMs(), this.isBrokerDisconnected, now);
         this.devices.set(canonicalUid, {
           ...remoteDev,
           uid: canonicalUid,
-          isOnline,
+          isOnline: nextState === 'ONLINE',
+          isStale: nextState === 'STALE',
+          connectivityState: nextState,
         });
       }
     });
@@ -394,11 +433,13 @@ class DeviceRegistryService {
       if (seen.has(canonical)) return;
       seen.add(canonical);
 
-      const isOnline = d.lastSeenTimestamp ? (now - d.lastSeenTimestamp) < getRegistryTimeoutMs() : false;
+      const nextState = resolveDeviceConnectivityState(d.lastSeenTimestamp, getRegistryTimeoutMs(), this.isBrokerDisconnected, now);
       list.push({
         ...d,
         uid: canonical,
-        isOnline: d.isOnline && isOnline,
+        isOnline: nextState === 'ONLINE',
+        isStale: nextState === 'STALE',
+        connectivityState: nextState,
       });
     });
 
@@ -437,9 +478,14 @@ class DeviceRegistryService {
     }
     if (!telemetry.isStale) {
       this.suppressRemoteOnlineUntilTelemetry = false;
+      this.isBrokerDisconnected = false;
     }
     const uid = getCanonicalUid(rawUid);
     const existing = this.devices.get(uid);
+    const isOfflineTimeout = Boolean((telemetry as any).isOfflineTimeout);
+    const nextState: DeviceConnectivityState = !telemetry.isStale
+      ? 'ONLINE'
+      : (isOfflineTimeout ? 'OFFLINE' : 'STALE');
 
     const timeStr = telemetry.time || new Date().toLocaleTimeString('en-US', { hour12: false });
     const batteryPercent = telemetry.bat != null ? telemetry.bat : (existing?.batteryPercent ?? null);
@@ -449,10 +495,12 @@ class DeviceRegistryService {
 
     if (existing) {
       // Update telemetry while strictly maintaining administrator registration and mapping;
-      // never refresh lastSeenTimestamp when a watchdog STALE event arrives.
+      // never refresh lastSeenTimestamp when a watchdog STALE/OFFLINE event arrives.
       const updated: ManagedDevice = {
         ...existing,
-        isOnline: !telemetry.isStale,
+        isOnline: nextState === 'ONLINE',
+        isStale: nextState === 'STALE',
+        connectivityState: nextState,
         batteryPercent,
         batteryVoltage,
         tank1Level: telemetry.wlp1 ?? existing.tank1Level,
@@ -486,7 +534,9 @@ class DeviceRegistryService {
       coachNumber: null,
       registrationStatus: 'DISCOVERED',
       assignmentStatus: 'AVAILABLE',
-      isOnline: !telemetry.isStale,
+      isOnline: nextState === 'ONLINE',
+      isStale: nextState === 'STALE',
+      connectivityState: nextState,
       batteryPercent: telemetry.bat,
       batteryVoltage,
       tank1Level: telemetry.wlp1,
@@ -547,15 +597,19 @@ class DeviceRegistryService {
           claimedSlots.set(slotKey, canonicalUid);
         }
       }
-      const hasFreshLocalTelemetry = Boolean(existing?.lastSeenTimestamp && (now - existing.lastSeenTimestamp) < getRegistryTimeoutMs());
       const rawLastSeen = typeof d.last_seen_at === 'string' ? d.last_seen_at.trim() : '';
       const utcLastSeen = rawLastSeen && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(rawLastSeen) ? `${rawLastSeen}Z` : rawLastSeen;
-      const backendLastSeenMs = utcLastSeen ? Date.parse(utcLastSeen) : 0;
-      const suppressedByDisconnect = this.suppressRemoteOnlineUntilTelemetry;
-      const effectiveLastSeenMs = hasFreshLocalTelemetry
-        ? existing!.lastSeenTimestamp
-        : (suppressedByDisconnect ? 0 : (Number.isFinite(backendLastSeenMs) ? backendLastSeenMs : 0));
-      const remoteIsOnline = !suppressedByDisconnect && Boolean(d.isOnline || d.is_online);
+      const parsedBackendMs = utcLastSeen ? Date.parse(utcLastSeen) : 0;
+      const backendLastSeenMs = Number.isFinite(parsedBackendMs) ? parsedBackendMs : 0;
+      const existingLastSeenMs = existing?.lastSeenTimestamp || 0;
+      const effectiveLastSeenMs = Math.max(existingLastSeenMs, backendLastSeenMs);
+      const suppressedByDisconnect = this.suppressRemoteOnlineUntilTelemetry || this.isBrokerDisconnected;
+      const computedState = resolveDeviceConnectivityState(effectiveLastSeenMs, getRegistryTimeoutMs(), suppressedByDisconnect, now);
+      const remoteIsOnline = !suppressedByDisconnect && Boolean(d.isOnline || d.is_online) && backendLastSeenMs >= existingLastSeenMs;
+      const finalState: DeviceConnectivityState = remoteIsOnline && computedState === 'OFFLINE' ? 'ONLINE' : computedState;
+      const effectiveLastSeenStr = existingLastSeenMs >= backendLastSeenMs && existing?.lastSeen
+        ? existing.lastSeen
+        : (effectiveLastSeenMs > 0 ? new Date(effectiveLastSeenMs).toLocaleTimeString('en-US', { hour12: false }) : 'Awaiting Telemetry Signal');
       const base: ManagedDevice = existing || {
         uid: canonicalUid,
         name: d.name || `Node (${canonicalUid.slice(-6)})`,
@@ -563,7 +617,9 @@ class DeviceRegistryService {
         coachNumber: coach,
         registrationStatus: 'REGISTERED',
         assignmentStatus: (train && coach) ? 'ENGAGED' : 'AVAILABLE',
-        isOnline: remoteIsOnline,
+        isOnline: finalState === 'ONLINE',
+        isStale: finalState === 'STALE',
+        connectivityState: finalState,
         batteryPercent: null,
         batteryVoltage: null,
         tank1Level: null,
@@ -575,7 +631,7 @@ class DeviceRegistryService {
         latitude: null,
         longitude: null,
         speedKmh: null,
-        lastSeen: effectiveLastSeenMs ? new Date(effectiveLastSeenMs).toLocaleTimeString('en-US', { hour12: false }) : 'Awaiting Telemetry Signal',
+        lastSeen: effectiveLastSeenStr,
         lastSeenTimestamp: effectiveLastSeenMs,
         firstDiscovered: d.created_at || new Date().toISOString(),
         hardwareModel: d.hardwareVersion || d.hardware_version || 'Cellular WLI Unit',
@@ -588,10 +644,10 @@ class DeviceRegistryService {
         coachNumber: coach,
         assignmentStatus: (train && coach) ? 'ENGAGED' : 'AVAILABLE',
         registrationStatus: 'REGISTERED',
-        isOnline: hasFreshLocalTelemetry ? existing!.isOnline : remoteIsOnline,
-        lastSeen: hasFreshLocalTelemetry
-          ? existing!.lastSeen
-          : (effectiveLastSeenMs ? new Date(effectiveLastSeenMs).toLocaleTimeString('en-US', { hour12: false }) : 'Awaiting Telemetry Signal'),
+        isOnline: finalState === 'ONLINE',
+        isStale: finalState === 'STALE',
+        connectivityState: finalState,
+        lastSeen: effectiveLastSeenStr,
         lastSeenTimestamp: effectiveLastSeenMs,
         hardwareModel: d.hardwareVersion || d.hardware_version || base.hardwareModel,
       });
@@ -607,12 +663,44 @@ class DeviceRegistryService {
     this.notify();
   }
 
-  public markAllOffline(): void {
-    this.suppressRemoteOnlineUntilTelemetry = true;
+  public evaluateLivenessStates(): boolean {
+    const now = Date.now();
+    const timeoutMs = getRegistryTimeoutMs();
     let changed = false;
     this.devices.forEach((dev, uid) => {
-      if (dev.isOnline || dev.lastSeenTimestamp) {
-        this.devices.set(uid, { ...dev, isOnline: false, lastSeenTimestamp: 0 });
+      const nextState = resolveDeviceConnectivityState(dev.lastSeenTimestamp, timeoutMs, this.isBrokerDisconnected, now);
+      const nextOnline = nextState === 'ONLINE';
+      const nextStale = nextState === 'STALE';
+      if (dev.isOnline !== nextOnline || Boolean(dev.isStale) !== nextStale || dev.connectivityState !== nextState) {
+        this.devices.set(uid, {
+          ...dev,
+          isOnline: nextOnline,
+          isStale: nextStale,
+          connectivityState: nextState,
+        });
+        changed = true;
+      }
+    });
+    if (changed) {
+      this.notify();
+    }
+    return changed;
+  }
+
+  public markBrokerConnected(): void {
+    this.isBrokerDisconnected = false;
+    this.suppressRemoteOnlineUntilTelemetry = false;
+    this.evaluateLivenessStates();
+  }
+
+  public markAllOffline(): void {
+    this.suppressRemoteOnlineUntilTelemetry = true;
+    this.isBrokerDisconnected = true;
+    let changed = false;
+    this.devices.forEach((dev, uid) => {
+      if (dev.isOnline || dev.isStale || dev.connectivityState !== 'OFFLINE') {
+        // Preserve historical lastSeen and lastSeenTimestamp when reporting broker offline.
+        this.devices.set(uid, { ...dev, isOnline: false, isStale: false, connectivityState: 'OFFLINE' });
         changed = true;
       }
     });
@@ -874,13 +962,15 @@ class DeviceRegistryService {
    * Delete device from registry.
    */
   public deleteDevice(uid: string): boolean {
-    this.deletedUids.add(uid);
-    const deleted = this.devices.delete(uid);
+    const cleanUid = getCanonicalUid(uid);
+    if (!cleanUid) return false;
+    this.deletedUids.add(cleanUid);
+    const deleted = this.devices.delete(cleanUid);
     if (deleted) {
       this.saveToStorage();
       this.notify();
       try {
-        alertNotificationService.resolveAlertsForDevice(uid, 'Device deleted');
+        alertNotificationService.resolveAlertsForDevice(cleanUid, 'Device deleted');
       } catch {}
     }
     return deleted;

@@ -49,6 +49,7 @@ export function parseValidGps(parsed: Record<string, any>): ParsedMqttGps {
 }
 
 export const DEFAULT_MQTT_TOPIC = '0023004D4B42501120353332';
+export const DEFAULT_SIMULATOR_TOPIC = '/sensor/topic/soumik';
 export const DEFAULT_DEVICE_UID = '0023004D4B42501120353332';
 export const LEGACY_DEFAULT_MQTT_TOPIC = '';
 export const DEFAULT_STALE_TIMEOUT_MS = 180000; // 180 seconds (matches hardware wak=180s interval + jitter)
@@ -373,6 +374,10 @@ export class MqttService {
   private staleTimer: any = null;
   private reconnectAttempts = 0;
   private lastTelemetry: LiveTelemetryPayload | null = null;
+  private lastTelemetryByUid: Map<string, LiveTelemetryPayload> = new Map();
+  private lastReceivedAtByUid: Map<string, number> = new Map();
+  private staleEmittedUids: Set<string> = new Set();
+  private offlineEmittedUids: Set<string> = new Set();
   private lastValidGps: MqttGpsFix | null = null;
   private gpsWaypoints: MqttGpsFix[] = [];
   private trainGpsFixes: Map<string, MqttGpsFix> = new Map();
@@ -612,6 +617,15 @@ export class MqttService {
         this.topic = DEFAULT_MQTT_TOPIC;
       }
 
+      const savedSelectedDevice = localStorage.getItem('panorama_mqtt_selected_device');
+      const savedTargetTopic = localStorage.getItem('panorama_mqtt_target_topic');
+      if (savedSelectedDevice && savedSelectedDevice.trim()) {
+        this.dynamicSubscriptions.set(savedSelectedDevice.trim(), this.defaultQos);
+      }
+      if (savedTargetTopic && savedTargetTopic.trim()) {
+        this.dynamicSubscriptions.set(savedTargetTopic.trim(), this.defaultQos);
+      }
+
       // Seed registered device UIDs from localStorage without creating circular imports
       try {
         const regRaw = localStorage.getItem('panorama_device_registry');
@@ -631,6 +645,8 @@ export class MqttService {
       }
     }
     this.dynamicSubscriptions.set(DEFAULT_MQTT_TOPIC, this.defaultQos);
+    this.dynamicSubscriptions.set(`${DEFAULT_MQTT_TOPIC}/#`, this.defaultQos);
+    this.dynamicSubscriptions.set(DEFAULT_SIMULATOR_TOPIC, this.defaultQos);
     if (this.topic && this.topic !== DEFAULT_MQTT_TOPIC) {
       this.dynamicSubscriptions.set(this.topic, this.defaultQos);
     }
@@ -728,9 +744,16 @@ export class MqttService {
 
     if (DEFAULT_MQTT_TOPIC) {
       subs.set(DEFAULT_MQTT_TOPIC, this.defaultQos);
+      subs.set(`${DEFAULT_MQTT_TOPIC}/#`, this.defaultQos);
+    }
+    if (DEFAULT_SIMULATOR_TOPIC) {
+      subs.set(DEFAULT_SIMULATOR_TOPIC, this.defaultQos);
     }
     this.registeredDeviceUids.forEach((uid) => {
-      if (uid) subs.set(uid, this.defaultQos);
+      if (uid) {
+        subs.set(uid, this.defaultQos);
+        subs.set(`${uid}/#`, this.defaultQos);
+      }
     });
     if (this.topic) {
       subs.set(this.topic, this.defaultQos);
@@ -1221,7 +1244,12 @@ export class MqttService {
     }
 
     const maxBuffer = deviceProfileService.getActiveProfile().maxTelemetryHistoryBuffer || 150;
+    const uidKey = (telemetry.uid || DEFAULT_DEVICE_UID).trim().toUpperCase();
     this.lastTelemetry = telemetry;
+    this.lastTelemetryByUid.set(uidKey, telemetry);
+    this.lastReceivedAtByUid.set(uidKey, now);
+    this.staleEmittedUids.delete(uidKey);
+    this.offlineEmittedUids.delete(uidKey);
     this.historyBuffer.unshift(telemetry);
     if (this.historyBuffer.length > maxBuffer) {
       this.historyBuffer.pop();
@@ -1281,16 +1309,80 @@ export class MqttService {
   private resetStaleTimer(): void {
     this.clearStaleTimer();
     const timeoutMs = this.getWatchdogTimeoutMs();
+    const offlineMs = timeoutMs * 2;
+    const now = Date.now();
+    let nextDelayMs = Number.POSITIVE_INFINITY;
+
+    this.lastReceivedAtByUid.forEach((receivedAt, uid) => {
+      if (!this.staleEmittedUids.has(uid)) {
+        nextDelayMs = Math.min(nextDelayMs, Math.max(50, receivedAt + timeoutMs - now));
+      } else if (!this.offlineEmittedUids.has(uid)) {
+        nextDelayMs = Math.min(nextDelayMs, Math.max(50, receivedAt + offlineMs - now));
+      }
+    });
+
+    if (!Number.isFinite(nextDelayMs)) {
+      if (!this.lastTelemetry || this.lastTelemetry.isStale) return;
+      nextDelayMs = timeoutMs;
+    }
+
     this.staleTimer = setTimeout(() => {
-      if (this.status === 'CONNECTED') {
-        Logger.info('MQTT', 'Watchdog', `No telemetry received for ${Math.round(timeoutMs / 1000)}s. Transitioning to STALE standby.`);
+      const checkNow = Date.now();
+      const staleLimitMs = this.getWatchdogTimeoutMs();
+      const offlineLimitMs = staleLimitMs * 2;
+      let anyFresh = false;
+      let hasPendingOffline = false;
+
+      this.lastReceivedAtByUid.forEach((receivedAt, uid) => {
+        const elapsed = checkNow - receivedAt;
+        const payload = this.lastTelemetryByUid.get(uid);
+        if (elapsed < staleLimitMs) {
+          anyFresh = true;
+          hasPendingOffline = true;
+          return;
+        }
+        if (elapsed >= offlineLimitMs) {
+          if (!this.offlineEmittedUids.has(uid)) {
+            this.offlineEmittedUids.add(uid);
+            this.staleEmittedUids.add(uid);
+            if (payload) {
+              const expired = { ...payload, isStale: true, isOfflineTimeout: true } as LiveTelemetryPayload & { isOfflineTimeout?: boolean };
+              this.lastTelemetryByUid.set(uid, expired);
+              if (this.lastTelemetry?.uid?.trim().toUpperCase() === uid) {
+                this.lastTelemetry = expired;
+              }
+              this.telemetryListeners.forEach((l) => l(expired));
+            }
+          }
+          return;
+        }
+        hasPendingOffline = true;
+        if (!this.staleEmittedUids.has(uid)) {
+          this.staleEmittedUids.add(uid);
+          if (payload) {
+            const stalePayload: LiveTelemetryPayload = { ...payload, isStale: true };
+            this.lastTelemetryByUid.set(uid, stalePayload);
+            if (this.lastTelemetry?.uid?.trim().toUpperCase() === uid) {
+              this.lastTelemetry = stalePayload;
+            }
+            this.telemetryListeners.forEach((l) => l(stalePayload));
+          }
+        }
+      });
+
+      if (!anyFresh && this.status === 'CONNECTED') {
+        Logger.info('MQTT', 'Watchdog', `No telemetry received for ${Math.round(staleLimitMs / 1000)}s. Transitioning to STALE standby.`);
         this.setStatus('STALE');
-        if (this.lastTelemetry) {
+        if (this.lastTelemetry && !this.lastTelemetry.isStale) {
           this.lastTelemetry = { ...this.lastTelemetry, isStale: true };
           this.telemetryListeners.forEach((l) => l(this.lastTelemetry!));
         }
       }
-    }, timeoutMs);
+
+      if (hasPendingOffline && (this.status === 'CONNECTED' || this.status === 'STALE')) {
+        this.resetStaleTimer();
+      }
+    }, nextDelayMs);
   }
 
   private clearStaleTimer(): void {
@@ -1363,6 +1455,12 @@ export class MqttService {
 
   getLastTelemetry(): LiveTelemetryPayload | null {
     return this.lastTelemetry;
+  }
+
+  getLatestTelemetryForUid(uid: string): LiveTelemetryPayload | null {
+    const clean = (uid || '').trim().toUpperCase();
+    if (!clean) return null;
+    return this.lastTelemetryByUid.get(clean) || null;
   }
 
   getLastValidGps(): MqttGpsFix | null {
@@ -1786,11 +1884,15 @@ export class MqttService {
 
     const isConnected = Boolean(this.client && this.client.isConnected && this.client.isConnected());
     next.forEach((uid) => {
+      const subTopic = `${uid}/#`;
       if (!this.registeredDeviceUids.has(uid) || (isConnected && !this.confirmedSubscriptions.has(uid))) {
         this.registeredDeviceUids.add(uid);
         if (isConnected) {
           this.subscribeWithAck(this.client, uid, 0);
         }
+      }
+      if (isConnected && !this.confirmedSubscriptions.has(subTopic)) {
+        this.subscribeWithAck(this.client, subTopic, 0);
       }
     });
 
@@ -1801,6 +1903,8 @@ export class MqttService {
           try {
             this.client.unsubscribe(oldUid);
             this.confirmedSubscriptions.delete(oldUid);
+            this.client.unsubscribe(`${oldUid}/#`);
+            this.confirmedSubscriptions.delete(`${oldUid}/#`);
           } catch {}
         }
       }
@@ -1821,11 +1925,17 @@ export class MqttService {
   public unsubscribeTopic(topic: string, forceUnsubscribeRegistered: boolean = false): boolean {
     const cleanTopic = topic.trim();
     if (!cleanTopic) return false;
-    this.dynamicSubscriptions.delete(cleanTopic);
-    // Keep core registered hardware topics subscribed in background unless forced
-    if (!forceUnsubscribeRegistered && this.registeredDeviceUids.has(cleanTopic)) {
+    const normUpper = cleanTopic.toUpperCase();
+    const baseUid = normUpper.endsWith('/#') ? normUpper.slice(0, -2) : normUpper;
+    const isProtectedCoreTopic =
+      cleanTopic === DEFAULT_MQTT_TOPIC ||
+      cleanTopic === `${DEFAULT_MQTT_TOPIC}/#` ||
+      cleanTopic === DEFAULT_SIMULATOR_TOPIC ||
+      this.registeredDeviceUids.has(baseUid);
+    if (!forceUnsubscribeRegistered && isProtectedCoreTopic) {
       return true;
     }
+    this.dynamicSubscriptions.delete(cleanTopic);
     if (this.client && this.client.isConnected && this.client.isConnected()) {
       try {
         this.client.unsubscribe(cleanTopic);
@@ -2273,6 +2383,11 @@ export class MqttService {
     this.dispatchTimer = null;
     this.pendingDispatchTelemetry.clear();
     this.lastTelemetry = null;
+    this.lastTelemetryByUid.clear();
+    this.lastReceivedAtByUid.clear();
+    this.staleEmittedUids.clear();
+    this.offlineEmittedUids.clear();
+    this.lastPayloadSignature = '';
     this.confirmedSubscriptions.clear();
     this.clearStaleTimer();
     this.cleanupClient();

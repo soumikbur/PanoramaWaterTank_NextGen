@@ -44,7 +44,7 @@ export interface DashboardCoach {
   coachNumber: string;
   coachType: string;
   deviceId: string;
-  deviceStatus: 'Online' | 'Offline';
+  deviceStatus: 'Online' | 'Stale' | 'Offline';
   batteryPercent: number | null;
   arrivalLevel: number | null;
   arrivalHeightCm: number | null;
@@ -67,6 +67,7 @@ export const EmployeeDashboard: React.FC = () => {
     liveTank,
     tanks,
     devices,
+    managedDevices,
     activeAlarms,
     liveTelemetry,
     lastValidGps,
@@ -237,10 +238,21 @@ export const EmployeeDashboard: React.FC = () => {
       configuredTrains.find((t) => t.train_number === targetNo) ||
       activePool[0];
 
+    const liveUidUpper = liveTelemetry?.uid?.trim().toUpperCase() || '';
+    const liveAssignedToMatch = Boolean(
+      liveUidUpper &&
+      match &&
+      (managedDevices.some(
+        (d) =>
+          (d.uid || '').trim().toUpperCase() === liveUidUpper &&
+          (d.trainNumber || '').trim() === match.train_number.trim()
+      ) ||
+        consistCoaches.some((c) => (c.deviceUid || '').trim().toUpperCase() === liveUidUpper))
+    );
     const matchedLive =
       liveTelemetry &&
       match &&
-      liveTelemetry.trno?.trim() === match.train_number.trim()
+      (liveAssignedToMatch || liveTelemetry.trno?.trim() === match.train_number.trim())
         ? liveTelemetry
         : null;
 
@@ -302,7 +314,7 @@ export const EmployeeDashboard: React.FC = () => {
       coachNumber: c.coachNumber,
       coachType: c.coachType,
       deviceId: c.deviceUid || 'Not Mapped',
-      deviceStatus: c.isOnline ? 'Online' : 'Offline',
+      deviceStatus: c.isOnline ? 'Online' : (c.offlineReason === 'TIMED_OUT' ? 'Stale' : 'Offline'),
       batteryPercent: c.batteryPercent,
       arrivalLevel: c.arrivalLevel,
       arrivalHeightCm: c.arrivalHeightCm,
@@ -1076,7 +1088,13 @@ export const EmployeeDashboard: React.FC = () => {
             </thead>
             <tbody>
               {/* Show live hardware telemetry train if not already present in registered displayTrains */}
-              {liveTelemetry && !displayTrains.some((t) => t.train_number.trim() === liveTelemetry.trno?.trim()) && (
+              {liveTelemetry &&
+                !displayTrains.some((t) => t.train_number.trim() === liveTelemetry.trno?.trim()) &&
+                !managedDevices.some(
+                  (d) =>
+                    (d.uid || '').trim().toUpperCase() === (liveTelemetry.uid || '').trim().toUpperCase() &&
+                    Boolean(d.trainNumber && displayTrains.some((t) => t.train_number.trim() === d.trainNumber!.trim()))
+                ) && (
                 <tr
                   onClick={() => handleSelectTrain(liveTelemetry.trno)}
                   style={{
@@ -1325,7 +1343,13 @@ export const EmployeeDashboard: React.FC = () => {
             ========================================================================= */}
         <div className="dashboard-train-cards-mobile mobile-card-list">
           {/* Mobile Live Hardware Train Card (if not already in registered displayTrains) */}
-          {liveTelemetry && !displayTrains.some((t) => t.train_number.trim() === liveTelemetry.trno?.trim()) && (
+          {liveTelemetry &&
+            !displayTrains.some((t) => t.train_number.trim() === liveTelemetry.trno?.trim()) &&
+            !managedDevices.some(
+              (d) =>
+                (d.uid || '').trim().toUpperCase() === (liveTelemetry.uid || '').trim().toUpperCase() &&
+                Boolean(d.trainNumber && displayTrains.some((t) => t.train_number.trim() === d.trainNumber!.trim()))
+            ) && (
             <div
               className={`mobile-train-card ${currentTrain.trainNumber === liveTelemetry.trno ? 'selected' : ''}`}
               onClick={() => handleSelectTrain(liveTelemetry.trno)}
@@ -2211,6 +2235,8 @@ export const EmployeeDashboard: React.FC = () => {
                     backgroundColor:
                       selectedCoach.deviceStatus === 'Online'
                         ? 'var(--color-status-success, #16A34A)'
+                        : selectedCoach.deviceStatus === 'Stale'
+                        ? '#D97706'
                         : 'var(--color-status-critical, #DC2626)',
                   }}
                 />
@@ -2223,12 +2249,23 @@ export const EmployeeDashboard: React.FC = () => {
                   color:
                     selectedCoach.deviceStatus === 'Online'
                       ? 'var(--color-status-success, #16A34A)'
+                      : selectedCoach.deviceStatus === 'Stale'
+                      ? '#D97706'
                       : 'var(--color-status-critical, #DC2626)',
                 }}
               >
                 {selectedCoach.deviceStatus}
               </span>
             </div>
+
+            {selectedConsistCoach?.lastSeenTimeStr && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--color-text-secondary, #475569)', fontSize: '12px' }}>Last Seen</span>
+                <span style={{ color: '#0F172A', fontSize: '12px', fontWeight: 600 }}>
+                  {selectedConsistCoach.lastSeenTimeStr}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

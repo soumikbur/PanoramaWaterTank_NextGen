@@ -20,6 +20,7 @@ export interface TankLiveStatus {
   alarmStatus: AlarmStatus;
   batteryVoltage: number | null;
   isOnline: boolean;
+  offlineReason?: string | null;
   hasTelemetry?: boolean;
   isStale?: boolean;
   lastUpdate: string | null;

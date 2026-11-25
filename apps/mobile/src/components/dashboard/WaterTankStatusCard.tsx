@@ -14,7 +14,7 @@ export interface WaterTankStatusCardProps {
   coachNumber: string;
   coachType?: string;
   deviceId?: string;
-  deviceStatus?: 'Online' | 'Offline';
+  deviceStatus?: 'Online' | 'Stale' | 'Offline';
   batteryPercent?: number | null;
   hasTelemetry?: boolean;
   isOnline?: boolean;
@@ -64,8 +64,8 @@ export const WaterTankStatusCard: React.FC<WaterTankStatusCardProps> = ({
     tank: ConsistTankItem | null | undefined,
     level: number | null | undefined
   ): { state: TankTelemetryState; timestamp: string } => {
-    const isDeviceOffline = deviceStatus === 'Offline' || (tank && !tank.isOnline && tank.offlineReason === 'DEVICE_DISCONNECTED');
-    const isStale = Boolean(tank?.isStale || (tank && tank.isOnline === false && tank.offlineReason === 'TIMED_OUT'));
+    const isStale = Boolean(deviceStatus === 'Stale' || tank?.isStale || (tank && tank.isOnline === false && tank.offlineReason === 'TIMED_OUT'));
+    const isDeviceOffline = (deviceStatus === 'Offline' && !isStale) || (tank && !tank.isOnline && tank.offlineReason === 'DEVICE_DISCONNECTED');
     const hasReading = level != null && hasTelemetry;
     const timeStr = tank?.lastSeenTimeStr || lastSeenTimeStr || (lastSeenTimestamp ? new Date(lastSeenTimestamp).toLocaleTimeString() : null);
 

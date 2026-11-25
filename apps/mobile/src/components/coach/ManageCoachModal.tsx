@@ -272,6 +272,9 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
     const map = new Map<string, {
       uid: string;
       isOnline: boolean;
+      isStale: boolean;
+      connectivityState: 'ONLINE' | 'STALE' | 'OFFLINE';
+      lastSeen: string;
       trainNumber: string | null;
       coachNumber: string | null;
       hardwareModel: string;
@@ -280,9 +283,13 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
 
     for (const d of managedDevices) {
       if (d.uid) {
+        const state = d.connectivityState || (d.isStale ? 'STALE' : (d.isOnline ? 'ONLINE' : 'OFFLINE'));
         map.set(d.uid.toUpperCase(), {
           uid: d.uid.toUpperCase(),
-          isOnline: !!d.isOnline,
+          isOnline: state === 'ONLINE',
+          isStale: state === 'STALE',
+          connectivityState: state,
+          lastSeen: d.lastSeen || 'Awaiting Telemetry Signal',
           trainNumber: d.trainNumber || null,
           coachNumber: d.coachNumber || null,
           hardwareModel: d.hardwareModel || 'WLI Node',
@@ -294,9 +301,13 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
     for (const d of devices) {
       const u = (d.uid || '').toUpperCase();
       if (u && !map.has(u)) {
+        const state = d.connectivityState || (d.isStale ? 'STALE' : (!!(d.isOnline ?? (d as any).is_online) ? 'ONLINE' : 'OFFLINE'));
         map.set(u, {
           uid: u,
-          isOnline: !!(d.isOnline ?? (d as any).is_online),
+          isOnline: state === 'ONLINE',
+          isStale: state === 'STALE',
+          connectivityState: state,
+          lastSeen: d.lastSeenAt || (d as any).last_seen_at || 'Awaiting Telemetry Signal',
           trainNumber: d.trainNumber || (d as any).train_number || null,
           coachNumber: d.coachNumber || (d as any).coach_number || null,
           hardwareModel: d.hardwareVersion || (d as any).hardware_version || 'WLI Node',
@@ -1429,29 +1440,39 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
 
                       {/* STATUS */}
                       <td style={{ padding: '10px 10px', textAlign: 'center' }}>
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '5px',
-                            padding: '3px 8px',
-                            borderRadius: '4px',
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            backgroundColor: coach.is_online ? '#DCFCE7' : '#F1F5F9',
-                            color: coach.is_online ? '#15803D' : '#64748B',
-                          }}
-                        >
-                          <span
-                            style={{
-                              width: '7px',
-                              height: '7px',
-                              borderRadius: '50%',
-                              backgroundColor: coach.is_online ? '#16A34A' : '#94A3B8',
-                            }}
-                          />
-                          {coach.is_online ? 'ONLINE' : 'OFFLINE'}
-                        </span>
+                        {(() => {
+                          const coachUid = (coach.device_uid || '').trim().toUpperCase();
+                          const liveDev = coachUid ? allKnownDevices.find((d) => d.uid === coachUid) : undefined;
+                          const connState = liveDev?.connectivityState || (coach.is_online ? 'ONLINE' : 'OFFLINE');
+                          const pillBg = connState === 'ONLINE' ? '#DCFCE7' : connState === 'STALE' ? '#FEF3C7' : '#F1F5F9';
+                          const pillColor = connState === 'ONLINE' ? '#15803D' : connState === 'STALE' ? '#B45309' : '#64748B';
+                          const dotColor = connState === 'ONLINE' ? '#16A34A' : connState === 'STALE' ? '#D97706' : '#94A3B8';
+                          return (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                padding: '3px 9px',
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                backgroundColor: pillBg,
+                                color: pillColor,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: '7px',
+                                  height: '7px',
+                                  borderRadius: '50%',
+                                  backgroundColor: dotColor,
+                                }}
+                              />
+                              {connState}
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       {/* ACTIONS */}
@@ -1965,19 +1986,34 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                           >
                             {isKnownInRegistry ? 'REGISTERED' : 'UNREGISTERED'}
                           </span>
-                          <span
-                            style={{
-                              fontSize: '10px',
-                              fontWeight: 700,
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                              backgroundColor: selectedDeviceObj?.isOnline ? '#DCFCE7' : '#F1F5F9',
-                              color: selectedDeviceObj?.isOnline ? '#16A34A' : '#64748B',
-                              border: `1px solid ${selectedDeviceObj?.isOnline ? '#86EFAC' : '#CBD5E1'}`,
-                            }}
-                          >
-                            {selectedDeviceObj?.isOnline ? 'ONLINE' : 'OFFLINE'}
-                          </span>
+                          {(() => {
+                            const connState = selectedDeviceObj?.connectivityState || (selectedDeviceObj?.isOnline ? 'ONLINE' : 'OFFLINE');
+                            const bg = connState === 'ONLINE' ? '#DCFCE7' : connState === 'STALE' ? '#FEF3C7' : '#F1F5F9';
+                            const fg = connState === 'ONLINE' ? '#16A34A' : connState === 'STALE' ? '#B45309' : '#64748B';
+                            const bd = connState === 'ONLINE' ? '#86EFAC' : connState === 'STALE' ? '#FCD34D' : '#CBD5E1';
+                            return (
+                              <>
+                                <span
+                                  style={{
+                                    fontSize: '10px',
+                                    fontWeight: 700,
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    backgroundColor: bg,
+                                    color: fg,
+                                    border: `1px solid ${bd}`,
+                                  }}
+                                >
+                                  {connState}
+                                </span>
+                                {selectedDeviceObj?.lastSeen && selectedDeviceObj.lastSeen !== 'Awaiting Telemetry Signal' && (
+                                  <span style={{ fontSize: '10px', color: '#64748B', fontWeight: 600 }}>
+                                    Last Seen: {selectedDeviceObj.lastSeen}
+                                  </span>
+                                )}
+                              </>
+                            );
+                          })()}
                           <button
                             type="button"
                             onClick={() => setFormData({ ...formData, deviceUid: '' })}
@@ -2072,7 +2108,7 @@ export const ManageCoachModal: React.FC<ManageCoachModalProps> = ({ isOpen, onCl
                           d.coachNumber &&
                           !isThisCoach &&
                           d.trainNumber !== 'UNASSIGNED';
-                        const statusTag = d.isOnline ? 'ONLINE' : 'OFFLINE';
+                        const statusTag = d.connectivityState || (d.isOnline ? 'ONLINE' : 'OFFLINE');
                         const assignTag = isThisCoach
                           ? 'Assigned to THIS coach'
                           : isOtherCoach

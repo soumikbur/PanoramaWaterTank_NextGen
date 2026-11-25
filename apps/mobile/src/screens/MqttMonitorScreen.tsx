@@ -209,6 +209,16 @@ function mqttTopicMatches(subscription: string, incomingTopic: string): boolean 
   return subParts.length === incParts.length;
 }
 
+function frameMatchesTarget(target: string, frame: RawMqttFrame): boolean {
+  const clean = target.trim();
+  if (!clean) return false;
+  if (mqttTopicMatches(clean, frame.topic)) return true;
+  if (/^[0-9A-Fa-f]{24}$/.test(clean) && frame.uid) {
+    return frame.uid.trim().toUpperCase() === clean.toUpperCase();
+  }
+  return false;
+}
+
 function formatLocalTimeMs(date: Date): string {
   const pad = (n: number, z = 2) => String(n).padStart(z, '0');
   return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`;
@@ -491,7 +501,7 @@ export const MqttMonitorScreen: React.FC = () => {
     const clean = initTopic.startsWith('panorama/') ? DEFAULT_HARDWARE_UID : initTopic.split('/')[0].trim();
     const history = mqttService
       .getRawMessages()
-      .filter((f) => mqttTopicMatches(clean, f.topic));
+      .filter((f) => frameMatchesTarget(clean, f));
     if (history.length > 0) {
       return history.map((f, idx) => {
         const receivedDate = new Date(f.receivedAt || Date.now());
@@ -663,6 +673,15 @@ export const MqttMonitorScreen: React.FC = () => {
       });
     });
 
+    if (!seen.has('/sensor/topic/soumik')) {
+      seen.add('/sensor/topic/soumik');
+      const hasRetained = Boolean(topicRegistry['/sensor/topic/soumik']);
+      list.push({
+        topic: '/sensor/topic/soumik',
+        label: `/sensor/topic/soumik (Simulator)${hasRetained ? ' [Retained]' : ''}`,
+      });
+    }
+
     Object.keys(topicRegistry).forEach((t) => {
       if (!seen.has(t)) {
         seen.add(t);
@@ -741,7 +760,7 @@ export const MqttMonitorScreen: React.FC = () => {
       const subscribedTopic = activeTopicRef.current.trim();
       if (!subscribedTopic) return;
 
-      if (!mqttTopicMatches(subscribedTopic, frame.topic)) {
+      if (!frameMatchesTarget(subscribedTopic, frame)) {
         return;
       }
 
@@ -873,13 +892,13 @@ export const MqttMonitorScreen: React.FC = () => {
 
       const previous = activeTopicRef.current.trim();
       if (previous && previous !== target) {
-        mqttService.unsubscribeTopic(previous);
+        // Keep core hardware & simulator feeds alive in background when switching monitor filter
         pendingBufferRef.current = [];
         setQueuedWhilePaused(0);
         setSelectedId(null);
 
         // Immediately seed from live session buffer or persistent retained record
-        const liveMatches = mqttService.getRawMessages().filter((f) => mqttTopicMatches(target, f.topic));
+        const liveMatches = mqttService.getRawMessages().filter((f) => frameMatchesTarget(target, f));
         if (liveMatches.length > 0) {
           const seeded = liveMatches.map((f) => {
             seqRef.current += 1;
@@ -1392,7 +1411,7 @@ export const MqttMonitorScreen: React.FC = () => {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
           <select
             aria-label="Registered device topic preset"
-            value={availableDevices.some((d) => d.uid === topicInput) ? topicInput : '__custom__'}
+            value={availableTopics.some((t) => t.topic === topicInput) ? topicInput : '__custom__'}
             onChange={(e) => {
               const v = e.target.value;
               if (v !== '__custom__') {
@@ -1411,12 +1430,12 @@ export const MqttMonitorScreen: React.FC = () => {
               minWidth: '210px',
             }}
           >
-            {availableDevices.map((d) => (
-              <option key={d.uid} value={d.uid}>
-                {d.label}
+            {availableTopics.map((t) => (
+              <option key={t.topic} value={t.topic}>
+                {t.label}
               </option>
             ))}
-            {!availableDevices.some((d) => d.uid === topicInput) && (
+            {!availableTopics.some((t) => t.topic === topicInput) && (
               <option value="__custom__">Custom Topic</option>
             )}
           </select>

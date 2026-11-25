@@ -4,6 +4,7 @@ import { useApp } from '../state/AppContext';
 import { ApiClient } from '../api/client';
 import { RegionSummary, TrainOverviewItem, TrainConsist } from '../types';
 import { localFleetStore, FLEET_UPDATED_EVENT } from '../services/localFleetStore';
+import { computeLevelPercentFromHeight } from '../services/tankStatusService';
 import { Train, Plus, Trash2, X, ChevronRight, MapPin, ArrowLeft, ArrowRight, CheckCircle2, Edit3, SlidersHorizontal } from 'lucide-react';
 import { AddTrainModal } from '../components/train/AddTrainModal';
 import { ManageCoachModal } from '../components/coach/ManageCoachModal';
@@ -1195,19 +1196,24 @@ export const TrainManagementScreen: React.FC = () => {
 
                     {(() => {
                       const coachOnline = isCoachOnline(selectedTrain.train_number, coach.coach_number);
+                      const cleanUid = (coach.device_uid || '').trim().toUpperCase();
+                      const coachDev = cleanUid
+                        ? managedDevices.find((d) => (d.uid || '').trim().toUpperCase() === cleanUid)
+                        : undefined;
+                      const coachStale = !coachOnline && Boolean(coachDev?.isStale || coachDev?.connectivityState === 'STALE');
                       return (
                         <span
                           style={{
-                            backgroundColor: coachOnline ? '#ECFDF5' : '#F1F5F9',
-                            color: coachOnline ? '#16A34A' : '#64748B',
-                            border: `1px solid ${coachOnline ? '#DCFCE7' : '#E2E8F0'}`,
+                            backgroundColor: coachOnline ? '#ECFDF5' : coachStale ? '#FFFBEB' : '#F1F5F9',
+                            color: coachOnline ? '#16A34A' : coachStale ? '#B45309' : '#64748B',
+                            border: `1px solid ${coachOnline ? '#DCFCE7' : coachStale ? '#FDE68A' : '#E2E8F0'}`,
                             borderRadius: '10px',
                             padding: '2px 8px',
                             fontSize: '10px',
                             fontWeight: 700,
                           }}
                         >
-                          {coachOnline ? 'DEVICE ONLINE' : 'DEVICE OFFLINE'}
+                          {coachOnline ? 'DEVICE ONLINE' : coachStale ? 'DEVICE STALE' : 'DEVICE OFFLINE'}
                         </span>
                       );
                     })()}
@@ -1223,8 +1229,27 @@ export const TrainManagementScreen: React.FC = () => {
                   }}
                 >
                   {(coach.tanks || []).map((tank) => {
+                    const coachOnline = isCoachOnline(selectedTrain.train_number, coach.coach_number);
+                    const cleanUid = (coach.device_uid || '').trim().toUpperCase();
+                    const coachDev = cleanUid
+                      ? managedDevices.find((d) => (d.uid || '').trim().toUpperCase() === cleanUid)
+                      : undefined;
+                    const maxHeight = tank.height_cm || 50;
+                    const liveHeight = coachDev
+                      ? (tank.tank_index === 2 ? coachDev.tank2HeightCm : coachDev.tank1HeightCm)
+                      : null;
+                    const hasLiveDeviceData = Boolean(coachDev && (coachOnline || coachDev.isStale));
+                    const effectivePct = hasLiveDeviceData && liveHeight != null
+                      ? (computeLevelPercentFromHeight(liveHeight, maxHeight) ?? tank.current_level_percent)
+                      : (hasLiveDeviceData && coachDev
+                          ? ((tank.tank_index === 2 ? coachDev.tank2Level : coachDev.tank1Level) ?? tank.current_level_percent)
+                          : tank.current_level_percent);
+                    const effectiveHeightCm =
+                      hasLiveDeviceData && liveHeight != null
+                        ? Number(liveHeight.toFixed(1))
+                        : (tank.current_height_cm ?? Number((((effectivePct || 0) / 100) * maxHeight).toFixed(1)));
                     const isWarn = tank.status === 'WARNING';
-                    const isCrit = tank.status === 'CRITICAL';
+                    const isCrit = tank.status === 'CRITICAL' || (hasLiveDeviceData && effectivePct < 15);
                     const barColor = isCrit ? '#DC2626' : isWarn ? '#D97706' : '#2563EB';
 
                     return (
@@ -1258,7 +1283,7 @@ export const TrainManagementScreen: React.FC = () => {
                               color: isCrit ? '#DC2626' : isWarn ? '#D97706' : '#16A34A',
                             }}
                           >
-                            {tank.status}
+                            {isCrit ? 'CRITICAL' : tank.status}
                           </span>
                         </div>
 
@@ -1273,10 +1298,10 @@ export const TrainManagementScreen: React.FC = () => {
                         >
                           <div>
                             <span style={{ fontSize: '20px', fontWeight: 800, color: barColor }}>
-                              {tank.current_level_percent}%
+                              {Number(effectivePct.toFixed(1))}%
                             </span>
                             <span style={{ fontSize: '11px', color: '#64748B', marginLeft: '6px' }}>
-                              ({(tank.current_height_cm ?? Number((((tank.current_level_percent || 0) / 100) * (tank.height_cm || 50)).toFixed(1)))} cm / {tank.height_cm || 50} cm)
+                              ({effectiveHeightCm} cm / {maxHeight} cm)
                             </span>
                           </div>
                         </div>
@@ -1293,7 +1318,7 @@ export const TrainManagementScreen: React.FC = () => {
                         >
                           <div
                             style={{
-                              width: `${Math.min(100, Math.max(0, tank.current_level_percent))}%`,
+                              width: `${Math.min(100, Math.max(0, effectivePct))}%`,
                               height: '100%',
                               backgroundColor: barColor,
                               borderRadius: '4px',

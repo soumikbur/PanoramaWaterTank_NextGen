@@ -1,3 +1,5 @@
+export type DeviceConnectivityState = 'ONLINE' | 'STALE' | 'OFFLINE';
+
 export interface Device {
   id: string;
   uid: string;
@@ -14,6 +16,8 @@ export interface Device {
   description?: string;
   status?: 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | 'DECOMMISSIONED' | string;
   isOnline: boolean;
+  isStale?: boolean;
+  connectivityState?: DeviceConnectivityState;
   is_online?: boolean;
   train_number?: string;
   coach_number?: string;
@@ -25,6 +29,7 @@ export interface Device {
   tank_assignment?: string;
   lastSeenAt: string | null;
   last_seen_at?: string | null;
+  lastSeenTimestamp?: number;
   lastHeartbeat?: string | null;
   batteryPercent?: number;
   batteryVoltage?: number;

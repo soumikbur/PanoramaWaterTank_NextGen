@@ -118,14 +118,25 @@ export const CoachDetailsScreen: React.FC = () => {
         : liveTelemetry.trno?.trim() === trainNum && liveTelemetry.chno?.trim().toUpperCase() === coachNum)
   );
 
+  const elapsedSinceDeviceMs = matchingDevice?.lastSeenTimestamp
+    ? Math.max(0, now - matchingDevice.lastSeenTimestamp)
+    : Number.POSITIVE_INFINITY;
+
   const isMatchingDeviceFresh = Boolean(
     matchingDevice &&
     matchingDevice.lastSeenTimestamp &&
-    now - matchingDevice.lastSeenTimestamp <= timeoutMs
+    elapsedSinceDeviceMs <= timeoutMs
   );
 
   const isOnline = Boolean(
     isMqttConnected && (hasLiveTelemetry || (matchingDevice?.isOnline && isMatchingDeviceFresh))
+  );
+  const isStale = Boolean(
+    !isOnline &&
+    isMqttConnected &&
+    matchingDevice &&
+    ((matchingDevice.lastSeenTimestamp && elapsedSinceDeviceMs > timeoutMs && elapsedSinceDeviceMs <= timeoutMs * 2) ||
+      matchingDevice.isStale)
   );
   const deviceId =
     (hasLiveTelemetry && liveTelemetry?.uid) ||
@@ -605,8 +616,8 @@ export const CoachDetailsScreen: React.FC = () => {
               width: '36px',
               height: '36px',
               borderRadius: '6px',
-              backgroundColor: isOnline ? '#ECFDF5' : '#FEF2F2',
-              color: isOnline ? '#16A34A' : '#DC2626',
+              backgroundColor: isOnline ? '#ECFDF5' : isStale ? '#FFFBEB' : '#FEF2F2',
+              color: isOnline ? '#16A34A' : isStale ? '#D97706' : '#DC2626',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -621,14 +632,23 @@ export const CoachDetailsScreen: React.FC = () => {
               style={{
                 fontSize: '13px',
                 fontWeight: 800,
-                color: isOnline ? '#16A34A' : '#DC2626',
+                color: isOnline ? '#16A34A' : isStale ? '#D97706' : '#DC2626',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
               }}
             >
-              {isOnline ? 'Online (Active)' : (!matchingDevice && !hasLiveTelemetry ? 'Offline (Unmapped)' : 'Offline (Standby)')}
+              {isOnline
+                ? 'Online (Active)'
+                : isStale
+                ? 'Stale (Delayed)'
+                : (!matchingDevice && !hasLiveTelemetry ? 'Offline (Unmapped)' : 'Offline (Standby)')}
             </div>
+            {(matchingDevice?.lastSeen || (hasLiveTelemetry && liveTelemetry?.time)) && (
+              <div style={{ fontSize: '10px', color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                Last Seen: {(hasLiveTelemetry && liveTelemetry?.time) || matchingDevice?.lastSeen}
+              </div>
+            )}
           </div>
         </div>
 
@@ -736,7 +756,7 @@ export const CoachDetailsScreen: React.FC = () => {
             waterHeightCm={arrivalHeight}
             isOnline={isOnline}
             hasTelemetry={arrivalPercent != null}
-            isStale={false}
+            isStale={isStale}
             lastUpdated={matchingDevice?.lastSeenTimestamp ? new Date(matchingDevice.lastSeenTimestamp).toISOString() : new Date().toISOString()}
             batteryPercent={batteryPercent}
             deviceId={deviceId}
@@ -754,7 +774,7 @@ export const CoachDetailsScreen: React.FC = () => {
             waterHeightCm={departureHeight}
             isOnline={isOnline}
             hasTelemetry={departurePercent != null}
-            isStale={false}
+            isStale={isStale}
             lastUpdated={matchingDevice?.lastSeenTimestamp ? new Date(matchingDevice.lastSeenTimestamp).toISOString() : new Date().toISOString()}
             batteryPercent={batteryPercent}
             deviceId={deviceId}

@@ -35,12 +35,14 @@ export interface DeviceTelemetry {
   coachNumber: string;
   serialNumber: string;
   location: string;
-  status: 'Online' | 'Offline' | 'Warning';
+  status: 'Online' | 'Stale' | 'Offline' | 'Warning';
   connectionType: string;
   modemModel: string;
   signalQuality: string;
   ipAddress: string;
   waterLevel: number | null;
+  secondaryWaterLevel?: number | null;
+  lastSeenTimestamp?: number;
   waterHeightCm: number | null;
   tankHeightCm: number;
   volumeLiters: number | null;
@@ -66,6 +68,7 @@ export const DevicesScreen: React.FC = () => {
   const {
     liveTank,
     devices,
+    managedDevices,
     connectionStatus,
     currentTime,
     refreshData,
@@ -372,11 +375,15 @@ export const DevicesScreen: React.FC = () => {
         const liveMaxHeight = isLiveDevice ? (liveTank?.maxHeightCm ?? 50.0) : 50.0;
         const liveVol = isLiveDevice ? (liveTank?.volumeLiters ?? null) : null;
         const liveCap = isLiveDevice ? (liveTank?.capacityLiters ?? 20.0) : 20.0;
-        const status: 'Online' | 'Offline' | 'Warning' = !d.isOnline
-          ? 'Offline'
-          : d.hasActiveAlarm || (liveLevel != null && (liveLevel < 20.0 || liveLevel >= 100.0))
-          ? 'Warning'
-          : 'Online';
+        const connState = d.connectivityState || (d.isStale ? 'STALE' : (d.isOnline ? 'ONLINE' : 'OFFLINE'));
+        const status: 'Online' | 'Stale' | 'Offline' | 'Warning' =
+          connState === 'STALE'
+            ? 'Stale'
+            : connState === 'OFFLINE'
+            ? 'Offline'
+            : d.hasActiveAlarm || (liveLevel != null && (liveLevel < 20.0 || liveLevel >= 100.0))
+            ? 'Warning'
+            : 'Online';
 
         return {
           dbId: d.id,
@@ -392,14 +399,16 @@ export const DevicesScreen: React.FC = () => {
           status,
           connectionType: 'Cellular / MQTT',
           modemModel: 'Wireless Link / MQTT',
-          signalQuality: d.isOnline ? 'Active Link' : 'No Signal',
+          signalQuality: connState === 'ONLINE' ? 'Active Link' : connState === 'STALE' ? 'Delayed Link' : 'No Signal',
           ipAddress: 'MQTT / Cellular',
           waterLevel: liveLevel,
+          secondaryWaterLevel: d.secondaryLevel ?? null,
+          lastSeenTimestamp: d.lastSeenTimestamp,
           waterHeightCm: liveHeight,
           tankHeightCm: liveMaxHeight,
           volumeLiters: liveVol,
           capacityLiters: liveCap,
-          sensorStatus: d.isOnline ? 'Operational' : 'Offline',
+          sensorStatus: connState === 'ONLINE' ? 'Operational' : connState === 'STALE' ? 'Stale' : 'Offline',
           sensorType: 'Hydrostatic Pressure (4-20mA)',
           gain: 'Standard Operating Range',
           temperature: isLiveDevice ? (liveTank?.temperature ?? d.temperature ?? null) : (d.temperature ?? null),
@@ -411,7 +420,9 @@ export const DevicesScreen: React.FC = () => {
           airBaseline: 0,
           deadband: '0.5 cm',
           alarmState: d.hasActiveAlarm ? 'ALERT_ACTIVE' : 'NORMAL',
-          lastUpdate: d.lastSeenAt ? (Number.isNaN(Date.parse(d.lastSeenAt)) ? d.lastSeenAt : new Date(d.lastSeenAt).toLocaleTimeString()) : 'Awaiting Data',
+          lastUpdate: d.lastSeenAt && !['Active Link', 'No Signal', 'Awaiting Telemetry Signal'].includes(d.lastSeenAt)
+            ? (Number.isNaN(Date.parse(d.lastSeenAt)) ? d.lastSeenAt : new Date(d.lastSeenAt).toLocaleTimeString())
+            : 'Awaiting Data',
           uploadInterval: '3 seconds',
           isPrimary: isLiveDevice,
         };
@@ -568,11 +579,58 @@ export const DevicesScreen: React.FC = () => {
 
   const totalCount = allDevices.length;
   const onlineCount = allDevices.filter((d) => d.status === 'Online').length;
+  const staleCount = allDevices.filter((d) => d.status === 'Stale').length;
   const offlineCount = allDevices.filter((d) => d.status === 'Offline').length;
   const warningCount = allDevices.filter((d) => d.status === 'Warning').length;
 
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalRecords);
+
+  const displayTelemetryRows = useMemo(() => {
+    if (selectedHistoryUid) return telemetryRecords;
+    const byUid = new Map<string, typeof devices[number]>();
+    devices.forEach((d) => {
+      if (d.uid) byUid.set(getCanonicalUid(d.uid), d);
+    });
+    const managedByUid = new Map<string, typeof managedDevices[number]>();
+    managedDevices.forEach((m) => {
+      if (m.uid) managedByUid.set(getCanonicalUid(m.uid), m);
+    });
+    return telemetryRecords.map((row) => {
+      const uidKey = getCanonicalUid(row.deviceId || '');
+      const live = byUid.get(uidKey);
+      const managed = managedByUid.get(uidKey);
+      if (!live && !managed) return row;
+      const hasLiveTiming = Boolean(live?.lastSeenTimestamp || live?.isOnline || live?.isStale || managed?.lastSeenTimestamp || managed?.isOnline || managed?.isStale);
+      if (!hasLiveTiming) return row;
+      const rawLast = live?.lastSeenAt || managed?.lastSeen || '';
+      const recordedStr = rawLast && !['Active Link', 'No Signal', 'Awaiting Telemetry Signal'].includes(rawLast)
+        ? (Number.isNaN(Date.parse(rawLast)) ? rawLast : new Date(rawLast).toLocaleTimeString())
+        : row.recordedAt;
+      const tsMs = live?.lastSeenTimestamp || managed?.lastSeenTimestamp || (rawLast ? Date.parse(rawLast) : 0);
+      let utcStr = row.receivedUtc;
+      if (tsMs && Number.isFinite(tsMs)) {
+        const dt = new Date(tsMs);
+        const p = (n: number) => String(n).padStart(2, '0');
+        utcStr = `${p(dt.getUTCDate())}-${p(dt.getUTCMonth() + 1)}-${dt.getUTCFullYear()} ${p(dt.getUTCHours())}:${p(dt.getUTCMinutes())}:${p(dt.getUTCSeconds())}`;
+      }
+      const lvl1Val = live?.primaryLevel ?? managed?.tank1Level ?? null;
+      const latVal = managed?.latitude ?? row.latitude;
+      const lonVal = managed?.longitude ?? row.longitude;
+      const hasGps = latVal != null && lonVal != null && Number.isFinite(latVal) && Number.isFinite(lonVal) && (latVal !== 0 || lonVal !== 0);
+      return {
+        ...row,
+        recordedAt: recordedStr,
+        level1Percent: lvl1Val != null ? `${lvl1Val.toFixed(1)}%` : row.level1Percent,
+        batteryV: live?.batteryVoltage ?? managed?.batteryVoltage ?? row.batteryV,
+        batteryPercent: (live?.batteryPercent ?? managed?.batteryPercent) != null ? `${(live?.batteryPercent ?? managed?.batteryPercent)!.toFixed(1)}%` : row.batteryPercent,
+        latitude: latVal,
+        longitude: lonVal,
+        gpsValid: hasGps ? 'Valid' : row.gpsValid,
+        receivedUtc: utcStr,
+      };
+    });
+  }, [telemetryRecords, selectedHistoryUid, devices, managedDevices]);
 
   const hasActiveFilters =
     searchDeviceId.trim() !== '' ||
@@ -829,7 +887,24 @@ export const DevicesScreen: React.FC = () => {
                       backgroundColor: '#10B981',
                     }}
                   />
-                  <span style={{ fontSize: '12px', color: '#059669', fontWeight: 600 }}>2 Online</span>
+                  <span style={{ fontSize: '12px', color: '#059669', fontWeight: 600 }}>
+                    {onlineCount + warningCount} Online
+                  </span>
+                  {staleCount > 0 && (
+                    <>
+                      <span style={{ color: '#CBD5E1' }}>|</span>
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          width: '8px',
+                          height: '8px',
+                          borderRadius: '50%',
+                          backgroundColor: '#F59E0B',
+                        }}
+                      />
+                      <span style={{ fontSize: '12px', color: '#D97706', fontWeight: 600 }}>{staleCount} Stale</span>
+                    </>
+                  )}
                   <span style={{ color: '#CBD5E1' }}>|</span>
                   <span
                     style={{
@@ -840,7 +915,7 @@ export const DevicesScreen: React.FC = () => {
                       backgroundColor: '#94A3B8',
                     }}
                   />
-                  <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>2 Offline</span>
+                  <span style={{ fontSize: '12px', color: '#64748B', fontWeight: 600 }}>{offlineCount} Offline</span>
                 </div>
                 <div style={{ color: '#CBD5E1' }}>|</div>
                 <div>
@@ -1398,7 +1473,7 @@ export const DevicesScreen: React.FC = () => {
                       </td>
                     </tr>
                   ) : (
-                    telemetryRecords.map((row, idx) => {
+                    displayTelemetryRows.map((row, idx) => {
                       // Alternating background: Row 1 White (#FFFFFF), Row 2 Very light blue (#F0F7FF)
                       const isAlternate = idx % 2 === 1;
                       const rowBg = isAlternate ? '#F0F7FF' : '#FFFFFF';
@@ -1737,6 +1812,7 @@ export const DevicesScreen: React.FC = () => {
                 >
                   <option value="All">All</option>
                   <option value="Online">Online</option>
+                  <option value="Stale">Stale</option>
                   <option value="Offline">Offline</option>
                   <option value="Warning">Warning</option>
                 </select>
@@ -1877,8 +1953,8 @@ export const DevicesScreen: React.FC = () => {
             }}
           >
             {filteredFleetDevices.map((dev) => {
-              const statusColor = dev.status === 'Online' ? '#10B981' : dev.status === 'Warning' ? '#F59E0B' : '#EF4444';
-              const statusBg = dev.status === 'Online' ? '#ECFDF5' : dev.status === 'Warning' ? '#FFFBEB' : '#FEF2F2';
+              const statusColor = dev.status === 'Online' ? '#10B981' : (dev.status === 'Warning' || dev.status === 'Stale') ? '#F59E0B' : '#EF4444';
+              const statusBg = dev.status === 'Online' ? '#ECFDF5' : (dev.status === 'Warning' || dev.status === 'Stale') ? '#FFFBEB' : '#FEF2F2';
 
               return (
                 <BaseCard key={dev.dbId} style={{ padding: '16px', boxSizing: 'border-box' }}>
@@ -1916,7 +1992,11 @@ export const DevicesScreen: React.FC = () => {
                     <div>
                       <span style={{ color: '#64748B' }}>Water Level:</span>{' '}
                       <strong style={{ color: '#2563EB' }}>
-                        {dev.waterLevel != null ? `${dev.waterLevel.toFixed(1)}%` : '--'}
+                        {dev.waterLevel != null
+                          ? (dev.secondaryWaterLevel != null
+                              ? `${dev.waterLevel.toFixed(0)}% / ${dev.secondaryWaterLevel.toFixed(0)}%`
+                              : `${dev.waterLevel.toFixed(1)}%`)
+                          : '--'}
                       </strong>
                     </div>
                     <div>

@@ -474,16 +474,16 @@ export const WaterTankScreen: React.FC = () => {
                           width: '6px',
                           height: '6px',
                           borderRadius: '3px',
-                          backgroundColor: !tank.isOnline ? '#DC2626' : '#16A34A',
+                          backgroundColor: tank.isOnline ? '#16A34A' : tank.offlineReason === 'TIMED_OUT' ? '#D97706' : '#DC2626',
                         }}
                       />
                       <span
                         style={{
                           fontWeight: 700,
-                          color: !tank.isOnline ? '#DC2626' : '#16A34A',
+                          color: tank.isOnline ? '#16A34A' : tank.offlineReason === 'TIMED_OUT' ? '#D97706' : '#DC2626',
                         }}
                       >
-                        {!tank.isOnline ? 'Offline' : 'Online'}
+                        {tank.isOnline ? 'Online' : tank.offlineReason === 'TIMED_OUT' ? 'Stale' : 'Offline'}
                       </span>
                     </div>
                     <ChevronRight size={14} color="#94A3B8" />
@@ -554,7 +554,7 @@ export const WaterTankScreen: React.FC = () => {
                                 : '#16A34A',
                             }}
                           >
-                            {!tank.isOnline ? 'OFFLINE' : tank.alarmStatus === 'STALE_DATA' ? 'STALE' : tank.alarmStatus}
+                            {!tank.isOnline ? (tank.offlineReason === 'TIMED_OUT' ? 'STALE' : 'OFFLINE') : tank.alarmStatus === 'STALE_DATA' ? 'STALE' : tank.alarmStatus}
                           </span>
                         </td>
                         <td style={{ padding: '12px 16px', fontWeight: 700, color: '#0F172A' }}>

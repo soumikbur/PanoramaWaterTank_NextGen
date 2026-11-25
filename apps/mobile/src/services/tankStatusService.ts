@@ -345,6 +345,9 @@ export function computeConsistData(params: {
     } else if (!isMqttActive) {
       isCoachOnline = false;
       offlineReason = 'MQTT_DISCONNECTED';
+    } else if (now - lastSeenTimestamp > timeoutMs * 2) {
+      isCoachOnline = false;
+      offlineReason = 'DEVICE_DISCONNECTED';
     } else if (now - lastSeenTimestamp > timeoutMs) {
       isCoachOnline = false;
       offlineReason = 'TIMED_OUT';
