@@ -917,7 +917,7 @@ export class MqttService {
       this.connectTimeoutTimer = setTimeout(() => {
         if (this.client === client && this.isConnecting) {
           this.isConnecting = false;
-          this.lastError = `Connection timeout after ${this.connectionTimeoutSeconds}s to ${this.brokerHost}:${this.brokerPort}${this.brokerPath}`;
+          this.lastError = `Connection timeout after ${this.connectionTimeoutSeconds}s`;
           this.lastDisconnectedAt = Date.now();
           console.warn('[MQTT]', this.lastError);
           this.cleanupClient();

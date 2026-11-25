@@ -36,7 +36,6 @@ import {
   Zap,
   RefreshCw,
   AlertTriangle,
-  ShieldCheck,
 } from 'lucide-react';
 
 export const DEFAULT_HARDWARE_UID = '0023004D4B42501120353332';
@@ -1091,12 +1090,12 @@ export const MqttMonitorScreen: React.FC = () => {
       setDiagnostics(mqttService.getBrokerDiagnostics());
       if (reconnectAfterSave) {
         setIsConfigModalOpen(false);
-        showToast(`Saved MQTT config; connecting to ${configHost.trim()}:${configPort}...`);
+        showToast('Saved MQTT configuration; reconnecting...');
       } else {
         showToast('MQTT configuration saved');
       }
     },
-    [buildDraftConfig, configDefaultQos, configHost, configPort, showToast]
+    [buildDraftConfig, configDefaultQos, showToast]
   );
 
   const handleTestConnection = useCallback(async () => {
@@ -1154,12 +1153,23 @@ export const MqttMonitorScreen: React.FC = () => {
         minHeight: '100%',
       }}
     >
-      {/* Scrollbar styling */}
+      {/* Scrollbar and responsive diagnostics strip styling */}
       <style>{`
         .mqtt-serial-stream::-webkit-scrollbar { width: 5px; height: 5px; }
         .mqtt-serial-stream::-webkit-scrollbar-track { background: #F1F5F9; }
         .mqtt-serial-stream::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
         .mqtt-serial-stream::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+        .mqtt-diagnostics-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 8px;
+          padding-top: 2px;
+        }
+        @media (min-width: 768px) {
+          .mqtt-diagnostics-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+        }
       `}</style>
 
       {/* SECTION 1: PAGE HEADING */}
@@ -1483,24 +1493,7 @@ export const MqttMonitorScreen: React.FC = () => {
         </div>
 
         {/* Diagnostics Strip */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))',
-            gap: '8px',
-            paddingTop: '4px',
-          }}
-        >
-          <div style={{ padding: '8px 10px', borderRadius: '8px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
-            <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <ShieldCheck size={12} color={brokerInfo.useSSL ? '#16A34A' : '#D97706'} />
-              BROKER ENDPOINT
-            </div>
-            <div style={{ fontSize: '11px', fontWeight: 700, color: '#0F172A', fontFamily: 'monospace', marginTop: '3px', wordBreak: 'break-all' }}>
-              {brokerInfo.useSSL ? 'wss' : 'ws'}://{brokerInfo.host}:{brokerInfo.port}{brokerInfo.path}
-            </div>
-          </div>
-
+        <div className="mqtt-diagnostics-grid">
           <div style={{ padding: '8px 10px', borderRadius: '8px', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0' }}>
             <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748B', display: 'flex', alignItems: 'center', gap: '4px' }}>
               <Activity size={12} color={diagnostics.subscriptionAck ? '#16A34A' : '#D97706'} />
@@ -2045,8 +2038,8 @@ export const MqttMonitorScreen: React.FC = () => {
                 <strong style={{ color: isBrokerConnected ? '#15803D' : '#DC2626' }}>
                   {getMqttStatusDisplay(liveStatus)}
                 </strong>
-                <span style={{ color: '#94A3B8', marginLeft: '8px', fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                  {configProtocol}://{configHost}:{configPort}{configPath}
+                <span style={{ color: '#64748B', marginLeft: '8px', fontWeight: 600 }}>
+                  &bull; {configSsl ? 'Secure WebSocket (WSS)' : 'WebSocket (WS)'}
                 </span>
               </div>
               <div style={{ color: '#475569', fontWeight: 600 }}>
@@ -2116,29 +2109,6 @@ export const MqttMonitorScreen: React.FC = () => {
               }}
             >
               <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569' }}>
-                Broker Host
-                <input
-                  id="mqtt-cfg-host"
-                  type="text"
-                  value={configHost}
-                  onChange={(e) => setConfigHost(e.target.value)}
-                  placeholder="broker.hivemq.com"
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '12px' }}
-                />
-              </label>
-
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569' }}>
-                Broker Port
-                <input
-                  id="mqtt-cfg-port"
-                  type="number"
-                  value={configPort}
-                  onChange={(e) => setConfigPort(Number(e.target.value))}
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '12px' }}
-                />
-              </label>
-
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569' }}>
                 Transport Protocol
                 <select
                   id="mqtt-cfg-protocol"
@@ -2156,18 +2126,6 @@ export const MqttMonitorScreen: React.FC = () => {
                   <option value="wss">Secure WebSocket (WSS)</option>
                   <option value="ws">WebSocket (WS)</option>
                 </select>
-              </label>
-
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569' }}>
-                WebSocket Path
-                <input
-                  id="mqtt-cfg-path"
-                  type="text"
-                  value={configPath}
-                  onChange={(e) => setConfigPath(e.target.value)}
-                  placeholder="/mqtt"
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '7px 10px', borderRadius: '8px', border: '1px solid #CBD5E1', fontSize: '12px', fontFamily: 'monospace' }}
-                />
               </label>
 
               <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '11px', fontWeight: 700, color: '#475569' }}>

@@ -2490,9 +2490,9 @@
     "semantic_hash": ""
   },
   "backend/static/assets/index.js": {
-    "mtime": 1795560739.9665568,
-    "seen": 1795561068.5496507,
-    "ast_hash": "d5ea97bc85fbf78af74e403798ee636c",
+    "mtime": 1795564913.8164363,
+    "seen": 1795565159.0468311,
+    "ast_hash": "0f8e82e49fca2d7733eb5d7ab9099aa8",
     "semantic_hash": ""
   },
   "scripts/verify_react_production_app.cjs": {
@@ -2502,9 +2502,9 @@
     "semantic_hash": ""
   },
   "backend/static/index.html": {
-    "mtime": 1795560739.974658,
-    "seen": 1795561068.729839,
-    "ast_hash": "182eb10e311eb0416f375cdd821e7443",
+    "mtime": 1795564913.826457,
+    "seen": 1795565159.1286495,
+    "ast_hash": "3abb8190d31f011e829214444264d187",
     "semantic_hash": ""
   },
   "apps/mobile/scripts/comprehensive_e2e_audit.cjs": {
@@ -2832,8 +2832,8 @@
     "semantic_hash": ""
   },
   "backend/static/404.html": {
-    "mtime": 1795560739.975658,
-    "seen": 1795561068.729839,
+    "mtime": 1795564913.826457,
+    "seen": 1795565159.1286495,
     "ast_hash": "428ecfd8ac04dbed543894a9d68f1dae",
     "semantic_hash": ""
   },
@@ -2910,9 +2910,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/services/mqttService.ts": {
-    "mtime": 1795560728.017376,
-    "seen": 1795561068.5184798,
-    "ast_hash": "798ce16acc4c2b10a3da4fd47d11b34d",
+    "mtime": 1795564031.8746066,
+    "seen": 1795564367.9372196,
+    "ast_hash": "541d94b5dde66cba9022a66a9f9970c3",
     "semantic_hash": ""
   },
   "apps/mobile/scripts/run_live_verify.cjs": {
@@ -5046,9 +5046,9 @@
     "semantic_hash": ""
   },
   "apps/mobile/src/screens/MqttMonitorScreen.tsx": {
-    "mtime": 1795560441.173708,
-    "seen": 1795561068.5119708,
-    "ast_hash": "164491337f7a9126529c248081385522",
+    "mtime": 1795564900.152684,
+    "seen": 1795565159.0298147,
+    "ast_hash": "5c50d435ad3027b4f7ef7074d563689d",
     "semantic_hash": ""
   },
   "apps/mobile/src/screens/RawDataScreen.tsx": {
@@ -8808,9 +8808,9 @@
     "semantic_hash": ""
   },
   "MQTT_Device_Simulator/config.json": {
-    "mtime": 1795558237.062425,
-    "seen": 1795559639.8470852,
-    "ast_hash": "fbb261f4d1638217b6f33f7c41d6397e",
+    "mtime": 1795561465.6060522,
+    "seen": 1795564367.8524227,
+    "ast_hash": "d84cc37307721589ffc3d90fc3af032e",
     "semantic_hash": ""
   },
   "MQTT_Device_Simulator/main.py": {
@@ -8826,9 +8826,9 @@
     "semantic_hash": ""
   },
   "MQTT_Device_Simulator/mqtt/mqtt_client.py": {
-    "mtime": 1795557112.4137673,
-    "seen": 1795559639.8470852,
-    "ast_hash": "7d27d7b832f767faf2b72991a3b6a02e",
+    "mtime": 1795564024.808878,
+    "seen": 1795564367.8534296,
+    "ast_hash": "58abcb4c5dc8bd1af628a769e639990d",
     "semantic_hash": ""
   },
   "MQTT_Device_Simulator/mqtt/publisher.py": {
@@ -8850,9 +8850,9 @@
     "semantic_hash": ""
   },
   "MQTT_Device_Simulator/tests/test_simulator.py": {
-    "mtime": 1795558133.3515773,
-    "seen": 1795559639.8470852,
-    "ast_hash": "56b3e8542d5892d51b9b254c660a98e2",
+    "mtime": 1795564085.9615736,
+    "seen": 1795564367.8544292,
+    "ast_hash": "bcd522ad5ab44fbca61fce50bda7eeb8",
     "semantic_hash": ""
   },
   "MQTT_Device_Simulator/ui/__init__.py": {
@@ -8862,9 +8862,9 @@
     "semantic_hash": ""
   },
   "MQTT_Device_Simulator/ui/connection_panel.py": {
-    "mtime": 1795558098.0624223,
-    "seen": 1795559639.8470852,
-    "ast_hash": "bd1f122633b9196dca4519af14a67275",
+    "mtime": 1795564063.520915,
+    "seen": 1795564367.8544292,
+    "ast_hash": "6b0de16eae789e1c101dcd16d2321d43",
     "semantic_hash": ""
   },
   "MQTT_Device_Simulator/ui/log_panel.py": {
@@ -8874,9 +8874,9 @@
     "semantic_hash": ""
   },
   "MQTT_Device_Simulator/ui/main_window.py": {
-    "mtime": 1795558103.4505372,
-    "seen": 1795559639.8470852,
-    "ast_hash": "f383f635c0de954c9dbab09936d03312",
+    "mtime": 1795564083.9958,
+    "seen": 1795564367.8554294,
+    "ast_hash": "f07d3745b0775295c332aec0b983a3da",
     "semantic_hash": ""
   },
   "MQTT_Device_Simulator/ui/sensor_panel.py": {
@@ -8910,15 +8910,15 @@
     "semantic_hash": ""
   },
   "MQTT_Device_Simulator/utils/paths.py": {
-    "mtime": 1795558023.4251342,
-    "seen": 1795559639.8470852,
-    "ast_hash": "5d371eef067a8e75daf78ab1d376904f",
+    "mtime": 1795561463.3408916,
+    "seen": 1795564367.8564215,
+    "ast_hash": "ec183712bed54175696821035895bcef",
     "semantic_hash": ""
   },
   "MQTT_Device_Simulator/README.md": {
-    "mtime": 1795558135.2977202,
-    "seen": 1795559639.9085417,
-    "ast_hash": "dfa13698f9915dc4fdc08e20acfbc8a3",
+    "mtime": 1795564104.206648,
+    "seen": 1795564368.0733895,
+    "ast_hash": "75e84f86b64fb0723088a2e30e4a58d3",
     "semantic_hash": ""
   },
   "MQTT_Device_Simulator/requirements.txt": {
