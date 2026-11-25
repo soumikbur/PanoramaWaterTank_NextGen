@@ -20,6 +20,7 @@ from app.models.user import User
 from app.websocket.manager import ws_manager
 from app.mqtt.client import mqtt_service
 from app.services.sync_broadcaster import broadcast_sync_event
+from app.core.device_identity import is_genuine_hardware_uid, get_canonical_uid
 from sqlalchemy import select
 
 router = APIRouter(prefix="/devices", tags=["Devices"])
@@ -287,8 +288,11 @@ async def create_device(
     db: AsyncSession = Depends(get_db)
 ):
     """Register a new edge monitoring device and auto-provision associated tanks (Admin & Employee)."""
+    clean_uid = get_canonical_uid(payload.uid)
+    if not clean_uid:
+        raise HTTPException(status_code=400, detail="Hardware UID is required.")
     repo = DeviceRepository(db)
-    existing = await repo.get_by_uid(payload.uid)
+    existing = await repo.get_by_uid(clean_uid)
     train_no = (payload.trainNumber or "").strip()
     coach_no = (payload.coachNumber or "").strip()
 
@@ -327,6 +331,7 @@ async def create_device(
             existing.description = payload.description
         existing.status = payload.status or ("ENGAGED" if (existing.train_number != "UNASSIGNED" and existing.coach_number != "UNASSIGNED") else "AVAILABLE")
         existing.updated_at = utc_now()
+        await repo.sync_exclusive_assignment(existing.uid, existing.train_number, existing.coach_number)
         await db.commit()
         await db.refresh(existing)
 
@@ -361,7 +366,7 @@ async def create_device(
         return out
 
     device = await repo.create_or_update(
-        uid=payload.uid.strip(),
+        uid=clean_uid,
         train_number=train_no or "UNASSIGNED",
         coach_number=coach_no or "UNASSIGNED",
         name=payload.name.strip(),
@@ -369,12 +374,14 @@ async def create_device(
         firmware_version=payload.firmwareVersion or "2.0.0",
         device_type=payload.deviceType or "Quectel EC200U 4G LTE",
         protocol=payload.protocol or "MQTT over TLS/WSS",
-        mqtt_client_id=payload.mqttClientId or f"panorama-wli-{payload.uid.strip()}",
-        mqtt_topic=payload.mqttTopic or f"panorama/telemetry/{payload.uid.strip()}",
+        mqtt_client_id=payload.mqttClientId or f"panorama-wli-{clean_uid}",
+        mqtt_topic=payload.mqttTopic or f"panorama/telemetry/{clean_uid}",
         tank_assignment=payload.tankAssignment or "BOTH",
         description=payload.description,
         status=payload.status or ("ENGAGED" if (train_no and train_no.upper() != "UNASSIGNED" and coach_no and coach_no.upper() != "UNASSIGNED") else "AVAILABLE"),
+        is_online=False,
     )
+    await repo.sync_exclusive_assignment(device.uid, device.train_number, device.coach_number)
 
     await db.commit()
     await db.refresh(device)
@@ -475,6 +482,7 @@ async def update_device(
     if payload.status is not None:
         device.status = payload.status.strip()
 
+    await repo.sync_exclusive_assignment(device.uid, device.train_number, device.coach_number)
     await db.commit()
     await db.refresh(device)
 
@@ -535,6 +543,7 @@ async def delete_device(
     if not target:
         raise HTTPException(status_code=404, detail="Device not found")
     uid = target.uid
+    await repo.sync_exclusive_assignment(uid, "UNASSIGNED", "UNASSIGNED")
     success = await repo.delete(target.id)
     if not success:
         raise HTTPException(status_code=404, detail="Device not found")

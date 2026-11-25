@@ -24,44 +24,44 @@ export const TrainManagementScreen: React.FC = () => {
   } = useApp();
 
   const isTrainOnline = (trainNumber: string): boolean => {
+    if (mqttConnectionStatus === 'DISCONNECTED' || mqttConnectionStatus === 'CONNECTION_ERROR') {
+      return false;
+    }
     const clean = trainNumber.trim().toLowerCase();
-    const liveMatch =
-      liveTelemetry &&
-      mqttConnectionStatus !== 'DISCONNECTED' &&
-      !liveTelemetry.isStale &&
-      liveTelemetry.trno?.trim().toLowerCase() === clean;
-    if (liveMatch) return true;
     const timeoutMs = (telemetryTimeoutSeconds || 120) * 1000;
     const now = Date.now();
-    return managedDevices.some(
-      (d) =>
-        d.assignmentStatus === 'ENGAGED' &&
-        d.trainNumber?.trim().toLowerCase() === clean &&
-        d.lastSeenTimestamp &&
-        now - d.lastSeenTimestamp <= timeoutMs
-    );
+    return managedDevices.some((d) => {
+      if (d.assignmentStatus !== 'ENGAGED' || d.trainNumber?.trim().toLowerCase() !== clean) {
+        return false;
+      }
+      if (liveTelemetry && !liveTelemetry.isStale && liveTelemetry.uid?.trim().toUpperCase() === d.uid?.trim().toUpperCase()) {
+        return true;
+      }
+      return Boolean(d.isOnline && d.lastSeenTimestamp && now - d.lastSeenTimestamp <= timeoutMs);
+    });
   };
 
   const isCoachOnline = (trainNumber: string, coachNumber: string): boolean => {
+    if (mqttConnectionStatus === 'DISCONNECTED' || mqttConnectionStatus === 'CONNECTION_ERROR') {
+      return false;
+    }
     const cleanTrain = trainNumber.trim().toLowerCase();
     const cleanCoach = coachNumber.trim().toLowerCase();
-    const liveMatch =
-      liveTelemetry &&
-      mqttConnectionStatus !== 'DISCONNECTED' &&
-      !liveTelemetry.isStale &&
-      liveTelemetry.trno?.trim().toLowerCase() === cleanTrain &&
-      liveTelemetry.chno?.trim().toLowerCase() === cleanCoach;
-    if (liveMatch) return true;
     const timeoutMs = (telemetryTimeoutSeconds || 120) * 1000;
     const now = Date.now();
-    return managedDevices.some(
-      (d) =>
-        d.assignmentStatus === 'ENGAGED' &&
-        d.trainNumber?.trim().toLowerCase() === cleanTrain &&
-        d.coachNumber?.trim().toLowerCase() === cleanCoach &&
-        d.lastSeenTimestamp &&
-        now - d.lastSeenTimestamp <= timeoutMs
-    );
+    return managedDevices.some((d) => {
+      if (
+        d.assignmentStatus !== 'ENGAGED' ||
+        d.trainNumber?.trim().toLowerCase() !== cleanTrain ||
+        d.coachNumber?.trim().toLowerCase() !== cleanCoach
+      ) {
+        return false;
+      }
+      if (liveTelemetry && !liveTelemetry.isStale && liveTelemetry.uid?.trim().toUpperCase() === d.uid?.trim().toUpperCase()) {
+        return true;
+      }
+      return Boolean(d.isOnline && d.lastSeenTimestamp && now - d.lastSeenTimestamp <= timeoutMs);
+    });
   };
 
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
@@ -116,7 +116,6 @@ export const TrainManagementScreen: React.FC = () => {
           setSelectedTrain(null);
         } else if (!trainNum || trainNum === currentTr || entityType === 'COACH') {
           try {
-            localFleetStore.invalidateConsist(currentTr);
             const refreshed = await ApiClient.fetchTrainConsist(currentTr);
             if (refreshed) setSelectedTrain(refreshed);
           } catch (err) {
@@ -180,11 +179,13 @@ export const TrainManagementScreen: React.FC = () => {
   const handleInspectTrain = async (trainNumber: string) => {
     try {
       setLoading(true);
+      setActionError(null);
       const consist = await ApiClient.fetchTrainConsist(trainNumber);
       setSelectedTrain(consist);
       setSelectedTrainNumber(trainNumber);
     } catch (e: any) {
       console.error('Failed to load consist:', e);
+      setActionError(e?.message || `Failed to load consist for Train ${trainNumber}.`);
     } finally {
       setLoading(false);
     }
@@ -1161,7 +1162,7 @@ export const TrainManagementScreen: React.FC = () => {
                         fontFamily: 'monospace',
                       }}
                     >
-                      UID: {coach.device_uid}
+                      UID: {coach.device_uid || 'Not Mapped'}
                     </span>
                     <span style={{ fontSize: '11px', color: '#94A3B8' }}>
                       Device: Water Monitoring Node
@@ -1222,7 +1223,7 @@ export const TrainManagementScreen: React.FC = () => {
                     gap: '14px',
                   }}
                 >
-                  {coach.tanks.map((tank) => {
+                  {(coach.tanks || []).map((tank) => {
                     const isWarn = tank.status === 'WARNING';
                     const isCrit = tank.status === 'CRITICAL';
                     const barColor = isCrit ? '#DC2626' : isWarn ? '#D97706' : '#2563EB';

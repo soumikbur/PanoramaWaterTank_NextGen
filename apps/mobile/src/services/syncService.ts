@@ -33,6 +33,11 @@ class SyncService {
   private maxSeenIds = 500;
   private isReconciling = false;
   private reconcileDebounceTimer: any = null;
+  private syncHandler: (() => Promise<boolean>) | null = null;
+
+  public registerSyncHandler(handler: () => Promise<boolean>): void {
+    this.syncHandler = handler;
+  }
 
   private constructor() {
     this.initListeners();
@@ -204,11 +209,19 @@ class SyncService {
 
     try {
       await this.flushOfflineQueue();
-      // Trigger local storage / broadcast reconciliation
+      if (this.syncHandler) {
+        const ok = await this.syncHandler();
+        if (ok) {
+          this.lastSyncTime = new Date();
+          this.setState('SYNCHRONIZED');
+          return true;
+        }
+        this.setState('OFFLINE');
+        return false;
+      }
       window.dispatchEvent(new CustomEvent('panorama:request-authoritative-sync'));
-      this.lastSyncTime = new Date();
-      this.setState('SYNCHRONIZED');
-      return true;
+      this.setState('OFFLINE');
+      return false;
     } catch (e) {
       console.warn('[SyncService] Reconciliation failed:', e);
       this.setState('OFFLINE');

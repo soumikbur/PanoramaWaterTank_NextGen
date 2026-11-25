@@ -173,16 +173,9 @@ function buildDefaultTrainRecord(
 const DEFAULT_INITIAL_STATE: StaticFleetState = {
   version: 2,
   updatedAt: 1700000000000,
-  mutationId: 'initial-verified-baseline',
+  mutationId: 'initial-empty-cache',
   deletedTrainNumbers: {},
-  trains: {
-    '11043': buildDefaultTrainRecord('11043', 'Ballia Express', 'WEST', 'Dadar', 'DR', 'Ballia', 'BUI', ['SLRD', 'S1', 'S2', 'B1', 'B2', 'A1'], 'CR', 'Express'),
-    '12249': buildDefaultTrainRecord('12249', 'Swarn Nagari Express', 'NORTH', 'Shakurbasti', 'SSB', 'Jaisalmer', 'JSM', ['SLRD', 'D1', 'D2', 'C1', 'C2', 'B1'], 'NR', 'Superfast Express'),
-    '12626': buildDefaultTrainRecord('12626', 'Kerala Express', 'SOUTH', 'New Delhi', 'NDLS', 'Trivandrum Central', 'TVC', ['SLRD', 'S1', 'S2', 'B1', 'B2', 'A1'], 'SR', 'Superfast Express'),
-    '12301': buildDefaultTrainRecord('12301', 'Howrah Rajdhani Express', 'EAST', 'Howrah Junction', 'HWH', 'New Delhi', 'NDLS', ['B1', 'B2', 'B3', 'A1', 'A2', 'H1'], 'ER', 'Rajdhani Express'),
-    '98765': buildDefaultTrainRecord('98765', 'Delete Target Express', 'EAST', 'Howrah Junction', 'HWH', 'Asansol Junction', 'ASN', ['A1', 'B1'], 'ER', 'Express'),
-    '98766': buildDefaultTrainRecord('98766', 'Preserve Express', 'EAST', 'Howrah Junction', 'HWH', 'Asansol Junction', 'ASN', ['A1', 'B1'], 'ER', 'Express'),
-  },
+  trains: {},
 };
 
 function readState(): StaticFleetState {
@@ -295,7 +288,7 @@ function writeState(
       state,
     });
 
-    // Central cross-browser persistence (SQLite Backend + WebSocket) and MQTT redundancy
+    // Central cross-browser persistence via authoritative backend sync
     if (!options?.skipPublish) {
       centralStateSync.pushNamespace(
         'fleet',
@@ -303,15 +296,6 @@ function writeState(
         options?.eventType || 'FLEET_SYNC',
         options?.entityId
       );
-      mqttService.publish(CENTRAL_FLEET_TOPIC, state, true);
-      mqttService.publish(CENTRAL_DELTA_SYNC_TOPIC, {
-        type: 'FLEET_UPDATE',
-        event_type: options?.eventType || 'FLEET_SYNC',
-        entity_id: options?.entityId || '',
-        version: state.version,
-        updatedAt: state.updatedAt,
-        mutationId: state.mutationId,
-      });
     }
   } catch (err) {
     console.warn('[LocalFleetStore] Error in writeState:', err);
@@ -657,17 +641,76 @@ export const localFleetStore = {
 
   getTrainConsist(trainNumber: string): TrainConsist | null {
     const clean = (trainNumber || '').trim();
+    if (!clean) return null;
     const state = readState();
-    return state.trains[clean]?.consist ?? null;
+    const record =
+      state.trains[clean] ||
+      Object.values(state.trains).find(
+        (rec) => rec?.train?.train_number?.trim().toLowerCase() === clean.toLowerCase()
+      );
+    if (!record) return null;
+    if (record.consist && Array.isArray(record.consist.coaches)) {
+      return record.consist;
+    }
+    const t = record.train;
+    if (!t) return null;
+    const defaultCoaches = DEFAULT_INITIAL_STATE.trains[t.train_number]?.consist?.coaches || [];
+    const fallbackCoaches: CoachConsist[] =
+      defaultCoaches.length > 0
+        ? defaultCoaches
+        : Array.from({ length: Math.max(0, t.coaches_count || 0) }, (_, idx) => {
+            const cNum = idx === 0 ? 'SLRD' : `C${idx + 1}`;
+            return {
+              coach_number: cNum,
+              coach_category: 'General',
+              device_uid: '',
+              is_online: false,
+              hardware_version: 'Standard WLI Node',
+              tanks: [
+                {
+                  id: `tank-${t.train_number}-${cNum}-1`,
+                  tank_index: 1,
+                  name: 'Arrival Side (Tank 1)',
+                  capacity_liters: 500,
+                  current_level_percent: 0,
+                  current_volume_liters: 0,
+                  status: 'NORMAL',
+                },
+                {
+                  id: `tank-${t.train_number}-${cNum}-2`,
+                  tank_index: 2,
+                  name: 'Departure Side (Tank 2)',
+                  capacity_liters: 500,
+                  current_level_percent: 0,
+                  current_volume_liters: 0,
+                  status: 'NORMAL',
+                },
+              ],
+            };
+          });
+    return {
+      train_number: t.train_number,
+      name: t.name,
+      region: normalizeRegionCode(t.region),
+      coaches_count: fallbackCoaches.length || t.coaches_count || 0,
+      tanks_count: (fallbackCoaches.length * 2) || t.tanks_count || 0,
+      online_status: Boolean(t.is_online),
+      active_alarms_count: t.active_alarms || 0,
+      coaches: fallbackCoaches,
+      source_station: t.source_station,
+      source_code: t.source_code,
+      destination_station: t.destination_station,
+      destination_code: t.destination_code,
+      railway_zone: t.railway_zone,
+      train_type: t.type,
+      total_coaches: t.total_coaches,
+      has_official_composition: Boolean(t.has_official_composition),
+      route: t.route,
+    };
   },
 
-  invalidateConsist(trainNumber: string): void {
-    const clean = (trainNumber || '').trim();
-    const state = readState();
-    if (state.trains[clean] && state.trains[clean].consist) {
-      delete (state.trains[clean] as any).consist;
-      writeState(state, { skipPublish: true });
-    }
+  invalidateConsist(_trainNumber: string): void {
+    // Preserve cached consist so offline or transient backend fallbacks never erase consist coaches.
   },
 
   syncFromAuthoritativeRegions(regions: RegionSummary[]): void {
@@ -729,6 +772,18 @@ export const localFleetStore = {
         };
         modified = true;
       } else {
+        const prevTrain = existing.train;
+        if (
+          prevTrain.name !== authTrain.name ||
+          prevTrain.region !== authTrain.region ||
+          prevTrain.coaches_count !== authTrain.coaches_count ||
+          prevTrain.tanks_count !== authTrain.tanks_count ||
+          Boolean(prevTrain.is_online) !== Boolean(authTrain.is_online) ||
+          (prevTrain as any).connectivity_status !== (authTrain as any).connectivity_status ||
+          prevTrain.active_alarms !== authTrain.active_alarms
+        ) {
+          modified = true;
+        }
         state.trains[num].train = { ...existing.train, ...authTrain };
         if (!state.trains[num].consist) {
           state.trains[num].consist = {
@@ -866,10 +921,11 @@ export const localFleetStore = {
     };
 
     record.consist.coaches.push(newCoach);
-    record.consist.coaches_count = record.consist.coaches.length;
-    record.consist.tanks_count = record.consist.coaches.length * 2;
-    record.train.coaches_count = record.consist.coaches.length;
-    record.train.tanks_count = record.consist.coaches.length * 2;
+    const nextCoachCount = Math.max(record.consist.coaches.length, (record.train.coaches_count || 0) + 1);
+    record.consist.coaches_count = nextCoachCount;
+    record.consist.tanks_count = nextCoachCount * 2;
+    record.train.coaches_count = nextCoachCount;
+    record.train.tanks_count = nextCoachCount * 2;
 
     if (input.device_uid && input.device_uid.trim()) {
       deviceRegistry.assignDevice(devUid, num, cNum);
@@ -1009,10 +1065,11 @@ export const localFleetStore = {
     }
 
     const [deletedCoach] = record.consist.coaches.splice(coachIdx, 1);
-    record.consist.coaches_count = record.consist.coaches.length;
-    record.consist.tanks_count = record.consist.coaches.length * 2;
-    record.train.coaches_count = record.consist.coaches.length;
-    record.train.tanks_count = record.consist.coaches.length * 2;
+    const nextCoachCount = Math.max(record.consist.coaches.length, Math.max(0, (record.train.coaches_count || 1) - 1));
+    record.consist.coaches_count = nextCoachCount;
+    record.consist.tanks_count = nextCoachCount * 2;
+    record.train.coaches_count = nextCoachCount;
+    record.train.tanks_count = nextCoachCount * 2;
 
     // Release device to unassigned pool rather than deleting hardware
     if (deletedCoach.device_uid) {

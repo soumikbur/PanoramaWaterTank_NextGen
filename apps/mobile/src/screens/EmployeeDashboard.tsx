@@ -747,7 +747,7 @@ export const EmployeeDashboard: React.FC = () => {
               />
               <span>
                 {mqttConnectionStatus === 'CONNECTED'
-                  ? 'MQTT LIVE'
+                  ? (liveTelemetry && !liveTelemetry.isStale ? 'MQTT LIVE' : 'BROKER CONN')
                   : mqttConnectionStatus === 'CONNECTING'
                   ? 'CONNECTING'
                   : mqttConnectionStatus === 'RECONNECTING'
@@ -1194,8 +1194,12 @@ export const EmployeeDashboard: React.FC = () => {
               {/* Authoritative Registered Fleet Trains */}
               {displayTrains.map((train) => {
                 const isSelected = currentTrain.trainNumber === train.train_number;
-                const isLiveActive = liveTelemetry && liveTelemetry.trno?.trim() === train.train_number.trim() && !liveTelemetry.isStale;
-                const isOnline = isLiveActive || train.is_online;
+                const trKey = train.train_number.trim();
+                const assignedOnlineDev = mqttConnectionStatus !== 'DISCONNECTED' && (devices || []).some(
+                  (d) => (d.trainNumber || '').trim() === trKey && (d.isOnline || (liveTelemetry && !liveTelemetry.isStale && liveTelemetry.uid?.trim().toUpperCase() === d.uid?.trim().toUpperCase()))
+                );
+                const isLiveActive = Boolean(assignedOnlineDev);
+                const isOnline = isLiveActive || (mqttConnectionStatus !== 'DISCONNECTED' && Boolean(train.is_online));
                 const isNeverConnected = !isOnline && (!train.connectivity_status || train.connectivity_status === 'NEVER_CONNECTED') && (train.devices_count === 0 || !train.devices_count);
 
                 const statusColor = isOnline
@@ -1307,7 +1311,7 @@ export const EmployeeDashboard: React.FC = () => {
                         fontSize: '11px',
                       }}
                     >
-                      {isLiveActive ? liveTelemetry.time : train.last_seen_at ? new Date(train.last_seen_at).toLocaleTimeString() : (train.last_telemetry || 'Standby')}
+                      {isLiveActive && liveTelemetry?.time ? liveTelemetry.time : train.last_seen_at ? new Date(train.last_seen_at).toLocaleTimeString() : (train.last_telemetry || 'Standby')}
                     </td>
                   </tr>
                 );
@@ -1445,8 +1449,11 @@ export const EmployeeDashboard: React.FC = () => {
           {/* Authoritative Registered Fleet Mobile Cards */}
           {displayTrains.map((train) => {
             const isSelected = currentTrain.trainNumber === train.train_number;
-            const isLiveActive = liveTelemetry && liveTelemetry.trno?.trim() === train.train_number.trim() && !liveTelemetry.isStale;
-            const isOnline = isLiveActive || train.is_online;
+            const trKey = train.train_number.trim();
+            const isLiveActive = mqttConnectionStatus !== 'DISCONNECTED' && (devices || []).some(
+              (d) => (d.trainNumber || '').trim() === trKey && (d.isOnline || (liveTelemetry && !liveTelemetry.isStale && liveTelemetry.uid?.trim().toUpperCase() === d.uid?.trim().toUpperCase()))
+            );
+            const isOnline = isLiveActive || (mqttConnectionStatus !== 'DISCONNECTED' && Boolean(train.is_online));
             const isNeverConnected = !isOnline && (!train.connectivity_status || train.connectivity_status === 'NEVER_CONNECTED') && (train.devices_count === 0 || !train.devices_count);
 
             const statusBg = isOnline ? '#DCFCE7' : isNeverConnected ? '#F1F5F9' : '#FEF3C7';
@@ -1538,7 +1545,7 @@ export const EmployeeDashboard: React.FC = () => {
                   </div>
                   <div style={{ gridColumn: 'span 2' }}>
                     <span style={{ color: '#64748B' }}>Last Telemetry: </span>
-                    <strong>{isLiveActive ? liveTelemetry.time : train.last_seen_at ? new Date(train.last_seen_at).toLocaleTimeString() : (train.last_telemetry || 'Standby')}</strong>
+                    <strong>{isLiveActive && liveTelemetry?.time ? liveTelemetry.time : train.last_seen_at ? new Date(train.last_seen_at).toLocaleTimeString() : (train.last_telemetry || 'Standby')}</strong>
                   </div>
                 </div>
 

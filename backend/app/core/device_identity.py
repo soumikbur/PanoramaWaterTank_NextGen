@@ -5,10 +5,8 @@ from typing import Optional, Dict
 HEX_24_RE = re.compile(r"^[0-9A-Fa-f]{24}$")
 TEST_PATTERNS = re.compile(r"TEST|AUDIT|DUMMY|DEMO|SEED|PLACEHOLDER|ROGUE|MOCK", re.I)
 
-# Consolidated canonical mappings for historical re-registrations or format variations
-CANONICAL_UID_MAP: Dict[str, str] = {
-    "0023004D4B42501120353332": "0026004D4B42501120353332",
-}
+# Preserves every genuine hardware UID verbatim (including Device 1: 0023004D4B42501120353332)
+CANONICAL_UID_MAP: Dict[str, str] = {}
 
 VALID_STATUSES = {"AVAILABLE", "ENGAGED", "REGISTERED"}
 

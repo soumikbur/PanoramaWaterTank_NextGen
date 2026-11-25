@@ -189,6 +189,10 @@ export const Header: React.FC = () => {
       title: 'Devices',
       subtitle: 'Telemetry Unit Registry & Link Status',
     },
+    'device-mapping': {
+      title: 'Device Mapping',
+      subtitle: 'Hardware UID Registration & Coach Assignment',
+    },
     'raw-data': {
       title: 'Raw Data',
       subtitle: 'Real-Time WLI Device Serial Terminal & Frame Inspector',
@@ -245,6 +249,7 @@ export const Header: React.FC = () => {
     'coach-details': 'Coach Details',
     watertank: 'All Tanks',
     devices: 'Devices',
+    'device-mapping': 'Device Mapping',
     'raw-data': 'Raw Data',
     'mqtt-monitor': 'Raw Data',
     location: 'Location',
@@ -1222,7 +1227,7 @@ export const Header: React.FC = () => {
                   }}
                 >
                   {mqttConnectionStatus === 'CONNECTED'
-                    ? 'LIVE'
+                    ? (liveTelemetry && !liveTelemetry.isStale ? 'LIVE' : 'MQTT')
                     : mqttConnectionStatus === 'CONNECTING'
                     ? 'CONN'
                     : mqttConnectionStatus === 'RECONNECTING'
@@ -2082,7 +2087,7 @@ export const Header: React.FC = () => {
             }}
           >
             {mqttConnectionStatus === 'CONNECTED'
-              ? (liveTelemetry ? 'LIVE' : 'ONLINE')
+              ? (liveTelemetry && !liveTelemetry.isStale ? 'MQTT LIVE' : 'BROKER CONN')
               : mqttConnectionStatus === 'STALE'
               ? 'STALE'
               : mqttConnectionStatus === 'CONNECTING'
@@ -2093,7 +2098,7 @@ export const Header: React.FC = () => {
               ? 'SUB ERROR'
               : mqttConnectionStatus === 'CONNECTION_ERROR'
               ? 'CONN ERROR'
-              : 'OFFLINE'}
+              : 'DISCONNECTED'}
           </span>
         </div>
 
@@ -2170,7 +2175,7 @@ export const Header: React.FC = () => {
               ? 'SYNCED'
               : syncState === 'SYNCHRONIZING'
               ? 'SYNCING...'
-              : 'OFFLINE'}
+              : 'SYNC OFFLINE'}
           </span>
         </div>
 

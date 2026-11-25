@@ -45,7 +45,8 @@ export function isGenuineHardwareUid(uid: string | null | undefined): boolean {
 export function getCanonicalUid(uid: string | null | undefined): string {
   if (!uid || typeof uid !== 'string') return '';
   const clean = uid.trim();
-  return CANONICAL_UID_MAP[clean] || clean;
+  const mapped = CANONICAL_UID_MAP[clean] || CANONICAL_UID_MAP[clean.toUpperCase()] || clean;
+  return HEX_24_RE.test(mapped) ? mapped.toUpperCase() : mapped;
 }
 
 export interface ManagedDevice {
@@ -82,7 +83,21 @@ export interface ManagedDevice {
 }
 
 const STORAGE_KEY = 'panorama_device_registry';
-const STALE_TIMEOUT_MS = 90000; // 90 seconds timeout for online flag
+const DEFAULT_REGISTRY_TIMEOUT_MS = 180000; // Matches 180s telemetry interval ("wak": 180) + watchdog timeout
+
+function getRegistryTimeoutMs(): number {
+  if (typeof window === 'undefined' || !window.localStorage) return DEFAULT_REGISTRY_TIMEOUT_MS;
+  try {
+    const saved = window.localStorage.getItem('panorama_telemetry_timeout_sec');
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      if (Number.isFinite(parsed) && parsed >= 10 && parsed <= 3600) {
+        return parsed * 1000;
+      }
+    }
+  } catch {}
+  return DEFAULT_REGISTRY_TIMEOUT_MS;
+}
 
 class DeviceRegistryService {
   private static instance: DeviceRegistryService;
@@ -92,6 +107,7 @@ class DeviceRegistryService {
   private deletedUids: Set<string> = new Set();
   private version: number = 1;
   private updatedAt: number = 1700000000000;
+  private suppressRemoteOnlineUntilTelemetry: boolean = false;
 
   private constructor() {
     this.loadFromStorage();
@@ -137,7 +153,7 @@ class DeviceRegistryService {
             if (seenCanonical.has(canonical)) return;
             seenCanonical.add(canonical);
 
-            const isOnline = d.lastSeenTimestamp ? (now - d.lastSeenTimestamp) < STALE_TIMEOUT_MS : false;
+            const isOnline = d.lastSeenTimestamp ? (now - d.lastSeenTimestamp) < getRegistryTimeoutMs() : false;
             this.devices.set(canonical, {
               ...d,
               uid: canonical,
@@ -147,155 +163,7 @@ class DeviceRegistryService {
         }
       }
 
-      // 0. Verified WLI Field Hardware Node (primary physical unit)
-      if (!this.devices.has('0023004D4B42501120353332') && !this.deletedUids.has('0023004D4B42501120353332')) {
-        this.devices.set('0023004D4B42501120353332', {
-          uid: '0023004D4B42501120353332',
-          name: 'WLI Hardware Node 0023004D4B42501120353332',
-          trainNumber: null,
-          coachNumber: null,
-          registrationStatus: 'REGISTERED',
-          assignmentStatus: 'AVAILABLE',
-          isOnline: false,
-          batteryPercent: null,
-          batteryVoltage: null,
-          tank1Level: null,
-          tank1HeightCm: null,
-          tank2Level: null,
-          tank2HeightCm: null,
-          valve1Normal: null,
-          valve2Normal: null,
-          temperature: null,
-          pressure: null,
-          latitude: null,
-          longitude: null,
-          speedKmh: null,
-          lastSeen: 'Awaiting MQTT Telemetry',
-          lastSeenTimestamp: 0,
-          firstDiscovered: '2026-10-28T12:41:43.000Z',
-          registeredAt: '2026-10-28T12:41:43.000Z',
-          hardwareModel: 'Cellular WLI Unit',
-        });
-      }
-
-      // Ensure registered units exist in registry (Source of Truth)
-      // 1. Shatabdi Coach B4 Water System (canonical registered unit, currently offline)
-      if (!this.devices.has('0026004D4B42501120353332') && !this.deletedUids.has('0026004D4B42501120353332')) {
-        this.devices.set('0026004D4B42501120353332', {
-          uid: '0026004D4B42501120353332',
-          name: 'Shatabdi Coach B4 Water System',
-          trainNumber: '12002',
-          coachNumber: 'B4',
-          registrationStatus: 'REGISTERED',
-          assignmentStatus: 'ENGAGED',
-          isOnline: false,
-          batteryPercent: 88,
-          batteryVoltage: 3.8,
-          tank1Level: 74.5,
-          tank1HeightCm: 37.25,
-          tank2Level: 72.0,
-          tank2HeightCm: 36.0,
-          valve1Normal: true,
-          valve2Normal: true,
-          latitude: 27.1751,
-          longitude: 78.0421,
-          speedKmh: 65.5,
-          lastSeen: 'Offline (Historical Telemetry Stored)',
-          lastSeenTimestamp: 0,
-          firstDiscovered: '2026-10-28T12:41:43.000Z',
-          registeredAt: '2026-10-28T12:41:43.000Z',
-          hardwareModel: 'Cellular WLI Unit',
-        });
-      }
-
-      // 2. Coach 01 WLI Node (seeded offline until live MQTT telemetry arrives)
-      if (!this.devices.has('002F00654B42501320353332') && !this.deletedUids.has('002F00654B42501320353332')) {
-        this.devices.set('002F00654B42501320353332', {
-          uid: '002F00654B42501320353332',
-          name: 'Coach 01 WLI Node',
-          trainNumber: null,
-          coachNumber: null,
-          registrationStatus: 'REGISTERED',
-          assignmentStatus: 'AVAILABLE',
-          isOnline: false,
-          batteryPercent: null,
-          batteryVoltage: null,
-          tank1Level: null,
-          tank1HeightCm: null,
-          tank2Level: null,
-          tank2HeightCm: null,
-          valve1Normal: true,
-          valve2Normal: true,
-          latitude: null,
-          longitude: null,
-          speedKmh: null,
-          lastSeen: 'Awaiting Telemetry Signal',
-          lastSeenTimestamp: 0,
-          firstDiscovered: '2026-11-16T09:46:06.000Z',
-          registeredAt: '2026-11-16T09:46:06.000Z',
-          hardwareModel: 'Cellular WLI Unit',
-        });
-      }
-
-      // 3. WLI Node Sensor 31 (seeded offline until live MQTT telemetry arrives)
-      if (!this.devices.has('0023004D4B42501120353331') && !this.deletedUids.has('0023004D4B42501120353331')) {
-        this.devices.set('0023004D4B42501120353331', {
-          uid: '0023004D4B42501120353331',
-          name: 'WLI Node Sensor 31',
-          trainNumber: null,
-          coachNumber: null,
-          registrationStatus: 'REGISTERED',
-          assignmentStatus: 'AVAILABLE',
-          isOnline: false,
-          batteryPercent: null,
-          batteryVoltage: null,
-          tank1Level: null,
-          tank1HeightCm: null,
-          tank2Level: null,
-          tank2HeightCm: null,
-          valve1Normal: true,
-          valve2Normal: true,
-          latitude: null,
-          longitude: null,
-          speedKmh: null,
-          lastSeen: 'Awaiting Telemetry Signal',
-          lastSeenTimestamp: 0,
-          firstDiscovered: '2026-11-14T08:26:58.000Z',
-          registeredAt: '2026-11-14T08:26:58.000Z',
-          hardwareModel: 'Cellular WLI Unit',
-        });
-      }
-
-      // 4. Node 353337 (genuine hardware node, offline)
-      if (!this.devices.has('0027004D4B42501120353337') && !this.deletedUids.has('0027004D4B42501120353337')) {
-        this.devices.set('0027004D4B42501120353337', {
-          uid: '0027004D4B42501120353337',
-          name: 'Node (353337)',
-          trainNumber: '12626',
-          coachNumber: 'S1',
-          registrationStatus: 'REGISTERED',
-          assignmentStatus: 'ENGAGED',
-          isOnline: false,
-          batteryPercent: 85,
-          batteryVoltage: 3.8,
-          tank1Level: null,
-          tank1HeightCm: null,
-          tank2Level: null,
-          tank2HeightCm: null,
-          valve1Normal: true,
-          valve2Normal: true,
-          latitude: null,
-          longitude: null,
-          speedKmh: 0,
-          lastSeen: 'Offline (No Telemetry Recorded)',
-          lastSeenTimestamp: 0,
-          firstDiscovered: '2026-11-24T10:46:54.000Z',
-          registeredAt: '2026-11-24T10:46:54.000Z',
-          hardwareModel: 'Cellular WLI Unit',
-        });
-      }
-
-      // Save purged, deduplicated genuine devices back to localStorage
+      // Save hydrated genuine devices back to localStorage (no hardcoded client seeds)
       localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(this.devices.values())));
     } catch (e) {
       console.warn('[DeviceRegistry] Error reading storage, initializing fresh:', e);
@@ -329,12 +197,6 @@ class DeviceRegistryService {
 
       if (!options?.skipPublish) {
         centralStateSync.pushNamespace('devices', stateObj, 'DEVICE_UPDATED');
-        mqttService.publish(CENTRAL_DEVICES_TOPIC, stateObj, true);
-        mqttService.publish(CENTRAL_DELTA_SYNC_TOPIC, {
-          type: 'DEVICE_UPDATE',
-          version: this.version,
-          updatedAt: this.updatedAt,
-        });
       }
     } catch (e: any) {
       if (e?.name === 'QuotaExceededError' || e?.code === 22) {
@@ -377,14 +239,19 @@ class DeviceRegistryService {
     });
 
     const now = Date.now();
+    const authoritativeUids = new Set<string>();
     rawDevices.forEach((remoteDev) => {
-      if (!remoteDev || !remoteDev.uid || this.deletedUids.has(remoteDev.uid) || remoteDev.uid.startsWith('PANORAMA-')) return;
-      const existing = this.devices.get(remoteDev.uid);
+      if (!remoteDev || !remoteDev.uid || !isGenuineHardwareUid(remoteDev.uid)) return;
+      const canonicalUid = getCanonicalUid(remoteDev.uid);
+      if (this.deletedUids.has(canonicalUid)) return;
+      authoritativeUids.add(canonicalUid);
+      const existing = this.devices.get(canonicalUid);
       if (existing) {
         // Keep active local telemetry if local timestamp is newer, but adopt remote administrative mapping
         const useLocalTelemetry = existing.lastSeenTimestamp > (remoteDev.lastSeenTimestamp || 0);
-        this.devices.set(remoteDev.uid, {
+        this.devices.set(canonicalUid, {
           ...remoteDev,
+          uid: canonicalUid,
           name: remoteDev.name || existing.name,
           trainNumber: remoteDev.trainNumber !== undefined ? remoteDev.trainNumber : existing.trainNumber,
           coachNumber: remoteDev.coachNumber !== undefined ? remoteDev.coachNumber : existing.coachNumber,
@@ -392,7 +259,7 @@ class DeviceRegistryService {
           assignmentStatus: remoteDev.assignmentStatus || existing.assignmentStatus,
           hardwareModel: remoteDev.hardwareModel || existing.hardwareModel,
           // Telemetry
-          isOnline: useLocalTelemetry ? existing.isOnline : ((remoteDev.lastSeenTimestamp ? (now - remoteDev.lastSeenTimestamp) < STALE_TIMEOUT_MS : false)),
+          isOnline: useLocalTelemetry ? existing.isOnline : ((remoteDev.lastSeenTimestamp ? (now - remoteDev.lastSeenTimestamp) < getRegistryTimeoutMs() : false)),
           batteryPercent: useLocalTelemetry ? existing.batteryPercent : remoteDev.batteryPercent,
           batteryVoltage: useLocalTelemetry ? existing.batteryVoltage : remoteDev.batteryVoltage,
           tank1Level: useLocalTelemetry ? existing.tank1Level : remoteDev.tank1Level,
@@ -406,13 +273,22 @@ class DeviceRegistryService {
           lastSeenTimestamp: Math.max(existing.lastSeenTimestamp || 0, remoteDev.lastSeenTimestamp || 0),
         });
       } else {
-        const isOnline = remoteDev.lastSeenTimestamp ? (now - remoteDev.lastSeenTimestamp) < STALE_TIMEOUT_MS : false;
-        this.devices.set(remoteDev.uid, {
+        const isOnline = remoteDev.lastSeenTimestamp ? (now - remoteDev.lastSeenTimestamp) < getRegistryTimeoutMs() : false;
+        this.devices.set(canonicalUid, {
           ...remoteDev,
+          uid: canonicalUid,
           isOnline,
         });
       }
     });
+
+    if (opts?.authoritative && authoritativeUids.size > 0) {
+      Array.from(this.devices.keys()).forEach((localUid) => {
+        if (!authoritativeUids.has(localUid)) {
+          this.devices.delete(localUid);
+        }
+      });
+    }
 
     this.version = Math.max(this.version, remoteVersion);
     this.updatedAt = remoteUpdatedAt > 0 ? remoteUpdatedAt : this.updatedAt;
@@ -518,7 +394,7 @@ class DeviceRegistryService {
       if (seen.has(canonical)) return;
       seen.add(canonical);
 
-      const isOnline = d.lastSeenTimestamp ? (now - d.lastSeenTimestamp) < STALE_TIMEOUT_MS : false;
+      const isOnline = d.lastSeenTimestamp ? (now - d.lastSeenTimestamp) < getRegistryTimeoutMs() : false;
       list.push({
         ...d,
         uid: canonical,
@@ -559,6 +435,9 @@ class DeviceRegistryService {
     if (!isGenuineHardwareUid(rawUid)) {
       return null;
     }
+    if (!telemetry.isStale) {
+      this.suppressRemoteOnlineUntilTelemetry = false;
+    }
     const uid = getCanonicalUid(rawUid);
     const existing = this.devices.get(uid);
 
@@ -569,7 +448,8 @@ class DeviceRegistryService {
       : (existing?.batteryVoltage ?? null);
 
     if (existing) {
-      // Update telemetry while strictly maintaining administrator registration and mapping
+      // Update telemetry while strictly maintaining administrator registration and mapping;
+      // never refresh lastSeenTimestamp when a watchdog STALE event arrives.
       const updated: ManagedDevice = {
         ...existing,
         isOnline: !telemetry.isStale,
@@ -586,8 +466,8 @@ class DeviceRegistryService {
         latitude: telemetry.lat !== null && telemetry.long !== null ? telemetry.lat : existing.latitude,
         longitude: telemetry.lat !== null && telemetry.long !== null ? telemetry.long : existing.longitude,
         speedKmh: telemetry.speed ?? existing.speedKmh,
-        lastSeen: timeStr,
-        lastSeenTimestamp: now,
+        lastSeen: telemetry.isStale ? existing.lastSeen : timeStr,
+        lastSeenTimestamp: telemetry.isStale ? existing.lastSeenTimestamp : now,
         payloadTrno: telemetry.trno || existing.payloadTrno,
         payloadChno: telemetry.chno || existing.payloadChno,
       };
@@ -638,56 +518,108 @@ class DeviceRegistryService {
    * Reconcile remote backend devices into local registry without triggering mutations or MQTT publication storms.
    */
   public reconcileRemoteDevices(devices: any[]): void {
-    if (!Array.isArray(devices) || devices.length === 0) return;
+    if (!Array.isArray(devices)) return;
     const now = Date.now();
+    const seenAuthoritative = new Set<string>();
+    const claimedSlots = new Map<string, string>();
     devices.forEach((d) => {
       if (!d || !d.uid || !isGenuineHardwareUid(d.uid)) return;
       const canonicalUid = getCanonicalUid(d.uid);
+      seenAuthoritative.add(canonicalUid);
       const existing = this.devices.get(canonicalUid);
-      const train = (d.trainNumber || d.train_number || '').trim() || null;
-      const coach = (d.coachNumber || d.coach_number || '').trim() || null;
+      const rawTrain = (d.trainNumber || d.train_number || '').trim();
+      const rawCoach = (d.coachNumber || d.coach_number || '').trim().toUpperCase();
       const isEngaged = Boolean(
-        train &&
-        coach &&
-        train.toUpperCase() !== 'UNASSIGNED' &&
-        coach.toUpperCase() !== 'UNASSIGNED'
+        rawTrain &&
+        rawCoach &&
+        rawTrain.toUpperCase() !== 'UNASSIGNED' &&
+        rawCoach !== 'UNASSIGNED'
       );
+      let train: string | null = isEngaged ? rawTrain : null;
+      let coach: string | null = isEngaged ? rawCoach : null;
+      if (isEngaged && train && coach) {
+        const slotKey = `${train.toLowerCase()}::${coach.toLowerCase()}`;
+        const prevOwner = claimedSlots.get(slotKey);
+        if (prevOwner && prevOwner !== canonicalUid) {
+          train = null;
+          coach = null;
+        } else {
+          claimedSlots.set(slotKey, canonicalUid);
+        }
+      }
+      const hasFreshLocalTelemetry = Boolean(existing?.lastSeenTimestamp && (now - existing.lastSeenTimestamp) < getRegistryTimeoutMs());
+      const rawLastSeen = typeof d.last_seen_at === 'string' ? d.last_seen_at.trim() : '';
+      const utcLastSeen = rawLastSeen && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(rawLastSeen) ? `${rawLastSeen}Z` : rawLastSeen;
+      const backendLastSeenMs = utcLastSeen ? Date.parse(utcLastSeen) : 0;
+      const suppressedByDisconnect = this.suppressRemoteOnlineUntilTelemetry;
+      const effectiveLastSeenMs = hasFreshLocalTelemetry
+        ? existing!.lastSeenTimestamp
+        : (suppressedByDisconnect ? 0 : (Number.isFinite(backendLastSeenMs) ? backendLastSeenMs : 0));
+      const remoteIsOnline = !suppressedByDisconnect && Boolean(d.isOnline || d.is_online);
       const base: ManagedDevice = existing || {
         uid: canonicalUid,
         name: d.name || `Node (${canonicalUid.slice(-6)})`,
         trainNumber: train,
         coachNumber: coach,
         registrationStatus: 'REGISTERED',
-        assignmentStatus: isEngaged ? 'ENGAGED' : 'AVAILABLE',
-        isOnline: Boolean(d.isOnline || d.is_online),
-        batteryPercent: 85,
-        batteryVoltage: 3.8,
-        tank1Level: 0,
-        tank1HeightCm: 0,
-        tank2Level: 0,
-        tank2HeightCm: 0,
-        valve1Normal: true,
-        valve2Normal: true,
+        assignmentStatus: (train && coach) ? 'ENGAGED' : 'AVAILABLE',
+        isOnline: remoteIsOnline,
+        batteryPercent: null,
+        batteryVoltage: null,
+        tank1Level: null,
+        tank1HeightCm: null,
+        tank2Level: null,
+        tank2HeightCm: null,
+        valve1Normal: null,
+        valve2Normal: null,
         latitude: null,
         longitude: null,
-        speedKmh: 0,
-        lastSeen: new Date().toLocaleTimeString('en-US', { hour12: false }),
-        lastSeenTimestamp: now,
-        firstDiscovered: new Date().toISOString(),
+        speedKmh: null,
+        lastSeen: effectiveLastSeenMs ? new Date(effectiveLastSeenMs).toLocaleTimeString('en-US', { hour12: false }) : 'Awaiting Telemetry Signal',
+        lastSeenTimestamp: effectiveLastSeenMs,
+        firstDiscovered: d.created_at || new Date().toISOString(),
         hardwareModel: d.hardwareVersion || d.hardware_version || 'Cellular WLI Unit',
       };
       this.devices.set(canonicalUid, {
         ...base,
+        uid: canonicalUid,
         name: d.name || base.name,
         trainNumber: train,
         coachNumber: coach,
-        assignmentStatus: isEngaged ? 'ENGAGED' : 'AVAILABLE',
+        assignmentStatus: (train && coach) ? 'ENGAGED' : 'AVAILABLE',
         registrationStatus: 'REGISTERED',
+        isOnline: hasFreshLocalTelemetry ? existing!.isOnline : remoteIsOnline,
+        lastSeen: hasFreshLocalTelemetry
+          ? existing!.lastSeen
+          : (effectiveLastSeenMs ? new Date(effectiveLastSeenMs).toLocaleTimeString('en-US', { hour12: false }) : 'Awaiting Telemetry Signal'),
+        lastSeenTimestamp: effectiveLastSeenMs,
         hardwareModel: d.hardwareVersion || d.hardware_version || base.hardwareModel,
       });
     });
+    if (seenAuthoritative.size > 0) {
+      Array.from(this.devices.keys()).forEach((k) => {
+        if (!seenAuthoritative.has(k)) {
+          this.devices.delete(k);
+        }
+      });
+    }
     this.saveToStorage({ skipPublish: true });
     this.notify();
+  }
+
+  public markAllOffline(): void {
+    this.suppressRemoteOnlineUntilTelemetry = true;
+    let changed = false;
+    this.devices.forEach((dev, uid) => {
+      if (dev.isOnline || dev.lastSeenTimestamp) {
+        this.devices.set(uid, { ...dev, isOnline: false, lastSeenTimestamp: 0 });
+        changed = true;
+      }
+    });
+    if (changed) {
+      this.saveToStorage({ skipPublish: true });
+      this.notify();
+    }
   }
 
   /**
@@ -702,20 +634,38 @@ class DeviceRegistryService {
       hardwareModel?: string;
     }
   ): ManagedDevice {
-    const existing = this.devices.get(uid);
+    const cleanUid = getCanonicalUid(uid);
+    const existing = this.devices.get(cleanUid);
     const now = Date.now();
     const train = options?.trainNumber?.trim() || null;
-    const coach = options?.coachNumber?.trim() || null;
+    const coach = options?.coachNumber?.trim()?.toUpperCase() || null;
     const isEngaged = Boolean(
       train &&
       coach &&
       train.toUpperCase() !== 'UNASSIGNED' &&
-      coach.toUpperCase() !== 'UNASSIGNED'
+      coach !== 'UNASSIGNED'
     );
 
+    if (isEngaged && train && coach) {
+      this.devices.forEach((other, otherUid) => {
+        if (
+          otherUid !== cleanUid &&
+          (other.trainNumber || '').trim().toLowerCase() === train.toLowerCase() &&
+          (other.coachNumber || '').trim().toUpperCase() === coach
+        ) {
+          this.devices.set(otherUid, {
+            ...other,
+            trainNumber: null,
+            coachNumber: null,
+            assignmentStatus: 'AVAILABLE',
+          });
+        }
+      });
+    }
+
     const base: ManagedDevice = existing || {
-      uid,
-      name: options?.name?.trim() || `Node (${uid.slice(-6)})`,
+      uid: cleanUid,
+      name: options?.name?.trim() || `Node (${cleanUid.slice(-6)})`,
       trainNumber: train,
       coachNumber: coach,
       registrationStatus: 'REGISTERED',
@@ -739,6 +689,7 @@ class DeviceRegistryService {
 
     const registered: ManagedDevice = {
       ...base,
+      uid: cleanUid,
       name: options?.name?.trim() || base.name,
       trainNumber: train,
       coachNumber: coach,
@@ -747,18 +698,19 @@ class DeviceRegistryService {
       hardwareModel: options?.hardwareModel || base.hardwareModel,
     };
 
-    const isKnown = this.devices.has(uid);
-    this.devices.set(uid, registered);
+    const isKnown = this.devices.has(cleanUid);
+    this.devices.set(cleanUid, registered);
     this.saveToStorage();
     this.notify();
 
     // Async REST sync attempt when a backend origin is configured and active
+    const apiBase = resolveRegistryApiBase();
     const isUnreachable = typeof window !== 'undefined' && (
       (window as any).__PANORAMA_IS_REMOTE_UNREACHABLE__
         ? (window as any).__PANORAMA_IS_REMOTE_UNREACHABLE__()
         : false
     );
-    if (API_BASE && !isUnreachable) {
+    if (apiBase && !isUnreachable) {
       const token = typeof window !== 'undefined' ? localStorage.getItem('panorama_token') : null;
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -766,19 +718,19 @@ class DeviceRegistryService {
       };
       const syncBody = {
         name: registered.name,
-        train_number: registered.trainNumber || '',
-        coach_number: registered.coachNumber || '',
+        train_number: registered.trainNumber || 'UNASSIGNED',
+        coach_number: registered.coachNumber || 'UNASSIGNED',
         hardware_version: registered.hardwareModel,
       };
 
       if (isKnown) {
-        fetch(`${API_BASE}/devices/${encodeURIComponent(registered.uid)}`, {
+        fetch(`${apiBase}/devices/${encodeURIComponent(registered.uid)}`, {
           method: 'PUT',
           headers,
           body: JSON.stringify(syncBody),
         }).catch(() => {});
       } else {
-        fetch(`${API_BASE}/devices`, {
+        fetch(`${apiBase}/devices`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -788,7 +740,7 @@ class DeviceRegistryService {
         })
           .then((res) => {
             if (res.status === 400 || res.status === 409) {
-              return fetch(`${API_BASE}/devices/${encodeURIComponent(registered.uid)}`, {
+              return fetch(`${apiBase}/devices/${encodeURIComponent(registered.uid)}`, {
                 method: 'PUT',
                 headers,
                 body: JSON.stringify(syncBody),
@@ -816,7 +768,8 @@ class DeviceRegistryService {
    * Release device from coach mapping into available pool.
    */
   public unassignDevice(uid: string): ManagedDevice | undefined {
-    const existing = this.devices.get(uid);
+    const cleanUid = getCanonicalUid(uid);
+    const existing = this.devices.get(cleanUid);
     if (!existing) return undefined;
 
     const unassigned: ManagedDevice = {
@@ -826,11 +779,11 @@ class DeviceRegistryService {
       assignmentStatus: 'AVAILABLE',
     };
 
-    this.devices.set(uid, unassigned);
+    this.devices.set(cleanUid, unassigned);
     this.saveToStorage();
     this.notify();
     try {
-      alertNotificationService.resolveAlertsForDevice(uid, 'Device unassigned');
+      alertNotificationService.resolveAlertsForDevice(cleanUid, 'Device unassigned');
     } catch {}
 
     const isUnreachable = typeof window !== 'undefined' && (
@@ -839,17 +792,18 @@ class DeviceRegistryService {
         : false
     );
 
-    if (API_BASE && !isUnreachable) {
+    const apiBase = resolveRegistryApiBase();
+    if (apiBase && !isUnreachable) {
       const token = typeof window !== 'undefined' ? localStorage.getItem('panorama_token') : null;
-      fetch(`${API_BASE}/devices/${uid}`, {
+      fetch(`${apiBase}/devices/${encodeURIComponent(uid)}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          trainNumber: '',
-          coachNumber: '',
+          trainNumber: 'UNASSIGNED',
+          coachNumber: 'UNASSIGNED',
         }),
       }).catch(() => {});
     }

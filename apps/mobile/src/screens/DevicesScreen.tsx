@@ -385,7 +385,10 @@ export const DevicesScreen: React.FC = () => {
           trainNumber: d.trainNumber || 'UNASSIGNED',
           coachNumber: d.coachNumber || 'UNASSIGNED',
           serialNumber: canonicalUid,
-          location: d.trainNumber ? `Coach ${d.coachNumber || '—'} (Train ${d.trainNumber})` : 'Unassigned WLI Unit',
+          location:
+            d.trainNumber && d.trainNumber.toUpperCase() !== 'UNASSIGNED'
+              ? `Coach ${d.coachNumber || '—'} (Train ${d.trainNumber})`
+              : 'Unassigned WLI Unit',
           status,
           connectionType: 'Cellular / MQTT',
           modemModel: 'Wireless Link / MQTT',

@@ -51,8 +51,8 @@ export function parseValidGps(parsed: Record<string, any>): ParsedMqttGps {
 export const DEFAULT_MQTT_TOPIC = '0023004D4B42501120353332';
 export const DEFAULT_DEVICE_UID = '0023004D4B42501120353332';
 export const LEGACY_DEFAULT_MQTT_TOPIC = '';
-export const DEFAULT_STALE_TIMEOUT_MS = 180000; // 180 seconds (nominal 90s upload task + jitter headroom)
-export const STALE_TIMEOUT_MS = 30000; // Fast watchdog timeout for local/test runner
+export const DEFAULT_STALE_TIMEOUT_MS = 180000; // 180 seconds (matches hardware wak=180s interval + jitter)
+export const STALE_TIMEOUT_MS = 180000;
 
 export const CENTRAL_FLEET_TOPIC = 'panorama/central/fleet/v2';
 export const CENTRAL_DEVICES_TOPIC = 'panorama/central/devices/v2';
@@ -410,7 +410,32 @@ export class MqttService {
   private defaultQos: 0 | 1 | 2 = 0;
   private autoReconnect: boolean = true;
   private topic: string = DEFAULT_MQTT_TOPIC;
-  private watchdogTimeoutMs: number = STALE_TIMEOUT_MS;
+  private watchdogOverrideMs: number | null = null;
+
+  public getWatchdogTimeoutMs(): number {
+    if (this.watchdogOverrideMs !== null && Number.isFinite(this.watchdogOverrideMs)) {
+      return Math.max(5000, this.watchdogOverrideMs);
+    }
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const saved = window.localStorage.getItem('panorama_telemetry_timeout_sec');
+        if (saved) {
+          const parsed = parseInt(saved, 10);
+          if (Number.isFinite(parsed) && parsed >= 10 && parsed <= 3600) {
+            return parsed * 1000;
+          }
+        }
+      } catch {}
+    }
+    return DEFAULT_STALE_TIMEOUT_MS;
+  }
+
+  public setWatchdogTimeoutMs(ms: number | null): void {
+    this.watchdogOverrideMs = ms !== null && Number.isFinite(ms) ? Math.max(5000, ms) : null;
+    if (this.status === 'CONNECTED' && this.lastTelemetry && !this.lastTelemetry.isStale) {
+      this.resetStaleTimer();
+    }
+  }
 
   private constructor() {
     this.initConfiguration();
@@ -594,7 +619,7 @@ export class MqttService {
           const arr = JSON.parse(regRaw);
           if (Array.isArray(arr)) {
             arr.forEach((d: any) => {
-              const uid = typeof d?.uid === 'string' ? d.uid.trim() : '';
+              const uid = typeof d?.uid === 'string' ? d.uid.trim().toUpperCase() : '';
               if (/^[0-9A-Fa-f]{24}$/.test(uid) && d?.registrationStatus !== 'DISCOVERED') {
                 this.registeredDeviceUids.add(uid);
               }
@@ -630,6 +655,10 @@ export class MqttService {
     const clean = topic.trim();
     if (!clean) return;
     const isTelemetryTarget = !this.isInternalSyncTopic(clean);
+    if (this.confirmedSubscriptions.has(clean) && !isRetry) {
+      return;
+    }
+    this.confirmedSubscriptions.add(clean);
 
     try {
       client.subscribe(clean, {
@@ -651,6 +680,7 @@ export class MqttService {
         },
         onFailure: (err: any) => {
           if (this.client !== client) return;
+          this.confirmedSubscriptions.delete(clean);
           const errMsg = err?.errorMessage || 'Broker rejected subscription';
           if (isTelemetryTarget) {
             this.subscriptionError = `Topic "${clean}": ${errMsg}`;
@@ -1026,9 +1056,15 @@ export class MqttService {
     const readFiniteNumber = (keys: string[], fieldLabel: string, min?: number, max?: number): number | null => {
       for (const k of keys) {
         if (parsed[k] !== undefined && parsed[k] !== null) {
-          const v = parsed[k];
-          if (typeof v !== 'number' || !Number.isFinite(v)) {
-            validationErrors.push(`${fieldLabel}: expected number, got ${typeof v}`);
+          const rawVal = parsed[k];
+          const v =
+            typeof rawVal === 'number'
+              ? rawVal
+              : typeof rawVal === 'string' && rawVal.trim() !== ''
+              ? Number(rawVal.trim())
+              : NaN;
+          if (!Number.isFinite(v)) {
+            validationErrors.push(`${fieldLabel}: expected number, got ${typeof rawVal}`);
             return null;
           }
           if (min !== undefined && v < min) {
@@ -1078,7 +1114,7 @@ export class MqttService {
       console.warn('[MQTT]', this.lastUidMismatch);
     }
 
-    const uid = payloadUid || topicUid || DEFAULT_DEVICE_UID;
+    const uid = (payloadUid || topicUid || DEFAULT_DEVICE_UID).trim().toUpperCase();
     const trno = String(parsed.trno ?? parsed.trainNumber ?? parsed.train_number ?? '').trim();
     const chno = String(parsed.chno ?? parsed.coachNumber ?? parsed.coach_id ?? '').trim();
 
@@ -1244,16 +1280,17 @@ export class MqttService {
 
   private resetStaleTimer(): void {
     this.clearStaleTimer();
+    const timeoutMs = this.getWatchdogTimeoutMs();
     this.staleTimer = setTimeout(() => {
       if (this.status === 'CONNECTED') {
-        Logger.info('MQTT', 'Watchdog', `No telemetry received for ${STALE_TIMEOUT_MS / 1000}s. Transitioning to STALE standby.`);
+        Logger.info('MQTT', 'Watchdog', `No telemetry received for ${Math.round(timeoutMs / 1000)}s. Transitioning to STALE standby.`);
         this.setStatus('STALE');
         if (this.lastTelemetry) {
           this.lastTelemetry = { ...this.lastTelemetry, isStale: true };
           this.telemetryListeners.forEach((l) => l(this.lastTelemetry!));
         }
       }
-    }, STALE_TIMEOUT_MS);
+    }, timeoutMs);
   }
 
   private clearStaleTimer(): void {
@@ -1743,7 +1780,7 @@ export class MqttService {
     uids.forEach((raw) => {
       const clean = typeof raw === 'string' ? raw.trim() : '';
       if (/^[0-9A-Fa-f]{24}$/.test(clean)) {
-        next.add(clean);
+        next.add(clean.toUpperCase());
       }
     });
 
@@ -2235,6 +2272,8 @@ export class MqttService {
     this.reconfigureTimer = null;
     this.dispatchTimer = null;
     this.pendingDispatchTelemetry.clear();
+    this.lastTelemetry = null;
+    this.confirmedSubscriptions.clear();
     this.clearStaleTimer();
     this.cleanupClient();
     this.lastDisconnectedAt = Date.now();

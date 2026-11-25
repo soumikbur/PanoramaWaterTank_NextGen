@@ -12,17 +12,24 @@ export const DEFAULT_LOCAL_API_URL = 'http://127.0.0.1:8000/api/v1';
 export const DEFAULT_PRODUCTION_WS_URL = 'wss://panorama-water-tank-backend.onrender.com/api/v1/ws/live';
 export const DEFAULT_HTTPS_RECEIVER_HEALTH_URL = 'https://panorama-water-tank-backend.onrender.com/api/health';
 
-// Compile-time bundled environment variables (replaced directly by esbuild define)
+// Compile-time bundled environment variables (replaced directly by esbuild define;
+// never guard on `typeof process !== 'undefined'` because esbuild leaves `typeof process` as 'undefined' in browser/WebView).
 declare const process: any;
-const BUNDLED_API_URL: string =
-  (typeof process !== 'undefined' && process.env && process.env.VITE_API_BASE_URL) ?
-    String(process.env.VITE_API_BASE_URL) :
-    DEFAULT_PRODUCTION_API_URL;
+const BUNDLED_API_URL: string = (() => {
+  try {
+    return String(process.env.VITE_API_URL || process.env.VITE_API_BASE_URL || '').trim();
+  } catch {
+    return '';
+  }
+})();
 
-const BUNDLED_WS_URL: string =
-  (typeof process !== 'undefined' && process.env && process.env.VITE_WS_URL) ?
-    String(process.env.VITE_WS_URL) :
-    DEFAULT_PRODUCTION_WS_URL;
+const BUNDLED_WS_URL: string = (() => {
+  try {
+    return String(process.env.VITE_WS_URL || '').trim();
+  } catch {
+    return '';
+  }
+})();
 
 export const STORAGE_KEY_API_URL = 'panorama_backend_url';
 export const STORAGE_KEY_WS_URL = 'panorama_ws_url';
@@ -63,18 +70,24 @@ export function resolveApiBaseUrl(): string {
     } catch {}
   }
 
-  // 2. Android Capacitor native environment check: default to local reverse proxy (8000) for development
-  if (typeof window !== 'undefined' && isAndroidCapacitorApp()) {
-    return 'http://127.0.0.1:8000/api/v1';
-  }
-
-  // 3. Local desktop FastAPI server detection (only when the web client itself is served from port 8000)
-  if (typeof window !== 'undefined' && window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
+  // 2. Local desktop FastAPI server detection when website itself is served from port 8000
+  if (
+    typeof window !== 'undefined' &&
+    !isAndroidCapacitorApp() &&
+    window.location &&
+    window.location.protocol &&
+    window.location.protocol.startsWith('http')
+  ) {
     const host = window.location.hostname || '127.0.0.1';
     const port = window.location.port || '';
     if ((host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0') && port === '8000') {
       return `http://${host}:${port}/api/v1`;
     }
+  }
+
+  // 3. Compiled bundle API URL overrides (VITE_API_URL / VITE_API_BASE_URL) apply uniformly across web and mobile
+  if (BUNDLED_API_URL && isValidHttpUrl(BUNDLED_API_URL)) {
+    return BUNDLED_API_URL.replace(/\/+$/, '');
   }
 
   // 4. Build-time environment variable injection

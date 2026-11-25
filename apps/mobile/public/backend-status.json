@@ -1,8 +1,8 @@
 {
-  "available": false,
-  "scadaWsAvailable": false,
+  "available": true,
+  "scadaWsAvailable": true,
   "httpsReceiverAvailable": true,
   "httpsHealthUrl": "https://panorama-water-tank-backend.onrender.com/api/health",
   "url": "https://panorama-water-tank-backend.onrender.com/api/v1",
-  "reason": "Render hosts Panorama WLI HTTPS Receiver (/api/health); main dashboard streams live telemetry via HiveMQ MQTT"
+  "reason": "Authoritative SCADA API v1 + Sync endpoints enabled"
 }

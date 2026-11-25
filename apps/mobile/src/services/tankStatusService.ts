@@ -22,7 +22,7 @@
 import { LiveTelemetryPayload, MqttConnectionStatus, TankLiveStatus, TrainConsist, TrainOverviewItem } from '../types';
 import { ManagedDevice } from './deviceRegistry';
 
-export const DEFAULT_TELEMETRY_TIMEOUT_SECONDS = 120;
+export const DEFAULT_TELEMETRY_TIMEOUT_SECONDS = 180;
 export const TIMEOUT_STORAGE_KEY = 'panorama_telemetry_timeout_sec';
 
 export type OfflineReason =
@@ -153,7 +153,10 @@ export function computeConsistData(params: {
 
   const coachTypes = ['Passenger', 'AC Chair Car', 'AC 3-Tier', 'AC 2-Tier', 'Sleeper Class', 'Executive'];
   const timeoutMs = timeoutSeconds * 1000;
-  const isMqttActive = mqttStatus !== 'DISCONNECTED';
+  const isMqttActive =
+    mqttStatus !== 'DISCONNECTED' &&
+    mqttStatus !== 'CONNECTION_ERROR' &&
+    mqttStatus !== 'SUBSCRIPTION_ERROR';
 
   const cleanTrainNumber = (trainNumber || '').trim();
   const matchedTrain = configuredTrains

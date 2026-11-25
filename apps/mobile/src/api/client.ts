@@ -171,6 +171,11 @@ export class ApiClient {
   private static healthCheckTimer: any = null;
   private static statusListeners: Set<(status: BackendConnectivityStatus) => void> = new Set();
   private static pendingGetRequests: Map<string, Promise<any>> = new Map();
+  private static lastAuthoritativeSyncOk = false;
+
+  static wasLastSyncAuthoritative(): boolean {
+    return this.lastAuthoritativeSyncOk;
+  }
 
   static getBackendStatus(): BackendConnectivityStatus {
     return this.backendStatus;
@@ -245,33 +250,10 @@ export class ApiClient {
       return false;
     }
 
-    // Static hosting check: on github.io or pages.dev without user custom URL override
-    if (typeof window !== 'undefined' && window.location && window.location.hostname) {
-      const host = window.location.hostname;
-      if (host.endsWith('github.io') || host.endsWith('pages.dev')) {
-        const hasCustom = typeof window.localStorage !== 'undefined' && Boolean(window.localStorage.getItem(STORAGE_KEY_API_URL));
-        if (!hasCustom && !immediate) {
-          try {
-            const statusRes = await fetch('./backend-status.json', { cache: 'no-store' });
-            if (statusRes.ok) {
-              const statusData = await statusRes.json();
-              if (statusData && statusData.available === false) {
-                this.setBackendStatus('OFFLINE');
-                return false;
-              }
-            }
-          } catch {
-            this.setBackendStatus('OFFLINE');
-            return false;
-          }
-        }
-      }
-    }
-
     const healthUrl = resolveHealthUrl(base);
     try {
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      const timeoutId = controller ? setTimeout(() => controller.abort(), 4000) : null;
+      const timeoutId = controller ? setTimeout(() => controller.abort(), 9000) : null;
 
       const response = await fetch(healthUrl, {
         method: 'GET',
@@ -318,16 +300,6 @@ export class ApiClient {
     }
     const base = resolveApiBase();
     if (!base) return true;
-
-    if (typeof window !== 'undefined' && window.location && window.location.hostname) {
-      const host = window.location.hostname;
-      if (host.endsWith('github.io') || host.endsWith('pages.dev')) {
-        const hasCustom = typeof window.localStorage !== 'undefined' && Boolean(window.localStorage.getItem(STORAGE_KEY_API_URL));
-        if (!hasCustom && this.backendStatus !== 'ONLINE') {
-          return true;
-        }
-      }
-    }
 
     return this.backendStatus === 'OFFLINE';
   }
@@ -1223,24 +1195,31 @@ export class ApiClient {
 
   // Trains and Fleet Management
   static async fetchRegionsSummary(): Promise<RegionSummary[]> {
-    if (!API_BASE || this.isRemoteUnreachable()) {
+    const base = resolveApiBase();
+    if (!base || this.isRemoteUnreachable()) {
+      this.lastAuthoritativeSyncOk = false;
       return localFleetStore.getRegionsSummary();
     }
     try {
       const res = await this.request<RegionSummary[]>('/trains/regions');
       if (Array.isArray(res)) {
+        this.lastAuthoritativeSyncOk = true;
         localFleetStore.syncFromAuthoritativeRegions(res);
         return res;
       }
+      this.lastAuthoritativeSyncOk = false;
       return localFleetStore.getRegionsSummary();
     } catch (err) {
+      this.lastAuthoritativeSyncOk = false;
       Logger.debug('API', 'ApiClient', 'fetchRegionsSummary failed, falling back to cached local fleet', 'fetchRegionsSummary', err);
       return localFleetStore.getRegionsSummary();
     }
   }
 
   static async fetchTrains(region?: string, search?: string): Promise<TrainOverviewItem[]> {
-    if (!API_BASE || this.isRemoteUnreachable()) {
+    const base = resolveApiBase();
+    if (!base || this.isRemoteUnreachable()) {
+      this.lastAuthoritativeSyncOk = false;
       return localFleetStore.listTrains(region, search);
     }
     const params = new URLSearchParams();
@@ -1248,8 +1227,11 @@ export class ApiClient {
     if (search) params.append('search', search);
     const query = params.toString() ? `?${params.toString()}` : '';
     try {
-      return await this.request<TrainOverviewItem[]>(`/trains${query}`);
+      const trains = await this.request<TrainOverviewItem[]>(`/trains${query}`);
+      this.lastAuthoritativeSyncOk = true;
+      return trains;
     } catch {
+      this.lastAuthoritativeSyncOk = false;
       return localFleetStore.listTrains(region, search);
     }
   }
@@ -1259,21 +1241,34 @@ export class ApiClient {
     if (!clean) {
       throw new Error('Train number is required.');
     }
-    if (!API_BASE || this.isRemoteUnreachable()) {
+    const base = resolveApiBase();
+    if (!base || this.isRemoteUnreachable()) {
+      this.lastAuthoritativeSyncOk = false;
       const localConsist = localFleetStore.getTrainConsist(clean);
       if (localConsist) return localConsist;
       throw new Error(`Train ${clean} not found.`);
     }
     try {
       const consist = await this.request<TrainConsist>(`/trains/${encodeURIComponent(clean)}/consist`);
-      if (consist) {
+      if (consist && (Array.isArray(consist.coaches) && (consist.coaches.length > 0 || (consist.coaches_count || 0) === 0))) {
+        this.lastAuthoritativeSyncOk = true;
         localFleetStore.syncTrainConsist(clean, consist);
         return consist;
       }
       const localConsist = localFleetStore.getTrainConsist(clean);
+      if (localConsist && localConsist.coaches && localConsist.coaches.length > 0) {
+        return localConsist;
+      }
+      if (consist) {
+        this.lastAuthoritativeSyncOk = true;
+        localFleetStore.syncTrainConsist(clean, consist);
+        return consist;
+      }
+      this.lastAuthoritativeSyncOk = false;
       if (localConsist) return localConsist;
       throw new Error(`Train ${clean} not found.`);
     } catch {
+      this.lastAuthoritativeSyncOk = false;
       const localConsist = localFleetStore.getTrainConsist(clean);
       if (localConsist) return localConsist;
       throw new Error(`Train ${clean} not found.`);
@@ -1302,22 +1297,18 @@ export class ApiClient {
   }
 
   static async createTrain(data: TrainCreatePayload): Promise<any> {
-    let res: any;
-    if (API_BASE && !this.isRemoteUnreachable()) {
-      try {
-        res = await this.request('/trains', {
-          method: 'POST',
-          body: JSON.stringify(data),
-        });
-        try {
-          localFleetStore.createTrain(data, { skipPublish: true });
-        } catch {}
-      } catch (err) {
-        res = localFleetStore.createTrain(data);
-      }
-    } else {
-      res = localFleetStore.createTrain(data);
+    const base = resolveApiBase();
+    if (!base) {
+      throw new Error('No backend API URL configured.');
     }
+    const res = await this.request('/trains', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    try {
+      localFleetStore.createTrain(data, { skipPublish: true });
+    } catch {}
+    this.lastAuthoritativeSyncOk = true;
     try {
       mqttService.publishSyncEvent({
         event_type: 'TRAIN_CREATED',
@@ -1332,22 +1323,18 @@ export class ApiClient {
   }
 
   static async updateTrain(trainNumber: string, data: { name?: string; region?: string; type?: string; railway_zone?: string }): Promise<any> {
-    let res: any;
-    if (API_BASE && !this.isRemoteUnreachable()) {
-      try {
-        res = await this.request(`/trains/${encodeURIComponent(trainNumber)}`, {
-          method: 'PUT',
-          body: JSON.stringify(data),
-        });
-        try {
-          localFleetStore.updateTrain(trainNumber, data, { skipPublish: true });
-        } catch {}
-      } catch (err) {
-        res = localFleetStore.updateTrain(trainNumber, data);
-      }
-    } else {
-      res = localFleetStore.updateTrain(trainNumber, data);
+    const base = resolveApiBase();
+    if (!base) {
+      throw new Error('No backend API URL configured.');
     }
+    const res = await this.request(`/trains/${encodeURIComponent(trainNumber)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    try {
+      localFleetStore.updateTrain(trainNumber, data, { skipPublish: true });
+    } catch {}
+    this.lastAuthoritativeSyncOk = true;
     try {
       mqttService.publishSyncEvent({
         event_type: 'TRAIN_UPDATED',
@@ -1366,21 +1353,17 @@ export class ApiClient {
     if (!clean) {
       throw new Error('Train number is required for deletion.');
     }
-    let res: any;
-    if (API_BASE && !this.isRemoteUnreachable()) {
-      try {
-        res = await this.request<{ success?: boolean; message: string; trainId?: string }>(`/trains/${clean}`, {
-          method: 'DELETE',
-        });
-        try {
-          localFleetStore.deleteTrain(trainNumber, { skipPublish: true });
-        } catch {}
-      } catch (err) {
-        res = localFleetStore.deleteTrain(trainNumber);
-      }
-    } else {
-      res = localFleetStore.deleteTrain(trainNumber);
+    const base = resolveApiBase();
+    if (!base) {
+      throw new Error('No backend API URL configured.');
     }
+    const res = await this.request<{ success?: boolean; message: string; trainId?: string }>(`/trains/${clean}`, {
+      method: 'DELETE',
+    });
+    try {
+      localFleetStore.deleteTrain(trainNumber, { skipPublish: true });
+    } catch {}
+    this.lastAuthoritativeSyncOk = true;
     deviceRegistry.detachTrain(trainNumber);
     try {
       alertNotificationService.resolveAlertsForTrain(trainNumber);
@@ -1402,22 +1385,18 @@ export class ApiClient {
   static async addCoach(trainNumber: string, data: CoachFormInput): Promise<any> {
     const cleanTrain = (trainNumber || '').trim();
     if (!cleanTrain) throw new Error('Train number is required.');
-    let res: any;
-    if (API_BASE && !this.isRemoteUnreachable()) {
-      try {
-        res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches`, {
-          method: 'POST',
-          body: JSON.stringify(data),
-        });
-        try {
-          localFleetStore.addCoach(cleanTrain, data, { skipPublish: true });
-        } catch {}
-      } catch (err) {
-        res = localFleetStore.addCoach(cleanTrain, data);
-      }
-    } else {
-      res = localFleetStore.addCoach(cleanTrain, data);
+    const base = resolveApiBase();
+    if (!base) {
+      throw new Error('No backend API URL configured.');
     }
+    const res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    try {
+      localFleetStore.addCoach(cleanTrain, data, { skipPublish: true });
+    } catch {}
+    this.lastAuthoritativeSyncOk = true;
     try {
       mqttService.publishSyncEvent({
         event_type: 'COACH_CREATED',
@@ -1435,22 +1414,18 @@ export class ApiClient {
     const cleanTrain = (trainNumber || '').trim();
     const cleanCoach = (coachNumber || '').trim();
     if (!cleanTrain || !cleanCoach) throw new Error('Train number and Coach number are required.');
-    let res: any;
-    if (API_BASE && !this.isRemoteUnreachable()) {
-      try {
-        res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(cleanCoach)}`, {
-          method: 'PUT',
-          body: JSON.stringify(data),
-        });
-        try {
-          localFleetStore.updateCoach(cleanTrain, cleanCoach, data, { skipPublish: true });
-        } catch {}
-      } catch (err) {
-        res = localFleetStore.updateCoach(cleanTrain, cleanCoach, data);
-      }
-    } else {
-      res = localFleetStore.updateCoach(cleanTrain, cleanCoach, data);
+    const base = resolveApiBase();
+    if (!base) {
+      throw new Error('No backend API URL configured.');
     }
+    const res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(cleanCoach)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    try {
+      localFleetStore.updateCoach(cleanTrain, cleanCoach, data, { skipPublish: true });
+    } catch {}
+    this.lastAuthoritativeSyncOk = true;
     try {
       mqttService.publishSyncEvent({
         event_type: 'COACH_UPDATED',
@@ -1469,22 +1444,18 @@ export class ApiClient {
     const oldCoach = (oldCoachNumber || '').trim();
     const newCoach = (newCoachNumber || '').trim().toUpperCase();
     if (!cleanTrain || !oldCoach || !newCoach) throw new Error('Train number, old coach number, and new coach number are required.');
-    let res: any;
-    if (API_BASE && !this.isRemoteUnreachable()) {
-      try {
-        res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(oldCoach)}/rename`, {
-          method: 'PUT',
-          body: JSON.stringify({ new_coach_number: newCoach }),
-        });
-        try {
-          localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach, { skipPublish: true });
-        } catch {}
-      } catch (err) {
-        res = localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach);
-      }
-    } else {
-      res = localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach);
+    const base = resolveApiBase();
+    if (!base) {
+      throw new Error('No backend API URL configured.');
     }
+    const res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(oldCoach)}/rename`, {
+      method: 'PUT',
+      body: JSON.stringify({ new_coach_number: newCoach }),
+    });
+    try {
+      localFleetStore.renameCoach(cleanTrain, oldCoach, newCoach, { skipPublish: true });
+    } catch {}
+    this.lastAuthoritativeSyncOk = true;
     try {
       mqttService.publishSyncEvent({
         event_type: 'COACH_RENAMED',
@@ -1502,21 +1473,17 @@ export class ApiClient {
     const cleanTrain = (trainNumber || '').trim();
     const cleanCoach = (coachNumber || '').trim();
     if (!cleanTrain || !cleanCoach) throw new Error('Train number and coach number are required.');
-    let res: any;
-    if (API_BASE && !this.isRemoteUnreachable()) {
-      try {
-        res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(cleanCoach)}`, {
-          method: 'DELETE',
-        });
-        try {
-          localFleetStore.deleteCoach(cleanTrain, cleanCoach, { skipPublish: true });
-        } catch {}
-      } catch (err) {
-        res = localFleetStore.deleteCoach(cleanTrain, cleanCoach);
-      }
-    } else {
-      res = localFleetStore.deleteCoach(cleanTrain, cleanCoach);
+    const base = resolveApiBase();
+    if (!base) {
+      throw new Error('No backend API URL configured.');
     }
+    const res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/${encodeURIComponent(cleanCoach)}`, {
+      method: 'DELETE',
+    });
+    try {
+      localFleetStore.deleteCoach(cleanTrain, cleanCoach, { skipPublish: true });
+    } catch {}
+    this.lastAuthoritativeSyncOk = true;
     deviceRegistry.unassignCoachDevice(cleanTrain, cleanCoach);
     try {
       alertNotificationService.resolveAlertsForCoach(cleanTrain, cleanCoach);
@@ -1537,22 +1504,18 @@ export class ApiClient {
   static async reorderCoaches(trainNumber: string, coachNumbers: string[]): Promise<any> {
     const cleanTrain = (trainNumber || '').trim();
     if (!cleanTrain) throw new Error('Train number is required.');
-    let res: any;
-    if (API_BASE && !this.isRemoteUnreachable()) {
-      try {
-        res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/reorder`, {
-          method: 'PUT',
-          body: JSON.stringify({ coach_numbers: coachNumbers }),
-        });
-        try {
-          localFleetStore.reorderCoaches(cleanTrain, coachNumbers, { skipPublish: true });
-        } catch {}
-      } catch (err) {
-        res = localFleetStore.reorderCoaches(cleanTrain, coachNumbers);
-      }
-    } else {
-      res = localFleetStore.reorderCoaches(cleanTrain, coachNumbers);
+    const base = resolveApiBase();
+    if (!base) {
+      throw new Error('No backend API URL configured.');
     }
+    const res = await this.request(`/trains/${encodeURIComponent(cleanTrain)}/coaches/reorder`, {
+      method: 'PUT',
+      body: JSON.stringify({ coach_numbers: coachNumbers }),
+    });
+    try {
+      localFleetStore.reorderCoaches(cleanTrain, coachNumbers, { skipPublish: true });
+    } catch {}
+    this.lastAuthoritativeSyncOk = true;
     try {
       mqttService.publishSyncEvent({
         event_type: 'COACHES_REORDERED',
@@ -1619,7 +1582,7 @@ export class ApiClient {
   static async searchStations(query: string, limit: number = 25): Promise<any[]> {
     const q = (query || '').trim();
     if (!q) return [];
-    if (API_BASE && !this.isRemoteUnreachable()) {
+    if (resolveApiBase() && !this.isRemoteUnreachable()) {
       try {
         return await this.request<any[]>(`/location/stations/search?q=${encodeURIComponent(q)}&limit=${limit}`);
       } catch {}
@@ -1630,7 +1593,7 @@ export class ApiClient {
   static async fetchOfficialRoute(trainNumber: string): Promise<any> {
     const clean = (trainNumber || '').trim();
     if (!clean) return null;
-    if (API_BASE && !this.isRemoteUnreachable()) {
+    if (resolveApiBase() && !this.isRemoteUnreachable()) {
       try {
         return await this.request<any>(`/location/official-route/${encodeURIComponent(clean)}`);
       } catch {}
@@ -1650,7 +1613,7 @@ export class ApiClient {
   ): Promise<any> {
     const clean = (trainNumber || '').trim();
     let res: any = null;
-    if (API_BASE && !this.isRemoteUnreachable()) {
+    if (resolveApiBase() && !this.isRemoteUnreachable()) {
       try {
         res = await this.request(`/location/routes`, {
           method: 'POST',
@@ -1684,7 +1647,7 @@ export class ApiClient {
   static async deleteRoute(trainNumber: string): Promise<any> {
     const clean = (trainNumber || '').trim();
     let res: any = null;
-    if (API_BASE && !this.isRemoteUnreachable()) {
+    if (resolveApiBase() && !this.isRemoteUnreachable()) {
       try {
         res = await this.request(`/location/routes/${encodeURIComponent(clean)}`, {
           method: 'DELETE',
@@ -1742,7 +1705,7 @@ export class ApiClient {
 
   static async updateTank(tankId: string, data: { name?: string; capacityLiters?: number; heightCm?: number; areaM2?: number; geometry?: string }): Promise<any> {
     let res: any;
-    if (API_BASE && !this.isRemoteUnreachable()) {
+    if (resolveApiBase() && !this.isRemoteUnreachable()) {
       try {
         res = await this.request(`/tanks/${encodeURIComponent(tankId)}`, {
           method: 'PUT',
@@ -1767,20 +1730,38 @@ export class ApiClient {
 
   // Devices
   static async fetchDevices(search?: string, isOnline?: boolean): Promise<Device[]> {
-    if (API_BASE && !this.isRemoteUnreachable()) {
+    const base = resolveApiBase();
+    if (base && !this.isRemoteUnreachable()) {
       try {
         const params = new URLSearchParams();
         if (search) params.append('search', search);
         if (isOnline !== undefined) params.append('is_online', String(isOnline));
         const query = params.toString() ? `?${params.toString()}` : '';
         const remote = await this.request<Device[]>(`/devices${query}`);
-        if (Array.isArray(remote) && remote.length > 0) {
-          // Reconcile into local persistent registry without triggering mutation publication storms
-          deviceRegistry.reconcileRemoteDevices(remote);
-          return remote;
+        if (Array.isArray(remote)) {
+          const normalized: Device[] = remote.map((raw: any) => ({
+            ...raw,
+            trainNumber: raw.trainNumber ?? raw.train_number ?? 'UNASSIGNED',
+            coachNumber: raw.coachNumber ?? raw.coach_number ?? 'UNASSIGNED',
+            train_number: raw.train_number ?? raw.trainNumber ?? 'UNASSIGNED',
+            coach_number: raw.coach_number ?? raw.coachNumber ?? 'UNASSIGNED',
+            isOnline: Boolean(raw.isOnline ?? raw.is_online),
+            is_online: Boolean(raw.is_online ?? raw.isOnline),
+            lastSeenAt: raw.lastSeenAt ?? raw.last_seen_at ?? null,
+            last_seen_at: raw.last_seen_at ?? raw.lastSeenAt ?? null,
+            hardwareVersion: raw.hardwareVersion ?? raw.hardware_version,
+            firmwareVersion: raw.firmwareVersion ?? raw.firmware_version,
+            deviceType: raw.deviceType ?? raw.device_type,
+            mqttClientId: raw.mqttClientId ?? raw.mqtt_client_id,
+            mqttTopic: raw.mqttTopic ?? raw.mqtt_topic,
+            tankAssignment: raw.tankAssignment ?? raw.tank_assignment,
+          }));
+          this.lastAuthoritativeSyncOk = true;
+          deviceRegistry.reconcileRemoteDevices(normalized);
+          return normalized;
         }
       } catch {
-        // Offline / GitHub Pages fallback
+        this.lastAuthoritativeSyncOk = false;
       }
     }
 
@@ -1830,20 +1811,16 @@ export class ApiClient {
     const trainNumber = (data.trainNumber || data.train_number || '').trim();
     const coachNumber = (data.coachNumber || data.coach_number || '').trim();
     const name = data.name.trim();
-
-    // Record into persistent registry
-    const registered = deviceRegistry.registerDevice(uid, {
-      name,
-      trainNumber: trainNumber || null,
-      coachNumber: coachNumber || null,
-      hardwareModel: data.deviceType || data.hardwareVersion || data.hardware_version || 'Cellular WLI Unit',
-    });
+    const base = resolveApiBase();
+    if (!base) {
+      throw new Error('No backend API URL configured.');
+    }
 
     const payload = {
       uid,
       name,
-      train_number: trainNumber,
-      coach_number: coachNumber,
+      train_number: trainNumber || 'UNASSIGNED',
+      coach_number: coachNumber || 'UNASSIGNED',
       hardware_version: data.hardwareVersion || data.hardware_version || 'Standard WLI Node',
       firmware_version: data.firmwareVersion || data.firmware_version || '2.0.0',
       device_type: data.deviceType || data.device_type || 'Cellular WLI Unit',
@@ -1852,9 +1829,21 @@ export class ApiClient {
       mqtt_topic: data.mqttTopic || data.mqtt_topic || `panorama/telemetry/${uid}`,
       tank_assignment: data.tankAssignment || data.tank_assignment || 'BOTH',
       description: data.description || '',
-      status: data.status || 'AVAILABLE',
+      status: data.status || (trainNumber && coachNumber ? 'ENGAGED' : 'AVAILABLE'),
     };
 
+    const created = await this.request<Device>('/devices', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    deviceRegistry.registerDevice(uid, {
+      name,
+      trainNumber: trainNumber || null,
+      coachNumber: coachNumber || null,
+      hardwareModel: data.deviceType || data.hardwareVersion || data.hardware_version || 'Cellular WLI Unit',
+    });
+    this.lastAuthoritativeSyncOk = true;
     try {
       mqttService.publishSyncEvent({
         event_type: 'DEVICE_CREATED',
@@ -1864,48 +1853,24 @@ export class ApiClient {
         payload: { ...payload, uid, id: uid },
       });
     } catch {}
-
-    if (API_BASE && !this.isRemoteUnreachable()) {
-      try {
-        return await this.request<Device>('/devices', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        });
-      } catch (err) {
-        // Fall back to locally registered device if remote fails
-      }
-    }
-    return {
-      id: registered.uid,
-        uid: registered.uid,
-        name: registered.name,
-        trainNumber: registered.trainNumber || '',
-        coachNumber: registered.coachNumber || '',
-        train_number: registered.trainNumber || '',
-        coach_number: registered.coachNumber || '',
-        hardwareVersion: registered.hardwareModel,
-        hardware_version: registered.hardwareModel,
-        deviceType: payload.device_type,
-        protocol: payload.protocol,
-        mqttClientId: payload.mqtt_client_id,
-        mqttTopic: payload.mqtt_topic,
-        tankAssignment: payload.tank_assignment,
-        description: payload.description,
-        status: payload.status,
-        firmwareVersion: payload.firmware_version,
-        isOnline: registered.isOnline,
-        lastSeenAt: registered.lastSeen,
-        batteryPercent: registered.batteryPercent ?? undefined,
-        hasActiveAlarm: false,
-    };
+    return created;
   }
 
   static async updateDevice(deviceId: string, data: Partial<DeviceCreatePayload>): Promise<Device> {
+    const base = resolveApiBase();
+    if (!base) {
+      throw new Error('No backend API URL configured.');
+    }
     const tr = data.trainNumber || data.train_number;
     const ch = data.coachNumber || data.coach_number;
-    if (tr || ch) {
+    const updated = await this.request<Device>(`/devices/${encodeURIComponent(deviceId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    if (tr !== undefined || ch !== undefined) {
       deviceRegistry.assignDevice(deviceId, tr || '', ch || '');
     }
+    this.lastAuthoritativeSyncOk = true;
     try {
       mqttService.publishSyncEvent({
         event_type: 'DEVICE_UPDATED',
@@ -1915,33 +1880,17 @@ export class ApiClient {
         payload: { deviceId, uid: deviceId, trainNumber: tr, coachNumber: ch, ...data },
       });
     } catch {}
-    try {
-      return await this.request<Device>(`/devices/${deviceId}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-      });
-    } catch {
-      const dev = deviceRegistry.getDeviceByUid(deviceId);
-      return {
-        id: deviceId,
-        uid: deviceId,
-        name: dev?.name || `Node (${deviceId})`,
-        trainNumber: dev?.trainNumber || '',
-        coachNumber: dev?.coachNumber || '',
-        train_number: dev?.trainNumber || '',
-        coach_number: dev?.coachNumber || '',
-        hardwareVersion: dev?.hardwareModel || 'Cellular WLI Unit',
-        firmwareVersion: '2.0.0',
-        isOnline: dev?.isOnline ?? false,
-        lastSeenAt: dev?.lastSeen || null,
-        batteryPercent: dev?.batteryPercent ?? undefined,
-        hasActiveAlarm: false,
-      };
-    }
+    return updated;
   }
 
   static async deleteDevice(deviceId: string): Promise<any> {
+    const base = resolveApiBase();
+    if (!base) {
+      throw new Error('No backend API URL configured.');
+    }
+    const res = await this.request(`/devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' });
     deviceRegistry.deleteDevice(deviceId);
+    this.lastAuthoritativeSyncOk = true;
     try {
       mqttService.publishSyncEvent({
         event_type: 'DEVICE_DELETED',
@@ -1951,15 +1900,7 @@ export class ApiClient {
         payload: { id: deviceId, uid: deviceId },
       });
     } catch {}
-    if (API_BASE) {
-      try {
-        return await this.request(`/devices/${deviceId}`, { method: 'DELETE' });
-      } catch (err) {
-        // If device was only registered client-side or offline
-        return { success: true, id: deviceId };
-      }
-    }
-    return { success: true, id: deviceId };
+    return res;
   }
 
   static async fetchDeviceDiagnostics(deviceId: string): Promise<DeviceDiagnostics> {
@@ -2014,7 +1955,7 @@ export class ApiClient {
       limit = 25,
     } = params;
 
-    if (API_BASE && !this.isRemoteUnreachable()) {
+    if (resolveApiBase() && !this.isRemoteUnreachable()) {
       try {
         const queryParams = new URLSearchParams();
         if (search) queryParams.append('search', search);
@@ -2127,7 +2068,7 @@ export class ApiClient {
       limit = 25,
     } = params;
 
-    if (API_BASE && !this.isRemoteUnreachable()) {
+    if (resolveApiBase() && !this.isRemoteUnreachable()) {
       try {
         const queryParams = new URLSearchParams();
         if (search) queryParams.append('search', search);
@@ -2282,7 +2223,7 @@ export class ApiClient {
     } = params;
 
     // Check if remote export is available
-    if (API_BASE && !this.isRemoteUnreachable()) {
+    if (resolveApiBase() && !this.isRemoteUnreachable()) {
       try {
         const queryParams = new URLSearchParams();
         if (search) queryParams.append('search', search);
@@ -2676,14 +2617,24 @@ export class ApiClient {
    * Automatically updates the local offline cache.
    */
   static async getLatestMqttTopics(limit = 500): Promise<{ count: number; total: number; topics: MqttLatestTopicRecord[] }> {
-    try {
-      const res: any = await this.request(`/mqtt/topics/latest?limit=${limit}`);
-      if (res && Array.isArray(res.topics)) {
-        localMqttStore.saveBatch(res.topics);
-        return res;
+    const base = resolveApiBase();
+    if (base && !this.isRemoteUnreachable()) {
+      try {
+        const res: any = await this.request(`/mqtt/topics/latest?limit=${limit}`);
+        if (res && Array.isArray(res.topics)) {
+          if (res.topics.length > 0) {
+            localMqttStore.saveBatch(res.topics);
+          }
+          const merged = localMqttStore.getAll();
+          return {
+            count: merged.length,
+            total: Math.max(Number(res.total) || 0, merged.length),
+            topics: merged,
+          };
+        }
+      } catch (err) {
+        Logger.warn('MQTT', 'ApiClient', 'Failed to fetch latest MQTT topics from server, using local cache', 'getLatestMqttTopics', err);
       }
-    } catch (err) {
-      Logger.warn('MQTT', 'ApiClient', 'Failed to fetch latest MQTT topics from server, using local cache', 'getLatestMqttTopics', err);
     }
     const cached = localMqttStore.getAll();
     return { count: cached.length, total: cached.length, topics: cached };

@@ -30,7 +30,7 @@ class Device(Base):
     updated_at = Column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
     # Relationships (keep telemetry_readings lazy="select" so Device/Train queries never OOM by eagerly loading full history)
-    coach = relationship("Coach", primaryjoin="foreign(Device.uid) == Coach.device_uid", uselist=False, lazy="selectin")
+    coach = relationship("Coach", primaryjoin="foreign(Device.uid) == Coach.device_uid", uselist=False, lazy="selectin", viewonly=True)
     tanks = relationship("Tank", back_populates="device", cascade="all, delete-orphan", lazy="selectin")
     telemetry_readings = relationship("TelemetryReading", back_populates="device", cascade="all, delete-orphan", lazy="select")
     alarms = relationship("Alarm", back_populates="device", cascade="all, delete-orphan", lazy="selectin")

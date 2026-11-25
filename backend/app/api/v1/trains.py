@@ -72,6 +72,17 @@ def _normalize_region_input(raw_region: str) -> str:
     return map_zone_to_region(cleaned, fallback="EAST")
 
 
+def _is_device_live(d: Device, timeout_s: int = 120) -> bool:
+    if not getattr(d, "is_online", False):
+        return False
+    ts = getattr(d, "last_seen_at", None)
+    if not ts:
+        return False
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return (utc_now() - ts).total_seconds() <= timeout_s
+
+
 def _safe_json_loads(raw: Optional[str], default: Any) -> Any:
     if not raw:
         return default
@@ -274,7 +285,8 @@ async def get_regions_summary(db: AsyncSession = Depends(get_db)):
             devs = train_devices.get(train_no, [])
             meta = _build_train_meta(train_no, db_trains.get(train_no))
             if meta.get("region", "NORTH") == reg_key:
-                is_online = any(d.is_online for d in devs) if devs else False
+                is_online = any(_is_device_live(d) for d in devs) if devs else False
+                ever_seen = any(getattr(d, "last_seen_at", None) is not None for d in devs)
                 coaches_list = meta.get("coach_composition") or []
                 if isinstance(coaches_list, list) and len(coaches_list) > 0:
                     coaches_count = len(coaches_list)
@@ -309,7 +321,7 @@ async def get_regions_summary(db: AsyncSession = Depends(get_db)):
                     "coaches_count": coaches_count,
                     "tanks_count": tank_count,
                     "is_online": is_online,
-                    "connectivity_status": "ONLINE" if is_online else ("OFFLINE" if devs else "NEVER_CONNECTED"),
+                    "connectivity_status": "ONLINE" if is_online else ("OFFLINE" if ever_seen else "NEVER_CONNECTED"),
                     "status": train_status,
                     "active_alarms": train_alarm_count,
                     "source_station": meta.get("source_station"),
@@ -375,7 +387,7 @@ async def list_trains(
             continue
 
         devs = train_devices.get(train_no, [])
-        is_online = any(d.is_online for d in devs) if devs else False
+        is_online = any(_is_device_live(d) for d in devs) if devs else False
 
         coaches_list = meta.get("coach_composition") or []
         if isinstance(coaches_list, list) and len(coaches_list) > 0:
@@ -385,7 +397,8 @@ async def list_trains(
         device_tank_sum = sum(len(d.tanks) for d in devs) if devs else 0
         tanks_count = max(coaches_count * 2, device_tank_sum)
 
-        if devs:
+        ever_seen = any(getattr(d, "last_seen_at", None) is not None for d in devs)
+        if ever_seen:
             connectivity_status = "ONLINE" if is_online else "OFFLINE"
         else:
             connectivity_status = "NEVER_CONNECTED"
@@ -443,7 +456,21 @@ async def get_train_consist(train_number: str, db: AsyncSession = Depends(get_db
     telemetry_repo = TelemetryRepository(db)
 
     comp = _safe_json_loads(db_train.coach_configuration_json, [])
+    if not comp:
+        db_coaches = (
+            await db.execute(
+                select(Coach)
+                .where(Coach.train_number == train_number, Coach.is_deleted == False)
+                .order_by(Coach.position.asc())
+            )
+        ).scalars().all()
+        if db_coaches:
+            comp = [
+                {"coach_number": c.coach_number, "device_uid": c.device_uid}
+                for c in db_coaches
+            ]
     devices_by_coach = {d.coach_number.strip().upper(): d for d in devices if d.coach_number}
+    devices_by_uid = {d.uid.strip().upper(): d for d in devices if d.uid}
 
     coaches_list = []
     total_tanks = 0
@@ -455,9 +482,12 @@ async def get_train_consist(train_number: str, db: AsyncSession = Depends(get_db
             cn = (c.get("coach_number") or "").strip().upper()
             if not cn:
                 continue
-            d = devices_by_coach.get(cn)
+            d = devices_by_coach.get(cn) or (
+                devices_by_uid.get(str(c.get("device_uid")).strip().upper()) if c.get("device_uid") else None
+            )
             if d:
-                if d.is_online:
+                d_live = _is_device_live(d)
+                if d_live:
                     any_online = True
                 coach_tanks = []
                 for t in d.tanks:
@@ -493,7 +523,7 @@ async def get_train_consist(train_number: str, db: AsyncSession = Depends(get_db
                 coaches_list.append(CoachConsistItem(
                     coach_number=cn,
                     device_uid=d.uid,
-                    is_online=d.is_online,
+                    is_online=d_live,
                     hardware_version=d.hardware_version or "Standard WLI Node",
                     tanks=coach_tanks
                 ))
@@ -544,7 +574,8 @@ async def get_train_consist(train_number: str, db: AsyncSession = Depends(get_db
                 ))
     else:
         for d in devices:
-            if d.is_online:
+            d_live = _is_device_live(d)
+            if d_live:
                 any_online = True
             coach_tanks = []
             for t in d.tanks:
@@ -580,7 +611,7 @@ async def get_train_consist(train_number: str, db: AsyncSession = Depends(get_db
             coaches_list.append(CoachConsistItem(
                 coach_number=d.coach_number,
                 device_uid=d.uid,
-                is_online=d.is_online,
+                is_online=d_live,
                 hardware_version=d.hardware_version or "Standard WLI Node",
                 tanks=coach_tanks
             ))
@@ -1170,6 +1201,7 @@ async def add_coach_to_train(
             device.coach_number = c_clean
             device.status = "ENGAGED"
             device.updated_at = utc_now()
+        await device_repo.sync_exclusive_assignment(uid, tr_clean, c_clean)
 
         # Configure Dual Tanks for assigned device
         h1 = data.tank_1_height_cm or data.tank_height_cm or 50.0
@@ -1554,6 +1586,11 @@ async def update_coach_details(
                         height_cm=h2,
                         tank_type=(data.tank_2_geometry or "CYLINDRICAL").upper(),
                     )
+            dev_repo = DeviceRepository(db)
+            if new_uid:
+                await dev_repo.sync_exclusive_assignment(new_uid, tr_clean, c_clean)
+            elif current_uid:
+                await dev_repo.sync_exclusive_assignment(current_uid, "UNASSIGNED", "UNASSIGNED")
 
     # Update relational coach entity
     coach_repo = CoachRepository(db)

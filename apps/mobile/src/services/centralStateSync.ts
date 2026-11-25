@@ -13,7 +13,7 @@
  * - Graceful degradation if remote sync endpoint is temporarily waking or offline.
  */
 
-import { DEFAULT_HTTPS_RECEIVER_HEALTH_URL } from '../config/apiConfig';
+import { resolveApiBaseUrl } from '../config/apiConfig';
 
 export type SyncNamespace = 'fleet' | 'devices' | 'settings' | 'users';
 export type CentralSyncStatus = 'CONNECTED' | 'CONNECTING' | 'POLLING' | 'OFFLINE';
@@ -42,14 +42,15 @@ export function resolveCentralSyncBaseUrl(): string {
     if (typeof override === 'string' && override.trim()) {
       return override.trim().replace(/\/+$/, '');
     }
-    const host = window.location?.hostname || '';
-    const port = window.location?.port || '';
-    // Local development against HTTPS_Server directly on same origin
-    if ((host === 'localhost' || host === '127.0.0.1') && (port === '8000' || port === '8443')) {
-      return window.location.origin.replace(/\/+$/, '');
-    }
   }
-  return DEFAULT_HTTPS_RECEIVER_HEALTH_URL.replace(/\/api\/health$/i, '');
+  const apiBase = resolveApiBaseUrl();
+  if (apiBase) {
+    return apiBase.replace(/\/api\/v1\/?$/i, '').replace(/\/+$/, '');
+  }
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin.replace(/\/+$/, '');
+  }
+  return '';
 }
 
 class CentralStateSyncService {

@@ -19,6 +19,7 @@ from app.core.database import engine, init_db, get_db
 from app.mqtt.client import mqtt_service
 from app.services.outbox_service import outbox_worker_loop
 from app.api.v1 import api_router, trains as trains_v1, mqtt_topics as mqtt_topics_v1
+from app.api import sync as sync_compat
 from app.api.v1.health import health_check
 from app.api.v1.ws import websocket_live_stream
 
@@ -89,6 +90,9 @@ app = FastAPI(
 _explicit_origins = [o for o in settings.CORS_ORIGINS if o != "*"]
 _explicit_origins.extend([
     "https://soumikbur.github.io",
+    "https://localhost",
+    "http://localhost",
+    "capacitor://localhost",
     "http://localhost:3000",
     "http://localhost:5173",
     "http://localhost:8000",
@@ -134,6 +138,7 @@ async def normalize_api_trailing_slash(request: Request, call_next):
 
 # Mount API Routers
 app.include_router(api_router)
+app.include_router(sync_compat.router)
 app.include_router(trains_v1.router, prefix="/api", include_in_schema=False)
 app.include_router(mqtt_topics_v1.router, prefix="/api", include_in_schema=False)
 

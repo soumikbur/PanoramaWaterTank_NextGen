@@ -214,64 +214,70 @@ class MqttService:
                 telemetry_repo = TelemetryRepository(session)
                 alarm_repo = AlarmRepository(session)
 
-                # Validate target train exists before associating telemetry to prevent phantom/deleted train recreation
-                clean_trno = (payload.trno or "").strip()
-                train_row = None
-                if clean_trno and clean_trno.upper() != "UNASSIGNED":
-                    train_row = (
+                clean_trno = str(payload.trno or "").strip()
+                clean_chno = str(payload.chno or "").strip()
+                canonical_uid = get_canonical_uid(payload.uid)
+                is_hw_uid = is_genuine_hardware_uid(payload.uid)
+                now_utc = datetime.now(timezone.utc)
+
+                configured_train = None
+                if clean_trno:
+                    configured_train = (
                         await session.execute(
                             select(Train).where(Train.train_number == clean_trno, Train.is_deleted == False)
                         )
                     ).scalar_one_or_none()
 
-                # Check if clean_trno is a factory default dummy string
-                is_dummy_train = clean_trno.lower() in ("abcd123", "pano123", "test", "demo", "00000", "default", "none") or not clean_trno
+                is_configured_coach_fixture = (
+                    not is_hw_uid
+                    and configured_train is not None
+                    and bool(clean_chno)
+                    and canonical_uid.upper() == f"PANORAMA-{clean_trno}-{clean_chno}".upper()
+                )
 
-                if clean_trno and clean_trno.upper() != "UNASSIGNED" and not is_dummy_train and train_row is None:
-                    # Telemetry explicitly claims a deleted or unconfigured train: reject train assignment and do not mark online
-                    existing_dev = await device_repo.get_by_uid(payload.uid)
-                    if existing_dev:
-                        existing_dev.train_number = "UNASSIGNED"
-                        existing_dev.coach_number = "UNASSIGNED"
-                        existing_dev.is_online = False
-                        await session.commit()
-                    logger.info(
-                        "Ignoring telemetry train assignment for unconfigured or deleted train '%s' (uid=%s)",
-                        clean_trno,
-                        payload.uid,
-                    )
+                if not is_hw_uid and not is_configured_coach_fixture:
+                    logger.warning("Ignoring unverified or non-hardware UID '%s' from MQTT telemetry.", payload.uid)
                     return
 
-                if train_row is None:
-                    # Unassigned device reporting telemetry without train claim or with factory default strings:
-                    # Ingest and keep device ONLINE as DISCOVERED / AVAILABLE without creating phantom trains
-                    device = await device_repo.get_by_uid(payload.uid)
-                    if not device:
-                        if not is_genuine_hardware_uid(payload.uid):
-                            logger.warning("Ignoring unverified or non-hardware UID '%s' from MQTT telemetry.", payload.uid)
-                            return
-                        device = await device_repo.create_or_update(
-                            uid=payload.uid,
-                            train_number="UNASSIGNED",
-                            coach_number="UNASSIGNED",
-                            name=f"WLI Node ({payload.uid[-6:]})",
-                            status="AVAILABLE"
-                        )
-                        logger.info(f"Discovered new edge hardware node '{payload.uid}' via MQTT.")
-                    else:
-                        device.train_number = "UNASSIGNED"
-                        device.coach_number = "UNASSIGNED"
-                        device.is_online = True
-                        device.last_seen_at = datetime.now(timezone.utc)
-                        await session.flush()
-                else:
-                    # 1. Update/Create Device attached to verified configured train
+                device = await device_repo.get_by_uid(canonical_uid)
+
+                if not device:
+                    # Physical hardware starts UNASSIGNED until an administrator maps it;
+                    # configured train coach fixtures bind to their active configured train.
                     device = await device_repo.create_or_update(
-                        uid=payload.uid,
-                        train_number=clean_trno,
-                        coach_number=payload.chno or "UNASSIGNED",
-                        status="ENGAGED"
+                        uid=canonical_uid,
+                        train_number=clean_trno if is_configured_coach_fixture else "UNASSIGNED",
+                        coach_number=clean_chno if is_configured_coach_fixture else "UNASSIGNED",
+                        name=(
+                            f"Coach {clean_chno} Controller"
+                            if is_configured_coach_fixture
+                            else f"WLI Node ({canonical_uid[-6:]})"
+                        ),
+                        status="ENGAGED" if is_configured_coach_fixture else "AVAILABLE",
+                        is_online=True,
+                        last_seen_at=now_utc,
                     )
+                    logger.info(f"Discovered new edge hardware node '{canonical_uid}' via MQTT.")
+                else:
+                    # Preserve administrator consist mapping; only clear if mapped train was deleted
+                    assigned_tr = (device.train_number or "").strip()
+                    if assigned_tr and assigned_tr.upper() != "UNASSIGNED":
+                        mapped_train = (
+                            await session.execute(
+                                select(Train).where(Train.train_number == assigned_tr, Train.is_deleted == False)
+                            )
+                        ).scalar_one_or_none()
+                        if mapped_train is None:
+                            device.train_number = "UNASSIGNED"
+                            device.coach_number = "UNASSIGNED"
+                            device.status = "AVAILABLE"
+                        else:
+                            device.status = "ENGAGED"
+                    else:
+                        device.status = "AVAILABLE"
+                    device.is_online = True
+                    device.last_seen_at = now_utc
+                    await session.flush()
 
                 # 2. Fetch Primary Tank
                 primary_tank = await tank_repo.get_by_device_and_index(device.id, 1)

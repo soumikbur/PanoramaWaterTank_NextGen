@@ -136,54 +136,7 @@ export class WebSocketService {
     if (typeof window === 'undefined' || typeof fetch === 'undefined') return true;
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
 
-    // Static hosting guard: if on github.io or pages.dev without custom backend override
-    if (typeof window !== 'undefined' && window.location && window.location.hostname) {
-      const host = window.location.hostname;
-      if (host.endsWith('github.io') || host.endsWith('pages.dev')) {
-        const hasCustom = typeof window.localStorage !== 'undefined' && Boolean(window.localStorage.getItem('panorama_backend_url'));
-        if (!hasCustom) {
-          try {
-            const statusRes = await fetch('./backend-status.json', { cache: 'no-store' });
-            if (statusRes.ok) {
-              const statusData = await statusRes.json();
-              if (statusData && statusData.available === false) {
-                // Verify the independent HTTPS Receiver health endpoint (`GET /api/health`) rather than reporting `/api/v1/health` offline
-                const httpsHealthUrl = resolveHttpsReceiverHealthUrl(statusData.httpsHealthUrl || wsUrl);
-                try {
-                  const hc = typeof AbortController !== 'undefined' ? new AbortController() : null;
-                  const ht = hc ? setTimeout(() => hc.abort(), 5000) : null;
-                  const hr = await fetch(httpsHealthUrl, {
-                    method: 'GET',
-                    headers: { Accept: 'application/json' },
-                    signal: hc?.signal,
-                    cache: 'no-store',
-                  });
-                  if (ht) clearTimeout(ht);
-                  if (hr.ok) {
-                    this.httpsReceiverMode = true;
-                    if (!this.standbyLogged) {
-                      this.standbyLogged = true;
-                      Logger.info(
-                        'WEBSOCKET',
-                        'WebSocketService',
-                        `HTTPS Receiver backend verified online at ${httpsHealthUrl} (HTTP ${hr.status}). Real-time telemetry is running via HiveMQ MQTT.`
-                      );
-                    }
-                    return false;
-                  }
-                } catch {
-                  // HTTPS receiver unreachable; fall through to standard standby log
-                }
-                this.httpsReceiverMode = false;
-                return false;
-              }
-            }
-          } catch {
-            return false;
-          }
-        }
-      }
-    }
+    this.httpsReceiverMode = false;
 
     const healthUrl = getHttpHealthUrl(wsUrl);
     try {

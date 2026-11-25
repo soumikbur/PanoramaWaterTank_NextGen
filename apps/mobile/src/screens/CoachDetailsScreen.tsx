@@ -78,31 +78,43 @@ export const CoachDetailsScreen: React.FC = () => {
   const coachTypes = ['Passenger', 'AC Chair Car', 'AC 3-Tier', 'AC 2-Tier', 'Sleeper Class', 'Executive AC'];
   const coachType = coachTypes[(Math.abs(coachIndex - 1)) % coachTypes.length];
 
-  // Assigned device lookup or deterministic consist capability
+  // Assigned device lookup matching train+coach first to avoid cross-train collisions
   const matchingDevice: any = useMemo(() => {
-    return (
-      managedDevices?.find(
+    const consistCoachUid = activeConsist?.coaches
+      ?.find((c) => c.coach_number?.trim().toUpperCase() === coachNum)
+      ?.device_uid?.trim()
+      ?.toUpperCase();
+    const matchList = (list: any[]) =>
+      list?.find(
         (d) =>
-          (d.coachNumber && d.coachNumber.toUpperCase() === coachNum) ||
-          (d.trainNumber === trainNum && d.coachNumber === coachNum)
+          consistCoachUid && d.uid && d.uid.trim().toUpperCase() === consistCoachUid
       ) ||
-      devices.find(
+      list?.find(
         (d) =>
-          (d.coachNumber && d.coachNumber.toUpperCase() === coachNum) ||
-          (d.trainNumber === trainNum && d.coachNumber === coachNum)
-      )
-    );
-  }, [managedDevices, devices, coachNum, trainNum]);
+          d.trainNumber?.trim() === trainNum &&
+          d.coachNumber?.trim().toUpperCase() === coachNum
+      ) ||
+      list?.find(
+        (d) => !d.trainNumber && d.coachNumber?.trim().toUpperCase() === coachNum
+      );
+    return matchList(managedDevices) || matchList(devices);
+  }, [managedDevices, devices, activeConsist, coachNum, trainNum]);
 
-  const timeoutMs = (telemetryTimeoutSeconds || 120) * 1000;
+  const timeoutMs = (telemetryTimeoutSeconds || 180) * 1000;
   const now = Date.now();
-  const isMqttConnected = mqttConnectionStatus !== 'DISCONNECTED' && connectionStatus !== 'DISCONNECTED';
+  const isMqttConnected =
+    mqttConnectionStatus !== 'DISCONNECTED' &&
+    mqttConnectionStatus !== 'CONNECTION_ERROR' &&
+    mqttConnectionStatus !== 'SUBSCRIPTION_ERROR';
 
+  const mappedUid = matchingDevice?.uid?.trim()?.toUpperCase() || '';
   const hasLiveTelemetry = Boolean(
     liveTelemetry &&
-    isMqttConnected &&
-    !liveTelemetry.isStale &&
-    liveTelemetry.chno.toUpperCase() === coachNum
+      isMqttConnected &&
+      !liveTelemetry.isStale &&
+      (mappedUid
+        ? liveTelemetry.uid?.trim().toUpperCase() === mappedUid
+        : liveTelemetry.trno?.trim() === trainNum && liveTelemetry.chno?.trim().toUpperCase() === coachNum)
   );
 
   const isMatchingDeviceFresh = Boolean(
@@ -111,8 +123,15 @@ export const CoachDetailsScreen: React.FC = () => {
     now - matchingDevice.lastSeenTimestamp <= timeoutMs
   );
 
-  const isOnline = Boolean(isMqttConnected && (hasLiveTelemetry || (matchingDevice?.isOnline && isMatchingDeviceFresh)));
-  const deviceId = (hasLiveTelemetry && liveTelemetry?.uid) || matchingDevice?.uid || (matchingDevice?.deviceUid) || 'Not Mapped';
+  const isOnline = Boolean(
+    isMqttConnected && (hasLiveTelemetry || (matchingDevice?.isOnline && isMatchingDeviceFresh))
+  );
+  const deviceId =
+    (hasLiveTelemetry && liveTelemetry?.uid) ||
+    matchingDevice?.uid ||
+    matchingDevice?.deviceUid ||
+    activeConsist?.coaches?.find((c) => c.coach_number?.trim().toUpperCase() === coachNum)?.device_uid ||
+    'Not Mapped';
   const batteryPercent = hasLiveTelemetry && liveTelemetry ? liveTelemetry.bat : (matchingDevice?.batteryPercent ?? null);
   const isBatteryLow = batteryPercent != null && batteryPercent < 40;
 
@@ -121,16 +140,20 @@ export const CoachDetailsScreen: React.FC = () => {
   const configuredMaxCapacity = (activeConsist?.train_number === trainNum && activeConsist?.tank_capacity_liters) || matchedConfiguredTrain?.tank_capacity_liters || 20.0;
 
   // Dual Tank Telemetry values: formula (heightCm / configuredMaxHeight) * 100
+  const fallbackLevel1 = matchingDevice?.tank1Level ?? matchingDevice?.primaryLevel ?? null;
+  const fallbackHeight1 = matchingDevice?.tank1HeightCm ?? (fallbackLevel1 != null ? (fallbackLevel1 / 100) * configuredMaxHeight : null);
   const arrivalPercent = hasLiveTelemetry && liveTelemetry && typeof liveTelemetry.cm1 === 'number' && configuredMaxHeight > 0
     ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm1 / configuredMaxHeight) * 100)).toFixed(1))
-    : (matchingDevice?.primaryLevel ?? null);
-  const arrivalHeight = hasLiveTelemetry && liveTelemetry ? liveTelemetry.cm1 : (arrivalPercent != null ? (arrivalPercent / 100) * configuredMaxHeight : null);
+    : fallbackLevel1;
+  const arrivalHeight = hasLiveTelemetry && liveTelemetry ? liveTelemetry.cm1 : fallbackHeight1;
   const arrivalVolume = arrivalPercent != null ? Number(((arrivalPercent / 100) * configuredMaxCapacity).toFixed(1)) : null;
 
+  const fallbackLevel2 = matchingDevice?.tank2Level ?? matchingDevice?.secondaryLevel ?? null;
+  const fallbackHeight2 = matchingDevice?.tank2HeightCm ?? (fallbackLevel2 != null ? (fallbackLevel2 / 100) * configuredMaxHeight : null);
   const departurePercent = hasLiveTelemetry && liveTelemetry && typeof liveTelemetry.cm2 === 'number' && configuredMaxHeight > 0
     ? Number(Math.min(100, Math.max(0, (liveTelemetry.cm2 / configuredMaxHeight) * 100)).toFixed(1))
-    : (matchingDevice?.secondaryLevel ?? null);
-  const departureHeight = hasLiveTelemetry && liveTelemetry ? liveTelemetry.cm2 : (departurePercent != null ? (departurePercent / 100) * configuredMaxHeight : null);
+    : fallbackLevel2;
+  const departureHeight = hasLiveTelemetry && liveTelemetry ? liveTelemetry.cm2 : fallbackHeight2;
   const departureVolume = departurePercent != null ? Number(((departurePercent / 100) * configuredMaxCapacity).toFixed(1)) : null;
 
   const availableCoaches = useMemo(() => {
@@ -683,7 +706,7 @@ export const CoachDetailsScreen: React.FC = () => {
           </div>
           <div style={{ fontSize: '11px', color: '#64748B', display: 'flex', alignItems: 'center', gap: '5px' }}>
             <Clock size={12} />
-            <span>Telemetry Stream: <strong>{isOnline && hasLiveTelemetry ? 'Active MQTT Stream' : 'Awaiting Link'}</strong></span>
+            <span>Telemetry Stream: <strong>{isOnline ? 'Active MQTT Stream' : 'Awaiting Link'}</strong></span>
           </div>
         </div>
 
@@ -703,15 +726,15 @@ export const CoachDetailsScreen: React.FC = () => {
             tankIndex={1}
             tankName="Arrival Side (Tank 1)"
             sensorLabel="Sensor 1"
-            capacityLiters={500.0}
-            maxHeightCm={150.0}
+            capacityLiters={configuredMaxCapacity}
+            maxHeightCm={configuredMaxHeight}
             fillPercent={arrivalPercent}
             waterHeightCm={arrivalHeight}
             volumeLiters={arrivalVolume}
             isOnline={isOnline}
             hasTelemetry={arrivalPercent != null}
             isStale={false}
-            lastUpdated={new Date().toISOString()}
+            lastUpdated={matchingDevice?.lastSeenTimestamp ? new Date(matchingDevice.lastSeenTimestamp).toISOString() : new Date().toISOString()}
             batteryPercent={batteryPercent}
             deviceId={deviceId}
             valveState={arrivalPercent != null && arrivalPercent < 15 ? 'ALERT' : 'NORMAL'}
@@ -723,15 +746,15 @@ export const CoachDetailsScreen: React.FC = () => {
             tankIndex={2}
             tankName="Departure Side (Tank 2)"
             sensorLabel="Sensor 2"
-            capacityLiters={500.0}
-            maxHeightCm={150.0}
+            capacityLiters={configuredMaxCapacity}
+            maxHeightCm={configuredMaxHeight}
             fillPercent={departurePercent}
             waterHeightCm={departureHeight}
             volumeLiters={departureVolume}
             isOnline={isOnline}
             hasTelemetry={departurePercent != null}
             isStale={false}
-            lastUpdated={new Date().toISOString()}
+            lastUpdated={matchingDevice?.lastSeenTimestamp ? new Date(matchingDevice.lastSeenTimestamp).toISOString() : new Date().toISOString()}
             batteryPercent={batteryPercent}
             deviceId={deviceId}
             valveState={departurePercent != null && departurePercent < 15 ? 'ALERT' : 'NORMAL'}
@@ -743,14 +766,17 @@ export const CoachDetailsScreen: React.FC = () => {
           SECTION E: TRAIN LOCATION & SATELLITE GPS TRACKING (MAP INTEGRATION)
           ========================================================================= */}
       <CoachMiniMap
-        latitude={liveTelemetry?.lat}
-        longitude={liveTelemetry?.long}
-        speedKmh={liveTelemetry?.speed}
+        latitude={hasLiveTelemetry ? liveTelemetry?.lat : (matchingDevice?.latitude ?? null)}
+        longitude={hasLiveTelemetry ? liveTelemetry?.long : (matchingDevice?.longitude ?? null)}
+        speedKmh={hasLiveTelemetry ? liveTelemetry?.speed : (matchingDevice?.speedKmh ?? null)}
         trainNumber={trainNum}
         coachNumber={coachNum}
         isOnline={isOnline}
-        hasGpsFix={Boolean(liveTelemetry && liveTelemetry.gpsFix !== false && liveTelemetry.lat != null)}
-        lastUpdate={liveTelemetry?.time}
+        hasGpsFix={Boolean(
+          (hasLiveTelemetry && liveTelemetry && liveTelemetry.gpsFix !== false && liveTelemetry.lat != null) ||
+          (isOnline && matchingDevice?.latitude != null && matchingDevice?.longitude != null)
+        )}
+        lastUpdate={hasLiveTelemetry ? liveTelemetry?.time : matchingDevice?.lastSeen}
         onOpenFullMap={() => setActiveScreen('location')}
       />
 

@@ -26,6 +26,19 @@ REGION_CONFIG = {
     "CENTRAL": {"name": "Central Railway", "code": "CR"},
 }
 
+import re as _re
+_HEX_24_RE = _re.compile(r"^[0-9A-Fa-f]{24}$")
+_TEST_UID_RE = _re.compile(r"TEST|AUDIT|DUMMY|DEMO|SEED|PLACEHOLDER|ROGUE|MOCK", _re.I)
+
+
+def is_genuine_hardware_uid(uid: Optional[str]) -> bool:
+    if not uid or not isinstance(uid, str):
+        return False
+    clean = uid.strip()
+    if _TEST_UID_RE.search(clean):
+        return False
+    return bool(_HEX_24_RE.match(clean))
+
 ZONE_TO_REGION = {
     "NR": "NORTH", "NCR": "NORTH", "NER": "NORTH",
     "SR": "SOUTH", "SCR": "SOUTH", "SWR": "SOUTH",
@@ -218,6 +231,14 @@ class SharedStateService:
                     created_at TEXT NOT NULL,
                     resolved_at TEXT
                 );
+
+                CREATE TABLE IF NOT EXISTS mqtt_latest_topics (
+                    topic TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL,
+                    qos INTEGER DEFAULT 0,
+                    retained INTEGER DEFAULT 0,
+                    received_at TEXT NOT NULL
+                );
                 """
             )
             conn.commit()
@@ -246,6 +267,18 @@ class SharedStateService:
             now_iso = datetime.now(timezone.utc).isoformat()
             baseline_trains = [
                 {
+                    "train_number": "15120",
+                    "name": "Banaras Janta Express",
+                    "region": "NORTH",
+                    "railway_zone": "NR",
+                    "train_type": "Mail/Express",
+                    "source_station": "Dehradoon",
+                    "source_code": "DDN",
+                    "destination_station": "Banaras",
+                    "destination_code": "BNRS",
+                    "coaches": ["SLRD", "GEN", "H1", "A2", "A1", "B2", "B1", "M2", "M1", "S3", "S2", "S1", "LPR"],
+                },
+                {
                     "train_number": "12249",
                     "name": "Swarn Nagari Express",
                     "region": "NORTH",
@@ -258,6 +291,18 @@ class SharedStateService:
                     "coaches": ["SLRD", "D1", "D2", "C1", "C2", "B1"],
                 },
                 {
+                    "train_number": "12302",
+                    "name": "New Delhi Howrah Rajdhani Express",
+                    "region": "NORTH",
+                    "railway_zone": "NR",
+                    "train_type": "Rajdhani Express",
+                    "source_station": "New Delhi",
+                    "source_code": "NDLS",
+                    "destination_station": "Howrah Jn",
+                    "destination_code": "HWH",
+                    "coaches": ["SLRD", "S1", "S2", "B1", "B2", "A1"],
+                },
+                {
                     "train_number": "12626",
                     "name": "Kerala Express",
                     "region": "SOUTH",
@@ -267,11 +312,11 @@ class SharedStateService:
                     "source_code": "NDLS",
                     "destination_station": "Thiruvananthapuram",
                     "destination_code": "TVC",
-                    "coaches": ["SLRD", "S1", "S2", "B1", "B2", "A1"],
+                    "coaches": ["SLRD", "S1", "S2", "B1", "B2", "A1", "C1", "C2"],
                 },
                 {
                     "train_number": "12301",
-                    "name": "Howrah Rajdhani Express",
+                    "name": "Howrah - New Delhi Rajdhani Express",
                     "region": "EAST",
                     "railway_zone": "ER",
                     "train_type": "Rajdhani Express",
@@ -279,7 +324,7 @@ class SharedStateService:
                     "source_code": "HWH",
                     "destination_station": "New Delhi",
                     "destination_code": "NDLS",
-                    "coaches": ["B1", "B2", "B3", "A1", "A2", "H1"],
+                    "coaches": ["C1", "C2"],
                 },
                 {
                     "train_number": "11043",
@@ -315,14 +360,23 @@ class SharedStateService:
                 )
                 for idx, c_num in enumerate(coaches, 1):
                     c_id = f"coach-{tr['train_number']}-{c_num}"
+                    mapped_uid = (
+                        "0023004D4B42501120353332"
+                        if (tr["train_number"] == "15120" and c_num == "SLRD")
+                        else (
+                            "002F00654B42501320353332"
+                            if (tr["train_number"] == "12301" and c_num == "C2")
+                            else ""
+                        )
+                    )
                     cur.execute(
                         """
                         INSERT INTO coaches (
                             id, train_number, coach_number, coach_name, coach_category, coach_type,
                             position, device_uid, created_at, updated_at
-                        ) VALUES (?, ?, ?, ?, 'PASSENGER', 'AC_CHAIR_CAR', ?, '', ?, ?)
+                        ) VALUES (?, ?, ?, ?, 'PASSENGER', 'AC_CHAIR_CAR', ?, ?, ?, ?)
                         """,
-                        (c_id, tr["train_number"], c_num, f"Coach {c_num}", idx, now_iso, now_iso),
+                        (c_id, tr["train_number"], c_num, f"Coach {c_num}", idx, mapped_uid, now_iso, now_iso),
                     )
                     # 2 tanks per coach
                     for t_idx in (1, 2):
@@ -339,24 +393,30 @@ class SharedStateService:
                             (tank_id, tr["train_number"], c_num, t_idx, t_name, now_iso, now_iso),
                         )
 
-            # Baseline hardware device
-            cur.execute(
-                """
-                INSERT OR IGNORE INTO devices (
-                    uid, id, name, train_number, coach_number, device_type,
-                    protocol, mqtt_client_id, mqtt_topic, tank_assignment,
-                    status, is_online, last_seen_at, created_at, updated_at
-                ) VALUES (
-                    '0023004D4B42501120353332', 'dev-001', 'Shatabdi Coach B4 Water System',
-                    'UNASSIGNED', 'UNASSIGNED', 'Quectel EC200U 4G LTE',
-                    'MQTT over TLS/WSS', 'panorama-wli-0023004D4B42501120353332',
-                    'panorama/telemetry/0023004D4B42501120353332', 'BOTH',
-                    'AVAILABLE', 0, NULL, ?, ?
+            # Baseline hardware devices (Device 1 & Device 2 + standby hardware)
+            baseline_devices = [
+                ("0023004D4B42501120353332", "dev-001", "WLI Primary Node 332", "15120", "SLRD", "ENGAGED"),
+                ("002F00654B42501320353332", "dev-002", "WLI Hardware Node 002F", "12301", "C2", "ENGAGED"),
+                ("0026004D4B42501120353332", "dev-003", "Legacy Historical Node", "UNASSIGNED", "UNASSIGNED", "AVAILABLE"),
+                ("0023004D4B42501120353331", "dev-004", "WLI Node Sensor 31", "UNASSIGNED", "UNASSIGNED", "AVAILABLE"),
+                ("0027004D4B42501120353337", "dev-005", "WLI Node Sensor 37", "UNASSIGNED", "UNASSIGNED", "AVAILABLE"),
+            ]
+            for uid, d_id, d_name, d_tr, d_ch, d_status in baseline_devices:
+                cur.execute(
+                    """
+                    INSERT OR IGNORE INTO devices (
+                        uid, id, name, train_number, coach_number, device_type,
+                        protocol, mqtt_client_id, mqtt_topic, tank_assignment,
+                        status, is_online, last_seen_at, created_at, updated_at
+                    ) VALUES (
+                        ?, ?, ?, ?, ?, 'Quectel EC200U 4G LTE',
+                        'MQTT over TLS/WSS', ?, ?, 'BOTH',
+                        ?, 0, NULL, ?, ?
+                    )
+                    """,
+                    (uid, d_id, d_name, d_tr, d_ch, f"panorama-wli-{uid.lower()}", f"panorama/telemetry/{uid}", d_status, now_iso, now_iso),
                 )
-                """,
-                (now_iso, now_iso),
-            )
-            conn.commit()
+        conn.commit()
 
     def _rebuild_fleet_state_snapshot_unlocked(self, conn: sqlite3.Connection) -> None:
         """Rebuild the 'fleet' namespace JSON in shared_state from the relational tables."""
@@ -643,8 +703,13 @@ class SharedStateService:
             cur = conn.cursor()
 
             train_rows = cur.execute("SELECT * FROM trains ORDER BY train_number ASC").fetchall()
-            devices_rows = cur.execute("SELECT * FROM devices").fetchall()
-            device_online_map = {d["train_number"]: bool(d["is_online"]) for d in devices_rows if d["train_number"]}
+            devices_rows = [dict(r) for r in cur.execute("SELECT * FROM devices").fetchall() if is_genuine_hardware_uid(r["uid"])]
+            dev_by_uid = {d["uid"]: d for d in devices_rows}
+            devs_by_train: Dict[str, List[Dict[str, Any]]] = {}
+            for d in devices_rows:
+                tr = (d.get("train_number") or "").strip()
+                if tr and tr.upper() != "UNASSIGNED":
+                    devs_by_train.setdefault(tr, []).append(d)
 
             # Alarms
             alarms_rows = cur.execute("SELECT * FROM alarms WHERE status = 'ACTIVE'").fetchall()
@@ -670,9 +735,16 @@ class SharedStateService:
                 for tr in trains_in_reg:
                     t_num = tr["train_number"]
                     coach_rows = cur.execute("SELECT * FROM coaches WHERE train_number = ?", (t_num,)).fetchall()
-                    c_count = len(coach_rows) or tr["total_coaches"] or 1
+                    c_count = len(coach_rows) or tr["total_coaches"] or 0
                     t_count = c_count * 2
-                    is_online = device_online_map.get(t_num, False)
+                    tr_devs = devs_by_train.get(t_num, [])
+                    assigned_uids = {(cr["device_uid"] or "").strip() for cr in coach_rows if (cr["device_uid"] or "").strip()}
+                    for u in assigned_uids:
+                        if u in dev_by_uid and dev_by_uid[u] not in tr_devs:
+                            tr_devs.append(dev_by_uid[u])
+                    is_online = any(bool(d.get("is_online")) for d in tr_devs)
+                    ever_seen = any(bool(d.get("last_seen_at")) for d in tr_devs)
+                    conn_status = "ONLINE" if is_online else ("OFFLINE" if ever_seen else "NEVER_CONNECTED")
 
                     active_alerts = alarm_counts.get(t_num, 0)
                     if has_crit_map.get(t_num, False):
@@ -692,8 +764,9 @@ class SharedStateService:
                         "type": tr["train_type"] or "Express",
                         "coaches_count": c_count,
                         "tanks_count": t_count,
+                        "devices_count": len(tr_devs),
                         "is_online": is_online,
-                        "connectivity_status": "ONLINE" if is_online else "OFFLINE",
+                        "connectivity_status": conn_status,
                         "status": "All Normal" if active_alerts == 0 else f"{active_alerts} Active Alerts",
                         "active_alarms": active_alerts,
                         "source_station": tr["source_station"] or "Origin",
@@ -779,9 +852,17 @@ class SharedStateService:
             coach_rows = cur.execute(
                 "SELECT * FROM coaches WHERE train_number = ? ORDER BY position ASC", (clean,)
             ).fetchall()
+            dev_rows = cur.execute("SELECT * FROM devices").fetchall()
+            dev_by_uid = {d["uid"]: dict(d) for d in dev_rows if is_genuine_hardware_uid(d["uid"])}
             coaches_list = []
+            any_coach_online = False
             for cr in coach_rows:
                 c_num = cr["coach_number"]
+                d_uid = (cr["device_uid"] or "").strip()
+                dev_info = dev_by_uid.get(d_uid) if d_uid else None
+                c_online = bool(dev_info and dev_info.get("is_online"))
+                if c_online:
+                    any_coach_online = True
                 tank_rows = cur.execute(
                     "SELECT * FROM tanks WHERE train_number = ? AND coach_number = ? ORDER BY tank_index ASC",
                     (clean, c_num),
@@ -801,9 +882,11 @@ class SharedStateService:
                 ]
                 coaches_list.append({
                     "coach_number": c_num,
+                    "coach_name": cr["coach_name"] or f"Coach {c_num}",
                     "coach_category": cr["coach_category"],
-                    "device_uid": cr["device_uid"] or "",
-                    "is_online": False,
+                    "coach_type": cr["coach_type"],
+                    "device_uid": d_uid,
+                    "is_online": c_online,
                     "hardware_version": "Standard WLI Node",
                     "tanks": tanks_list,
                 })
@@ -814,7 +897,7 @@ class SharedStateService:
                 "region": tr["region"],
                 "coaches_count": len(coaches_list),
                 "tanks_count": sum(len(c["tanks"]) for c in coaches_list),
-                "online_status": False,
+                "online_status": any_coach_online,
                 "active_alarms_count": 0,
                 "coaches": coaches_list,
                 "source_station": tr["source_station"] or "Origin",
@@ -899,6 +982,7 @@ class SharedStateService:
                     for t_idx in (1, 2):
                         t_name = "Arrival Side (Tank 1)" if t_idx == 1 else "Departure Side (Tank 2)"
                         tank_id = f"tank-{train_number}-{c_num}-{t_idx}"
+                        tank_liters = tank_c * 25.0 if tank_c <= 20.0 else tank_c
                         conn.execute(
                             """
                             INSERT INTO tanks (
@@ -907,7 +991,7 @@ class SharedStateService:
                                 current_volume_liters, status, created_at, updated_at
                             ) VALUES (?, ?, ?, ?, ?, 'CYLINDRICAL', ?, ?, 0.04, 0.0, 0.0, 'NORMAL', ?, ?)
                             """,
-                            (tank_id, train_number, c_num, t_idx, t_name, tank_c * 25.0, tank_h, now_iso, now_iso),
+                            (tank_id, train_number, c_num, t_idx, t_name, tank_liters, tank_h, now_iso, now_iso),
                         )
 
                 conn.commit()
@@ -1076,12 +1160,176 @@ class SharedStateService:
         with self._lock:
             conn = self._get_conn()
             rows = conn.execute("SELECT * FROM devices ORDER BY uid ASC").fetchall()
-            return [dict(r) for r in rows]
+            return [dict(r) for r in rows if is_genuine_hardware_uid(r["uid"])]
+
+    def _sync_exclusive_assignment_unlocked(
+        self, conn: sqlite3.Connection, uid: str, train_number: str, coach_number: str, now_iso: str
+    ) -> None:
+        clean_uid = (uid or "").strip()
+        tr_clean = (train_number or "").strip()
+        ch_clean = (coach_number or "").strip().upper()
+        is_assigned = bool(
+            clean_uid
+            and tr_clean
+            and tr_clean.upper() != "UNASSIGNED"
+            and ch_clean
+            and ch_clean != "UNASSIGNED"
+        )
+        if clean_uid:
+            conn.execute(
+                "UPDATE coaches SET device_uid = '', updated_at = ? WHERE device_uid = ? AND NOT (train_number = ? AND coach_number = ?)",
+                (now_iso, clean_uid, tr_clean if is_assigned else "__NONE__", ch_clean if is_assigned else "__NONE__"),
+            )
+        if is_assigned:
+            conn.execute(
+                "UPDATE devices SET train_number = 'UNASSIGNED', coach_number = 'UNASSIGNED', status = 'AVAILABLE', updated_at = ? WHERE train_number = ? AND coach_number = ? AND uid != ?",
+                (now_iso, tr_clean, ch_clean, clean_uid),
+            )
+            conn.execute(
+                "UPDATE coaches SET device_uid = ?, updated_at = ? WHERE train_number = ? AND coach_number = ?",
+                (clean_uid, now_iso, tr_clean, ch_clean),
+            )
+
+    def update_coach(self, train_number: str, coach_number: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        clean_tr = train_number.strip()
+        clean_c = coach_number.strip().upper()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            conn = self._get_conn()
+            cr = conn.execute(
+                "SELECT * FROM coaches WHERE train_number = ? AND coach_number = ?", (clean_tr, clean_c)
+            ).fetchone()
+            if not cr:
+                raise ValueError(f"Coach {clean_c} not found on Train {clean_tr}.")
+
+            c_name = payload.get("coach_name") or cr["coach_name"]
+            c_cat = payload.get("coach_category") or cr["coach_category"]
+            c_type = payload.get("coach_type") or cr["coach_type"]
+            new_uid = payload.get("device_uid")
+            old_uid = (cr["device_uid"] or "").strip()
+            final_uid = old_uid if new_uid is None else new_uid.strip()
+
+            conn.execute(
+                "UPDATE coaches SET coach_name = ?, coach_category = ?, coach_type = ?, device_uid = ?, updated_at = ? WHERE train_number = ? AND coach_number = ?",
+                (c_name, c_cat, c_type, final_uid, now_iso, clean_tr, clean_c),
+            )
+
+            for idx, cap_k, h_k, n_k, g_k in (
+                (1, "tank_1_capacity", "tank_1_height_cm", "tank_1_name", "tank_1_geometry"),
+                (2, "tank_2_capacity", "tank_2_height_cm", "tank_2_name", "tank_2_geometry"),
+            ):
+                cap = payload.get(cap_k)
+                ht = payload.get(h_k) or payload.get("tank_height_cm")
+                tname = payload.get(n_k)
+                tgeom = payload.get(g_k)
+                if any(v is not None for v in (cap, ht, tname, tgeom)):
+                    conn.execute(
+                        """
+                        UPDATE tanks
+                        SET name = COALESCE(?, name),
+                            capacity_liters = COALESCE(?, capacity_liters),
+                            height_cm = COALESCE(?, height_cm),
+                            tank_type = COALESCE(?, tank_type),
+                            updated_at = ?
+                        WHERE train_number = ? AND coach_number = ? AND tank_index = ?
+                        """,
+                        (tname, cap, ht, (tgeom.upper() if isinstance(tgeom, str) else None), now_iso, clean_tr, clean_c, idx),
+                    )
+
+            if new_uid is not None:
+                if old_uid and old_uid != final_uid:
+                    conn.execute(
+                        "UPDATE devices SET train_number = 'UNASSIGNED', coach_number = 'UNASSIGNED', status = 'AVAILABLE', updated_at = ? WHERE uid = ?",
+                        (now_iso, old_uid),
+                    )
+                if final_uid:
+                    if not is_genuine_hardware_uid(final_uid):
+                        raise ValueError("Invalid hardware UID")
+                    ex = conn.execute("SELECT 1 FROM devices WHERE uid = ?", (final_uid,)).fetchone()
+                    if ex:
+                        conn.execute(
+                            "UPDATE devices SET train_number = ?, coach_number = ?, status = 'ENGAGED', updated_at = ? WHERE uid = ?",
+                            (clean_tr, clean_c, now_iso, final_uid),
+                        )
+                    else:
+                        conn.execute(
+                            """
+                            INSERT INTO devices (
+                                uid, id, name, train_number, coach_number, device_type,
+                                protocol, mqtt_client_id, mqtt_topic, tank_assignment,
+                                status, is_online, last_seen_at, created_at, updated_at
+                            ) VALUES (?, ?, ?, ?, ?, 'Quectel EC200U 4G LTE', 'MQTT over TLS/WSS', ?, ?, 'BOTH', 'ENGAGED', 0, NULL, ?, ?)
+                            """,
+                            (final_uid, f"dev-{uuid.uuid4().hex[:8]}", f"Node ({final_uid[-6:]})", clean_tr, clean_c, f"panorama-wli-{final_uid.lower()}", f"panorama/telemetry/{final_uid}", now_iso, now_iso),
+                        )
+                    self._sync_exclusive_assignment_unlocked(conn, final_uid, clean_tr, clean_c, now_iso)
+
+            conn.commit()
+            self._rebuild_fleet_state_snapshot_unlocked(conn)
+            self._rebuild_devices_state_snapshot_unlocked(conn)
+        return {"success": True, "train_number": clean_tr, "coach_number": clean_c, "device_uid": final_uid}
+
+    def update_device(self, device_id: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            conn = self._get_conn()
+            row = conn.execute("SELECT * FROM devices WHERE id = ? OR uid = ?", (device_id, device_id)).fetchone()
+            if not row:
+                return None
+            uid = row["uid"]
+            name = (payload.get("name") or row["name"]).strip()
+            tr_no = (payload.get("trainNumber") if payload.get("trainNumber") is not None else payload.get("train_number"))
+            ch_no = (payload.get("coachNumber") if payload.get("coachNumber") is not None else payload.get("coach_number"))
+            final_tr = (tr_no if tr_no is not None else row["train_number"]).strip() or "UNASSIGNED"
+            final_ch = (ch_no if ch_no is not None else row["coach_number"]).strip().upper() or "UNASSIGNED"
+            final_st = "ENGAGED" if (final_tr.upper() != "UNASSIGNED" and final_ch != "UNASSIGNED") else "AVAILABLE"
+            conn.execute(
+                "UPDATE devices SET name = ?, train_number = ?, coach_number = ?, status = ?, updated_at = ? WHERE uid = ?",
+                (name, final_tr, final_ch, final_st, now_iso, uid),
+            )
+            self._sync_exclusive_assignment_unlocked(conn, uid, final_tr, final_ch, now_iso)
+            conn.commit()
+            self._rebuild_fleet_state_snapshot_unlocked(conn)
+            self._rebuild_devices_state_snapshot_unlocked(conn)
+            updated = conn.execute("SELECT * FROM devices WHERE uid = ?", (uid,)).fetchone()
+            return dict(updated) if updated else None
+
+    def update_tank(self, tank_id: str, payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            conn = self._get_conn()
+            row = conn.execute("SELECT * FROM tanks WHERE id = ?", (tank_id,)).fetchone()
+            if not row:
+                return None
+            conn.execute(
+                """
+                UPDATE tanks SET name = COALESCE(?, name),
+                    capacity_liters = COALESCE(?, capacity_liters),
+                    height_cm = COALESCE(?, height_cm),
+                    area_m2 = COALESCE(?, area_m2),
+                    tank_type = COALESCE(?, tank_type),
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    payload.get("name"),
+                    payload.get("capacityLiters") or payload.get("capacity_liters"),
+                    payload.get("heightCm") or payload.get("height_cm"),
+                    payload.get("areaM2") or payload.get("area_m2"),
+                    payload.get("geometry") or payload.get("tank_type"),
+                    now_iso,
+                    tank_id,
+                ),
+            )
+            conn.commit()
+            self._rebuild_fleet_state_snapshot_unlocked(conn)
+            updated = conn.execute("SELECT * FROM tanks WHERE id = ?", (tank_id,)).fetchone()
+            return dict(updated) if updated else None
 
     def create_device(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         uid = str(payload.get("uid") or "").strip().upper()
-        if not uid:
-            raise ValueError("Device UID is required.")
+        if not is_genuine_hardware_uid(uid):
+            raise ValueError("Invalid hardware UID: must be a genuine 24-char physical hex identifier.")
         with self._lock:
             conn = self._get_conn()
             existing = conn.execute("SELECT 1 FROM devices WHERE uid = ?", (uid,)).fetchone()
@@ -1089,6 +1337,10 @@ class SharedStateService:
                 raise ValueError(f"Device UID {uid} already exists.")
             now_iso = datetime.now(timezone.utc).isoformat()
             d_id = f"dev-{uuid.uuid4().hex[:8]}"
+            tr_no = str(payload.get("train_number") or payload.get("trainNumber") or "UNASSIGNED").strip() or "UNASSIGNED"
+            ch_no = str(payload.get("coach_number") or payload.get("coachNumber") or "UNASSIGNED").strip().upper() or "UNASSIGNED"
+            is_engaged = tr_no.upper() != "UNASSIGNED" and ch_no != "UNASSIGNED"
+            dev_status = "ENGAGED" if is_engaged else (payload.get("status") or "AVAILABLE")
             conn.execute(
                 """
                 INSERT INTO devices (
@@ -1099,20 +1351,22 @@ class SharedStateService:
                 """,
                 (
                     uid, d_id, payload.get("name") or "Coach Water Monitor",
-                    payload.get("train_number") or "UNASSIGNED",
-                    payload.get("coach_number") or "UNASSIGNED",
+                    tr_no,
+                    ch_no,
                     payload.get("device_type") or "Quectel EC200U 4G LTE",
                     payload.get("protocol") or "MQTT over TLS/WSS",
                     payload.get("mqtt_client_id") or f"panorama-wli-{uid.lower()}",
                     payload.get("mqtt_topic") or f"panorama/telemetry/{uid}",
                     payload.get("tank_assignment") or "BOTH",
-                    payload.get("status") or "AVAILABLE",
+                    dev_status,
                     now_iso, now_iso,
                 ),
             )
+            self._sync_exclusive_assignment_unlocked(conn, uid, tr_no, ch_no, now_iso)
             conn.commit()
+            self._rebuild_fleet_state_snapshot_unlocked(conn)
             self._rebuild_devices_state_snapshot_unlocked(conn)
-        return {"id": d_id, "uid": uid, "status": "AVAILABLE"}
+        return {"id": d_id, "uid": uid, "train_number": tr_no, "coach_number": ch_no, "status": dev_status}
 
     def delete_device(self, device_id: str) -> bool:
         with self._lock:
@@ -1121,6 +1375,64 @@ class SharedStateService:
             conn.commit()
             self._rebuild_devices_state_snapshot_unlocked(conn)
         return True
+
+    def list_mqtt_topics(self, limit: int = 500) -> List[Dict[str, Any]]:
+        with self._lock:
+            conn = self._get_conn()
+            rows = conn.execute(
+                "SELECT topic, payload, qos, retained, received_at FROM mqtt_latest_topics ORDER BY received_at DESC LIMIT ?",
+                (max(1, min(limit, 1000)),),
+            ).fetchall()
+            return [
+                {
+                    "topic": r["topic"],
+                    "payload": r["payload"],
+                    "qos": int(r["qos"]),
+                    "retained": bool(r["retained"]),
+                    "received_at": r["received_at"],
+                }
+                for r in rows
+            ]
+
+    def get_mqtt_topic(self, topic: str) -> Optional[Dict[str, Any]]:
+        clean = topic.strip()
+        if not clean:
+            return None
+        with self._lock:
+            conn = self._get_conn()
+            r = conn.execute(
+                "SELECT topic, payload, qos, retained, received_at FROM mqtt_latest_topics WHERE topic = ?",
+                (clean,),
+            ).fetchone()
+            if not r:
+                return None
+            return {
+                "topic": r["topic"],
+                "payload": r["payload"],
+                "qos": int(r["qos"]),
+                "retained": bool(r["retained"]),
+                "received_at": r["received_at"],
+            }
+
+    def upsert_mqtt_topic(self, topic: str, payload: str, qos: int = 0, retained: bool = False) -> Dict[str, Any]:
+        clean = topic.strip()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            conn = self._get_conn()
+            conn.execute(
+                """
+                INSERT INTO mqtt_latest_topics (topic, payload, qos, retained, received_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(topic) DO UPDATE SET
+                    payload = excluded.payload,
+                    qos = excluded.qos,
+                    retained = excluded.retained,
+                    received_at = excluded.received_at
+                """,
+                (clean, payload, int(qos), 1 if retained else 0, now_iso),
+            )
+            conn.commit()
+        return {"topic": clean, "payload": payload, "qos": int(qos), "retained": bool(retained), "received_at": now_iso}
 
 
 shared_state_service = SharedStateService()

@@ -20,6 +20,7 @@ import {
 import { ApiClient, BackendConnectivityStatus } from '../api/client';
 import { wsService, WebSocketStatus } from '../services/websocket';
 import { mqttService } from '../services/mqttService';
+import { localMqttStore } from '../services/localMqttStore';
 import { syncService, SyncState } from '../services/syncService';
 import { centralStateSync } from '../services/centralStateSync';
 import { DisplayPreferencesService, ScalePreset } from '../services/displayPreferencesService';
@@ -363,6 +364,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const handleSetTelemetryTimeout = (seconds: number) => {
     setTelemetryTimeoutSeconds(seconds);
     setTelemetryTimeoutSec(seconds);
+    mqttService.setWatchdogTimeoutMs(seconds * 1000);
   };
 
   const configuredTrains: TrainOverviewItem[] = useMemo(() => {
@@ -762,11 +764,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return unsub;
   }, []);
 
-  const refreshRegions = async () => {
+  const refreshRegions = async (): Promise<boolean> => {
     try {
       const data = await ApiClient.fetchRegionsSummary();
-      if (!Array.isArray(data)) return;
-      regionsLoadedRef.current = true;
+      if (!Array.isArray(data)) {
+        syncService.setState('OFFLINE');
+        return false;
+      }
+      const authoritative = ApiClient.wasLastSyncAuthoritative();
+      regionsLoadedRef.current = authoritative;
       setRegions(data);
 
       const validTrains = new Set<string>();
@@ -781,7 +787,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       );
       setTanks(filteredTanks);
       setLiveTank((prev) => (prev && prev.trainNumber && validTrains.has(prev.trainNumber.trim()) ? prev : filteredTanks[0] ?? null));
-      setLiveTelemetry((prev) => (prev && prev.trno && validTrains.has(prev.trno.trim()) ? prev : null));
+      setLiveTelemetry((prev) => {
+        if (!prev) return null;
+        const mapped = prev.uid ? deviceRegistry.getDeviceByUid(prev.uid) : undefined;
+        const resolvedTrno = (mapped?.trainNumber || prev.trno || '').trim();
+        return resolvedTrno && validTrains.has(resolvedTrno) ? prev : null;
+      });
       setActiveAlarms((prev) =>
         prev.filter((a) => !a.trainNumber || validTrains.has(a.trainNumber.trim()))
       );
@@ -789,14 +800,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setLastValidGps(null);
         setGpsWaypoints([]);
       }
-      syncService.setState('SYNCHRONIZED');
+      syncService.setState(authoritative ? 'SYNCHRONIZED' : 'OFFLINE');
+      return authoritative;
     } catch (e) {
-      console.warn('[AppContext] Error fetching regions, retaining current fleet state:', e);
+      console.warn('[AppContext] Error fetching regions, marking sync offline:', e);
+      syncService.setState('OFFLINE');
+      return false;
     }
   };
 
   // Fetch initial REST data
-  const refreshData = async () => {
+  const refreshData = async (): Promise<boolean> => {
     try {
       const [tank, allTanks, devList, alarms, stats, regs, health] = await Promise.all([
         ApiClient.fetchLiveTank().catch(() => null),
@@ -808,8 +822,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         ApiClient.fetchHealth().catch(() => null),
       ]);
 
+      const regionsAuthoritative = Array.isArray(regs) && ApiClient.wasLastSyncAuthoritative();
+
       if (Array.isArray(regs)) {
-        regionsLoadedRef.current = true;
+        regionsLoadedRef.current = regionsAuthoritative;
         setRegions(regs);
 
         const validTrains = new Set<string>();
@@ -831,8 +847,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (tank) setLiveTank(tank);
       }
 
-      if (Array.isArray(devList) && devList.length > 0) {
-        setDevices(devList);
+      if (Array.isArray(devList)) {
+        const mergedDevs = devList.map((d) => ({
+          ...d,
+          isOnline: Boolean(deviceRegistry.getDeviceByUid(d.uid)?.isOnline ?? d.isOnline),
+        }));
+        setDevices(mergedDevs);
+        mqttService.syncRegisteredDeviceUids(
+          deviceRegistry.getDevices().map((d) => d.uid).concat(mergedDevs.map((d) => d.uid))
+        );
+      } else {
+        mqttService.syncRegisteredDeviceUids(deviceRegistry.getDevices().map((d) => d.uid));
       }
       if (Array.isArray(alarms)) {
         setActiveAlarms(alarms);
@@ -844,13 +869,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (health?.mqttBroker) {
         setMqttBrokerStatus(health.mqttBroker === 'CONNECTED' ? 'CONNECTED' : 'DISCONNECTED');
       }
-      syncService.setState('SYNCHRONIZED');
+      const isSynced = regionsAuthoritative && Boolean(health || ApiClient.getBackendStatus() === 'ONLINE');
+      syncService.setState(isSynced ? 'SYNCHRONIZED' : 'OFFLINE');
+      return isSynced;
     } catch (e) {
-      console.warn('[AppContext] Error refreshing data, retaining current fleet state:', e);
+      console.warn('[AppContext] Error refreshing data, marking sync offline:', e);
+      syncService.setState('OFFLINE');
+      return false;
     }
   };
 
   useEffect(() => {
+    syncService.registerSyncHandler(() => refreshData());
     refreshData();
     if (typeof window === 'undefined') return;
     const centralChannel =
@@ -1165,7 +1195,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setMqttConnectionStatus(st);
       if (st === 'CONNECTED') {
         mqttAttemptedRef.current = true;
-        setConnectionStatus('CONNECTED');
         setMqttBrokerStatus('CONNECTED');
         alertNotificationService.evaluateBrokerConnectivity({ isConnected: true });
         // Real-time synchronization reconciliation on initial connect / reconnect
@@ -1173,9 +1202,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         refreshData();
       } else if (st === 'CONNECTING' || st === 'RECONNECTING') {
         mqttAttemptedRef.current = true;
-        setConnectionStatus('RECONNECTING');
+        setMqttBrokerStatus('DISCONNECTED');
       } else if (st === 'SUBSCRIPTION_ERROR' || st === 'CONNECTION_ERROR') {
         setMqttBrokerStatus('DISCONNECTED');
+        setLiveTelemetry(null);
+        deviceRegistry.markAllOffline();
+        setDevices((prev) => prev.map((d) => ({ ...d, isOnline: false })));
         if (mqttAttemptedRef.current) {
           const diag = mqttService.getBrokerDiagnostics();
           alertNotificationService.evaluateBrokerConnectivity({
@@ -1188,6 +1220,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
       } else if (st === 'DISCONNECTED') {
         setMqttBrokerStatus('DISCONNECTED');
+        setLiveTelemetry(null);
+        deviceRegistry.markAllOffline();
+        setDevices((prev) => prev.map((d) => ({ ...d, isOnline: false })));
         if (mqttAttemptedRef.current && !mqttService.isIntentionalDisconnect()) {
           alertNotificationService.evaluateBrokerConnectivity({
             isConnected: false,
@@ -1337,10 +1372,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           String(event.entity_id || '').split(':')[1] ||
           ''
         ).trim().toUpperCase();
-
-        if (trainNum) {
-          localFleetStore.invalidateConsist(trainNum);
-        }
 
         if (op === 'CREATE' || eventType === 'COACH_CREATED') {
           try {
@@ -1634,7 +1665,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const activeChno = (mappedDev?.coachNumber || telemetry.chno || '').trim();
 
       // Always persist and propagate verified MQTT telemetry to Live Store, GPS, and Device Registry
-      setLiveTelemetry(telemetry);
+      setLiveTelemetry({
+        ...telemetry,
+        trno: activeTrno || telemetry.trno,
+        chno: activeChno || telemetry.chno,
+      });
       setLastValidGps(mqttService.getLastValidGps());
       setGpsWaypoints(mqttService.getGpsWaypoints());
       setMqttBrokerStatus('CONNECTED');
@@ -1684,9 +1719,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           firmwareVersion: '2.2.0-prod',
           hardwareVersion: mappedDev?.hardwareModel || 'Cellular WLI Unit',
         };
-        const exists = prev.find((d) => d.uid === telemetry.uid);
+        const canonicalUid = (telemetry.uid || '').trim().toUpperCase();
+        const exists = prev.find((d) => (d.uid || '').trim().toUpperCase() === canonicalUid);
         if (exists) {
-          return prev.map((d) => (d.uid === telemetry.uid ? { ...d, ...updatedDevice } : d));
+          return prev.map((d) => ((d.uid || '').trim().toUpperCase() === canonicalUid ? { ...d, ...updatedDevice } : d));
         }
         return [updatedDevice, ...prev];
       });
@@ -1904,6 +1940,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setSelectedCoachNumber((prev) => (prev || activeChno));
     });
 
+    const unsubMqttRaw = mqttService.onRawMessage((frame) => {
+      if (!frame || !frame.topic || frame.topic.startsWith('panorama/central/') || frame.topic.startsWith('panorama/sync/')) {
+        return;
+      }
+      const iso = new Date(frame.receivedAt || Date.now()).toISOString();
+      const prev = localMqttStore.getLatest(frame.topic);
+      localMqttStore.saveRecord({
+        topic: frame.topic,
+        payload: frame.isJson && frame.parsedJson ? frame.parsedJson : (frame.payloadString || ''),
+        payload_type: frame.isJson ? 'JSON' : 'TEXT',
+        qos: frame.qos ?? 0,
+        retained: Boolean(frame.retained),
+        received_at: iso,
+        updated_at: iso,
+        message_sequence: (prev?.message_sequence || 0) + 1,
+      });
+    });
+
     return () => {
       clearTimeout(deltaDebounceTimer);
       unsubMqttStatus();
@@ -1914,6 +1968,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       unsubMqttCentralDevice();
       unsubMqttDeltaSync();
       unsubMqttTelemetry();
+      unsubMqttRaw();
       mqttService.disconnect();
     };
   }, []);
